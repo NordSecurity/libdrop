@@ -114,6 +114,7 @@ async fn client_task_v1(
     let _guard = TransferGuard::new(state.clone(), xfer.id());
 
     let (upload_tx, mut upload_rx) = mpsc::channel(4);
+    let mut ping = tokio::time::interval(state.config.transfer_idle_lifetime / 2);
     let mut handler = ClientHandler::new(state, upload_tx, xfer, logger);
 
     let task = async {
@@ -131,20 +132,23 @@ async fn client_task_v1(
                     };
                 },
                 // Message received
-                recv = socket.next() => {
-                    match recv.transpose().context("Socket recv")? {
+                recv = tokio::time::timeout(handler.timeout(), socket.next()) => {
+                    match recv.map_err(|_| crate::Error::TransferTimeout)?.transpose().context("Socket recv")? {
                         Some(msg) => {
                             if handler.on_recv(msg).await.context("Handler on recv")?.is_break() {
                                 break;
                             }
                         },
                         None => break,
-                    };
+                    }
                 },
                 // Message to send down the wire
                 msg = upload_rx.recv() => {
                     let msg = msg.expect("Handler channel should always be open");
                     socket.send(Message::from(msg)).await.context("Socket sending upload msg")?;
+                },
+                _ = ping.tick() => {
+                    socket.send(Message::Ping(Vec::new())).await.context("Failed to send PING")?;
                 }
             }
         }
@@ -170,6 +174,7 @@ struct ClientHandler {
     xfer: crate::Transfer,
     jobs: HashMap<PathBuf, JoinHandle<()>>,
     logger: Logger,
+    last_recv: Instant,
 }
 
 impl ClientHandler {
@@ -185,6 +190,7 @@ impl ClientHandler {
             xfer,
             jobs: HashMap::new(),
             logger,
+            last_recv: Instant::now(),
         }
     }
 
@@ -202,7 +208,16 @@ impl ClientHandler {
         }
     }
 
+    fn timeout(&self) -> Duration {
+        self.state
+            .config
+            .transfer_idle_lifetime
+            .saturating_sub(self.last_recv.elapsed())
+    }
+
     async fn on_recv(&mut self, msg: Message) -> anyhow::Result<ControlFlow<()>> {
+        self.last_recv = Instant::now();
+
         match msg {
             Message::Text(json) => {
                 let msg: v1::ServerMsg =
@@ -231,6 +246,8 @@ impl ClientHandler {
                 self.on_close(true).await;
                 return Ok(ControlFlow::Break(()));
             }
+            Message::Ping(_) => {}
+            Message::Pong(_) => {}
             _ => anyhow::bail!("Client received invalid WS message type"),
         }
 
@@ -240,9 +257,13 @@ impl ClientHandler {
     async fn on_finalize_failure(&self, err: anyhow::Error) {
         error!(self.logger, "Client failed on WS loop: {:?}", err);
 
-        let err = err
-            .downcast::<tokio_tungstenite::tungstenite::Error>()
-            .map_or(crate::Error::BadTransferState, crate::Error::from);
+        let err = match err.downcast::<crate::Error>() {
+            Ok(err) => err,
+            Err(err) => match err.downcast::<tokio_tungstenite::tungstenite::Error>() {
+                Ok(err) => err.into(),
+                Err(_) => crate::Error::BadTransferState,
+            },
+        };
 
         self.state
             .event_tx

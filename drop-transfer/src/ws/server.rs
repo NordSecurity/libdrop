@@ -6,7 +6,7 @@ use std::{
     ops::ControlFlow,
     path::{Path, PathBuf},
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use anyhow::Context;
@@ -203,7 +203,6 @@ async fn on_client_v1(
     };
 }
 
-// TODO(msz): error handling
 async fn handle_client_v1(
     mut socket: WebSocket,
     xfer: Transfer,
@@ -241,7 +240,8 @@ async fn handle_client_v1(
     }
 
     let (send_tx, mut send_rx) = mpsc::channel(4);
-    let mut handler = ServerHandler::new(send_tx, state.clone(), xfer, logger.clone());
+    let mut ping = tokio::time::interval(state.config.transfer_idle_lifetime / 2);
+    let mut handler = ServerHandler::new(send_tx, state, xfer, logger.clone());
 
     let task = async {
         loop {
@@ -259,8 +259,8 @@ async fn handle_client_v1(
                     }
                 },
                 // Message received
-                recv = socket.next() => {
-                    match recv.transpose()? {
+                recv = tokio::time::timeout(handler.timeout(), socket.next()) => {
+                    match recv.map_err(|_| crate::Error::TransferTimeout)?.transpose()? {
                         Some(msg) => {
                             if handler.on_recv(&mut socket, msg).await?.is_break() {
                                 break;
@@ -273,6 +273,9 @@ async fn handle_client_v1(
                 msg = send_rx.recv() => {
                     let msg = msg.expect("Handler channel should always be open");
                     socket.send(Message::from(&msg)).await?;
+                },
+                _ = ping.tick() => {
+                    socket.send(Message::ping(Vec::new())).await.context("Failed to send PING message")?;
                 }
             };
         }
@@ -296,6 +299,7 @@ struct ServerHandler {
     state: Arc<State>,
     xfer: Transfer,
     logger: Logger,
+    last_recv: Instant,
 }
 
 struct FileTransferState {
@@ -326,7 +330,15 @@ impl ServerHandler {
             jobs: HashMap::new(),
             xfer,
             logger,
+            last_recv: Instant::now(),
         }
+    }
+
+    fn timeout(&self) -> Duration {
+        self.state
+            .config
+            .transfer_idle_lifetime
+            .saturating_sub(self.last_recv.elapsed())
     }
 
     async fn on_recv(
@@ -334,6 +346,8 @@ impl ServerHandler {
         socket: &mut WebSocket,
         msg: Message,
     ) -> anyhow::Result<ControlFlow<()>> {
+        self.last_recv = Instant::now();
+
         if let Ok(json) = msg.to_str() {
             let msg: v1::ClientMsg =
                 serde_json::from_str(json).context("Failed to deserialize json")?;
@@ -355,6 +369,7 @@ impl ServerHandler {
             self.on_close(true).await;
 
             return Ok(ControlFlow::Break(()));
+        } else if msg.is_ping() || msg.is_pong() {
         } else {
             anyhow::bail!("Server received invalid WS message type");
         }
@@ -365,9 +380,13 @@ impl ServerHandler {
     async fn on_finalize_failure(&self, err: anyhow::Error) {
         error!(self.logger, "Server failed to handle WS message: {:?}", err);
 
-        let err = err
-            .downcast::<warp::Error>()
-            .map_or(crate::Error::BadTransferState, crate::Error::from);
+        let err = match err.downcast::<crate::Error>() {
+            Ok(err) => err,
+            Err(err) => match err.downcast::<warp::Error>() {
+                Ok(err) => err.into(),
+                Err(_) => crate::Error::BadTransferState,
+            },
+        };
 
         self.state
             .event_tx
