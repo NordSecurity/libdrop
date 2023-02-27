@@ -248,7 +248,7 @@ impl ClientHandler {
             }
             Message::Ping(_) => {}
             Message::Pong(_) => {}
-            _ => anyhow::bail!("Client received invalid WS message type"),
+            _ => norddrop_log_warn!(self.logger, "Client received invalid WS message type"),
         }
 
         Ok(ControlFlow::Continue(()))

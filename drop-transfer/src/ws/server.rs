@@ -371,7 +371,7 @@ impl ServerHandler {
             return Ok(ControlFlow::Break(()));
         } else if msg.is_ping() || msg.is_pong() {
         } else {
-            anyhow::bail!("Server received invalid WS message type");
+            norddrop_log_warn!(self.logger, "Server received invalid WS message type");
         }
 
         anyhow::Ok(ControlFlow::Continue(()))
