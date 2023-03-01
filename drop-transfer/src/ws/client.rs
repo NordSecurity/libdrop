@@ -10,18 +10,21 @@ use std::{
 
 use anyhow::Context;
 use futures::{SinkExt, StreamExt};
-use slog::{debug, error, warn, Logger};
+use slog::{debug, error, info, warn, Logger};
 use tokio::{
     net::TcpStream,
     sync::mpsc::{self, Sender, UnboundedReceiver},
     task::JoinHandle,
 };
-use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
+use tokio_tungstenite::{
+    tungstenite::{self, protocol::Role, Message},
+    WebSocketStream,
+};
 
 use crate::{
     error::ResultExt,
     manager::{TransferConnection, TransferGuard},
-    protocol::v1,
+    protocol::{self, v1},
     service::State,
     utils::Hidden,
     Event,
@@ -33,15 +36,39 @@ pub enum ClientReq {
 
 pub(crate) async fn run(state: Arc<State>, xfer: crate::Transfer, logger: Logger) {
     let start_session_v1 = async {
-        let socket = tokio::time::timeout(
+        let mut socket = tokio::time::timeout(
             state.config.req_connection_timeout,
             tcp_connect(&state, xfer.peer(), &logger),
         )
         .await
         .map_err(|err| io::Error::new(io::ErrorKind::TimedOut, err))?;
 
-        let url = format!("ws://{}:{}/drop/v1", xfer.peer(), drop_config::PORT);
-        let (mut client, _) = tokio_tungstenite::client_async(url, socket).await?;
+        let mut versions_to_try = [protocol::Version::V2, protocol::Version::V1].into_iter();
+
+        let ver = loop {
+            let ver = versions_to_try.next().ok_or_else(|| {
+                crate::Error::Io(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "Server did not respond for any of known protocol versions",
+                ))
+            })?;
+
+            let url = format!("ws://{}:{}/drop/{ver}", xfer.peer(), drop_config::PORT);
+
+            match tokio_tungstenite::client_async(url, &mut socket).await {
+                Ok(_) => break ver,
+                Err(tungstenite::Error::Http(resp)) if resp.status().is_client_error() => {
+                    debug!(
+                        logger,
+                        "Failed to connect to version {}, response: {:?}", ver, resp
+                    );
+                }
+                Err(err) => return Err(err.into()),
+            }
+        };
+
+        info!(logger, "Client connected, using version: {}", ver);
+        let mut client = WebSocketStream::from_raw_socket(socket, Role::Client, None).await;
 
         let req = v1::TransferRequest::try_from(&xfer)?;
 
@@ -59,10 +86,10 @@ pub(crate) async fn run(state: Arc<State>, xfer: crate::Transfer, logger: Logger
             .await
             .expect("Could not send a Request Queued event, channel closed");
 
-        crate::Result::Ok((client, rx))
+        crate::Result::Ok((client, rx, ver))
     };
 
-    let (client, rx) = match start_session_v1.await {
+    let (client, rx, ver) = match start_session_v1.await {
         Ok(client) => client,
         Err(err) => {
             error!(logger, "Could not send transfer {}: {}", xfer.id(), err);
@@ -77,7 +104,10 @@ pub(crate) async fn run(state: Arc<State>, xfer: crate::Transfer, logger: Logger
         }
     };
 
-    client_task_v1(client, state, xfer, rx, logger).await;
+    match ver {
+        protocol::Version::V1 => client_task_v1(client, state, xfer, rx, logger).await,
+        protocol::Version::V2 => client_task_v2(client, state, xfer, rx, logger).await,
+    }
 }
 
 async fn tcp_connect(state: &State, ip: IpAddr, logger: &Logger) -> TcpStream {
@@ -105,6 +135,26 @@ async fn tcp_connect(state: &State, ip: IpAddr, logger: &Logger) -> TcpStream {
 }
 
 async fn client_task_v1(
+    socket: WebSocketStream<TcpStream>,
+    state: Arc<State>,
+    xfer: crate::Transfer,
+    api_req_rx: UnboundedReceiver<ClientReq>,
+    logger: Logger,
+) {
+    client_task_v1_v2::<false>(socket, state, xfer, api_req_rx, logger).await
+}
+
+async fn client_task_v2(
+    socket: WebSocketStream<TcpStream>,
+    state: Arc<State>,
+    xfer: crate::Transfer,
+    api_req_rx: UnboundedReceiver<ClientReq>,
+    logger: Logger,
+) {
+    client_task_v1_v2::<true>(socket, state, xfer, api_req_rx, logger).await
+}
+
+async fn client_task_v1_v2<const PING: bool>(
     mut socket: WebSocketStream<TcpStream>,
     state: Arc<State>,
     xfer: crate::Transfer,
@@ -114,7 +164,7 @@ async fn client_task_v1(
     let _guard = TransferGuard::new(state.clone(), xfer.id());
 
     let (upload_tx, mut upload_rx) = mpsc::channel(4);
-    let mut ping = tokio::time::interval(state.config.transfer_idle_lifetime / 2);
+    let mut ping = super::utils::Pinger::<PING>::new(&state);
     let mut handler = ClientHandler::new(state, upload_tx, xfer, logger);
 
     let task = async {
@@ -132,8 +182,8 @@ async fn client_task_v1(
                     };
                 },
                 // Message received
-                recv = tokio::time::timeout(handler.timeout(), socket.next()) => {
-                    match recv.map_err(|_| crate::Error::TransferTimeout)?.transpose().context("Socket recv")? {
+                recv = super::utils::recv(&mut socket, handler.timeout::<PING>()) => {
+                    match recv? {
                         Some(msg) => {
                             if handler.on_recv(msg).await.context("Handler on recv")?.is_break() {
                                 break;
@@ -208,11 +258,17 @@ impl ClientHandler {
         }
     }
 
-    fn timeout(&self) -> Duration {
-        self.state
-            .config
-            .transfer_idle_lifetime
-            .saturating_sub(self.last_recv.elapsed())
+    fn timeout<const PING: bool>(&self) -> Option<Duration> {
+        if PING {
+            Some(
+                self.state
+                    .config
+                    .transfer_idle_lifetime
+                    .saturating_sub(self.last_recv.elapsed()),
+            )
+        } else {
+            None
+        }
     }
 
     async fn on_recv(&mut self, msg: Message) -> anyhow::Result<ControlFlow<()>> {
@@ -246,9 +302,13 @@ impl ClientHandler {
                 self.on_close(true).await;
                 return Ok(ControlFlow::Break(()));
             }
-            Message::Ping(_) => {}
-            Message::Pong(_) => {}
-            _ => norddrop_log_warn!(self.logger, "Client received invalid WS message type"),
+            Message::Ping(_) => {
+                debug!(self.logger, "PING");
+            }
+            Message::Pong(_) => {
+                debug!(self.logger, "PONG");
+            }
+            _ => warn!(self.logger, "Client received invalid WS message type"),
         }
 
         Ok(ControlFlow::Continue(()))
@@ -259,7 +319,7 @@ impl ClientHandler {
 
         let err = match err.downcast::<crate::Error>() {
             Ok(err) => err,
-            Err(err) => match err.downcast::<tokio_tungstenite::tungstenite::Error>() {
+            Err(err) => match err.downcast::<tungstenite::Error>() {
                 Ok(err) => err.into(),
                 Err(_) => crate::Error::BadTransferState,
             },

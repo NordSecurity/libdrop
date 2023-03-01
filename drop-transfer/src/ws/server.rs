@@ -26,7 +26,7 @@ use crate::{
     error::ResultExt,
     event::DownloadSuccess,
     manager::{TransferConnection, TransferGuard},
-    protocol::v1,
+    protocol::{self, v1},
     quarantine::PathExt,
     service::State,
     utils::Hidden,
@@ -53,17 +53,35 @@ pub(crate) fn start(
         let stop = stop.clone();
         let logger = logger.clone();
 
-        warp::path!("drop" / "v1")
+        warp::path("drop")
+            .and(warp::path::param().and_then(|version: String| async move {
+                version
+                    .parse::<protocol::Version>()
+                    .map_err(|_| warp::reject::not_found())
+            }))
             .and(warp::ws())
             .and(warp::filters::addr::remote())
-            .map(move |ws: warp::ws::Ws, peer: Option<SocketAddr>| {
-                let state = Arc::clone(&state);
-                let peer = peer.expect("Transport should use IP adresses");
-                let stop = stop.clone();
-                let logger = logger.clone();
+            .map(
+                move |version: protocol::Version, ws: warp::ws::Ws, peer: Option<SocketAddr>| {
+                    let state = Arc::clone(&state);
+                    let peer = peer.expect("Transport should use IP addresses");
+                    let stop = stop.clone();
+                    let logger = logger.clone();
 
-                ws.on_upgrade(move |socket| on_client_v1(socket, peer.ip(), state, stop, logger))
-            })
+                    ws.on_upgrade(move |socket| async move {
+                        info!(logger, "Client requested protocol version: {}", version);
+
+                        match version {
+                            protocol::Version::V1 => {
+                                on_client_v1(socket, peer.ip(), state, stop, logger).await
+                            }
+                            protocol::Version::V2 => {
+                                on_client_v2(socket, peer.ip(), state, stop, logger).await
+                            }
+                        }
+                    })
+                },
+            )
     };
 
     let future = match warp::serve(service)
@@ -103,6 +121,26 @@ pub(crate) fn start(
     Ok(task)
 }
 
+async fn on_client_v1(
+    socket: WebSocket,
+    peer: IpAddr,
+    state: Arc<State>,
+    stop: CancellationToken,
+    logger: Logger,
+) {
+    on_client_v1_v2::<false>(socket, peer, state, stop, logger).await
+}
+
+async fn on_client_v2(
+    socket: WebSocket,
+    peer: IpAddr,
+    state: Arc<State>,
+    stop: CancellationToken,
+    logger: Logger,
+) {
+    on_client_v1_v2::<true>(socket, peer, state, stop, logger).await
+}
+
 async fn receive_request(socket: &mut WebSocket) -> anyhow::Result<v1::TransferRequest> {
     let msg = socket
         .next()
@@ -115,7 +153,7 @@ async fn receive_request(socket: &mut WebSocket) -> anyhow::Result<v1::TransferR
     serde_json::from_str(msg).context("Failed to deserialize transfer request")
 }
 
-async fn on_client_v1(
+async fn on_client_v1_v2<const PING: bool>(
     mut socket: WebSocket,
     peer: IpAddr,
     state: Arc<State>,
@@ -191,7 +229,7 @@ async fn on_client_v1(
         }
     };
 
-    let job = handle_client_v1(socket, xfer, state, logger);
+    let job = handle_client_v1::<PING>(socket, xfer, state, logger);
 
     tokio::select! {
         biased;
@@ -203,7 +241,7 @@ async fn on_client_v1(
     };
 }
 
-async fn handle_client_v1(
+async fn handle_client_v1<const PING: bool>(
     mut socket: WebSocket,
     xfer: Transfer,
     state: Arc<State>,
@@ -240,7 +278,8 @@ async fn handle_client_v1(
     }
 
     let (send_tx, mut send_rx) = mpsc::channel(4);
-    let mut ping = tokio::time::interval(state.config.transfer_idle_lifetime / 2);
+    let mut ping = super::utils::Pinger::<PING>::new(&state);
+
     let mut handler = ServerHandler::new(send_tx, state, xfer, logger.clone());
 
     let task = async {
@@ -259,8 +298,8 @@ async fn handle_client_v1(
                     }
                 },
                 // Message received
-                recv = tokio::time::timeout(handler.timeout(), socket.next()) => {
-                    match recv.map_err(|_| crate::Error::TransferTimeout)?.transpose()? {
+                recv = super::utils::recv(&mut socket, handler.timeout::<PING>()) => {
+                    match recv? {
                         Some(msg) => {
                             if handler.on_recv(&mut socket, msg).await?.is_break() {
                                 break;
@@ -334,11 +373,17 @@ impl ServerHandler {
         }
     }
 
-    fn timeout(&self) -> Duration {
-        self.state
-            .config
-            .transfer_idle_lifetime
-            .saturating_sub(self.last_recv.elapsed())
+    fn timeout<const PING: bool>(&self) -> Option<Duration> {
+        if PING {
+            Some(
+                self.state
+                    .config
+                    .transfer_idle_lifetime
+                    .saturating_sub(self.last_recv.elapsed()),
+            )
+        } else {
+            None
+        }
     }
 
     async fn on_recv(
@@ -369,9 +414,12 @@ impl ServerHandler {
             self.on_close(true).await;
 
             return Ok(ControlFlow::Break(()));
-        } else if msg.is_ping() || msg.is_pong() {
+        } else if msg.is_ping() {
+            debug!(self.logger, "PING");
+        } else if msg.is_pong() {
+            debug!(self.logger, "PONG");
         } else {
-            norddrop_log_warn!(self.logger, "Server received invalid WS message type");
+            warn!(self.logger, "Server received invalid WS message type");
         }
 
         anyhow::Ok(ControlFlow::Continue(()))
