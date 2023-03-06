@@ -50,6 +50,8 @@ pub enum Error {
     WsClient(#[from] tokio_tungstenite::tungstenite::Error),
     #[error("Address already in use")]
     AddrInUse,
+    #[error("File modified")]
+    FileModified,
 }
 
 impl From<&Error> for u32 {
@@ -79,6 +81,7 @@ impl From<&Error> for u32 {
             Error::WsServer(_) => 25,
             Error::WsClient(_) => 26,
             Error::AddrInUse => 27,
+            Error::FileModified => 28,
         }
     }
 }

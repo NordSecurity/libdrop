@@ -117,6 +117,7 @@ impl From<File> for crate::File {
         Self {
             path: Hidden(path.into_boxed_path()),
             size,
+            meta: None,
             children,
             source: Some(crate::file::FileSource::Path),
             mime_type: None,

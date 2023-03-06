@@ -10,7 +10,7 @@ use std::{
     io::Read,
     iter,
     ops::Deref,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use drop_config::DropConfig;
@@ -32,6 +32,7 @@ pub enum FileSource {
 pub struct File {
     pub(crate) path: Hidden<Box<Path>>,
     pub(crate) size: Option<u64>,
+    pub(crate) meta: Option<Hidden<fs::Metadata>>,
     pub(crate) children: HashMap<Hidden<Box<Path>>, File>,
     pub(crate) source: Option<FileSource>,
     pub(crate) mime_type: Option<Hidden<&'static str>>,
@@ -59,7 +60,7 @@ impl File {
                 return Err(Error::TransferLimitsExceeded);
             }
 
-            root.insert(File::new(entry.path())?)?;
+            root.insert(File::new(entry.path(), fs::symlink_metadata(path)?)?)?;
         }
 
         Ok(root)
@@ -99,17 +100,17 @@ impl File {
             .reduce(|lhs, p| lhs.join(p).into())
             .ok_or(Error::BadPath)?;
 
+        let filename = PathBuf::from(&path.file_name().ok_or(Error::BadPath)?).into_boxed_path();
+
         // We‘re inserting a parent
         if child.path() != &*path {
             self.children
-                .entry(Hidden(
-                    AsRef::<Path>::as_ref(&path.file_name().ok_or(Error::BadPath)?).into(),
-                ))
+                .entry(Hidden(filename))
                 .or_insert_with(|| Self::new_dir(path))
                 .insert(child)?;
         } else {
             self.children.insert(
-                Hidden(AsRef::<Path>::as_ref(&path.file_name().ok_or(Error::BadPath)?).into()),
+                Hidden(filename),
                 Self {
                     path: Hidden(path),
                     ..child
@@ -124,6 +125,7 @@ impl File {
         Self {
             path: Hidden(path),
             size: None,
+            meta: None,
             children: HashMap::new(),
             source: None,
             mime_type: None,
@@ -137,22 +139,18 @@ impl File {
             #[cfg(not(target_os = "windows"))]
             File::new_with_fd(path, fd).or(Err(Error::BadFile))
         } else {
-            match File::new(path) {
-                Ok(file) => Ok(file),
-                Err(e) => match e {
-                    Error::DirectoryNotExpected => File::walk(path, config),
-                    _ => Err(e),
-                },
+            let meta = fs::symlink_metadata(path)?;
+
+            if meta.is_dir() {
+                File::walk(path, config)
+            } else {
+                File::new(path, meta)
             }
         }
     }
 
-    fn new(path: &Path) -> Result<Self, Error> {
-        let metadata = fs::symlink_metadata(path)?;
-
-        if metadata.is_dir() {
-            return Err(Error::DirectoryNotExpected);
-        }
+    fn new(path: &Path, meta: fs::Metadata) -> Result<Self, Error> {
+        assert!(!meta.is_dir(), "Did not expect directory metadata");
 
         let mut options = OpenOptions::new();
         options.read(true);
@@ -167,7 +165,8 @@ impl File {
 
         Ok(Self {
             path: Hidden(path.into()),
-            size: Some(metadata.len()),
+            size: Some(meta.len()),
+            meta: Some(Hidden(meta)),
             children: HashMap::new(),
             source: Some(FileSource::Path),
             mime_type: mime_type.map(Hidden),
@@ -179,9 +178,9 @@ impl File {
         let f = unsafe { fs::File::from_raw_fd(fd) };
 
         let create_file = || {
-            let metadata = f.metadata()?;
+            let meta = f.metadata()?;
 
-            if metadata.is_dir() {
+            if meta.is_dir() {
                 return Err(Error::DirectoryNotExpected);
             }
 
@@ -191,7 +190,8 @@ impl File {
 
             Ok(Self {
                 path: Hidden(path.into()),
-                size: Some(metadata.len()),
+                size: Some(meta.len()),
+                meta: Some(Hidden(meta)),
                 children: HashMap::new(),
                 source: Some(FileSource::Fd(fd)),
                 mime_type: mime_type.map(Hidden),
@@ -228,9 +228,11 @@ impl File {
 
     // Open the file if it wasn't already opened and return the std::fs::File
     // instance
-    pub fn open(&self) -> Result<FileReader, Error> {
+    pub(crate) fn open(&self) -> Result<FileReader, Error> {
         let source = self.source.ok_or(Error::DirectoryNotExpected)?;
-        FileReader::new(source, self.size.unwrap_or(0), &self.path)
+        let meta = self.meta.clone().ok_or(Error::DirectoryNotExpected)?;
+
+        FileReader::new(source, meta.0, &self.path)
     }
 
     pub fn is_dir(&self) -> bool {

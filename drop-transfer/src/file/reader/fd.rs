@@ -34,4 +34,9 @@ impl super::Reader for FileReader {
     fn bytes_read(&self) -> u64 {
         self.pos
     }
+
+    fn meta(&mut self) -> crate::Result<fs::Metadata> {
+        let meta = self.file.metadata()?;
+        Ok(meta)
+    }
 }
