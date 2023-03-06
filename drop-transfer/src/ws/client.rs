@@ -617,7 +617,7 @@ fn start_upload(
                     .event_tx
                     .send(Event::FileUploadFailed(
                         xfer.clone(),
-                        Hidden(xfile.path().into()),
+                        Hidden(PathBuf::from(file).into_boxed_path()),
                         err,
                     ))
                     .await
