@@ -28,3 +28,5 @@ class Error(IntEnum):
     TRANSFER_TIMEOUT = (24,)
     WS_SERVER = (25,)
     WS_CLIENT = (26,)
+    ADDR_IN_USE = (27,)
+    FILE_MODIFIED = (28,)

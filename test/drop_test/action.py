@@ -269,3 +269,15 @@ class Stop(Action):
 
     def __str__(self):
         return "Stop"
+
+
+class ModifyFile(Action):
+    def __init__(self, file: str):
+        self._file = file
+
+    async def run(self, drop: ffi.Drop):
+        with open(self._file, "a") as f:
+            f.write("42")
+
+    def __str__(self):
+        return f"ModifyFile({self._file})"

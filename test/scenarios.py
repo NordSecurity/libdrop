@@ -2365,4 +2365,68 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario17",
+        "Modify the file during the transfer, expecct error",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        "/tmp/testfile-big",
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File("testfile-big", 10485760),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, "testfile-big")),
+                    action.ModifyFile("/tmp/testfile-big"),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0,
+                            "testfile-big",
+                            Error.FILE_MODIFIED,
+                        )
+                    ),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File("testfile-big", 10485760),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        "testfile-big",
+                        "/tmp/received",
+                    ),
+                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0,
+                            "testfile-big",
+                            Error.BAD_TRANSFER,
+                        )
+                    ),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]
