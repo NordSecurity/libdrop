@@ -1,0 +1,7 @@
+group_imports = "StdExternalCrate"
+imports_granularity = "crate"
+blank_lines_upper_bound = 1
+format_strings = true
+imports_indent = "block"
+normalize_comments = true
+wrap_comments = true

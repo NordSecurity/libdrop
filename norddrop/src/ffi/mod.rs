@@ -1,0 +1,350 @@
+pub mod types;
+mod version;
+
+use std::{
+    ffi::{CStr, CString},
+    panic,
+    sync::{Mutex, Once},
+};
+
+use libc::c_char;
+use slog::{error, o, warn, Drain, Logger};
+
+use self::types::{norddrop_event_cb, norddrop_log_level, norddrop_logger_cb, norddrop_result};
+use crate::{
+    device::{NordDropFFI, Result as DevResult},
+    ffi::types::PanicError,
+};
+
+/// Cehck if res is ok, else return early by converting Error into
+/// norddrop_result
+macro_rules! ffi_try {
+    ($expr:expr $(,)?) => {
+        match $expr {
+            Ok(v) => v,
+            Err(e) => return Into::<norddrop_result>::into(e),
+        }
+    };
+}
+
+/// cbindgen:ignore
+static PANIC_HOOK: Once = Once::new();
+
+extern "C" {
+    fn fortify_source();
+}
+
+#[allow(non_camel_case_types)]
+pub struct norddrop(Mutex<NordDropFFI>);
+
+#[no_mangle]
+pub extern "C" fn norddrop_new_transfer(
+    dev: &norddrop,
+    peer: *const c_char,
+    descriptors: *const c_char,
+) -> *mut c_char {
+    let res = panic::catch_unwind(|| {
+        let mut dev = dev.0.lock().expect("lock instance");
+
+        if peer.is_null() {
+            return Err(norddrop_result::NORDDROP_RES_INVALID_STRING);
+        }
+
+        let peer = unsafe { CStr::from_ptr(peer) }
+            .to_str()
+            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING)?;
+
+        if descriptors.is_null() {
+            return Err(norddrop_result::NORDDROP_RES_INVALID_STRING);
+        }
+
+        let descriptors = unsafe { CStr::from_ptr(descriptors) }
+            .to_str()
+            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING)?;
+
+        let xfid = match dev.new_transfer(peer, descriptors) {
+            Ok(id) => id,
+            Err(e) => {
+                error!(dev.logger, "norddrop_new_transfer: {:?}", e);
+                return Err(norddrop_result::NORDDROP_RES_ERROR);
+            }
+        };
+
+        Ok(xfid.to_string().into_bytes())
+    });
+
+    // catch_unwind catches panics as errors and everything else goes to Ok
+    match res {
+        Ok(Ok(xfid)) => new_unmanaged_str(&xfid),
+        _ => std::ptr::null_mut(),
+    }
+}
+
+/// Destroy libdrop instance
+#[no_mangle]
+pub extern "C" fn norddrop_destroy(dev: *mut norddrop) {
+    if !dev.is_null() {
+        unsafe { Box::from_raw(dev) };
+    }
+}
+
+/// Download a file from the peer
+#[no_mangle]
+pub extern "C" fn norddrop_download(
+    dev: &norddrop,
+    xfid: *const c_char,
+    fid: *const c_char,
+    dst: *const c_char,
+) -> norddrop_result {
+    let result = panic::catch_unwind(move || {
+        let mut dev = ffi_try!(dev
+            .0
+            .lock()
+            .map_err(|_| norddrop_result::NORDDROP_RES_ERROR));
+
+        let cstr_xfid = unsafe { CStr::from_ptr(xfid) };
+        let str_xfid = ffi_try!(cstr_xfid
+            .to_str()
+            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING));
+
+        let cstr_fid = unsafe { CStr::from_ptr(fid) };
+        let str_fid = ffi_try!(cstr_fid
+            .to_str()
+            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING));
+
+        let cstr_dst = unsafe { CStr::from_ptr(dst) };
+        let str_dst = ffi_try!(cstr_dst
+            .to_str()
+            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING));
+
+        dev.download(
+            ffi_try!(str_xfid
+                .to_string()
+                .parse()
+                .map_err(|_| norddrop_result::NORDDROP_RES_BAD_INPUT)),
+            ffi_try!(str_fid
+                .to_string()
+                .parse()
+                .map_err(|_| norddrop_result::NORDDROP_RES_BAD_INPUT)),
+            str_dst.to_string(),
+        )
+        .norddrop_log_result(dev.logger.clone(), "norddrop_download")
+    });
+
+    result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
+}
+/// Cancel a transfer from the sender side
+#[no_mangle]
+pub extern "C" fn norddrop_cancel_transfer(dev: &norddrop, xfid: *const c_char) -> norddrop_result {
+    let result = panic::catch_unwind(move || {
+        let cstr_xfid = unsafe { CStr::from_ptr(xfid) };
+        let str_xfid = ffi_try!(cstr_xfid
+            .to_str()
+            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING));
+
+        let mut dev = ffi_try!(dev
+            .0
+            .lock()
+            .map_err(|_| norddrop_result::NORDDROP_RES_ERROR));
+
+        dev.cancel_transfer(ffi_try!(str_xfid
+            .to_string()
+            .parse()
+            .map_err(|_| norddrop_result::NORDDROP_RES_BAD_INPUT)))
+            .norddrop_log_result(
+                dev.logger.clone(),
+                &format!("norddrop_cancel_transfer, xfid: {xfid:?}"),
+            )
+    });
+
+    result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
+}
+
+/// Cancel a transfer from the sender side
+#[no_mangle]
+pub extern "C" fn norddrop_cancel_file(
+    dev: &norddrop,
+    xfid: *const c_char,
+    fid: *const c_char,
+) -> norddrop_result {
+    let result = panic::catch_unwind(move || {
+        let cstr_xfid = unsafe { CStr::from_ptr(xfid) };
+        let str_xfid = ffi_try!(cstr_xfid
+            .to_str()
+            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING));
+
+        let cstr_fid = unsafe { CStr::from_ptr(fid) };
+        let str_fid = ffi_try!(cstr_fid
+            .to_str()
+            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING));
+
+        let mut dev = ffi_try!(dev
+            .0
+            .lock()
+            .map_err(|_| norddrop_result::NORDDROP_RES_ERROR));
+        dev.cancel_file(
+            ffi_try!(str_xfid
+                .to_string()
+                .parse()
+                .map_err(|_| norddrop_result::NORDDROP_RES_BAD_INPUT)),
+            ffi_try!(str_fid
+                .parse()
+                .map_err(|_| norddrop_result::NORDDROP_RES_BAD_INPUT)),
+        )
+        .norddrop_log_result(dev.logger.clone(), "norddrop_cancel_file")
+    });
+
+    result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
+}
+
+/// Start norddrop instance.
+#[no_mangle]
+pub extern "C" fn norddrop_start(
+    dev: &norddrop,
+    listen_addr: *const c_char,
+    config: *const c_char,
+) -> norddrop_result {
+    let result = panic::catch_unwind(move || {
+        let addr = {
+            if listen_addr.is_null() {
+                return norddrop_result::NORDDROP_RES_INVALID_STRING;
+            }
+
+            ffi_try!(unsafe { CStr::from_ptr(listen_addr) }
+                .to_str()
+                .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING))
+        };
+
+        let config = {
+            if config.is_null() {
+                return norddrop_result::NORDDROP_RES_INVALID_STRING;
+            }
+
+            ffi_try!(unsafe { CStr::from_ptr(config) }
+                .to_str()
+                .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING))
+        };
+
+        let mut dev = ffi_try!(dev
+            .0
+            .lock()
+            .map_err(|_| norddrop_result::NORDDROP_RES_ERROR));
+
+        dev.start(addr, config)
+            .norddrop_log_result(dev.logger.clone(), "norddrop_start")
+    });
+
+    result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
+}
+
+/// Stop norddrop instance and all related activities
+#[no_mangle]
+pub extern "C" fn norddrop_stop(dev: &norddrop) -> norddrop_result {
+    let result = panic::catch_unwind(move || {
+        let mut dev = match dev.0.lock() {
+            Ok(inst) => inst,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        dev.stop()
+            .norddrop_log_result(dev.logger.clone(), "norddrop_stop")
+    });
+
+    result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
+}
+
+/// Create a new instance of norddrop. This is a required step to work with API
+/// further
+#[no_mangle]
+pub extern "C" fn norddrop_new(
+    dev: *mut *mut norddrop,
+    event_cb: norddrop_event_cb,
+    log_level: norddrop_log_level,
+    logger_cb: norddrop_logger_cb,
+) -> norddrop_result {
+    unsafe {
+        fortify_source();
+    }
+
+    let logger = Logger::root(logger_cb.filter_level(log_level.into()).fuse(), o!());
+
+    PANIC_HOOK.call_once(|| {
+        let logger = logger.clone();
+
+        panic::set_hook(Box::new(move |info: &panic::PanicInfo| {
+            error!(logger, "{}", info);
+
+            let res = CString::new(
+                serde_json::to_string(&PanicError::from(info))
+                    .unwrap_or_else(|_| String::from("event_to_json error")),
+            );
+
+            match res {
+                Ok(s) => unsafe {
+                    let callback = event_cb.callback();
+                    let callback_data = event_cb.callback_data();
+
+                    (callback)(callback_data, s.as_ptr())
+                },
+                Err(e) => warn!(logger, "Failed to create CString: {}", e),
+            }
+        }));
+    });
+
+    let result = panic::catch_unwind(move || {
+        let drive = ffi_try!(NordDropFFI::new(event_cb, logger));
+        unsafe { *dev = Box::into_raw(Box::new(norddrop(Mutex::new(drive)))) };
+
+        norddrop_result::NORDDROP_RES_OK
+    });
+
+    result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
+}
+
+impl slog::Drain for norddrop_logger_cb {
+    type Ok = ();
+    type Err = ();
+
+    fn log(&self, record: &slog::Record, _: &slog::OwnedKVList) -> Result<Self::Ok, Self::Err> {
+        if !self.is_enabled(record.level()) {
+            return Ok(());
+        }
+
+        let file = record.location().file;
+        let line = record.location().line;
+
+        let msg = format!("{file}:{line} {}", record.msg());
+        if let Ok(cstr) = CString::new(msg) {
+            unsafe { (self.cb)(self.ctx, record.level().into(), cstr.as_ptr()) };
+        }
+
+        Ok(())
+    }
+}
+
+trait FFILog {
+    fn norddrop_log_result(self, logger: Logger, caller: &str) -> norddrop_result;
+}
+
+impl FFILog for DevResult {
+    fn norddrop_log_result(self, logger: Logger, caller: &str) -> norddrop_result {
+        let msg = format!("{self:?}");
+        let res = norddrop_result::from(self);
+        match res {
+            norddrop_result::NORDDROP_RES_OK => {}
+            _ => error!(logger, "{}: {}", caller, msg),
+        };
+        res
+    }
+}
+
+fn new_unmanaged_str(bytes: &[u8]) -> *mut c_char {
+    let ptr = unsafe { libc::calloc(bytes.len() + 1, std::mem::size_of::<c_char>()) };
+    if ptr.is_null() {
+        return std::ptr::null_mut();
+    };
+
+    unsafe { ptr.copy_from_nonoverlapping(bytes.as_ptr() as *const _, bytes.len()) };
+
+    ptr as *mut c_char
+}

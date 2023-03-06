@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "drop-analytics",
+    "drop-transfer",
+    "norddrop",
+]
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "macros"] }
+slog = { version = "2.7.0", features = ["release_max_level_info"] }

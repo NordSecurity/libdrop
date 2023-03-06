@@ -1,0 +1,14 @@
+stages:
+  - build
+
+build:
+  stage: build  
+  variables:
+    LIBDROP_UPSTREAM_COMMIT_SHA: $CI_COMMIT_SHA
+    LIBDROP_COMMIT_REF_NAME: $CI_COMMIT_REF_NAME
+    LIBDROP_PROJECT_NAME: $CI_PROJECT_NAME
+    LIBDROP_PROJECT_PATH: $CI_PROJECT_PATH
+  trigger:
+    project: $LIBDROP_BUILD_URL
+    branch: master
+    strategy: depend

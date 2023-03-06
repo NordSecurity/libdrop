@@ -1,0 +1,44 @@
+version: '3.4'
+
+x-peer: &peer-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  command: sh -c "test/run.py --runner=$$HOSTNAME --scenario=\"${SCENARIO}\" --lib=/src/${LIB_PATH}"
+  volumes:
+    - type: bind
+      source: ..
+      target: /src
+  working_dir: /src
+  cap_add:
+      - NET_ADMIN
+
+services:
+  ren:
+    <<: *peer-common
+    hostname: ren
+    networks:
+      interneciux:
+        ipv4_address: 172.20.0.5
+
+  stimpy:
+    <<: *peer-common
+    hostname: stimpy
+    networks:
+      interneciux:
+        ipv4_address: 172.20.0.15
+
+  george:
+    <<: *peer-common
+    hostname: george
+    networks:
+      interneciux:
+        ipv4_address: 172.20.0.25
+
+networks:
+  interneciux:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16

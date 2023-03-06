@@ -1,0 +1,6 @@
+[package]
+name = "drop-config"
+version = "1.0.0"
+authors = ["Lukas Pukenis"]
+edition = "2021"
+
