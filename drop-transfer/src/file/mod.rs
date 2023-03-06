@@ -21,6 +21,21 @@ use crate::{utils::Hidden, Error};
 
 const HEADER_SIZE: usize = 1024;
 
+#[derive(Clone, Debug)]
+pub enum FileKind {
+    Dir {
+        children: HashMap<Hidden<Box<Path>>, File>,
+    },
+    FileToSend {
+        meta: Hidden<fs::Metadata>,
+        source: FileSource,
+        mime_type: Option<Hidden<&'static str>>,
+    },
+    FileToRecv {
+        size: u64,
+    },
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum FileSource {
     Path,
@@ -31,11 +46,7 @@ pub enum FileSource {
 #[derive(Clone, Debug)]
 pub struct File {
     pub(crate) path: Hidden<Box<Path>>,
-    pub(crate) size: Option<u64>,
-    pub(crate) meta: Option<Hidden<fs::Metadata>>,
-    pub(crate) children: HashMap<Hidden<Box<Path>>, File>,
-    pub(crate) source: Option<FileSource>,
-    pub(crate) mime_type: Option<Hidden<&'static str>>,
+    pub(crate) kind: FileKind,
 }
 
 impl File {
@@ -60,7 +71,7 @@ impl File {
                 return Err(Error::TransferLimitsExceeded);
             }
 
-            root.insert(File::new(entry.path(), fs::symlink_metadata(path)?)?)?;
+            root.insert(File::new(entry.path(), entry.path().symlink_metadata()?)?)?;
         }
 
         Ok(root)
@@ -72,7 +83,7 @@ impl File {
 
         for component in path.components() {
             let key: Box<Path> = AsRef::<Path>::as_ref(&component).into();
-            let child = file.children.get(&key)?;
+            let child = file.children_inner()?.get(&key)?;
 
             file = child;
             ret = Some(child);
@@ -82,7 +93,21 @@ impl File {
     }
 
     pub fn children(&self) -> impl Iterator<Item = &File> {
-        self.children.values()
+        self.children_inner().into_iter().flat_map(|hm| hm.values())
+    }
+
+    fn children_inner(&self) -> Option<&HashMap<Hidden<Box<Path>>, Self>> {
+        match &self.kind {
+            FileKind::Dir { children } => Some(children),
+            _ => None,
+        }
+    }
+
+    fn children_inner_mut(&mut self) -> Option<&mut HashMap<Hidden<Box<Path>>, Self>> {
+        match &mut self.kind {
+            FileKind::Dir { children } => Some(children),
+            _ => None,
+        }
     }
 
     fn insert(&mut self, child: File) -> Result<(), Error> {
@@ -101,15 +126,16 @@ impl File {
             .ok_or(Error::BadPath)?;
 
         let filename = PathBuf::from(&path.file_name().ok_or(Error::BadPath)?).into_boxed_path();
+        let children = self.children_inner_mut().expect("Expected directory");
 
         // We‘re inserting a parent
         if child.path() != &*path {
-            self.children
+            children
                 .entry(Hidden(filename))
                 .or_insert_with(|| Self::new_dir(path))
                 .insert(child)?;
         } else {
-            self.children.insert(
+            children.insert(
                 Hidden(filename),
                 Self {
                     path: Hidden(path),
@@ -124,11 +150,9 @@ impl File {
     fn new_dir(path: Box<Path>) -> Self {
         Self {
             path: Hidden(path),
-            size: None,
-            meta: None,
-            children: HashMap::new(),
-            source: None,
-            mime_type: None,
+            kind: FileKind::Dir {
+                children: HashMap::new(),
+            },
         }
     }
 
@@ -165,11 +189,11 @@ impl File {
 
         Ok(Self {
             path: Hidden(path.into()),
-            size: Some(meta.len()),
-            meta: Some(Hidden(meta)),
-            children: HashMap::new(),
-            source: Some(FileSource::Path),
-            mime_type: mime_type.map(Hidden),
+            kind: FileKind::FileToSend {
+                meta: Hidden(meta),
+                source: FileSource::Path,
+                mime_type: mime_type.map(Hidden),
+            },
         })
     }
 
@@ -190,11 +214,11 @@ impl File {
 
             Ok(Self {
                 path: Hidden(path.into()),
-                size: Some(meta.len()),
-                meta: Some(Hidden(meta)),
-                children: HashMap::new(),
-                source: Some(FileSource::Fd(fd)),
-                mime_type: mime_type.map(Hidden),
+                kind: FileKind::FileToSend {
+                    meta: Hidden(meta),
+                    source: FileSource::Fd(fd),
+                    mime_type: mime_type.map(Hidden),
+                },
             })
         };
         let result = create_file();
@@ -214,11 +238,18 @@ impl File {
     }
 
     pub fn size(&self) -> Option<u64> {
-        self.size
+        match &self.kind {
+            FileKind::FileToSend { meta, .. } => Some(meta.len()),
+            FileKind::FileToRecv { size } => Some(*size),
+            _ => None,
+        }
     }
 
     pub fn mime_type(&self) -> Option<&'static str> {
-        self.mime_type.as_deref().copied()
+        match &self.kind {
+            FileKind::FileToSend { mime_type, .. } => mime_type.map(|h| h.0),
+            _ => None,
+        }
     }
 
     // Used for moose only
@@ -229,25 +260,24 @@ impl File {
     // Open the file if it wasn't already opened and return the std::fs::File
     // instance
     pub(crate) fn open(&self) -> Result<FileReader, Error> {
-        let source = self.source.ok_or(Error::DirectoryNotExpected)?;
-        let meta = self.meta.clone().ok_or(Error::DirectoryNotExpected)?;
-
-        FileReader::new(source, meta.0, &self.path)
+        match &self.kind {
+            FileKind::FileToSend { meta, source, .. } => {
+                FileReader::new(*source, meta.0.clone(), &self.path)
+            }
+            _ => Err(Error::BadFile),
+        }
     }
 
     pub fn is_dir(&self) -> bool {
-        !self.children.is_empty()
+        self.children_inner().is_some()
     }
 
     pub fn iter(&self) -> Box<dyn Iterator<Item = &File> + '_> {
-        if !self.is_dir() {
-            return Box::new(iter::empty());
-        }
-
         Box::new(
-            self.children
-                .values()
-                .flat_map(|c| Box::new(iter::once(c).chain(c.iter()))),
+            self.children_inner()
+                .into_iter()
+                .flat_map(|hm| hm.values())
+                .flat_map(|c| iter::once(c).chain(c.iter())),
         )
     }
 }

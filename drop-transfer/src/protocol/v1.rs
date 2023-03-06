@@ -1,13 +1,10 @@
-use std::{
-    net::IpAddr,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, net::IpAddr, path::PathBuf};
 
 use anyhow::Context;
 use drop_config::DropConfig;
 use serde::{Deserialize, Serialize};
 
-use crate::utils::Hidden;
+use crate::{file::FileKind, utils::Hidden};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct File {
@@ -94,34 +91,38 @@ impl Chunk {
     }
 }
 
-impl From<File> for crate::File {
-    fn from(
+impl TryFrom<File> for crate::File {
+    type Error = crate::Error;
+
+    fn try_from(
         File {
             name,
             size,
             children,
         }: File,
-    ) -> Self {
+    ) -> Result<Self, Self::Error> {
         let path = PathBuf::from(name);
 
-        let children = children
+        let children: HashMap<_, _> = children
             .into_iter()
             .map(|mut c| {
                 let key = c.name.clone();
                 c.name = path.join(&c.name).to_string_lossy().to_string();
 
-                (Hidden(AsRef::<Path>::as_ref(&key).into()), c.into())
+                Ok((Hidden(PathBuf::from(key).into_boxed_path()), c.try_into()?))
             })
-            .collect();
+            .collect::<Result<_, Self::Error>>()?;
 
-        Self {
+        Ok(Self {
             path: Hidden(path.into_boxed_path()),
-            size,
-            meta: None,
-            children,
-            source: Some(crate::file::FileSource::Path),
-            mime_type: None,
-        }
+            kind: if children.is_empty() {
+                FileKind::FileToRecv {
+                    size: size.ok_or(crate::Error::BadFile)?,
+                }
+            } else {
+                FileKind::Dir { children }
+            },
+        })
     }
 }
 
@@ -148,7 +149,14 @@ impl TryFrom<(TransferRequest, IpAddr, &DropConfig)> for crate::Transfer {
     fn try_from(
         (TransferRequest { files }, peer, config): (TransferRequest, IpAddr, &DropConfig),
     ) -> Result<Self, Self::Error> {
-        Self::new(peer, files.into_iter().map(Into::into).collect(), config)
+        Self::new(
+            peer,
+            files
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, crate::Error>>()?,
+            config,
+        )
     }
 }
 
