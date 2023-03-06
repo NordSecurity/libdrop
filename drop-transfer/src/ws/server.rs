@@ -23,6 +23,7 @@ use warp::{
     Filter,
 };
 
+use super::events::FileEventTx;
 use crate::{
     error::ResultExt,
     event::DownloadSuccess,
@@ -230,7 +231,7 @@ async fn on_client_v1_v2<const PING: bool>(
         }
     };
 
-    let job = handle_client_v1::<PING>(socket, xfer, state, logger);
+    let job = handle_client_v1_v2::<PING>(socket, xfer, state, logger);
 
     tokio::select! {
         biased;
@@ -242,7 +243,7 @@ async fn on_client_v1_v2<const PING: bool>(
     };
 }
 
-async fn handle_client_v1<const PING: bool>(
+async fn handle_client_v1_v2<const PING: bool>(
     mut socket: WebSocket,
     xfer: Transfer,
     state: Arc<State>,
@@ -278,7 +279,7 @@ async fn handle_client_v1<const PING: bool>(
         }
     }
 
-    let (send_tx, mut send_rx) = mpsc::channel(4);
+    let (send_tx, mut send_rx) = mpsc::channel(2);
     let mut ping = super::utils::Pinger::<PING>::new(&state);
 
     let mut handler = ServerHandler::new(send_tx, state, xfer, logger.clone());
@@ -335,19 +336,20 @@ async fn handle_client_v1<const PING: bool>(
 struct ServerHandler {
     // Used to send feedback from file reading threads
     transfer_sink: Sender<v1::ServerMsg>,
-    jobs: HashMap<PathBuf, FileTransferState>,
+    jobs: HashMap<PathBuf, FileTask>,
     state: Arc<State>,
     xfer: Transfer,
     logger: Logger,
     last_recv: Instant,
 }
 
-struct FileTransferState {
-    task: JoinHandle<()>,
+struct FileTask {
+    job: JoinHandle<()>,
     chunks_tx: UnboundedSender<Vec<u8>>,
+    events: Arc<FileEventTx>,
 }
 
-impl FileTransferState {
+impl FileTask {
     fn start(
         sink: Sender<v1::ServerMsg>,
         state: Arc<State>,
@@ -355,10 +357,16 @@ impl FileTransferState {
         task: Box<FileXferTask>,
         logger: Logger,
     ) -> Self {
+        let events = Arc::new(FileEventTx::new(&state));
         let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
-        let task = tokio::spawn(task.run(state, sink, chunks_rx, file, logger));
 
-        Self { task, chunks_tx }
+        let job = tokio::spawn(task.run(state, Arc::clone(&events), sink, chunks_rx, file, logger));
+
+        Self {
+            job,
+            chunks_tx,
+            events,
+        }
     }
 }
 
@@ -479,21 +487,22 @@ impl ServerHandler {
         );
 
         if let Some(file) = file {
-            if let Some(FileTransferState { task, chunks_tx: _ }) = self.jobs.remove(file) {
+            if let Some(FileTask {
+                job: task,
+                events,
+                chunks_tx: _,
+            }) = self.jobs.remove(file)
+            {
                 if !task.is_finished() {
                     task.abort();
-                    // Wait for the task to finish to ensure no more events are emitted
-                    let _ = task.await;
 
-                    self.state
-                        .event_tx
-                        .send(Event::FileDownloadFailed(
+                    events
+                        .stop(Event::FileDownloadFailed(
                             self.xfer.clone(),
                             Hidden(file.into()),
                             Error::BadTransfer,
                         ))
-                        .await
-                        .expect("Failed to send event");
+                        .await;
                 }
             }
         }
@@ -533,7 +542,7 @@ impl ServerHandler {
             .filter(|file| {
                 self.jobs
                     .get(file.path())
-                    .map_or(false, |state| !state.task.is_finished())
+                    .map_or(false, |state| !state.job.is_finished())
             })
             .for_each(|file| {
                 self.state.moose.service_quality_transfer_file(
@@ -568,7 +577,12 @@ impl ServerHandler {
     }
 
     async fn on_cancel(&mut self, file: &Path) {
-        if let Some(FileTransferState { task, chunks_tx: _ }) = self.jobs.remove(file) {
+        if let Some(FileTask {
+            job: task,
+            events,
+            chunks_tx: _,
+        }) = self.jobs.remove(file)
+        {
             if !task.is_finished() {
                 task.abort();
 
@@ -583,17 +597,12 @@ impl ServerHandler {
                     0,
                 );
 
-                // Wait for the task to finish to ensure no more events are emitted
-                let _ = task.await;
-
-                self.state
-                    .event_tx
-                    .send(Event::FileDownloadCancelled(
+                events
+                    .stop(Event::FileDownloadCancelled(
                         self.xfer.clone(),
                         Hidden(file.into()),
                     ))
-                    .await
-                    .expect("Failed to send event");
+                    .await;
             }
         }
     }
@@ -607,7 +616,7 @@ impl ServerHandler {
         let is_running = self
             .jobs
             .get(&file)
-            .map_or(false, |state| !state.task.is_finished());
+            .map_or(false, |state| !state.job.is_finished());
 
         if is_running {
             return Ok(());
@@ -618,7 +627,7 @@ impl ServerHandler {
         });
         socket.send(Message::from(&msg)).await?;
 
-        let state = FileTransferState::start(
+        let state = FileTask::start(
             self.transfer_sink.clone(),
             self.state.clone(),
             file.clone(),
@@ -634,13 +643,13 @@ impl ServerHandler {
     async fn stop_jobs(&mut self) {
         debug!(self.logger, "Waiting for background jobs to finish");
 
-        let tasks = self
-            .jobs
-            .drain()
-            .map(|(_, FileTransferState { task, chunks_tx: _ })| {
-                task.abort();
-                task
-            });
+        let tasks = self.jobs.drain().map(|(_, task)| {
+            task.job.abort();
+
+            async move {
+                task.events.stop_silent().await;
+            }
+        });
 
         futures::future::join_all(tasks).await;
     }
@@ -649,13 +658,10 @@ impl ServerHandler {
 impl Drop for ServerHandler {
     fn drop(&mut self) {
         debug!(self.logger, "Stopping server handler");
-        self.jobs
-            .values()
-            .for_each(|FileTransferState { task, chunks_tx: _ }| task.abort());
+        self.jobs.values().for_each(|task| task.job.abort());
     }
 }
 
-// TODO(msz): cleanup
 pub struct FileXferTask {
     pub file: crate::File,
     pub location: Hidden<PathBuf>,
@@ -717,6 +723,7 @@ impl FileXferTask {
     async fn run(
         self,
         state: Arc<State>,
+        events: Arc<FileEventTx>,
         sink: Sender<v1::ServerMsg>,
         mut stream: UnboundedReceiver<Vec<u8>>,
         file: PathBuf,
@@ -735,14 +742,12 @@ impl FileXferTask {
             0,
         );
 
-        state
-            .event_tx
-            .send(crate::Event::FileDownloadStarted(
+        events
+            .start(crate::Event::FileDownloadStarted(
                 self.xfer.clone(),
                 Hidden(self.file.path().into()),
             ))
-            .await
-            .expect("Failed to send FileDownloadStarted event");
+            .await;
 
         let receive_file = async {
             let mut out_file = match fs::File::create(&self.tmp_location.0) {
@@ -784,15 +789,13 @@ impl FileXferTask {
                         }))
                         .await?;
 
-                        state
-                            .event_tx
-                            .send(crate::Event::FileDownloadProgress(
+                        events
+                            .emit(crate::Event::FileDownloadProgress(
                                 self.xfer.clone(),
                                 Hidden(self.file.path().into()),
                                 bytes_received,
                             ))
-                            .await
-                            .expect("Failed to send FileDownloadProgress event");
+                            .await;
                     }
 
                     last_progress = current_progress;
@@ -886,11 +889,7 @@ impl FileXferTask {
         };
 
         if let Some(event) = event {
-            state
-                .event_tx
-                .send(event)
-                .await
-                .expect("Failed to send event");
+            events.stop(event).await;
         }
     }
 }

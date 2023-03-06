@@ -21,6 +21,7 @@ use tokio_tungstenite::{
     WebSocketStream,
 };
 
+use super::events::FileEventTx;
 use crate::{
     error::ResultExt,
     manager::{TransferConnection, TransferGuard},
@@ -165,7 +166,7 @@ async fn client_task_v1_v2<const PING: bool>(
 ) {
     let _guard = TransferGuard::new(state.clone(), xfer.id());
 
-    let (upload_tx, mut upload_rx) = mpsc::channel(4);
+    let (upload_tx, mut upload_rx) = mpsc::channel(2);
     let mut ping = super::utils::Pinger::<PING>::new(&state);
     let mut handler = ClientHandler::new(state, upload_tx, xfer, logger);
 
@@ -197,7 +198,7 @@ async fn client_task_v1_v2<const PING: bool>(
                 // Message to send down the wire
                 msg = upload_rx.recv() => {
                     let msg = msg.expect("Handler channel should always be open");
-                    socket.send(Message::from(msg)).await.context("Socket sending upload msg")?;
+                    socket.send(msg).await.context("Socket sending upload msg")?;
                 },
                 _ = ping.tick() => {
                     socket.send(Message::Ping(Vec::new())).await.context("Failed to send PING")?;
@@ -220,11 +221,31 @@ async fn client_task_v1_v2<const PING: bool>(
 
 type WsSink = WebSocketStream<TcpStream>;
 
+struct FileTask {
+    job: JoinHandle<()>,
+    events: Arc<FileEventTx>,
+}
+
+impl FileTask {
+    fn new(
+        state: Arc<State>,
+        sink: Sender<Message>,
+        xfer: crate::Transfer,
+        file: String,
+        logger: Logger,
+    ) -> anyhow::Result<Self> {
+        let events = Arc::new(FileEventTx::new(&state));
+        let job = start_upload(state, Arc::clone(&events), sink, xfer, file, logger)?;
+
+        Ok(Self { job, events })
+    }
+}
+
 struct ClientHandler {
     state: Arc<State>,
-    upload_tx: Sender<v1::Chunk>,
+    upload_tx: Sender<Message>,
     xfer: crate::Transfer,
-    jobs: HashMap<PathBuf, JoinHandle<()>>,
+    tasks: HashMap<PathBuf, FileTask>,
     logger: Logger,
     last_recv: Instant,
 }
@@ -232,7 +253,7 @@ struct ClientHandler {
 impl ClientHandler {
     fn new(
         state: Arc<State>,
-        upload_tx: Sender<v1::Chunk>,
+        upload_tx: Sender<Message>,
         xfer: crate::Transfer,
         logger: Logger,
     ) -> Self {
@@ -240,7 +261,7 @@ impl ClientHandler {
             state,
             upload_tx,
             xfer,
-            jobs: HashMap::new(),
+            tasks: HashMap::new(),
             logger,
             last_recv: Instant::now(),
         }
@@ -358,9 +379,9 @@ impl ClientHandler {
             .flat_file_list()
             .iter()
             .filter(|file| {
-                self.jobs
+                self.tasks
                     .get(file.path())
-                    .map_or(false, |task| !task.is_finished())
+                    .map_or(false, |task| !task.job.is_finished())
             })
             .for_each(|file| {
                 let size = file.size_kb().unwrap_or_default();
@@ -384,28 +405,26 @@ impl ClientHandler {
     }
 
     async fn on_progress(&self, file: PathBuf, transfered: u64) {
-        self.state
-            .event_tx
-            .send(Event::FileUploadProgress(
-                self.xfer.clone(),
-                Hidden(file.into_boxed_path()),
-                transfered,
-            ))
-            .await
-            .expect("Failed to send TransferProgress event");
+        if let Some(task) = self.tasks.get(&file) {
+            task.events
+                .emit(Event::FileUploadProgress(
+                    self.xfer.clone(),
+                    Hidden(file.into_boxed_path()),
+                    transfered,
+                ))
+                .await;
+        }
     }
 
     async fn on_done(&mut self, file: PathBuf) {
-        self.jobs.remove(&file);
-
-        self.state
-            .event_tx
-            .send(Event::FileUploadSuccess(
-                self.xfer.clone(),
-                Hidden(file.into_boxed_path()),
-            ))
-            .await
-            .expect("Failed to send FileUploadSuccess event");
+        if let Some(task) = self.tasks.remove(&file) {
+            task.events
+                .stop(Event::FileUploadSuccess(
+                    self.xfer.clone(),
+                    Hidden(file.into_boxed_path()),
+                ))
+                .await;
+        }
     }
 
     async fn on_error(&mut self, file: Option<&Path>, msg: String) {
@@ -417,21 +436,17 @@ impl ClientHandler {
         );
 
         if let Some(file) = file {
-            if let Some(task) = self.jobs.remove(file) {
-                if !task.is_finished() {
-                    task.abort();
-                    // Wait for the task to finish to ensure no more events are emitted
-                    let _ = task.await;
+            if let Some(task) = self.tasks.remove(file) {
+                if !task.job.is_finished() {
+                    task.job.abort();
 
-                    self.state
-                        .event_tx
-                        .send(Event::FileUploadFailed(
+                    task.events
+                        .stop(Event::FileUploadFailed(
                             self.xfer.clone(),
                             Hidden(file.into()),
                             crate::Error::BadTransfer,
                         ))
-                        .await
-                        .expect("Failed to send event");
+                        .await;
                 }
             }
         }
@@ -441,12 +456,12 @@ impl ClientHandler {
         let file_str = file.to_string_lossy().to_string();
 
         let f = || {
-            match self.jobs.entry(file) {
+            match self.tasks.entry(file) {
                 Entry::Occupied(o) => {
                     let task = o.into_mut();
 
-                    if task.is_finished() {
-                        *task = start_upload(
+                    if task.job.is_finished() {
+                        *task = FileTask::new(
                             self.state.clone(),
                             self.upload_tx.clone(),
                             self.xfer.clone(),
@@ -458,7 +473,7 @@ impl ClientHandler {
                     }
                 }
                 Entry::Vacant(v) => {
-                    let task = start_upload(
+                    let task = FileTask::new(
                         self.state.clone(),
                         self.upload_tx.clone(),
                         self.xfer.clone(),
@@ -491,9 +506,9 @@ impl ClientHandler {
     }
 
     async fn on_cancel(&mut self, file: &Path) {
-        if let Some(task) = self.jobs.remove(file) {
-            if !task.is_finished() {
-                task.abort();
+        if let Some(task) = self.tasks.remove(file) {
+            if !task.job.is_finished() {
+                task.job.abort();
 
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
@@ -506,17 +521,12 @@ impl ClientHandler {
                     0,
                 );
 
-                // Wait for the task to finish to ensure no more events are emitted
-                let _ = task.await;
-
-                self.state
-                    .event_tx
-                    .send(Event::FileUploadCancelled(
+                task.events
+                    .stop(Event::FileUploadCancelled(
                         self.xfer.clone(),
                         Hidden(file.into()),
                     ))
-                    .await
-                    .expect("Failed to send event");
+                    .await;
             }
         }
     }
@@ -524,9 +534,12 @@ impl ClientHandler {
     async fn stop_jobs(&mut self) {
         debug!(self.logger, "Waiting for background jobs to finish");
 
-        let tasks = self.jobs.drain().map(|(_, task)| {
-            task.abort();
-            task
+        let tasks = self.tasks.drain().map(|(_, task)| {
+            task.job.abort();
+
+            async move {
+                task.events.stop_silent().await;
+            }
         });
 
         futures::future::join_all(tasks).await;
@@ -536,13 +549,14 @@ impl ClientHandler {
 impl Drop for ClientHandler {
     fn drop(&mut self) {
         debug!(self.logger, "Stopping client handler");
-        self.jobs.values().for_each(|task| task.abort());
+        self.tasks.values().for_each(|task| task.job.abort());
     }
 }
 
 fn start_upload(
     state: Arc<State>,
-    sink: Sender<v1::Chunk>,
+    events: Arc<FileEventTx>,
+    sink: Sender<Message>,
     xfer: crate::Transfer,
     file: String,
     logger: Logger,
@@ -561,14 +575,12 @@ fn start_upload(
 
     let upload_job = async move {
         let send_file = async {
-            state
-                .event_tx
-                .send(Event::FileUploadStarted(
+            events
+                .start(Event::FileUploadStarted(
                     xfer.clone(),
                     Hidden(PathBuf::from(&file).into()),
                 ))
-                .await
-                .expect("Could not send a download started event, channel closed");
+                .await;
 
             let mut iofile = match xfile.open() {
                 Ok(f) => f,
@@ -590,7 +602,9 @@ fn start_upload(
                     None => return Ok(()),
                 };
 
-                sink.send(chunk).await.map_err(|_| crate::Error::Canceled)?;
+                sink.send(Message::from(chunk))
+                    .await
+                    .map_err(|_| crate::Error::Canceled)?;
             }
         };
 
@@ -613,15 +627,20 @@ fn start_upload(
                     "Failed at service::download() while reading a file: {}", err
                 );
 
-                state
-                    .event_tx
-                    .send(Event::FileUploadFailed(
+                let _ = sink
+                    .send(Message::from(&v1::ClientMsg::Error(v1::Error {
+                        file: Some(file.clone()),
+                        msg: err.to_string(),
+                    })))
+                    .await;
+
+                events
+                    .stop(Event::FileUploadFailed(
                         xfer.clone(),
                         Hidden(PathBuf::from(file).into_boxed_path()),
                         err,
                     ))
-                    .await
-                    .expect("Failed to send event");
+                    .await;
             }
         };
     };
