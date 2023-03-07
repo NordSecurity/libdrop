@@ -9,34 +9,16 @@ use anyhow::Context;
 use clap::{arg, command, value_parser, ArgAction, Command, Result};
 use drop_config::DropConfig;
 use drop_transfer::{Event, File, Service, Transfer};
-use lazy_static::lazy_static;
-use slog::{info, o, Drain, Logger};
+use slog::{o, Drain, Logger};
+use slog_scope::info;
 use tokio::sync::mpsc;
-
-lazy_static! {
-    static ref LOGGER: slog::Logger = Logger::root(
-        slog_async::Async::new(
-            slog::LevelFilter::new(
-                slog_term::FullFormat::new(slog_term::TermDecorator::new().build())
-                    .use_file_location()
-                    .build()
-                    .fuse(),
-                slog::Level::Trace
-            )
-            .fuse()
-        )
-        .build()
-        .fuse(),
-        o!()
-    );
-}
 
 async fn listen(
     service: &mut Service,
     mut rx: mpsc::Receiver<Event>,
     out_dir: &Path,
 ) -> anyhow::Result<()> {
-    info!(LOGGER, "Awaiting events…");
+    info!("Awaiting events…");
 
     while let Some(ev) = rx.recv().await {
         match ev {
@@ -44,7 +26,7 @@ async fn listen(
                 let xfid = xfer.id();
                 let files = xfer.files();
 
-                info!(LOGGER, "[EVENT] RequestReceived {}: {:?}", xfid, files);
+                info!("[EVENT] RequestReceived {}: {:?}", xfid, files);
 
                 for file in files.values() {
                     if file.is_dir() {
@@ -53,19 +35,19 @@ async fn listen(
                         for child in children {
                             let path = child.path();
 
-                            info!(LOGGER, "Downloading {:?}", path);
+                            info!("Downloading {:?}", path);
 
                             service
                                 .download(xfid, path, out_dir)
                                 .await
                                 .context("Cannot issue download call")?;
 
-                            info!(LOGGER, "{:?} finished downloading", path);
+                            info!("{:?} finished downloading", path);
                         }
                     } else {
                         let path = file.path();
 
-                        info!(LOGGER, "Downloading {:?}", path);
+                        info!("Downloading {:?}", path);
 
                         service
                             .download(xfid, path, out_dir)
@@ -76,7 +58,6 @@ async fn listen(
             }
             Event::FileDownloadStarted(xfer, file) => {
                 info!(
-                    LOGGER,
                     "[EVENT] [{}] FileDownloadStarted {:?} transfer started",
                     xfer.id(),
                     file,
@@ -85,7 +66,6 @@ async fn listen(
 
             Event::FileUploadProgress(xfer, file, byte_count) => {
                 info!(
-                    LOGGER,
                     "[EVENT] [{}] FileUploadProgress {:?} progress: {}",
                     xfer.id(),
                     file,
@@ -94,7 +74,6 @@ async fn listen(
             }
             Event::FileDownloadSuccess(xfer, info) => {
                 info!(
-                    LOGGER,
                     "[EVENT] [{}] FileDownloadSuccess {:?} [Final name: {:?}]",
                     xfer.id(),
                     info.id,
@@ -102,32 +81,16 @@ async fn listen(
                 );
             }
             Event::FileUploadSuccess(xfer, path) => {
-                info!(
-                    LOGGER,
-                    "[EVENT] FileUploadSuccess {}: {:?}",
-                    xfer.id(),
-                    path,
-                );
+                info!("[EVENT] FileUploadSuccess {}: {:?}", xfer.id(), path,);
             }
             Event::RequestQueued(xfer) => {
-                info!(
-                    LOGGER,
-                    "[EVENT] RequestQueued {}: {:?}",
-                    xfer.id(),
-                    xfer.files(),
-                );
+                info!("[EVENT] RequestQueued {}: {:?}", xfer.id(), xfer.files(),);
             }
             Event::FileUploadStarted(xfer, file) => {
-                info!(
-                    LOGGER,
-                    "[EVENT] FileUploadStarted {}: {:?}",
-                    xfer.id(),
-                    file,
-                );
+                info!("[EVENT] FileUploadStarted {}: {:?}", xfer.id(), file,);
             }
             Event::FileDownloadProgress(xfer, file, progress) => {
                 info!(
-                    LOGGER,
                     "[EVENT] FileDownloadProgress {}: {:?}, progress: {}",
                     xfer.id(),
                     file,
@@ -135,24 +98,13 @@ async fn listen(
                 );
             }
             Event::FileUploadCancelled(xfer, file) => {
-                info!(
-                    LOGGER,
-                    "[EVENT] FileUploadCancelled {}: {:?}",
-                    xfer.id(),
-                    file,
-                );
+                info!("[EVENT] FileUploadCancelled {}: {:?}", xfer.id(), file,);
             }
             Event::FileDownloadCancelled(xfer, file) => {
-                info!(
-                    LOGGER,
-                    "[EVENT] FileDownloadCancelled {}: {:?}",
-                    xfer.id(),
-                    file
-                );
+                info!("[EVENT] FileDownloadCancelled {}: {:?}", xfer.id(), file);
             }
             Event::FileUploadFailed(xfer, file, status) => {
                 info!(
-                    LOGGER,
                     "[EVENT] FileUploadFailed {}: {:?}, status: {:?}",
                     xfer.id(),
                     file,
@@ -161,7 +113,6 @@ async fn listen(
             }
             Event::FileDownloadFailed(xfer, file, status) => {
                 info!(
-                    LOGGER,
                     "[EVENT] FileDownloadFailed {}: {:?}, {:?}",
                     xfer.id(),
                     file,
@@ -170,19 +121,13 @@ async fn listen(
             }
             Event::TransferCanceled(xfer, by_peer) => {
                 info!(
-                    LOGGER,
                     "[EVENT] TransferCanceled {}, by peer? {}",
                     xfer.id(),
                     by_peer
                 );
             }
             Event::TransferFailed(xfer, err) => {
-                info!(
-                    LOGGER,
-                    "[EVENT] TransferFailed {}, status: {}",
-                    xfer.id(),
-                    err
-                );
+                info!("[EVENT] TransferFailed {}, status: {}", xfer.id(), err);
             }
         }
     }
@@ -192,6 +137,24 @@ async fn listen(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let logger = Logger::root(
+        slog_async::Async::new(
+            slog::LevelFilter::new(
+                slog_term::FullFormat::new(slog_term::TermDecorator::new().build())
+                    .use_file_location()
+                    .build()
+                    .fuse(),
+                slog::Level::Trace,
+            )
+            .fuse(),
+        )
+        .build()
+        .fuse(),
+        o!(),
+    );
+
+    let _guard = slog_scope::set_global_logger(logger.clone());
+
     let matches = command!()
         .arg(
             arg!(-l --listen <ADDR> "Listen address")
@@ -229,16 +192,8 @@ async fn main() -> anyhow::Result<()> {
         .get_one::<PathBuf>("output")
         .expect("Missing `output` flag");
 
-    info!(LOGGER, "Spawning listener task…");
-
-    let mut service = Service::start(
-        addr,
-        tx,
-        LOGGER.clone(),
-        config,
-        drop_analytics::moose_mock(),
-    )
-    .context("Failed to start service")?;
+    let mut service = Service::start(addr, tx, logger, config, drop_analytics::moose_mock())
+        .context("Failed to start service")?;
 
     let task = async {
         if let Some(matches) = matches.subcommand_matches("transfer") {
@@ -246,7 +201,7 @@ async fn main() -> anyhow::Result<()> {
                 .get_one::<IpAddr>("ADDR")
                 .expect("Missing transfer `ADDR` field");
 
-            info!(LOGGER, "Sending transfer request to {}", addr);
+            info!("Sending transfer request to {}", addr);
 
             let xfer = Transfer::new(
                 *addr,
@@ -262,12 +217,12 @@ async fn main() -> anyhow::Result<()> {
             service.send_request(xfer);
         }
 
-        info!(LOGGER, "Listening...");
+        info!("Listening...");
         listen(&mut service, rx, out_dir).await
     };
 
     let task_result = task.await;
-    info!(LOGGER, "Stopping the service");
+    info!("Stopping the service");
 
     let stop_result = service.stop().await.context("Failed to stop");
     task_result?;

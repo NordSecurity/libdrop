@@ -10,11 +10,11 @@ name = "udrop"
 [dev-dependencies]
 clap = { version = "3.2", features = ["cargo"] }
 slog-async = "2.7.0"
+slog-scope = "4.4.0"
 slog-term = "2.9"
 
 [dependencies]
 slog = { workspace = true }
-lazy_static = "1.4.0"
 drop-config = { version = "1.0.0", path = "../drop-config" }
 drop-analytics = { version = "1.0.0", path = "../drop-analytics" }
 uuid = { version = "1.2", features = ["v4"] }
