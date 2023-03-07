@@ -1,24 +1,12 @@
-use std::{
-    env,
-    net::{AddrParseError, IpAddr},
-    path::Path,
-    sync::Arc,
-};
+use std::{env, net::IpAddr, path::Path, time::Duration};
 
+use anyhow::Context;
 use clap::{arg, command, value_parser, ArgAction, Command, Result};
 use drop_config::DropConfig;
-use drop_transfer::{Error as TransferError, Event, File, Service, Transfer};
+use drop_transfer::{Event, File, Service, Transfer};
 use lazy_static::lazy_static;
 use slog::{info, o, Drain, Logger};
-use tokio::sync::{mpsc, Mutex};
-
-#[derive(thiserror::Error, Debug)]
-pub(crate) enum Error {
-    #[error("Bad address")]
-    BadAddress(#[from] AddrParseError),
-    #[error(transparent)]
-    Transfer(#[from] TransferError),
-}
+use tokio::sync::mpsc;
 
 lazy_static! {
     static ref LOGGER: slog::Logger = Logger::root(
@@ -38,12 +26,10 @@ lazy_static! {
     );
 }
 
-async fn listen(service: Arc<Mutex<Service>>, mut rx: mpsc::Receiver<Event>, _is_sender: bool) {
+async fn listen(service: &mut Service, mut rx: mpsc::Receiver<Event>) -> anyhow::Result<()> {
     info!(LOGGER, "Awaiting events…");
 
     while let Some(ev) = rx.recv().await {
-        let mut svc = service.lock().await;
-
         match ev {
             Event::RequestReceived(xfer) => {
                 let xfid = xfer.id();
@@ -62,7 +48,10 @@ async fn listen(service: Arc<Mutex<Service>>, mut rx: mpsc::Receiver<Event>, _is
 
                             info!(LOGGER, "Downloading {:?}", path);
 
-                            svc.download(xfid, path, out_dir).await.unwrap();
+                            service
+                                .download(xfid, path, out_dir)
+                                .await
+                                .context("Cannot issue download call")?;
 
                             info!(LOGGER, "{:?} finished downloading", path);
                         }
@@ -71,7 +60,10 @@ async fn listen(service: Arc<Mutex<Service>>, mut rx: mpsc::Receiver<Event>, _is
 
                         info!(LOGGER, "Downloading {:?}", path);
 
-                        svc.download(xfid, path, out_dir).await.unwrap();
+                        service
+                            .download(xfid, path, out_dir)
+                            .await
+                            .context("Cannot issue download call")?;
                     }
                 }
             }
@@ -187,10 +179,12 @@ async fn listen(service: Arc<Mutex<Service>>, mut rx: mpsc::Receiver<Event>, _is
             }
         }
     }
+
+    Ok(())
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> anyhow::Result<()> {
     let matches = command!()
         .arg(
             arg!(-l --listen <ADDR> "Listen address")
@@ -208,57 +202,59 @@ async fn main() -> Result<(), Error> {
         )
         .get_matches();
 
-    let config = DropConfig::default();
+    let config = DropConfig {
+        req_connection_timeout: Duration::from_secs(10),
+        ..Default::default()
+    };
 
     let (tx, rx) = mpsc::channel(256);
-    let addr = *matches.get_one::<IpAddr>("listen").unwrap();
-    let svc = Arc::new(Mutex::new(Service::start(
+    let addr = *matches
+        .get_one::<IpAddr>("listen")
+        .expect("Missing `listen` flag");
+
+    info!(LOGGER, "Spawning listener task…");
+
+    let mut service = Service::start(
         addr,
         tx,
         LOGGER.clone(),
         config,
         drop_analytics::moose_mock(),
-    )?));
-    let listener_svc = svc.clone();
+    )
+    .context("Failed to start service")?;
 
-    info!(LOGGER, "Spawning listener task…");
+    let task = async {
+        if let Some(matches) = matches.subcommand_matches("transfer") {
+            let addr = matches
+                .get_one::<IpAddr>("ADDR")
+                .expect("Missing transfer `ADDR` field");
 
-    let is_sender = matches.subcommand_matches("transfer").is_some();
+            info!(LOGGER, "Sending transfer request to {}", addr);
 
-    let service_task = tokio::spawn(async move {
+            let xfer = Transfer::new(
+                *addr,
+                matches
+                    .get_many::<String>("FILE")
+                    .expect("Missing transfer `FILE` field")
+                    .map(|p| File::from_path(Path::new(p), None, &config))
+                    .collect::<Result<Vec<File>, _>>()
+                    .context("Cannot build transfer from the files provided")?,
+                &config,
+            )?;
+
+            service.send_request(xfer);
+        }
+
         info!(LOGGER, "Listening...");
-        listen(listener_svc, rx, is_sender).await;
-    });
+        listen(&mut service, rx).await
+    };
 
-    if let Some(matches) = matches.subcommand_matches("transfer") {
-        let addr = matches.get_one::<IpAddr>("ADDR").unwrap();
+    let task_result = task.await;
+    info!(LOGGER, "Stopping the service");
 
-        info!(LOGGER, "Sending transfer request to {}", addr);
-
-        let mut inst = svc.lock().await;
-        let xfer = Transfer::new(
-            *addr,
-            matches
-                .get_many::<String>("FILE")
-                .unwrap()
-                .map(|p| File::from_path(Path::new(p), None, &config))
-                .collect::<Result<Vec<File>, drop_transfer::Error>>()?,
-            &config,
-        )?;
-
-        inst.send_request(xfer);
-    }
-
-    service_task.await.expect("Failed to join service task");
-
-    if let Ok(service) = Arc::try_unwrap(svc) {
-        info!(LOGGER, "Stopping the service");
-        service
-            .into_inner()
-            .stop()
-            .await
-            .expect("Service stop should not fail");
-    }
+    let stop_result = service.stop().await.context("Failed to stop");
+    task_result?;
+    stop_result?;
 
     Ok(())
 }
