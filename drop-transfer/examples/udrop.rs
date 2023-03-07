@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     env,
     net::IpAddr,
     path::{Path, PathBuf},
@@ -10,12 +11,14 @@ use clap::{arg, command, value_parser, ArgAction, Command, Result};
 use drop_config::DropConfig;
 use drop_transfer::{Event, File, Service, Transfer};
 use slog::{o, Drain, Logger};
-use slog_scope::info;
-use tokio::sync::mpsc;
+use slog_scope::{info, warn};
+use tokio::sync::{mpsc, watch, Mutex};
+use uuid::Uuid;
 
 async fn listen(
-    service: &mut Service,
-    mut rx: mpsc::Receiver<Event>,
+    service: &Mutex<Service>,
+    xfers: watch::Sender<BTreeSet<Uuid>>,
+    rx: &mut mpsc::Receiver<Event>,
     out_dir: &Path,
 ) -> anyhow::Result<()> {
     info!("Awaiting events…");
@@ -28,6 +31,10 @@ async fn listen(
 
                 info!("[EVENT] RequestReceived {}: {:?}", xfid, files);
 
+                xfers.send_modify(|xfers| {
+                    xfers.insert(xfid);
+                });
+
                 for file in files.values() {
                     if file.is_dir() {
                         let children: Vec<&File> = file.iter().filter(|c| !c.is_dir()).collect();
@@ -38,11 +45,11 @@ async fn listen(
                             info!("Downloading {:?}", path);
 
                             service
+                                .lock()
+                                .await
                                 .download(xfid, path, out_dir)
                                 .await
                                 .context("Cannot issue download call")?;
-
-                            info!("{:?} finished downloading", path);
                         }
                     } else {
                         let path = file.path();
@@ -50,6 +57,8 @@ async fn listen(
                         info!("Downloading {:?}", path);
 
                         service
+                            .lock()
+                            .await
                             .download(xfid, path, out_dir)
                             .await
                             .context("Cannot issue download call")?;
@@ -85,6 +94,10 @@ async fn listen(
             }
             Event::RequestQueued(xfer) => {
                 info!("[EVENT] RequestQueued {}: {:?}", xfer.id(), xfer.files(),);
+
+                xfers.send_modify(|xfers| {
+                    xfers.insert(xfer.id());
+                });
             }
             Event::FileUploadStarted(xfer, file) => {
                 info!("[EVENT] FileUploadStarted {}: {:?}", xfer.id(), file,);
@@ -125,11 +138,52 @@ async fn listen(
                     xfer.id(),
                     by_peer
                 );
+
+                xfers.send_modify(|xfers| {
+                    xfers.remove(&xfer.id());
+                });
             }
             Event::TransferFailed(xfer, err) => {
                 info!("[EVENT] TransferFailed {}, status: {}", xfer.id(), err);
+
+                xfers.send_modify(|xfers| {
+                    xfers.remove(&xfer.id());
+                });
             }
         }
+    }
+
+    Ok(())
+}
+
+async fn handle_stop(
+    service: &Mutex<Service>,
+    mut xfers: watch::Receiver<BTreeSet<Uuid>>,
+) -> anyhow::Result<()> {
+    tokio::signal::ctrl_c()
+        .await
+        .context("Failed to handle CTRL+C signal")?;
+
+    loop {
+        {
+            let set = xfers.borrow();
+
+            if set.is_empty() {
+                break;
+            }
+
+            let mut service = service.lock().await;
+            for &uuid in set.iter() {
+                if let Err(err) = service.cancel_all(uuid).await {
+                    warn!("Failed to cancel transfer {uuid}: {err:?}");
+                }
+            }
+        }
+
+        xfers
+            .changed()
+            .await
+            .context("Failed to wait for xfers change")?;
     }
 
     Ok(())
@@ -192,8 +246,30 @@ async fn main() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    let (tx, rx) = mpsc::channel(256);
+    let xfer = if let Some(matches) = matches.subcommand_matches("transfer") {
+        let addr = matches
+            .get_one::<IpAddr>("ADDR")
+            .expect("Missing transfer `ADDR` field");
 
+        info!("Sending transfer request to {}", addr);
+
+        let xfer = Transfer::new(
+            *addr,
+            matches
+                .get_many::<String>("FILE")
+                .expect("Missing transfer `FILE` field")
+                .map(|p| File::from_path(Path::new(p), None, &config))
+                .collect::<Result<Vec<File>, _>>()
+                .context("Cannot build transfer from the files provided")?,
+            &config,
+        )?;
+
+        Some(xfer)
+    } else {
+        None
+    };
+
+    let (tx, mut rx) = mpsc::channel(256);
     let addr = *matches
         .get_one::<IpAddr>("listen")
         .expect("Missing `listen` flag");
@@ -205,36 +281,27 @@ async fn main() -> anyhow::Result<()> {
     let mut service = Service::start(addr, tx, logger, config, drop_analytics::moose_mock())
         .context("Failed to start service")?;
 
-    let task = async {
-        if let Some(matches) = matches.subcommand_matches("transfer") {
-            let addr = matches
-                .get_one::<IpAddr>("ADDR")
-                .expect("Missing transfer `ADDR` field");
+    if let Some(xfer) = xfer {
+        service.send_request(xfer);
+    }
 
-            info!("Sending transfer request to {}", addr);
+    info!("Listening...");
 
-            let xfer = Transfer::new(
-                *addr,
-                matches
-                    .get_many::<String>("FILE")
-                    .expect("Missing transfer `FILE` field")
-                    .map(|p| File::from_path(Path::new(p), None, &config))
-                    .collect::<Result<Vec<File>, _>>()
-                    .context("Cannot build transfer from the files provided")?,
-                &config,
-            )?;
+    let service = Mutex::new(service);
+    let (xfers_tx, xfers_rx) = watch::channel(BTreeSet::new());
 
-            service.send_request(xfer);
-        }
-
-        info!("Listening...");
-        listen(&mut service, rx, out_dir).await
+    let task_result = tokio::select! {
+        r = handle_stop(&service, xfers_rx) => r,
+        r = listen(&service, xfers_tx, &mut rx, out_dir) => r,
     };
 
-    let task_result = task.await;
     info!("Stopping the service");
 
-    let stop_result = service.stop().await.context("Failed to stop");
+    let stop_result = service.into_inner().stop().await.context("Failed to stop");
+
+    // Drain events
+    while rx.recv().await.is_some() {}
+
     task_result?;
     stop_result?;
 

@@ -9,6 +9,7 @@ name = "udrop"
 
 [dev-dependencies]
 clap = { version = "3.2", features = ["cargo"] }
+tokio = { version = "1", features = ["signal"] }
 slog-async = "2.7.0"
 slog-scope = "4.4.0"
 slog-term = "2.9"
