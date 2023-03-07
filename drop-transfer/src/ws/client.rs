@@ -111,7 +111,6 @@ pub(crate) async fn run(state: Arc<State>, xfer: crate::Transfer, logger: Logger
 }
 
 async fn tcp_connect(state: &State, ip: IpAddr, logger: &Logger) -> TcpStream {
-    let max_sleep_time = state.config.req_connection_timeout / 10;
     let mut sleep_time = Duration::from_millis(200);
 
     loop {
@@ -128,7 +127,10 @@ async fn tcp_connect(state: &State, ip: IpAddr, logger: &Logger) -> TcpStream {
                 tokio::time::sleep(sleep_time).await;
 
                 // Exponential backoff but with upper limit
-                sleep_time = max_sleep_time.min(sleep_time * 2);
+                sleep_time = state
+                    .config
+                    .connection_max_retry_interval
+                    .min(sleep_time * 2);
             }
         }
     }

@@ -290,6 +290,7 @@ class Drop:
             "dir_depth_limit": 5,
             "transfer_file_limit": 1000,
             "req_connection_timeout_ms": 5000,
+            "connection_max_retry_interval_ms": 1000,
             "transfer_idle_lifetime_ms": 2000,
             "moose_event_path": "/tmp/moose-events",
             "moose_prod": False,
