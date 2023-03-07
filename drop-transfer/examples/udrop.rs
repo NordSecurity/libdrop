@@ -2,7 +2,7 @@ use std::{
     env,
     net::IpAddr,
     path::{Path, PathBuf},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::Context;
@@ -137,11 +137,21 @@ async fn listen(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let start = Instant::now();
+
     let logger = Logger::root(
         slog_async::Async::new(
             slog::LevelFilter::new(
                 slog_term::FullFormat::new(slog_term::TermDecorator::new().build())
                     .use_file_location()
+                    .use_custom_timestamp(move |writer| {
+                        let ts = start.elapsed();
+
+                        let secs = ts.as_secs();
+                        let millis = ts.subsec_millis();
+
+                        write!(writer, "{secs:04}.{millis:03}")
+                    })
                     .build()
                     .fuse(),
                 slog::Level::Trace,
