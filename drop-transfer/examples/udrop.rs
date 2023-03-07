@@ -1,4 +1,9 @@
-use std::{env, net::IpAddr, path::Path, time::Duration};
+use std::{
+    env,
+    net::IpAddr,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use anyhow::Context;
 use clap::{arg, command, value_parser, ArgAction, Command, Result};
@@ -26,7 +31,11 @@ lazy_static! {
     );
 }
 
-async fn listen(service: &mut Service, mut rx: mpsc::Receiver<Event>) -> anyhow::Result<()> {
+async fn listen(
+    service: &mut Service,
+    mut rx: mpsc::Receiver<Event>,
+    out_dir: &Path,
+) -> anyhow::Result<()> {
     info!(LOGGER, "Awaiting events…");
 
     while let Some(ev) = rx.recv().await {
@@ -36,8 +45,6 @@ async fn listen(service: &mut Service, mut rx: mpsc::Receiver<Event>) -> anyhow:
                 let files = xfer.files();
 
                 info!(LOGGER, "[EVENT] RequestReceived {}: {:?}", xfid, files);
-
-                let out_dir = &home::home_dir().unwrap();
 
                 for file in files.values() {
                     if file.is_dir() {
@@ -191,6 +198,11 @@ async fn main() -> anyhow::Result<()> {
                 .required(true)
                 .value_parser(value_parser!(IpAddr)),
         )
+        .arg(
+            arg!(-o --output <DIR> "Download directory")
+                .required(true)
+                .value_parser(value_parser!(PathBuf)),
+        )
         .subcommand(
             Command::new("transfer")
                 .arg(
@@ -208,9 +220,14 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let (tx, rx) = mpsc::channel(256);
+
     let addr = *matches
         .get_one::<IpAddr>("listen")
         .expect("Missing `listen` flag");
+
+    let out_dir = matches
+        .get_one::<PathBuf>("output")
+        .expect("Missing `output` flag");
 
     info!(LOGGER, "Spawning listener task…");
 
@@ -246,7 +263,7 @@ async fn main() -> anyhow::Result<()> {
         }
 
         info!(LOGGER, "Listening...");
-        listen(&mut service, rx).await
+        listen(&mut service, rx, out_dir).await
     };
 
     let task_result = task.await;

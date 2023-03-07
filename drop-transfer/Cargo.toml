@@ -9,10 +9,8 @@ name = "udrop"
 
 [dev-dependencies]
 clap = { version = "3.2", features = ["cargo"] }
-home = "0.5"
 slog-async = "2.7.0"
 slog-term = "2.9"
-tempfile = "3"
 
 [dependencies]
 slog = { workspace = true }
