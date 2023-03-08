@@ -2343,6 +2343,207 @@ scenarios = [
         },
     ),
     Scenario(
+        "scenario15-3",
+        "Send nested directory twice, expect (1) be added",
+        {
+            "ren": ActionList(
+                [
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        "/tmp/deep/path",
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    "path",
+                                    0,
+                                    {
+                                        event.File("file1.ext1", 1048576),
+                                        event.File("file2.ext2", 1048576),
+                                    },
+                                ),
+                            },
+                        )
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(
+                                0,
+                                "path/file1.ext1",
+                            ),
+                            event.Start(
+                                0,
+                                "path/file2.ext2",
+                            ),
+                            event.FinishFileUploaded(
+                                0,
+                                "path/file1.ext1",
+                            ),
+                            event.FinishFileUploaded(
+                                0,
+                                "path/file2.ext2",
+                            ),
+                        ]
+                    ),
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        "/tmp/deep/path",
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            1,
+                            {
+                                event.File(
+                                    "path",
+                                    0,
+                                    {
+                                        event.File("file1.ext1", 1048576),
+                                        event.File("file2.ext2", 1048576),
+                                    },
+                                ),
+                            },
+                        )
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(
+                                1,
+                                "path/file1.ext1",
+                            ),
+                            event.Start(
+                                1,
+                                "path/file2.ext2",
+                            ),
+                            event.FinishFileUploaded(
+                                1,
+                                "path/file1.ext1",
+                            ),
+                            event.FinishFileUploaded(
+                                1,
+                                "path/file2.ext2",
+                            ),
+                        ]
+                    ),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    "path",
+                                    0,
+                                    {
+                                        event.File("file1.ext1", 1048576),
+                                        event.File("file2.ext2", 1048576),
+                                    },
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        "path/file1.ext1",
+                        "/tmp/received",
+                    ),
+                    action.Download(
+                        0,
+                        "path/file2.ext2",
+                        "/tmp/received",
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(
+                                0,
+                                "path/file1.ext1",
+                            ),
+                            event.Start(
+                                0,
+                                "path/file2.ext2",
+                            ),
+                            event.FinishFileDownloaded(
+                                0,
+                                "path/file1.ext1",
+                                "file1.ext1",
+                            ),
+                            event.FinishFileDownloaded(
+                                0,
+                                "path/file2.ext2",
+                                "file2.ext2",
+                            ),
+                        ]
+                    ),
+                    action.Wait(
+                        event.Receive(
+                            1,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    "path",
+                                    0,
+                                    {
+                                        event.File("file1.ext1", 1048576),
+                                        event.File("file2.ext2", 1048576),
+                                    },
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        1,
+                        "path/file1.ext1",
+                        "/tmp/received",
+                    ),
+                    action.Download(
+                        1,
+                        "path/file2.ext2",
+                        "/tmp/received",
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(
+                                1,
+                                "path/file1.ext1",
+                            ),
+                            event.Start(
+                                1,
+                                "path/file2.ext2",
+                            ),
+                            event.FinishFileDownloaded(
+                                1,
+                                "path/file1.ext1",
+                                "file1.ext1",
+                            ),
+                            event.FinishFileDownloaded(
+                                1,
+                                "path/file2.ext2",
+                                "file2.ext2",
+                            ),
+                        ]
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            event.File("/tmp/received/path/file1.ext1", 1048576),
+                            event.File("/tmp/received/path/file2.ext2", 1048576),
+                            event.File("/tmp/received/path(1)/file1.ext1", 1048576),
+                            event.File("/tmp/received/path(1)/file2.ext2", 1048576),
+                        ],
+                    ),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
         "scenario16",
         "Activate connection timeout",
         {
