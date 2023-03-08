@@ -170,20 +170,22 @@ impl Service {
         );
 
         let fetch_xfer = async {
-            let lock = self.state.transfer_manager.lock().await;
+            let mut lock = self.state.transfer_manager.lock().await;
 
-            let xfer = lock.transfer(&uuid).ok_or(Error::BadTransfer)?;
             let chann = lock.connection(uuid).ok_or(Error::BadTransfer)?;
-
             let chann = match chann {
                 TransferConnection::Server(chann) => chann.clone(),
                 _ => return Err(Error::BadTransfer),
             };
 
-            Ok((xfer.clone(), chann))
+            let mapped_file_path = lock.apply_dir_mapping(uuid, parent_dir, file_id)?;
+            let xfer = lock.transfer(&uuid).ok_or(Error::BadTransfer)?.clone();
+
+            Ok((xfer, chann, mapped_file_path))
         };
 
-        let (xfer, channel) = moose_try_file!(self.state.moose, fetch_xfer.await, uuid, None);
+        let (xfer, channel, location) =
+            moose_try_file!(self.state.moose, fetch_xfer.await, uuid, None);
 
         let file = moose_try_file!(
             self.state.moose,
@@ -194,7 +196,6 @@ impl Service {
         .clone();
 
         let size_kb = file.size_kb().ok_or(Error::DirectoryNotExpected)?;
-        let location = parent_dir.join(file.path());
 
         // Path validation
         if location.components().any(|x| x == Component::ParentDir) {

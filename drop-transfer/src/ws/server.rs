@@ -686,29 +686,12 @@ impl FileXferTask {
     }
 
     fn move_tmp_to_dst(&self, logger: &Logger) -> crate::Result<PathBuf> {
-        let mut dst_location = self.location.0.clone();
+        let dst_location = crate::utils::map_path_if_exists(&self.location.0)?;
 
-        for rep_count in 1.. {
-            // Skip if there is already a file with the same name.
-            // Additionaly there could be a dangling symlink with the same name,
-            // the `symlink_metadata()` ensures we can catch that.
-            if matches!(dst_location.symlink_metadata() , Err(err) if err.kind() == io::ErrorKind::NotFound)
-            {
-                fs::rename(&self.tmp_location.0, &dst_location)?;
+        fs::rename(&self.tmp_location.0, &dst_location)?;
 
-                if let Err(err) = dst_location.quarantine() {
-                    error!(logger, "Failed to quarantine downloaded file: {}", err);
-                }
-
-                break;
-            } else {
-                let mut filename = format!("{}({rep_count})", &self.filename);
-                if let Some(extension) = self.location.0.extension() {
-                    filename.extend([".", &extension.to_string_lossy()]);
-                };
-
-                dst_location.set_file_name(filename);
-            };
+        if let Err(err) = dst_location.quarantine() {
+            error!(logger, "Failed to quarantine downloaded file: {}", err);
         }
 
         Ok(dst_location)

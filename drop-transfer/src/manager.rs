@@ -23,6 +23,8 @@ pub struct TransferState {
     pub(crate) xfer: Transfer,
     files: HashSet<PathBuf>,
     pub(crate) connection: TransferConnection,
+    // Used for mapping directories inside the destination
+    dir_mappings: HashMap<PathBuf, PathBuf>,
 }
 
 /// Transfer manager is responsible for keeping track of all ongoing or pending
@@ -38,6 +40,7 @@ impl TransferState {
             xfer,
             files: HashSet::new(),
             connection,
+            dir_mappings: HashMap::new(),
         }
     }
 }
@@ -100,6 +103,48 @@ impl TransferManager {
 
     pub(crate) fn connection(&self, id: Uuid) -> Option<&TransferConnection> {
         self.transfers.get(&id).map(|state| &state.connection)
+    }
+
+    pub(crate) fn apply_dir_mapping(
+        &mut self,
+        id: Uuid,
+        dest_dir: &Path,
+        file_xfer_path: &Path,
+    ) -> crate::Result<PathBuf> {
+        let state = self
+            .transfers
+            .get_mut(&id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        let mut iter = file_xfer_path.iter();
+
+        let probe = iter.next().ok_or(crate::Error::BadPath)?;
+        let next = iter.next();
+
+        let mapped = match next {
+            Some(next) => {
+                // Check if dir exists and is known to us
+                let mut target = match state.dir_mappings.entry(dest_dir.join(probe)) {
+                    // Dir is known, reuse
+                    Entry::Occupied(occ) => occ.get().clone(),
+                    // Dir in new, check if there is name conflict and add to known
+                    Entry::Vacant(vacc) => {
+                        let mapped = crate::utils::map_path_if_exists(vacc.key())?;
+                        vacc.insert(mapped).clone()
+                    }
+                };
+
+                target.push(next);
+                target.extend(iter);
+                target
+            }
+            None => {
+                // Ordinary file
+                dest_dir.join(file_xfer_path)
+            }
+        };
+
+        Ok(mapped)
     }
 }
 
