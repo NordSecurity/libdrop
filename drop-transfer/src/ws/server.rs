@@ -877,3 +877,9 @@ impl FileXferTask {
         }
     }
 }
+
+impl Drop for FileXferTask {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&*self.tmp_location);
+    }
+}

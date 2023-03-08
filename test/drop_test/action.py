@@ -1,11 +1,15 @@
 import asyncio
+from collections import Counter
+from functools import reduce
 import os
+from pathlib import Path
 import platform
+import subprocess
 import typing
 
 from . import event, ffi
 from .logger import logger
-from .event import Event, print_uuid, UUIDS
+from .event import Event, File, print_uuid, UUIDS
 
 import sys
 
@@ -255,8 +259,6 @@ class ConfigureNetwork(Action):
         self._latency = latency
 
     async def run(self, drop: ffi.Drop):
-        import subprocess
-
         def ex(cmd: str):
             print(
                 subprocess.run(
@@ -298,3 +300,28 @@ class ModifyFile(Action):
 
     def __str__(self):
         return f"ModifyFile({self._file})"
+
+
+class CompareTrees(Action):
+    def __init__(self, out_dir: Path, tree: list[File]):
+        self._out_dir = out_dir
+        self._tree = tree
+
+    async def run(self, drop: ffi.Drop):
+        build_tree = lambda parent, f: reduce(
+            lambda x, y: File(y, 0, {x}),
+            parent[::-1],
+            (File(f.name, f.stat().st_size, set())),
+        )
+        tree = [
+            build_tree(child.relative_to(self._out_dir).parent.parts, child)
+            for child in self._out_dir.iterdir()
+        ]
+
+        if Counter(self._tree) != Counter(tree):
+            raise Exception(
+                f"Output directory content mismatch (got {tree}, expected {self._tree})"
+            )
+
+    def __str__(self):
+        return f"CompareTrees({self._out_dir}, {self._tree})"

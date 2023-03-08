@@ -2,6 +2,8 @@ from drop_test import action, event
 from drop_test.scenario import Scenario, ActionList
 from drop_test.error import Error
 
+from pathlib import Path
+
 # We are using the transfer slots instead of UUIDS.
 # Each call to `action.NewTransfer` or the `Receive` event inserts the transfer UUID into the next slot - starting from 0
 
@@ -2700,6 +2702,110 @@ scenarios = [
                     ),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario18",
+        "Fail transfer and check if temporary file gets deleted",
+        {
+            "ren": ActionList(
+                [
+                    action.WaitForAnotherPeer(),
+                    action.ConfigureNetwork(),
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        "/tmp/testfile-big",
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File("testfile-big", 10485760),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, "testfile-big")),
+                    action.CancelTransferRequest(0),
+                    action.Wait(event.FinishTransferCanceled(0, False)),
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        "/tmp/testfile-small",
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            1,
+                            {
+                                event.File("testfile-small", 1048576),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(1, "testfile-small")),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            1,
+                            "testfile-small",
+                        )
+                    ),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File("testfile-big", 10485760),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        "testfile-big",
+                        "/tmp/received/18",
+                    ),
+                    action.Wait(event.Start(0, "testfile-big")),
+                    action.WaitRacy(
+                        sum(
+                            [
+                                [
+                                    event.FinishTransferCanceled(0, True),
+                                    event.Receive(
+                                        1,
+                                        "172.20.0.5",
+                                        {
+                                            event.File("testfile-small", 1048576),
+                                        },
+                                    ),
+                                ],
+                            ],
+                            [],
+                        )
+                    ),
+                    action.CompareTrees(Path("/tmp/received/18"), []),
+                    action.Download(
+                        1,
+                        "testfile-small",
+                        "/tmp/received/18",
+                    ),
+                    action.Wait(event.Start(1, "testfile-small")),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            1,
+                            "testfile-small",
+                            "testfile-small",
+                        )
+                    ),
+                    action.CompareTrees(
+                        Path("/tmp/received/18"),
+                        [event.File("testfile-small", 1048576)],
+                    ),
                     action.NoEvent(),
                     action.Stop(),
                 ]
