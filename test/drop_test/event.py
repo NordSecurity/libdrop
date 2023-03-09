@@ -33,7 +33,10 @@ class File:
 
         return set(lhs.flatten()) == set(rhs.flatten())
 
-    def flatten(self, parent="", collection=[]):
+    def flatten(self, parent="", collection=None):
+        if collection is None:
+            collection = []
+
         collection.append((parent, self._path, self._size))
 
         for child in self._children:
