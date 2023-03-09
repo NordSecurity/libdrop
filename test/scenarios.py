@@ -32,6 +32,7 @@ scenarios = [
                             "testfile-big",
                         )
                     ),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -65,6 +66,8 @@ scenarios = [
                             event.File("/tmp/received/testfile-big", 10485760),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -110,6 +113,7 @@ scenarios = [
                             "testfile-big",
                         )
                     ),
+                    action.ExpectCancel([0, 1], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -166,6 +170,9 @@ scenarios = [
                             event.File("/tmp/received/testfile-big", 10485760),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.CancelTransferRequest(1),
+                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -222,6 +229,7 @@ scenarios = [
                             [],
                         )
                     ),
+                    action.ExpectCancel([0, 1], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -289,6 +297,9 @@ scenarios = [
                             event.File("/tmp/received/testfile-big", 10485760),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.CancelTransferRequest(1),
+                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -521,6 +532,7 @@ scenarios = [
                             },
                         )
                     ),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -541,7 +553,9 @@ scenarios = [
                         0,
                         "testfile-big",
                     ),
-                    # No event since the download was not started yet
+                    action.NoEvent(),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -569,9 +583,8 @@ scenarios = [
                         )
                     ),
                     action.Wait(event.Start(0, "testfile-big")),
-                    action.Wait(
-                        event.FinishFileCanceled(0, "testfile-big", True),
-                    ),
+                    action.Wait(event.FinishFileCanceled(0, "testfile-big", True)),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -602,6 +615,8 @@ scenarios = [
                             False,
                         ),
                     ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -635,6 +650,7 @@ scenarios = [
                             "testfile-small",
                         )
                     ),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -671,6 +687,9 @@ scenarios = [
                     ),
                     action.CancelTransferFile(0, "testfile-small"),
                     action.NoEvent(),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
                     action.Stop(),
                 ]
             ),
@@ -703,6 +722,7 @@ scenarios = [
                         )
                     ),
                     action.CancelTransferFile(0, "testfile-small"),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -736,6 +756,9 @@ scenarios = [
                             event.File("/tmp/received/testfile-small", 1024 * 1024),
                         ],
                     ),
+                    action.NoEvent(),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -962,6 +985,7 @@ scenarios = [
                             "deep/another-path/file4.ext4",
                         ),
                     ),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1082,6 +1106,8 @@ scenarios = [
                             ),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1113,6 +1139,7 @@ scenarios = [
                     action.Wait(
                         event.FinishFileUploaded(0, "testfile-small"),
                     ),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1148,6 +1175,8 @@ scenarios = [
                             event.File("/tmp/received/testfile-small", 1048576),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1183,6 +1212,7 @@ scenarios = [
                     ),
                     action.Wait(event.Start(1, "testfile-small")),
                     action.Wait(event.FinishFileUploaded(1, "testfile-small")),
+                    action.ExpectCancel([0, 1], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1239,6 +1269,9 @@ scenarios = [
                             event.File("/tmp/received/testfile-small(1)", 1048576),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.CancelTransferRequest(1),
+                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1274,6 +1307,7 @@ scenarios = [
                     ),
                     action.Wait(event.Start(1, "file1.ext1")),
                     action.Wait(event.FinishFileUploaded(1, "file1.ext1")),
+                    action.ExpectCancel([0, 1], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1330,6 +1364,9 @@ scenarios = [
                             event.File("/tmp/received/file1(1).ext1", 1048576),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.CancelTransferRequest(1),
+                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1548,6 +1585,7 @@ scenarios = [
                         ]
                     ),
                     # fmt: on
+                    action.ExpectCancel([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1611,6 +1649,17 @@ scenarios = [
                         ]
                     ),
                     # fmt: on
+                    action.CancelTransferRequest(0),
+                    action.CancelTransferRequest(1),
+                    action.CancelTransferRequest(2),
+                    action.CancelTransferRequest(3),
+                    action.CancelTransferRequest(4),
+                    action.CancelTransferRequest(5),
+                    action.CancelTransferRequest(6),
+                    action.CancelTransferRequest(7),
+                    action.CancelTransferRequest(8),
+                    action.CancelTransferRequest(9),
+                    action.ExpectCancel([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1656,6 +1705,8 @@ scenarios = [
                                 0,
                                 "testfile-big",
                             ),
+                            event.FinishTransferCanceled(0, True),
+                            event.FinishTransferCanceled(1, True),
                         ]
                     ),
                     action.NoEvent(),
@@ -1691,6 +1742,8 @@ scenarios = [
                             event.File("/tmp/received/stimpy/testfile-big", 10485760),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1724,6 +1777,8 @@ scenarios = [
                             event.File("/tmp/received/george/testfile-big", 10485760),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1772,6 +1827,8 @@ scenarios = [
                                 1,
                                 "testfile-small",
                             ),
+                            event.FinishTransferCanceled(0, True),
+                            event.FinishTransferCanceled(1, True),
                         ]
                     ),
                     action.NoEvent(),
@@ -1809,6 +1866,8 @@ scenarios = [
                             ),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1844,6 +1903,8 @@ scenarios = [
                             ),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1878,6 +1939,7 @@ scenarios = [
                             "testfile-small",
                         ),
                     ),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1914,6 +1976,8 @@ scenarios = [
                             ),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1939,12 +2003,7 @@ scenarios = [
                             },
                         ),
                     ),
-                    action.Wait(
-                        event.FinishFailedTransfer(
-                            0,
-                            Error.WS_CLIENT,
-                        ),
-                    ),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1977,6 +2036,8 @@ scenarios = [
                             "/tmp/symtest-dir/testfile-small",
                         ]
                     ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2011,6 +2072,7 @@ scenarios = [
                             "testfile-small",
                         ),
                     ),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2059,6 +2121,8 @@ scenarios = [
                             ),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2098,6 +2162,7 @@ scenarios = [
                             "testfile-small",
                         ),
                     ),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2134,6 +2199,8 @@ scenarios = [
                             ),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2173,6 +2240,7 @@ scenarios = [
                             "testfile-small",
                         )
                     ),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2220,6 +2288,8 @@ scenarios = [
                             event.File("/tmp/received/testfile-small(1)", 1048576),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2271,6 +2341,7 @@ scenarios = [
                             "testfile.small.with.complicated.extension",
                         )
                     ),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2336,6 +2407,8 @@ scenarios = [
                             ),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2595,6 +2668,7 @@ scenarios = [
                             Error.FILE_MODIFIED,
                         )
                     ),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2624,6 +2698,8 @@ scenarios = [
                             Error.BAD_TRANSFER,
                         )
                     ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]

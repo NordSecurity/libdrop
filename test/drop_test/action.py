@@ -230,6 +230,23 @@ class NoEvent(Action):
         return f"NoEvent({self._duration})"
 
 
+class ExpectCancel(Action):
+    def __init__(self, uuid_slots: typing.List[int], by_peer: bool):
+        self._uuid_slots = uuid_slots
+        self._by_peer = by_peer
+
+    async def run(self, drop: ffi.Drop):
+        events: typing.List[event.Event] = [
+            event.FinishTransferCanceled(slot, self._by_peer)
+            for slot in self._uuid_slots
+        ]
+        await drop._events.wait_racy(events, ignore_progress=False)
+
+    def __str__(self):
+        uuids = [print_uuid(slot) for slot in self._uuid_slots]
+        return f"ExpectCancel({uuids})"
+
+
 # Shape egress traffic. Slowing down and adding latency helps introducing
 # determinism in the testing environment
 class ConfigureNetwork(Action):
