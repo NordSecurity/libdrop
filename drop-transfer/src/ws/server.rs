@@ -6,11 +6,12 @@ use std::{
     ops::ControlFlow,
     path::{Path, PathBuf},
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 use anyhow::Context;
 use futures::{SinkExt, StreamExt};
+use sha1::{Digest, Sha1};
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
     sync::mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
@@ -671,8 +672,24 @@ impl FileXferTask {
             .ok_or(crate::Error::BadFile)?
             .to_string_lossy()
             .to_string();
+        let mut suffix = Sha1::new();
 
-        let tmp_location = format!("{}.dropdl-{}", location.display(), xfer.id()).into();
+        suffix.update(xfer.id().as_bytes());
+        if let Ok(time) = SystemTime::now().elapsed() {
+            suffix.update(time.as_nanos().to_ne_bytes());
+        }
+
+        let suffix: String = suffix
+            .finalize()
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect();
+        let tmp_location = format!(
+            "{}.dropdl-{}",
+            location.display(),
+            suffix.get(..8).unwrap_or(&suffix),
+        )
+        .into();
         let size = file.size().ok_or(crate::Error::DirectoryNotExpected)?;
 
         Ok(Self {

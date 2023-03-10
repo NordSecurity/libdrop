@@ -25,6 +25,7 @@ infer = "0.12.0"
 libc = "0.2"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.91"
+sha-1 = "0.10"
 slog = { workspace = true }
 strum = { version = "0.24.1", features = ["derive"] }
 thiserror = "1.0"
