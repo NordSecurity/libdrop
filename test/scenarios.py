@@ -3,6 +3,7 @@ from drop_test.scenario import Scenario, ActionList
 from drop_test.error import Error
 
 from pathlib import Path
+from tempfile import gettempdir
 
 # We are using the transfer slots instead of UUIDS.
 # Each call to `action.NewTransfer` or the `Receive` event inserts the transfer UUID into the next slot - starting from 0
@@ -2788,7 +2789,7 @@ scenarios = [
                             [],
                         )
                     ),
-                    action.CompareTrees(Path("/tmp/received/18"), []),
+                    action.CompareTrees(Path(gettempdir()) / "received" / "18", []),
                     action.Download(
                         1,
                         "testfile-small",
@@ -2803,7 +2804,7 @@ scenarios = [
                         )
                     ),
                     action.CompareTrees(
-                        Path("/tmp/received/18"),
+                        Path(gettempdir()) / "received" / "18",
                         [event.File("testfile-small", 1048576)],
                     ),
                     action.NoEvent(),
