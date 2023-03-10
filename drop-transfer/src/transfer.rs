@@ -72,7 +72,6 @@ impl Transfer {
     pub fn flat_file_list(&self) -> Vec<&File> {
         self.files()
             .values()
-            .into_iter()
             .flat_map(|f| {
                 if f.is_dir() {
                     f.iter().filter(|c| !c.is_dir()).collect::<Vec<_>>()
