@@ -1,5 +1,6 @@
 use std::{collections::HashMap, net::IpAddr, path::Path};
 
+use drop_analytics::TransferInfo;
 use drop_config::DropConfig;
 use uuid::Uuid;
 
@@ -82,12 +83,37 @@ impl Transfer {
             .collect()
     }
 
-    // Used for moose only
-    pub fn sizes_kb(&self) -> Vec<i32> {
-        self.flat_file_list()
+    pub fn info(&self) -> TransferInfo {
+        let info_list = self
+            .flat_file_list()
             .iter()
-            .map(|f| f.size_kb().unwrap_or_default())
-            .collect()
+            .map(|f| f.info().unwrap_or_default())
+            .collect::<Vec<_>>();
+
+        let size_list = info_list
+            .iter()
+            .map(|info| info.size_kb)
+            .collect::<Vec<i32>>();
+
+        TransferInfo {
+            mime_type_list: info_list
+                .iter()
+                .map(|info| info.mime_type.as_str())
+                .collect::<Vec<_>>()
+                .join(","),
+            extension_list: info_list
+                .iter()
+                .map(|info| info.extension.as_str())
+                .collect::<Vec<_>>()
+                .join(","),
+            file_size_list: size_list
+                .iter()
+                .map(i32::to_string)
+                .collect::<Vec<String>>()
+                .join(","),
+            transfer_size_kb: size_list.iter().sum(),
+            file_count: info_list.len() as i32,
+        }
     }
 
     pub fn id(&self) -> Uuid {

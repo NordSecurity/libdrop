@@ -41,7 +41,7 @@ pub struct Service {
 }
 
 macro_rules! moose_try_file {
-    ($moose:expr, $func:expr, $xfer_id:expr, $file_size:expr) => {
+    ($moose:expr, $func:expr, $xfer_id:expr, $file_info:expr) => {
         match $func {
             Ok(r) => r,
             Err(e) => {
@@ -49,8 +49,8 @@ macro_rules! moose_try_file {
                     Err(u32::from(&e) as i32),
                     drop_analytics::Phase::Start,
                     $xfer_id.to_string(),
-                    $file_size,
                     0,
+                    $file_info,
                 );
 
                 return Err(e);
@@ -109,18 +109,10 @@ impl Service {
     }
 
     pub fn send_request(&mut self, xfer: crate::Transfer) {
-        let sizes = xfer.sizes_kb();
-
         self.state.moose.service_quality_transfer_batch(
             drop_analytics::Phase::Start,
-            sizes.len() as i32,
-            sizes
-                .iter()
-                .map(|size| size.to_string())
-                .collect::<Vec<String>>()
-                .join(","),
             xfer.id().to_string(),
-            sizes.iter().sum(),
+            xfer.info(),
         );
 
         let stop_job = {
@@ -195,19 +187,19 @@ impl Service {
         )
         .clone();
 
-        let size_kb = file.size_kb().ok_or(Error::DirectoryNotExpected)?;
+        let file_info = file.info();
 
         // Path validation
         if location.components().any(|x| x == Component::ParentDir) {
             let err = Err(Error::BadPath);
-            moose_try_file!(self.state.moose, err, uuid, Some(size_kb));
+            moose_try_file!(self.state.moose, err, uuid, file_info);
         }
 
         let parent_location = moose_try_file!(
             self.state.moose,
             location.parent().ok_or(Error::BadPath),
             uuid,
-            Some(size_kb)
+            file_info
         );
 
         // Check if target directory is a symlink
@@ -216,21 +208,21 @@ impl Service {
                 self.logger,
                 "Destination should not contain directory symlinks"
             );
-            moose_try_file!(self.state.moose, Err(Error::BadPath), uuid, Some(size_kb));
+            moose_try_file!(self.state.moose, Err(Error::BadPath), uuid, file_info);
         }
 
         moose_try_file!(
             self.state.moose,
             fs::create_dir_all(parent_location).map_err(|_| Error::BadPath),
             uuid,
-            Some(size_kb)
+            file_info
         );
 
         let task = moose_try_file!(
             self.state.moose,
             FileXferTask::new(file, xfer, location),
             uuid,
-            Some(size_kb)
+            file_info
         );
 
         channel
@@ -274,14 +266,15 @@ impl Service {
 
             if let Some(fids) = fids {
                 fids.iter().for_each(|id| {
+                    let file = xfer.file(id).expect("Bad file");
                     let status: u32 = From::from(&Error::Canceled);
 
                     self.state.moose.service_quality_transfer_file(
                         Err(status as _),
                         drop_analytics::Phase::End,
                         xfer.id().to_string(),
-                        xfer.file(id).expect("Bad file").size_kb(),
                         0,
+                        file.info(),
                     )
                 });
             }

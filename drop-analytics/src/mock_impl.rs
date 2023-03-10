@@ -1,3 +1,5 @@
+use crate::{FileInfo, TransferInfo};
+
 pub struct MockImpl;
 
 impl super::Moose for MockImpl {
@@ -6,10 +8,8 @@ impl super::Moose for MockImpl {
     fn service_quality_transfer_batch(
         &self,
         _phase: crate::Phase,
-        _files_count: i32,
-        _size_of_files_list: String,
         _transfer_id: String,
-        _transfer_size: i32,
+        _info: TransferInfo,
     ) {
     }
 
@@ -18,8 +18,8 @@ impl super::Moose for MockImpl {
         _res: Result<(), i32>,
         _phase: crate::Phase,
         _transfer_id: String,
-        _transfer_size: Option<i32>,
         _transfer_time: i32,
+        _info: Option<FileInfo>,
     ) {
     }
 }

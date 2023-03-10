@@ -15,23 +15,31 @@ pub enum Phase {
     End,
 }
 
+pub struct TransferInfo {
+    pub mime_type_list: String,
+    pub extension_list: String,
+    pub file_size_list: String,
+    pub transfer_size_kb: i32,
+    pub file_count: i32,
+}
+
+#[derive(Default)]
+pub struct FileInfo {
+    pub mime_type: String,
+    pub extension: String,
+    pub size_kb: i32,
+}
+
 pub trait Moose: Send + Sync {
     fn service_quality_initialization_init(&self, res: Result<(), i32>, phase: Phase);
-    fn service_quality_transfer_batch(
-        &self,
-        phase: Phase,
-        files_count: i32,
-        size_of_files_list: String,
-        transfer_id: String,
-        transfer_size: i32,
-    );
+    fn service_quality_transfer_batch(&self, phase: Phase, transfer_id: String, info: TransferInfo);
     fn service_quality_transfer_file(
         &self,
         res: Result<(), i32>,
         phase: Phase,
         transfer_id: String,
-        transfer_size: Option<i32>,
         transfer_time: i32,
+        info: Option<FileInfo>,
     );
 }
 
