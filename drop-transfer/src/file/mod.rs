@@ -1,3 +1,4 @@
+mod id;
 mod reader;
 
 #[cfg(unix)]
@@ -9,14 +10,13 @@ use std::{
     },
     io::Read,
     iter,
-    ops::Deref,
     path::{Path, PathBuf},
 };
 
 use drop_analytics::FileInfo;
 use drop_config::DropConfig;
+pub use id::FileId;
 pub use reader::FileReader;
-use walkdir::WalkDir;
 
 use crate::{utils::Hidden, Error};
 
@@ -25,7 +25,7 @@ const HEADER_SIZE: usize = 1024;
 #[derive(Clone, Debug)]
 pub enum FileKind {
     Dir {
-        children: HashMap<Hidden<Box<Path>>, File>,
+        children: HashMap<Hidden<String>, File>,
     },
     FileToSend {
         meta: Hidden<fs::Metadata>,
@@ -37,145 +37,121 @@ pub enum FileKind {
     },
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum FileSource {
-    Path,
+    Path(Hidden<PathBuf>),
     #[cfg(unix)]
     Fd(RawFd),
 }
 
 #[derive(Clone, Debug)]
 pub struct File {
-    pub(crate) path: Hidden<Box<Path>>,
+    pub(crate) name: Hidden<String>,
     pub(crate) kind: FileKind,
 }
 
 impl File {
     fn walk(path: &Path, config: &DropConfig) -> Result<Self, Error> {
-        let mut root = Self::new_dir(path.into());
+        fn walk(
+            path: &Path,
+            depth: &mut usize,
+            breadth: &mut usize,
+            config: &DropConfig,
+        ) -> Result<File, Error> {
+            let name = path
+                .file_name()
+                .ok_or(crate::Error::BadPath)?
+                .to_string_lossy()
+                .to_string();
 
-        let mut breadth = 0;
-        for entry in WalkDir::new(path).min_depth(1).into_iter() {
-            let entry = entry.map_err(|_| Error::BadFile)?;
+            let mut children = HashMap::new();
 
-            if entry.file_type().is_dir() {
-                continue;
+            for entry in fs::read_dir(path)? {
+                let entry = entry?;
+                let ft = entry.file_type()?;
+
+                let child = if ft.is_dir() {
+                    *depth += 1;
+                    if *depth > config.dir_depth_limit {
+                        return Err(Error::TransferLimitsExceeded);
+                    }
+
+                    let subdir = walk(&entry.path(), depth, breadth, config)?;
+                    *depth -= 1;
+
+                    subdir
+                } else if ft.is_file() {
+                    File::new(entry.path(), entry.metadata()?)?
+                } else {
+                    continue;
+                };
+
+                children.insert(child.name.clone(), child);
+
+                *breadth += 1;
+                if *breadth > config.transfer_file_limit {
+                    return Err(Error::TransferLimitsExceeded);
+                }
             }
 
-            if entry.depth() > config.dir_depth_limit {
-                return Err(Error::TransferLimitsExceeded);
-            }
-
-            breadth += 1;
-
-            if breadth > config.transfer_file_limit {
-                return Err(Error::TransferLimitsExceeded);
-            }
-
-            root.insert(File::new(entry.path(), entry.path().symlink_metadata()?)?)?;
+            Ok(File {
+                name: Hidden(name),
+                kind: FileKind::Dir { children },
+            })
         }
 
-        Ok(root)
+        let mut depth = 1;
+        let mut breadth = 0;
+        walk(path, &mut depth, &mut breadth, config)
     }
 
-    pub fn child(&self, path: &Path) -> Option<&Self> {
-        let mut file = self;
-        let mut ret = None;
-
-        for component in path.components() {
-            let key: Box<Path> = AsRef::<Path>::as_ref(&component).into();
-            let child = file.children_inner()?.get(&key)?;
-
-            file = child;
-            ret = Some(child);
-        }
-
-        ret
+    pub fn child(&self, name: &String) -> Option<&Self> {
+        self.children_inner()?.get(name)
     }
 
     pub fn children(&self) -> impl Iterator<Item = &File> {
         self.children_inner().into_iter().flat_map(|hm| hm.values())
     }
 
-    fn children_inner(&self) -> Option<&HashMap<Hidden<Box<Path>>, Self>> {
+    fn children_inner(&self) -> Option<&HashMap<Hidden<String>, Self>> {
         match &self.kind {
             FileKind::Dir { children } => Some(children),
             _ => None,
         }
     }
 
-    fn children_inner_mut(&mut self) -> Option<&mut HashMap<Hidden<Box<Path>>, Self>> {
-        match &mut self.kind {
-            FileKind::Dir { children } => Some(children),
-            _ => None,
-        }
-    }
+    pub fn from_path(
+        path: impl Into<PathBuf>,
+        fd: Option<i32>,
+        config: &DropConfig,
+    ) -> Result<Self, Error> {
+        let path = path.into();
 
-    fn insert(&mut self, child: File) -> Result<(), Error> {
-        let lhs = self.path();
-        let rhs = child.path();
-
-        if !rhs.starts_with(lhs) {
-            return Err(Error::BadPath);
-        }
-
-        let path: Box<Path> = rhs
-            .components()
-            .take(lhs.components().count() + 1)
-            .map(|c| Into::<Box<Path>>::into(AsRef::<Path>::as_ref(&c)))
-            .reduce(|lhs, p| lhs.join(p).into())
-            .ok_or(Error::BadPath)?;
-
-        let filename = PathBuf::from(&path.file_name().ok_or(Error::BadPath)?).into_boxed_path();
-        let children = self.children_inner_mut().expect("Expected directory");
-
-        // We‘re inserting a parent
-        if child.path() != &*path {
-            children
-                .entry(Hidden(filename))
-                .or_insert_with(|| Self::new_dir(path))
-                .insert(child)?;
-        } else {
-            children.insert(
-                Hidden(filename),
-                Self {
-                    path: Hidden(path),
-                    ..child
-                },
-            );
-        }
-
-        Ok(())
-    }
-
-    fn new_dir(path: Box<Path>) -> Self {
-        Self {
-            path: Hidden(path),
-            kind: FileKind::Dir {
-                children: HashMap::new(),
-            },
-        }
-    }
-
-    pub fn from_path(path: &Path, fd: Option<i32>, config: &DropConfig) -> Result<Self, Error> {
         if let Some(fd) = fd {
             #[cfg(target_os = "windows")]
             return Err(Error::InvalidArgument);
             #[cfg(not(target_os = "windows"))]
-            File::new_with_fd(path, fd).or(Err(Error::BadFile))
+            File::new_with_fd(&path, fd).or(Err(Error::BadFile))
         } else {
-            let meta = fs::symlink_metadata(path)?;
+            let meta = fs::symlink_metadata(&path)?;
 
             if meta.is_dir() {
-                File::walk(path, config)
+                File::walk(&path, config)
             } else {
                 File::new(path, meta)
             }
         }
     }
 
-    fn new(path: &Path, meta: fs::Metadata) -> Result<Self, Error> {
+    fn new(path: PathBuf, meta: fs::Metadata) -> Result<Self, Error> {
         assert!(!meta.is_dir(), "Did not expect directory metadata");
+
+        let name = path
+            .file_name()
+            .ok_or(crate::Error::BadPath)?
+            .to_str()
+            .ok_or(crate::Error::BadPath)?
+            .to_string();
 
         let mut options = OpenOptions::new();
         options.read(true);
@@ -183,7 +159,7 @@ impl File {
         options.custom_flags(libc::O_NOFOLLOW);
 
         // Check if we are allowed to read the file
-        let mut file = options.open(path)?;
+        let mut file = options.open(&path)?;
         let mut buf = vec![0u8; HEADER_SIZE];
         let header_len = file.read(&mut buf)?;
         let mime_type = infer::get(&buf[0..header_len])
@@ -191,10 +167,10 @@ impl File {
             .to_string();
 
         Ok(Self {
-            path: Hidden(path.into()),
+            name: Hidden(name),
             kind: FileKind::FileToSend {
                 meta: Hidden(meta),
-                source: FileSource::Path,
+                source: FileSource::Path(Hidden(path)),
                 mime_type: Some(Hidden(mime_type)),
             },
         })
@@ -202,6 +178,13 @@ impl File {
 
     #[cfg(unix)]
     fn new_with_fd(path: &Path, fd: RawFd) -> Result<Self, Error> {
+        let name = path
+            .file_name()
+            .ok_or(crate::Error::BadPath)?
+            .to_str()
+            .ok_or(crate::Error::BadPath)?
+            .to_string();
+
         let f = unsafe { fs::File::from_raw_fd(fd) };
 
         let create_file = || {
@@ -218,7 +201,7 @@ impl File {
                 .to_string();
 
             Ok(Self {
-                path: Hidden(path.into()),
+                name: Hidden(name),
                 kind: FileKind::FileToSend {
                     meta: Hidden(meta),
                     source: FileSource::Fd(fd),
@@ -234,12 +217,8 @@ impl File {
         result
     }
 
-    pub fn name(&self) -> Option<String> {
-        Some(String::from(self.path.file_name()?.to_string_lossy()))
-    }
-
-    pub fn path(&self) -> &Path {
-        self.path.deref()
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn size(&self) -> Option<u64> {
@@ -257,8 +236,7 @@ impl File {
                     .as_deref()
                     .cloned()
                     .unwrap_or_else(|| "unknown".to_string()),
-                extension: self
-                    .path
+                extension: AsRef::<Path>::as_ref(self.name.as_str())
                     .extension()
                     .map(|e| e.to_string_lossy().to_string())
                     .unwrap_or_else(|| "unknown".to_string()),
@@ -275,9 +253,7 @@ impl File {
     // instance
     pub(crate) fn open(&self) -> Result<FileReader, Error> {
         match &self.kind {
-            FileKind::FileToSend { meta, source, .. } => {
-                FileReader::new(*source, meta.0.clone(), &self.path)
-            }
+            FileKind::FileToSend { meta, source, .. } => FileReader::new(source, meta.0.clone()),
             _ => Err(Error::BadFile),
         }
     }

@@ -201,11 +201,11 @@ impl From<drop_transfer::Transfer> for EventTransferRequest {
 impl From<&drop_transfer::File> for File {
     fn from(f: &drop_transfer::File) -> Self {
         Self {
-            id: f.name().unwrap_or_default(),
+            id: f.name().to_string(),
             size: f.size().unwrap_or_default(),
             children: f
                 .children()
-                .map(|c| (c.name().unwrap_or_default(), c.into()))
+                .map(|c| (c.name().to_string(), c.into()))
                 .collect(),
         }
     }

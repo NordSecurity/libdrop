@@ -2,7 +2,6 @@ pub mod types;
 
 use std::{
     net::{IpAddr, ToSocketAddrs},
-    path::Path,
     sync::Arc,
 };
 
@@ -206,18 +205,16 @@ impl NordDropFFI {
                         }
                     }
 
-                    File::from_path(Path::new(&desc.path.0), desc.fd, &self.config.drop).map_err(
-                        |e| {
-                            error!(
-                                self.logger,
-                                "Could not open file {:?} for transfer ({:?}): {}",
-                                desc,
-                                descriptors,
-                                e
-                            );
-                            ffi::types::NORDDROP_RES_TRANSFER_CREATE
-                        },
-                    )
+                    File::from_path(&desc.path.0, desc.fd, &self.config.drop).map_err(|e| {
+                        error!(
+                            self.logger,
+                            "Could not open file {:?} for transfer ({:?}): {}",
+                            desc,
+                            descriptors,
+                            e
+                        );
+                        ffi::types::NORDDROP_RES_TRANSFER_CREATE
+                    })
                 })
                 .collect::<Result<Vec<File>>>()?;
 
@@ -270,7 +267,7 @@ impl NordDropFFI {
             let mut locked_inst = instance.lock().await;
             let inst = locked_inst.as_mut().expect("Instance not initialized");
 
-            if let Err(e) = inst.download(xfid, file.as_ref(), dst.as_ref()).await {
+            if let Err(e) = inst.download(xfid, (&file).into(), dst.as_ref()).await {
                 error!(
                     logger,
                     "Failed to download a file with xfid: {}, file: {:?}, dst: {:?}, error: {:?}",
@@ -338,7 +335,7 @@ impl NordDropFFI {
             let mut locked_inst = instance.lock().await;
             let inst = locked_inst.as_mut().expect("Instance not initialized");
 
-            if let Err(e) = inst.cancel(xfid, file.as_ref()).await {
+            if let Err(e) = inst.cancel(xfid, (&file).into()).await {
                 error!(
                     logger,
                     "Failed to cancel a file with xfid: {}, file: {:?}, error: {:?}",

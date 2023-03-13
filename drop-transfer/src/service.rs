@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 use crate::{
     error::ResultExt,
+    file::FileId,
     manager::TransferConnection,
     ws::{
         self,
@@ -150,14 +151,14 @@ impl Service {
     pub async fn download(
         &mut self,
         uuid: Uuid,
-        file_id: &Path,
+        file_id: FileId,
         parent_dir: &Path,
     ) -> crate::Result<()> {
         debug!(
             self.logger,
-            "Client::download() called with Uuid: {}, file: {}, parent_dir: {}",
+            "Client::download() called with Uuid: {}, file: {:?}, parent_dir: {}",
             uuid,
-            file_id.display(),
+            file_id,
             parent_dir.display()
         );
 
@@ -170,11 +171,7 @@ impl Service {
                 _ => return Err(Error::BadTransfer),
             };
 
-            let mapped_file_path = lock.apply_dir_mapping(
-                uuid,
-                &crate::utils::normalize_path(parent_dir),
-                &crate::utils::normalize_path(file_id),
-            )?;
+            let mapped_file_path = lock.apply_dir_mapping(uuid, parent_dir, &file_id)?;
             let xfer = lock.transfer(&uuid).ok_or(Error::BadTransfer)?.clone();
 
             Ok((xfer, chann, mapped_file_path))
@@ -185,7 +182,7 @@ impl Service {
 
         let file = moose_try_file!(
             self.state.moose,
-            xfer.file(file_id).ok_or(Error::BadFileId),
+            xfer.file(&file_id).ok_or(Error::BadFileId),
             uuid,
             None
         )
@@ -231,7 +228,7 @@ impl Service {
 
         channel
             .send(ServerReq::Download {
-                file: file_id.into(),
+                file: file_id,
                 task: Box::new(task),
             })
             .map_err(|_| Error::BadTransfer)?;
@@ -240,18 +237,18 @@ impl Service {
     }
 
     /// Cancel a single file in a transfer
-    pub async fn cancel(&mut self, xfer_uuid: Uuid, file: &Path) -> crate::Result<()> {
+    pub async fn cancel(&mut self, xfer_uuid: Uuid, file: FileId) -> crate::Result<()> {
         let lock = self.state.transfer_manager.lock().await;
 
         let conn = lock.connection(xfer_uuid).ok_or(Error::BadTransfer)?;
 
         match conn {
             TransferConnection::Client(conn) => {
-                conn.send(ClientReq::Cancel { file: file.into() })
+                conn.send(ClientReq::Cancel { file })
                     .map_err(|_| Error::BadTransferState)?;
             }
             TransferConnection::Server(conn) => {
-                conn.send(ServerReq::Cancel { file: file.into() })
+                conn.send(ServerReq::Cancel { file })
                     .map_err(|_| Error::BadTransferState)?;
             }
         }
