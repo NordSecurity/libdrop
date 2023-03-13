@@ -1,10 +1,13 @@
-use std::{collections::HashMap, net::IpAddr, path::PathBuf};
+use std::{collections::HashMap, net::IpAddr};
 
 use anyhow::Context;
 use drop_config::DropConfig;
 use serde::{Deserialize, Serialize};
 
-use crate::{file::FileKind, utils::Hidden};
+use crate::{
+    file::{FileId, FileKind},
+    utils::Hidden,
+};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct File {
@@ -20,18 +23,18 @@ pub struct TransferRequest {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Download {
-    pub file: String,
+    pub file: FileId,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Progress {
-    pub file: String,
+    pub file: FileId,
     pub bytes_transfered: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Error {
-    pub file: Option<String>,
+    pub file: Option<FileId>,
     pub msg: String,
 }
 
@@ -54,7 +57,7 @@ pub enum ClientMsg {
 
 #[derive(Clone)]
 pub struct Chunk {
-    pub file: String,
+    pub file: FileId,
     pub data: Vec<u8>,
 }
 
@@ -74,13 +77,17 @@ impl Chunk {
         anyhow::ensure!(msg.len() > id_end, "Invalid file id length");
 
         let drain = msg.drain(0..id_end).skip(LEN_SIZE);
-        let file = String::from_utf8(drain.collect()).context("Invalid file id")?;
+        let file = String::from_utf8(drain.collect())
+            .context("Invalid file id")?
+            .into();
 
         Ok(Self { file, data: msg })
     }
 
     pub fn encode(self) -> Vec<u8> {
         let Self { file, data } = self;
+
+        let file = file.to_string();
 
         let len = file.len() as u32;
         len.to_le_bytes()
@@ -101,20 +108,18 @@ impl TryFrom<File> for crate::File {
             children,
         }: File,
     ) -> Result<Self, Self::Error> {
-        let path = PathBuf::from(name);
-
         let children: HashMap<_, _> = children
             .into_iter()
-            .map(|mut c| {
-                let key = c.name.clone();
-                c.name = path.join(&c.name).to_string_lossy().to_string();
+            .map(|c| {
+                let name = Hidden(c.name.clone());
+                let file = crate::File::try_from(c)?;
 
-                Ok((Hidden(PathBuf::from(key).into_boxed_path()), c.try_into()?))
+                Ok((name, file))
             })
             .collect::<Result<_, Self::Error>>()?;
 
         Ok(Self {
-            path: Hidden(path.into_boxed_path()),
+            name: Hidden(name),
             kind: if children.is_empty() {
                 FileKind::FileToRecv {
                     size: size.ok_or(crate::Error::BadFile)?,
@@ -130,7 +135,7 @@ impl TryFrom<&crate::File> for File {
     type Error = crate::Error;
 
     fn try_from(value: &crate::File) -> Result<Self, Self::Error> {
-        let name = value.name().ok_or(crate::Error::BadPath)?;
+        let name = value.name().to_string();
 
         Ok(Self {
             name,
@@ -208,12 +213,12 @@ mod tests {
     #[test]
     fn binary_serialization() {
         const FILE_CONTNET: &[u8] = b"test file content";
-        const FILE_PATH: &str = "test/file.ext";
+        const FILE_ID: &str = "test/file.ext";
 
         const CHUNK_MSG: &[u8] = b"\x0D\x00\x00\x00test/file.exttest file content";
 
         let msg = Chunk {
-            file: String::from(FILE_PATH),
+            file: FileId::from(FILE_ID),
             data: FILE_CONTNET.to_vec(),
         }
         .encode();
@@ -223,7 +228,7 @@ mod tests {
         let Chunk { file, data } =
             Chunk::decode(CHUNK_MSG.to_vec()).expect("Failed to decode chunk");
 
-        assert_eq!(file, FILE_PATH);
+        assert_eq!(file, FileId::from(FILE_ID));
         assert_eq!(data, FILE_CONTNET);
     }
 }

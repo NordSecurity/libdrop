@@ -58,38 +58,15 @@ async fn listen(
                     .entry(xfid)
                     .or_insert_with(HashSet::new);
 
-                for file in files.values() {
-                    if file.is_dir() {
-                        let children: Vec<&File> = file.iter().filter(|c| !c.is_dir()).collect();
+                for (file_id, _) in xfer.flat_file_list() {
+                    service
+                        .lock()
+                        .await
+                        .download(xfid, file_id.clone(), out_dir)
+                        .await
+                        .context("Cannot issue download call")?;
 
-                        for child in children {
-                            let path = child.path();
-
-                            info!("Downloading {:?}", path);
-
-                            service
-                                .lock()
-                                .await
-                                .download(xfid, path, out_dir)
-                                .await
-                                .context("Cannot issue download call")?;
-
-                            file_set.insert(path.to_path_buf());
-                        }
-                    } else {
-                        let path = file.path();
-
-                        info!("Downloading {:?}", path);
-
-                        service
-                            .lock()
-                            .await
-                            .download(xfid, path, out_dir)
-                            .await
-                            .context("Cannot issue download call")?;
-
-                        file_set.insert(path.to_path_buf());
-                    }
+                    file_set.insert(PathBuf::from(file_id));
                 }
 
                 if file_set.is_empty() {
@@ -327,7 +304,7 @@ async fn main() -> anyhow::Result<()> {
             matches
                 .get_many::<String>("FILE")
                 .expect("Missing transfer `FILE` field")
-                .map(|p| File::from_path(Path::new(p), None, &config))
+                .map(|p| File::from_path(p, None, &config))
                 .collect::<Result<Vec<File>, _>>()
                 .context("Cannot build transfer from the files provided")?,
             &config,

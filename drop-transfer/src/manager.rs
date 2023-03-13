@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -8,9 +8,10 @@ use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 
 use crate::{
+    file::FileId,
     service::State,
     ws::{client::ClientReq, server::ServerReq},
-    Error, File, Transfer,
+    Error, Transfer,
 };
 
 #[derive(Clone)]
@@ -21,7 +22,6 @@ pub enum TransferConnection {
 
 pub struct TransferState {
     pub(crate) xfer: Transfer,
-    files: HashSet<PathBuf>,
     pub(crate) connection: TransferConnection,
     // Used for mapping directories inside the destination
     dir_mappings: HashMap<PathBuf, PathBuf>,
@@ -38,7 +38,6 @@ impl TransferState {
     fn new(xfer: Transfer, connection: TransferConnection) -> Self {
         Self {
             xfer,
-            files: HashSet::new(),
             connection,
             dir_mappings: HashMap::new(),
         }
@@ -48,10 +47,17 @@ impl TransferState {
 impl TransferManager {
     /// Get ALL of the ongoing file transfers for a given transfer ID
     /// returns None if a transfer does not exist
-    pub(crate) fn get_transfer_files(&self, transfer_id: Uuid) -> Option<Vec<PathBuf>> {
-        self.transfers
-            .get(&transfer_id)
-            .map(|state| state.files.iter().cloned().collect())
+    pub(crate) fn get_transfer_files(&self, transfer_id: Uuid) -> Option<Vec<FileId>> {
+        let state = self.transfers.get(&transfer_id)?;
+
+        let ids = state
+            .xfer
+            .flat_file_list()
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+
+        Some(ids)
     }
 
     /// Cancel ALL of the ongoing file transfers for a given transfer ID    
@@ -71,27 +77,7 @@ impl TransferManager {
         match self.transfers.entry(xfer.id()) {
             Entry::Occupied(_) => Err(Error::BadTransferState),
             Entry::Vacant(entry) => {
-                let state = entry.insert(TransferState::new(xfer.clone(), connection));
-
-                for file in xfer.files() {
-                    state.files.insert(file.0.to_path_buf());
-
-                    let children = file.1.iter().collect::<Vec<&File>>();
-
-                    for child in children {
-                        let path = if let Ok(path) = child
-                            .path()
-                            .strip_prefix(file.1.path().parent().unwrap_or_else(|| Path::new("")))
-                        {
-                            path
-                        } else {
-                            child.path()
-                        };
-
-                        state.files.insert(path.to_path_buf());
-                    }
-                }
-
+                entry.insert(TransferState::new(xfer, connection));
                 Ok(())
             }
         }
@@ -109,14 +95,14 @@ impl TransferManager {
         &mut self,
         id: Uuid,
         dest_dir: &Path,
-        file_xfer_path: &Path,
+        file_id: &FileId,
     ) -> crate::Result<PathBuf> {
         let state = self
             .transfers
             .get_mut(&id)
             .ok_or(crate::Error::BadTransfer)?;
 
-        let mut iter = file_xfer_path.iter();
+        let mut iter = file_id.iter();
 
         let probe = iter.next().ok_or(crate::Error::BadPath)?;
         let next = iter.next();
@@ -129,7 +115,8 @@ impl TransferManager {
                     Entry::Occupied(occ) => occ.get().clone(),
                     // Dir in new, check if there is name conflict and add to known
                     Entry::Vacant(vacc) => {
-                        let mapped = crate::utils::map_path_if_exists(vacc.key())?;
+                        let norm_path = crate::utils::normalize_path(vacc.key());
+                        let mapped = crate::utils::map_path_if_exists(&norm_path)?;
                         vacc.insert(mapped).clone()
                     }
                 };
@@ -140,7 +127,7 @@ impl TransferManager {
             }
             None => {
                 // Ordinary file
-                dest_dir.join(file_xfer_path)
+                crate::utils::normalize_path(dest_dir.join(probe))
             }
         };
 

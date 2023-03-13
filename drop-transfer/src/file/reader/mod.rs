@@ -3,7 +3,7 @@ mod fd;
 
 mod path;
 
-use std::{fs, path::Path};
+use std::fs;
 
 use crate::Error;
 
@@ -17,15 +17,11 @@ pub struct FileReader {
 }
 
 impl FileReader {
-    pub(super) fn new(
-        source: super::FileSource,
-        meta: fs::Metadata,
-        path: &Path,
-    ) -> crate::Result<Self> {
+    pub(super) fn new(source: &super::FileSource, meta: fs::Metadata) -> crate::Result<Self> {
         let inner: Box<dyn Reader> = match source {
-            super::FileSource::Path => Box::new(path::FileReader::new(path)?),
+            super::FileSource::Path(path) => Box::new(path::FileReader::new(path)?),
             #[cfg(unix)]
-            super::FileSource::Fd(fd) => Box::new(unsafe { fd::FileReader::new(fd) }),
+            super::FileSource::Fd(fd) => Box::new(unsafe { fd::FileReader::new(*fd) }),
         };
 
         Ok(Self {
