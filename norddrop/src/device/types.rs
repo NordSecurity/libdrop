@@ -257,6 +257,7 @@ mod tests {
           "transfer_file_limit": 100,
           "req_connection_timeout_ms": 1000,
           "transfer_idle_lifetime_ms": 2000,
+          "connection_max_retry_interval_ms": 500,
           "moose_event_path": "test/path",
           "moose_prod": true
         }
@@ -271,6 +272,7 @@ mod tests {
                     transfer_file_limit,
                     req_connection_timeout,
                     transfer_idle_lifetime,
+                    connection_max_retry_interval,
                 },
             moose: drop_config::MooseConfig { event_path, prod },
         } = cfg.into();
@@ -278,6 +280,7 @@ mod tests {
         assert_eq!(dir_depth_limit, 10);
         assert_eq!(transfer_file_limit, 100);
         assert_eq!(req_connection_timeout, Duration::from_millis(1000));
+        assert_eq!(connection_max_retry_interval, Duration::from_millis(500));
         assert_eq!(transfer_idle_lifetime, Duration::from_millis(2000));
         assert_eq!(event_path, "test/path");
         assert!(prod);
