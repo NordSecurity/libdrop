@@ -549,8 +549,8 @@ impl ServerHandler {
                     Err(u32::from(&Error::Canceled) as i32),
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
-                    file.size_kb(),
                     0,
+                    file.info(),
                 );
             });
 
@@ -590,11 +590,11 @@ impl ServerHandler {
                     Err(u32::from(&crate::Error::Canceled) as i32),
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
+                    0,
                     self.xfer
                         .file(file)
                         .expect("File should exists since we have a transfer task running")
-                        .size_kb(),
-                    0,
+                        .info(),
                 );
 
                 events
@@ -745,8 +745,8 @@ impl FileXferTask {
             Ok(()),
             drop_analytics::Phase::Start,
             self.xfer.id().to_string(),
-            self.file.size_kb(),
             0,
+            self.file.info(),
         );
 
         events
@@ -859,8 +859,8 @@ impl FileXferTask {
             result.to_status(),
             drop_analytics::Phase::End,
             self.xfer.id().to_string(),
-            self.file.size_kb(),
             transfer_time.elapsed().as_millis() as i32,
+            self.file.info(),
         );
 
         let event = match result {

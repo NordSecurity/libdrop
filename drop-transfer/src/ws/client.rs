@@ -384,14 +384,12 @@ impl ClientHandler {
                     .map_or(false, |task| !task.job.is_finished())
             })
             .for_each(|file| {
-                let size = file.size_kb().unwrap_or_default();
-
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
-                    Some(size),
                     0,
+                    file.info(),
                 )
             });
 
@@ -514,11 +512,11 @@ impl ClientHandler {
                     Err(u32::from(&crate::Error::Canceled) as i32),
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
+                    0,
                     self.xfer
                         .file(file)
                         .expect("File should exists since we have a transfer task running")
-                        .size_kb(),
-                    0,
+                        .info(),
                 );
 
                 task.events
@@ -569,8 +567,8 @@ fn start_upload(
         Ok(()),
         drop_analytics::Phase::Start,
         xfer.id().to_string(),
-        xfile.size_kb(),
         0,
+        xfile.info(),
     );
 
     let upload_job = async move {
@@ -614,8 +612,8 @@ fn start_upload(
             result.to_status(),
             drop_analytics::Phase::End,
             xfer.id().to_string(),
-            xfile.size_kb(),
             transfer_time.elapsed().as_millis() as i32,
+            xfile.info(),
         );
 
         match result {

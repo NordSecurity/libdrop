@@ -1,18 +1,57 @@
+use std::{
+    sync::mpsc::{sync_channel, SyncSender},
+    time::Duration,
+};
+
 use anyhow::Context;
 use mooselibdropapp as moose;
 use serde_json::Value;
-use slog::{warn, Logger};
+use slog::{error, info, warn, Logger};
+
+use crate::{FileInfo, TransferInfo};
 
 const DROP_MOOSE_APP_NAME: &str = "norddrop";
 
 /// Version of the tracker used, should be updated everytime the tracker library
 /// is updated
-const DROP_MOOSE_TRACKER_VERSION: &str = "0.0.2";
+const DROP_MOOSE_TRACKER_VERSION: &str = "0.1.2";
 
 const MOOSE_STATUS_SUCCESS: i32 = 0;
 
 pub struct MooseImpl {
     logger: slog::Logger,
+}
+
+struct MooseInitCallback {
+    logger: slog::Logger,
+    init_tx: SyncSender<Result<moose::ContextState, moose::MooseError>>,
+}
+
+impl moose::InitCallback for MooseInitCallback {
+    fn on_init(&self, result_code: &Result<moose::ContextState, moose::MooseError>) {
+        info!(self.logger, "[Moose] Init callback: {:?}", result_code);
+        self.init_tx
+            .send(*result_code)
+            .expect("Failed to send moose init result to channel");
+    }
+}
+
+struct MooseErrorCallback {
+    logger: slog::Logger,
+}
+
+impl moose::ErrorCallback for MooseErrorCallback {
+    fn on_error(
+        &self,
+        _error_level: moose::MooseErrorLevel,
+        error_code: moose::MooseError,
+        msg: &str,
+    ) {
+        error!(
+            self.logger,
+            "[Moose] Error callback {:?}: {:?}", error_code, msg
+        );
+    }
 }
 
 macro_rules! moose_debug {
@@ -22,7 +61,7 @@ macro_rules! moose_debug {
         $func:expr
     ) => {
         if let Some(error) = $result.as_ref().err() {
-            warn!($logger, "[Moose] Error: {} on call to `{}`", error, $func);
+            warn!($logger, "[Moose] Error: {:?} on call to `{}`", error, $func);
         }
     };
 }
@@ -47,18 +86,37 @@ impl MooseImpl {
         app_version: String,
         prod: bool,
     ) -> anyhow::Result<Self> {
+        let (tx, rx) = sync_channel(1);
+
         let res = moose::init(
             event_path,
             DROP_MOOSE_APP_NAME.to_string(),
             app_version,
             DROP_MOOSE_TRACKER_VERSION.to_string(),
             prod,
+            Box::new(MooseInitCallback {
+                logger: logger.clone(),
+                init_tx: tx,
+            }),
+            Box::new(MooseErrorCallback {
+                logger: logger.clone(),
+            }),
         );
 
         moose_debug!(logger, res, "init");
         res.context("Failed to initialize moose")?;
 
+        let res = rx
+            .recv_timeout(Duration::from_secs(2))
+            .context("Failed to receive moose init callback result")?;
+        moose_debug!(logger, res, "init");
+
+        anyhow::ensure!(res.is_ok(), "Failed to initialize moose: {:?}", res.err());
+
         populate_context(&logger);
+        let res = moose::flush_changes();
+        moose_debug!(logger, res, "flush_changes");
+        res.context("Failed to flush moose context")?;
 
         Ok(Self { logger })
     }
@@ -88,19 +146,20 @@ impl super::Moose for MooseImpl {
     fn service_quality_transfer_batch(
         &self,
         phase: super::Phase,
-        files_count: i32,
-        size_of_files_list: String,
         transfer_id: String,
-        transfer_size: i32,
+        info: TransferInfo,
     ) {
         moose!(
             self.logger,
             send_serviceQuality_transfer_batch,
             phase.into(),
-            files_count,
-            size_of_files_list,
+            mooselibdropapp::LibdropappEventTrigger::LibdropappEventTriggerNone,
+            info.extension_list,
+            info.mime_type_list,
+            info.file_count,
+            info.file_size_list,
             transfer_id,
-            transfer_size
+            info.transfer_size_kb
         );
     }
 
@@ -109,21 +168,26 @@ impl super::Moose for MooseImpl {
         res: Result<(), i32>,
         phase: crate::Phase,
         transfer_id: String,
-        transfer_size: Option<i32>,
         transfer_time: i32,
+        info: Option<FileInfo>,
     ) {
         let errno = match res {
             Ok(()) => MOOSE_STATUS_SUCCESS,
             Err(err) => err,
         };
 
+        let info = info.unwrap_or_default();
+
         moose!(
             self.logger,
             send_serviceQuality_transfer_file,
             errno,
             phase.into(),
+            mooselibdropapp::LibdropappEventTrigger::LibdropappEventTriggerNone,
+            info.extension,
+            info.mime_type,
             transfer_id,
-            transfer_size.unwrap_or(0),
+            info.size_kb,
             transfer_time
         );
     }

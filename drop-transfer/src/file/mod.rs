@@ -13,6 +13,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use drop_analytics::FileInfo;
 use drop_config::DropConfig;
 pub use reader::FileReader;
 use walkdir::WalkDir;
@@ -29,7 +30,7 @@ pub enum FileKind {
     FileToSend {
         meta: Hidden<fs::Metadata>,
         source: FileSource,
-        mime_type: Option<Hidden<&'static str>>,
+        mime_type: Option<Hidden<String>>,
     },
     FileToRecv {
         size: u64,
@@ -185,14 +186,16 @@ impl File {
         let mut file = options.open(path)?;
         let mut buf = vec![0u8; HEADER_SIZE];
         let header_len = file.read(&mut buf)?;
-        let mime_type = infer::get(&buf[0..header_len]).map(|t| t.mime_type());
+        let mime_type = infer::get(&buf[0..header_len])
+            .map_or("unknown", |t| t.mime_type())
+            .to_string();
 
         Ok(Self {
             path: Hidden(path.into()),
             kind: FileKind::FileToSend {
                 meta: Hidden(meta),
                 source: FileSource::Path,
-                mime_type: mime_type.map(Hidden),
+                mime_type: Some(Hidden(mime_type)),
             },
         })
     }
@@ -210,14 +213,16 @@ impl File {
 
             let mut buf = vec![0u8; HEADER_SIZE];
             let header_len = f.read_at(&mut buf, 0)?;
-            let mime_type = infer::get(&buf[0..header_len]).map(|t| t.mime_type());
+            let mime_type = infer::get(&buf[0..header_len])
+                .map_or("unknown", |t| t.mime_type())
+                .to_string();
 
             Ok(Self {
                 path: Hidden(path.into()),
                 kind: FileKind::FileToSend {
                     meta: Hidden(meta),
                     source: FileSource::Fd(fd),
-                    mime_type: mime_type.map(Hidden),
+                    mime_type: Some(Hidden(mime_type)),
                 },
             })
         };
@@ -245,16 +250,25 @@ impl File {
         }
     }
 
-    pub fn mime_type(&self) -> Option<&'static str> {
+    pub fn info(&self) -> Option<FileInfo> {
         match &self.kind {
-            FileKind::FileToSend { mime_type, .. } => mime_type.map(|h| h.0),
+            FileKind::FileToSend { mime_type, .. } => Some(FileInfo {
+                mime_type: mime_type
+                    .as_deref()
+                    .cloned()
+                    .unwrap_or_else(|| "unknown".to_string()),
+                extension: self
+                    .path
+                    .extension()
+                    .map(|e| e.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "unknown".to_string()),
+                size_kb: self
+                    .size()
+                    .map(|s| (s as f64 / 1024.0).ceil() as i32)
+                    .unwrap_or_default(),
+            }),
             _ => None,
         }
-    }
-
-    // Used for moose only
-    pub fn size_kb(&self) -> Option<i32> {
-        self.size().map(|s| (s as f64 / 1024.0).ceil() as i32)
     }
 
     // Open the file if it wasn't already opened and return the std::fs::File
