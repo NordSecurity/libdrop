@@ -170,7 +170,11 @@ impl Service {
                 _ => return Err(Error::BadTransfer),
             };
 
-            let mapped_file_path = lock.apply_dir_mapping(uuid, parent_dir, file_id)?;
+            let mapped_file_path = lock.apply_dir_mapping(
+                uuid,
+                &crate::utils::normalize_path(parent_dir),
+                &crate::utils::normalize_path(file_id),
+            )?;
             let xfer = lock.transfer(&uuid).ok_or(Error::BadTransfer)?.clone();
 
             Ok((xfer, chann, mapped_file_path))
