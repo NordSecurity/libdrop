@@ -52,6 +52,8 @@ pub enum Error {
     AddrInUse,
     #[error("File modified")]
     FileModified,
+    #[error("Filename is too long")]
+    FilenameTooLong,
 }
 
 impl From<&Error> for u32 {
@@ -82,6 +84,7 @@ impl From<&Error> for u32 {
             Error::WsClient(_) => 26,
             Error::AddrInUse => 27,
             Error::FileModified => 28,
+            Error::FilenameTooLong => 29,
         }
     }
 }
