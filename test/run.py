@@ -86,6 +86,8 @@ async def main():
 
     # in kilobytes
     test_files = {
+        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt": 1
+        * 1024,
         "testfile-small": 1 * 1024,
         "testfile-big": 10 * 1024,
         "deep/path/file1.ext1": 1 * 1024,

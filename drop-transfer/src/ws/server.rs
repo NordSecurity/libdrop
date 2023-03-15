@@ -670,6 +670,7 @@ pub struct FileXferTask {
     pub size: u64,
     pub xfer: crate::Transfer,
 }
+const MAX_FILENAME_LENGTH: usize = 255;
 
 impl FileXferTask {
     pub fn new(file: crate::File, xfer: crate::Transfer, location: PathBuf) -> crate::Result<Self> {
@@ -690,14 +691,20 @@ impl FileXferTask {
             .iter()
             .map(|b| format!("{:02x}", b))
             .collect();
-        let tmp_location = format!(
+        let tmp_location: PathBuf = format!(
             "{}.dropdl-{}",
             location.display(),
             suffix.get(..8).unwrap_or(&suffix),
         )
         .into();
         let size = file.size().ok_or(crate::Error::DirectoryNotExpected)?;
-
+        let char_count = tmp_location
+            .file_name()
+            .expect("Cannot extract filename")
+            .len();
+        if char_count > MAX_FILENAME_LENGTH {
+            return Err(crate::Error::FilenameTooLong);
+        }
         Ok(Self {
             file,
             xfer,

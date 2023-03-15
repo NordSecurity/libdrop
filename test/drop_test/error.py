@@ -30,3 +30,4 @@ class Error(IntEnum):
     WS_CLIENT = (26,)
     ADDR_IN_USE = (27,)
     FILE_MODIFIED = (28,)
+    FILENAME_TOO_LONG = (29,)
