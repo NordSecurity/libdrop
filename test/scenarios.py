@@ -2814,7 +2814,7 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario19",
+        "scenario19-1",
         "Send a filename with 256 characters in a filename, expect it to fail",
         {
             "ren": ActionList(
@@ -2866,6 +2866,82 @@ scenarios = [
                             "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
                             Error.FILENAME_TOO_LONG,
                         )
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario19-2",
+        # While we do replace ASCII control chars, they are technically allowed on Linux. So we can write and run the test
+        "Send a file with a ASCII control char in the name, expect it to being renamed to '_'",
+        {
+            "ren": ActionList(
+                [
+                    # Wait for another peer to appear
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        "/tmp/with-illegal-char-\x0A-",
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    "with-illegal-char-\x0A-",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, "with-illegal-char-\x0A-")),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            "with-illegal-char-\x0A-",
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    "with-illegal-char-\x0A-",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        "with-illegal-char-\x0A-",
+                        "/tmp/received",
+                    ),
+                    action.Wait(event.Start(0, "with-illegal-char-\x0A-")),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            "with-illegal-char-\x0A-",
+                            "with-illegal-char-_-",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            event.File("/tmp/received/with-illegal-char-_-", 1048576),
+                        ],
                     ),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
