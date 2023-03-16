@@ -40,16 +40,16 @@ class NewTransferFails(Action):
 
 
 class NewTransfer(Action):
-    def __init__(self, peer: str, path: str):
+    def __init__(self, peer: str, paths: list[str]):
         self._peer: str = peer
-        self._path: str = path
+        self._paths: list[str] = paths
 
     async def run(self, drop: ffi.Drop):
-        xfid = drop.new_transfer(self._peer, [self._path])
+        xfid = drop.new_transfer(self._peer, self._paths)
         UUIDS.append(xfid)
 
     def __str__(self):
-        return f"NewTransfer({self._peer}, {self._path})"
+        return f"NewTransfer({self._peer}, {self._paths})"
 
 
 # New transfer just with files preopened. Used to test Android. Android can't share directories
