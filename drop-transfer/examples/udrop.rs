@@ -66,7 +66,7 @@ async fn listen(
                         .await
                         .context("Cannot issue download call")?;
 
-                    file_set.insert(PathBuf::from(file_id));
+                    file_set.insert(file_id);
                 }
 
                 if file_set.is_empty() {
@@ -108,7 +108,7 @@ async fn listen(
                 );
 
                 if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
-                    occ.get_mut().remove(&**info.id);
+                    occ.get_mut().remove(&info.id);
                     if occ.get().is_empty() {
                         cancel_xfer(xfid).await?;
                         occ.remove_entry();
@@ -145,7 +145,7 @@ async fn listen(
                 info!("[EVENT] FileDownloadCancelled {}: {:?}", xfid, file);
 
                 if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
-                    occ.get_mut().remove(&**file);
+                    occ.get_mut().remove(&file);
                     if occ.get().is_empty() {
                         cancel_xfer(xfid).await?;
                         occ.remove_entry();
@@ -169,7 +169,7 @@ async fn listen(
                 );
 
                 if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
-                    occ.get_mut().remove(&**file);
+                    occ.get_mut().remove(&file);
                     if occ.get().is_empty() {
                         cancel_xfer(xfid).await?;
                         occ.remove_entry();
