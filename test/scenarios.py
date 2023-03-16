@@ -2866,4 +2866,169 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario20",
+        "Send multiple files within a single transfer",
+        {
+            "ren": ActionList(
+                [
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        [
+                            "/tmp/testfile-small",
+                            "/tmp/testfile-big",
+                            "/tmp/deep",
+                        ],
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File("testfile-small", 1048576),
+                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    "deep",
+                                    0,
+                                    {
+                                        event.File(
+                                            "path",
+                                            0,
+                                            {
+                                                event.File("file1.ext1", 1048576),
+                                                event.File("file2.ext2", 1048576),
+                                            },
+                                        ),
+                                        event.File(
+                                            "another-path",
+                                            0,
+                                            {
+                                                event.File("file3.ext3", 1048576),
+                                                event.File("file4.ext4", 1048576),
+                                            },
+                                        ),
+                                    },
+                                ),
+                            },
+                        )
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(0, "testfile-small"),
+                            event.Start(0, "testfile-big"),
+                            event.Start(0, "deep/path/file1.ext1"),
+                            event.Start(0, "deep/path/file2.ext2"),
+                            event.Start(0, "deep/another-path/file3.ext3"),
+                            event.Start(0, "deep/another-path/file4.ext4"),
+                            event.FinishFileUploaded(0, "testfile-small"),
+                            event.FinishFileUploaded(0, "testfile-big"),
+                            event.FinishFileUploaded(0, "deep/path/file1.ext1"),
+                            event.FinishFileUploaded(0, "deep/path/file2.ext2"),
+                            event.FinishFileUploaded(0, "deep/another-path/file3.ext3"),
+                            event.FinishFileUploaded(0, "deep/another-path/file4.ext4"),
+                        ]
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File("testfile-small", 1048576),
+                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    "deep",
+                                    0,
+                                    {
+                                        event.File(
+                                            "path",
+                                            0,
+                                            {
+                                                event.File("file1.ext1", 1048576),
+                                                event.File("file2.ext2", 1048576),
+                                            },
+                                        ),
+                                        event.File(
+                                            "another-path",
+                                            0,
+                                            {
+                                                event.File("file3.ext3", 1048576),
+                                                event.File("file4.ext4", 1048576),
+                                            },
+                                        ),
+                                    },
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(0, "testfile-small", "/tmp/received/20"),
+                    action.Download(0, "testfile-big", "/tmp/received/20"),
+                    action.Download(0, "deep/path/file1.ext1", "/tmp/received/20"),
+                    action.Download(0, "deep/path/file2.ext2", "/tmp/received/20"),
+                    action.Download(
+                        0, "deep/another-path/file3.ext3", "/tmp/received/20"
+                    ),
+                    action.Download(
+                        0, "deep/another-path/file4.ext4", "/tmp/received/20"
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(0, "testfile-small"),
+                            event.Start(0, "testfile-big"),
+                            event.Start(0, "deep/path/file1.ext1"),
+                            event.Start(0, "deep/path/file2.ext2"),
+                            event.Start(0, "deep/another-path/file3.ext3"),
+                            event.Start(0, "deep/another-path/file4.ext4"),
+                            event.FinishFileDownloaded(
+                                0, "testfile-small", "testfile-small"
+                            ),
+                            event.FinishFileDownloaded(
+                                0, "testfile-big", "testfile-big"
+                            ),
+                            event.FinishFileDownloaded(
+                                0, "deep/path/file1.ext1", "file1.ext1"
+                            ),
+                            event.FinishFileDownloaded(
+                                0, "deep/path/file2.ext2", "file2.ext2"
+                            ),
+                            event.FinishFileDownloaded(
+                                0, "deep/another-path/file3.ext3", "file3.ext3"
+                            ),
+                            event.FinishFileDownloaded(
+                                0, "deep/another-path/file4.ext4", "file4.ext4"
+                            ),
+                        ]
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            event.File("/tmp/received/20/testfile-small", 1048576),
+                            event.File("/tmp/received/20/testfile-big", 10485760),
+                            event.File(
+                                "/tmp/received/20/deep/path/file1.ext1", 1048576
+                            ),
+                            event.File(
+                                "/tmp/received/20/deep/path/file2.ext2", 1048576
+                            ),
+                            event.File(
+                                "/tmp/received/20/deep/another-path/file3.ext3", 1048576
+                            ),
+                            event.File(
+                                "/tmp/received/20/deep/another-path/file4.ext4", 1048576
+                            ),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]
