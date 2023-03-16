@@ -3,7 +3,6 @@ use std::{
     io,
     net::IpAddr,
     ops::ControlFlow,
-    path::PathBuf,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -404,7 +403,7 @@ impl ClientHandler {
             task.events
                 .emit(Event::FileUploadProgress(
                     self.xfer.clone(),
-                    Hidden(file.into()),
+                    file,
                     transfered,
                 ))
                 .await;
@@ -414,10 +413,7 @@ impl ClientHandler {
     async fn on_done(&mut self, file: FileId) {
         if let Some(task) = self.tasks.remove(&file) {
             task.events
-                .stop(Event::FileUploadSuccess(
-                    self.xfer.clone(),
-                    Hidden(file.into()),
-                ))
+                .stop(Event::FileUploadSuccess(self.xfer.clone(), file))
                 .await;
         }
     }
@@ -438,7 +434,7 @@ impl ClientHandler {
                     task.events
                         .stop(Event::FileUploadFailed(
                             self.xfer.clone(),
-                            Hidden(file.into()),
+                            file,
                             crate::Error::BadTransfer,
                         ))
                         .await;
@@ -513,10 +509,7 @@ impl ClientHandler {
                 );
 
                 task.events
-                    .stop(Event::FileUploadCancelled(
-                        self.xfer.clone(),
-                        Hidden(file.into()),
-                    ))
+                    .stop(Event::FileUploadCancelled(self.xfer.clone(), file))
                     .await;
             }
         }
@@ -549,10 +542,10 @@ fn start_upload(
     events: Arc<FileEventTx>,
     sink: Sender<Message>,
     xfer: crate::Transfer,
-    file: FileId,
+    file_id: FileId,
     logger: Logger,
 ) -> anyhow::Result<JoinHandle<()>> {
-    let xfile = xfer.file(&file).context("File not found")?.clone();
+    let xfile = xfer.file(&file_id).context("File not found")?.clone();
 
     let transfer_time = Instant::now();
 
@@ -567,10 +560,7 @@ fn start_upload(
     let upload_job = async move {
         let send_file = async {
             events
-                .start(Event::FileUploadStarted(
-                    xfer.clone(),
-                    Hidden((&file).into()),
-                ))
+                .start(Event::FileUploadStarted(xfer.clone(), file_id.clone()))
                 .await;
 
             let mut iofile = match xfile.open() {
@@ -587,7 +577,7 @@ fn start_upload(
             loop {
                 let chunk = match iofile.read_chunk()? {
                     Some(chunk) => v1::Chunk {
-                        file: file.clone(),
+                        file: file_id.clone(),
                         data: chunk.to_vec(),
                     },
                     None => return Ok(()),
@@ -620,17 +610,13 @@ fn start_upload(
 
                 let _ = sink
                     .send(Message::from(&v1::ClientMsg::Error(v1::Error {
-                        file: Some(file.clone()),
+                        file: Some(file_id.clone()),
                         msg: err.to_string(),
                     })))
                     .await;
 
                 events
-                    .stop(Event::FileUploadFailed(
-                        xfer.clone(),
-                        Hidden(PathBuf::from(file).into_boxed_path()),
-                        err,
-                    ))
+                    .stop(Event::FileUploadFailed(xfer.clone(), file_id, err))
                     .await;
             }
         };

@@ -1,15 +1,18 @@
-use std::path::{Path, PathBuf};
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+};
 
 use crate::utils::Hidden;
 
-#[derive(Debug, Hash, Clone, PartialEq, Eq)]
-pub struct FileId(Hidden<Vec<String>>);
+#[derive(Hash, Clone, PartialEq, Eq)]
+pub struct FileId(Vec<String>);
 
 const SEPARATOR: &str = "/";
 
 impl FileId {
     pub fn from_name(name: String) -> Self {
-        Self(Hidden(vec![name]))
+        Self(vec![name])
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &String> {
@@ -31,12 +34,12 @@ where
             .split(SEPARATOR)
             .map(ToString::to_string)
             .collect();
-        Self(Hidden(vec))
+        Self(vec)
     }
 }
 
 impl From<FileId> for PathBuf {
-    fn from(FileId(Hidden(value)): FileId) -> Self {
+    fn from(FileId(value): FileId) -> Self {
         value.into_iter().collect()
     }
 }
@@ -62,6 +65,14 @@ impl From<&FileId> for Box<Path> {
 impl ToString for FileId {
     fn to_string(&self) -> String {
         self.0.join(SEPARATOR)
+    }
+}
+
+impl fmt::Debug for FileId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("FileId")
+            .field(&Hidden(self.to_string()))
+            .finish()
     }
 }
 

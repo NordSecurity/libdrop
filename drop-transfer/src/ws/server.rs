@@ -495,7 +495,7 @@ impl ServerHandler {
                     events
                         .stop(Event::FileDownloadFailed(
                             self.xfer.clone(),
-                            Hidden(file.into()),
+                            file,
                             Error::BadTransfer,
                         ))
                         .await;
@@ -589,10 +589,7 @@ impl ServerHandler {
                 );
 
                 events
-                    .stop(Event::FileDownloadCancelled(
-                        self.xfer.clone(),
-                        Hidden(file.into()),
-                    ))
+                    .stop(Event::FileDownloadCancelled(self.xfer.clone(), file))
                     .await;
             }
         }
@@ -741,7 +738,7 @@ impl FileXferTask {
         events
             .start(crate::Event::FileDownloadStarted(
                 self.xfer.clone(),
-                Hidden((&file_id).into()),
+                file_id.clone(),
             ))
             .await;
 
@@ -788,7 +785,7 @@ impl FileXferTask {
                         events
                             .emit(crate::Event::FileDownloadProgress(
                                 self.xfer.clone(),
-                                Hidden((&file_id).into()),
+                                file_id.clone(),
                                 bytes_received,
                             ))
                             .await;
@@ -856,7 +853,7 @@ impl FileXferTask {
             Ok(dst_location) => Some(Event::FileDownloadSuccess(
                 self.xfer.clone(),
                 DownloadSuccess {
-                    id: Hidden(file_id.into()),
+                    id: file_id,
                     final_path: Hidden(dst_location.into_boxed_path()),
                 },
             )),
@@ -868,11 +865,7 @@ impl FileXferTask {
                 }))
                 .await;
 
-                Some(Event::FileDownloadFailed(
-                    self.xfer.clone(),
-                    Hidden(file_id.into()),
-                    err,
-                ))
+                Some(Event::FileDownloadFailed(self.xfer.clone(), file_id, err))
             }
         };
 
