@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeSet,
+    collections::{btree_map::Entry, BTreeMap, BTreeSet, HashSet},
     env,
     net::IpAddr,
     path::{Path, PathBuf},
@@ -23,6 +23,24 @@ async fn listen(
 ) -> anyhow::Result<()> {
     info!("Awaiting events…");
 
+    let mut active_file_downloads = BTreeMap::new();
+
+    let xfers = &xfers;
+    let cancel_xfer = |xfid| async move {
+        service
+            .lock()
+            .await
+            .cancel_all(xfid)
+            .await
+            .context("Failed to cancled transfer")?;
+
+        xfers.send_modify(|xfers| {
+            xfers.remove(&xfid);
+        });
+
+        anyhow::Ok(())
+    };
+
     while let Some(ev) = rx.recv().await {
         match ev {
             Event::RequestReceived(xfer) => {
@@ -34,6 +52,10 @@ async fn listen(
                 xfers.send_modify(|xfers| {
                     xfers.insert(xfid);
                 });
+
+                let file_set = active_file_downloads
+                    .entry(xfid)
+                    .or_insert_with(HashSet::new);
 
                 for file in files.values() {
                     if file.is_dir() {
@@ -50,6 +72,8 @@ async fn listen(
                                 .download(xfid, path, out_dir)
                                 .await
                                 .context("Cannot issue download call")?;
+
+                            file_set.insert(path.to_path_buf());
                         }
                     } else {
                         let path = file.path();
@@ -62,7 +86,23 @@ async fn listen(
                             .download(xfid, path, out_dir)
                             .await
                             .context("Cannot issue download call")?;
+
+                        file_set.insert(path.to_path_buf());
                     }
+                }
+
+                if file_set.is_empty() {
+                    service
+                        .lock()
+                        .await
+                        .cancel_all(xfid)
+                        .await
+                        .context("Failed to cancled transfer")?;
+
+                    active_file_downloads.remove(&xfid);
+                    xfers.send_modify(|xfers| {
+                        xfers.remove(&xfid);
+                    });
                 }
             }
             Event::FileDownloadStarted(xfer, file) => {
@@ -82,12 +122,20 @@ async fn listen(
                 );
             }
             Event::FileDownloadSuccess(xfer, info) => {
+                let xfid = xfer.id();
+
                 info!(
                     "[EVENT] [{}] FileDownloadSuccess {:?} [Final name: {:?}]",
-                    xfer.id(),
-                    info.id,
-                    info.final_path,
+                    xfid, info.id, info.final_path,
                 );
+
+                if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
+                    occ.get_mut().remove(&**info.id);
+                    if occ.get().is_empty() {
+                        cancel_xfer(xfid).await?;
+                        occ.remove_entry();
+                    }
+                }
             }
             Event::FileUploadSuccess(xfer, path) => {
                 info!("[EVENT] FileUploadSuccess {}: {:?}", xfer.id(), path,);
@@ -114,7 +162,17 @@ async fn listen(
                 info!("[EVENT] FileUploadCancelled {}: {:?}", xfer.id(), file,);
             }
             Event::FileDownloadCancelled(xfer, file) => {
-                info!("[EVENT] FileDownloadCancelled {}: {:?}", xfer.id(), file);
+                let xfid = xfer.id();
+
+                info!("[EVENT] FileDownloadCancelled {}: {:?}", xfid, file);
+
+                if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
+                    occ.get_mut().remove(&**file);
+                    if occ.get().is_empty() {
+                        cancel_xfer(xfid).await?;
+                        occ.remove_entry();
+                    }
+                }
             }
             Event::FileUploadFailed(xfer, file, status) => {
                 info!(
@@ -125,12 +183,20 @@ async fn listen(
                 );
             }
             Event::FileDownloadFailed(xfer, file, status) => {
+                let xfid = xfer.id();
+
                 info!(
                     "[EVENT] FileDownloadFailed {}: {:?}, {:?}",
-                    xfer.id(),
-                    file,
-                    status
+                    xfid, file, status
                 );
+
+                if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
+                    occ.get_mut().remove(&**file);
+                    if occ.get().is_empty() {
+                        cancel_xfer(xfid).await?;
+                        occ.remove_entry();
+                    }
+                }
             }
             Event::TransferCanceled(xfer, by_peer) => {
                 info!(
@@ -139,6 +205,7 @@ async fn listen(
                     by_peer
                 );
 
+                active_file_downloads.remove(&xfer.id());
                 xfers.send_modify(|xfers| {
                     xfers.remove(&xfer.id());
                 });
@@ -146,6 +213,7 @@ async fn listen(
             Event::TransferFailed(xfer, err) => {
                 info!("[EVENT] TransferFailed {}, status: {}", xfer.id(), err);
 
+                active_file_downloads.remove(&xfer.id());
                 xfers.send_modify(|xfers| {
                     xfers.remove(&xfer.id());
                 });
