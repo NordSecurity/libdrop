@@ -16,10 +16,7 @@ scenarios = [
             "ren": ActionList(
                 [
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-big",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -84,7 +81,7 @@ scenarios = [
             "ren": ActionList(
                 [
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer("172.20.0.15", "/tmp/testfile-small"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -100,7 +97,7 @@ scenarios = [
                             "testfile-small",
                         )
                     ),
-                    action.NewTransfer("172.20.0.15", "/tmp/testfile-big"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
                             1,
@@ -189,7 +186,7 @@ scenarios = [
             "ren": ActionList(
                 [
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer("172.20.0.15", "/tmp/testfile-big"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -198,7 +195,7 @@ scenarios = [
                             },
                         ),
                     ),
-                    action.NewTransfer("172.20.0.15", "/tmp/testfile-small"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
                             1,
@@ -318,10 +315,7 @@ scenarios = [
                     action.ConfigureNetwork(),
                     # Wait for another peer to appear
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-big",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -371,10 +365,7 @@ scenarios = [
                     action.ConfigureNetwork(),
                     # Wait for another peer to appear
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-big",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -419,10 +410,7 @@ scenarios = [
                     action.ConfigureNetwork(),
                     # Wait for another peer to appear
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-big",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -476,10 +464,7 @@ scenarios = [
                     action.ConfigureNetwork(),
                     # Wait for another peer to appear
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-big",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -523,10 +508,7 @@ scenarios = [
                 [
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-big",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -573,10 +555,7 @@ scenarios = [
                 [
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-big",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -634,10 +613,7 @@ scenarios = [
                 [
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-small",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -705,10 +681,7 @@ scenarios = [
             "ren": ActionList(
                 [
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-small",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -776,10 +749,7 @@ scenarios = [
                 [
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/nested/big",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/nested/big"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -874,20 +844,14 @@ scenarios = [
         {
             "ren": ActionList(
                 [
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-small",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.FinishFailedTransfer(
                             0,
                             Error.IO,
                         )
                     ),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-small",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.FinishFailedTransfer(
                             1,
@@ -907,10 +871,7 @@ scenarios = [
             "ren": ActionList(
                 [
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/deep",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/deep"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -1193,7 +1154,7 @@ scenarios = [
             "ren": ActionList(
                 [
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer("172.20.0.15", "/tmp/testfile-small"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -1204,7 +1165,7 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, "testfile-small")),
                     action.Wait(event.FinishFileUploaded(0, "testfile-small")),
-                    action.NewTransfer("172.20.0.15", "/tmp/testfile-small"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
                             1,
@@ -1288,7 +1249,7 @@ scenarios = [
             "ren": ActionList(
                 [
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer("172.20.0.15", "/tmp/deep/path/file1.ext1"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/deep/path/file1.ext1"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -1299,7 +1260,7 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, "file1.ext1")),
                     action.Wait(event.FinishFileUploaded(0, "file1.ext1")),
-                    action.NewTransfer("172.20.0.15", "/tmp/deep/path/file1.ext1"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/deep/path/file1.ext1"]),
                     action.Wait(
                         event.Queued(
                             1,
@@ -1384,10 +1345,7 @@ scenarios = [
                 [
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-big",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -1445,10 +1403,7 @@ scenarios = [
                 [
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-big",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -1505,10 +1460,7 @@ scenarios = [
             "ren": ActionList(
                 [
                     action.ConfigureNetwork(latency="10000ms"),
-                    action.NewTransfer(
-                        "172.20.0.100",
-                        "/tmp/testfile-big",
-                    ),
+                    action.NewTransfer("172.20.0.100", ["/tmp/testfile-big"]),
                     action.Stop(),
                     action.Wait(
                         event.FinishFailedTransfer(
@@ -1529,34 +1481,34 @@ scenarios = [
                 [
                     action.WaitForAnotherPeer(),
                     # fmt: off
-                    action.NewTransfer("172.20.0.15", "/tmp/testfile-bulk-01"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-01"]),
                     action.Wait(event.Queued(0, { event.File("testfile-bulk-01", 10485760), })),
 
-                    action.NewTransfer("172.20.0.15", "/tmp/testfile-bulk-02"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-02"]),
                     action.Wait(event.Queued(1, { event.File("testfile-bulk-02", 10485760), })),
 
-                    action.NewTransfer("172.20.0.15", "/tmp/testfile-bulk-03"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-03"]),
                     action.Wait(event.Queued(2, { event.File("testfile-bulk-03", 10485760), })),
 
-                    action.NewTransfer("172.20.0.15", "/tmp/testfile-bulk-04"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-04"]),
                     action.Wait(event.Queued(3, { event.File("testfile-bulk-04", 10485760), })),
 
-                    action.NewTransfer("172.20.0.15", "/tmp/testfile-bulk-05"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-05"]),
                     action.Wait(event.Queued(4, { event.File("testfile-bulk-05", 10485760), })),
 
-                    action.NewTransfer("172.20.0.15", "/tmp/testfile-bulk-06"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-06"]),
                     action.Wait(event.Queued(5, { event.File("testfile-bulk-06", 10485760), })),
 
-                    action.NewTransfer("172.20.0.15", "/tmp/testfile-bulk-07"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-07"]),
                     action.Wait(event.Queued(6, { event.File("testfile-bulk-07", 10485760), })),
 
-                    action.NewTransfer("172.20.0.15", "/tmp/testfile-bulk-08"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-08"]),
                     action.Wait(event.Queued(7, { event.File("testfile-bulk-08", 10485760), })),
 
-                    action.NewTransfer("172.20.0.15", "/tmp/testfile-bulk-09"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-09"]),
                     action.Wait(event.Queued(8, { event.File("testfile-bulk-09", 10485760), })),
 
-                    action.NewTransfer("172.20.0.15", "/tmp/testfile-bulk-10"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-10"]),
                     action.Wait(event.Queued(9, { event.File("testfile-bulk-10", 10485760), })),
 
                     # fmt: on
@@ -1921,10 +1873,7 @@ scenarios = [
             "ren": ActionList(
                 [
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-small",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -1994,10 +1943,7 @@ scenarios = [
             "ren": ActionList(
                 [
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-small",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -2054,10 +2000,7 @@ scenarios = [
             "ren": ActionList(
                 [
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-small",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -2139,15 +2082,9 @@ scenarios = [
             "ren": ActionList(
                 [
                     action.WaitForAnotherPeer(),
-                    action.NewTransferFails(
-                        "172.20.0.15",
-                        "/tmp/testfile-small-xd",
-                    ),
+                    action.NewTransferFails("172.20.0.15", "/tmp/testfile-small-xd"),
                     action.NoEvent(duration=2),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-small",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -2217,10 +2154,7 @@ scenarios = [
             "ren": ActionList(
                 [
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-small",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -2308,7 +2242,7 @@ scenarios = [
                     action.WaitForAnotherPeer(),
                     action.NewTransfer(
                         "172.20.0.15",
-                        "/tmp/testfile.small.with.complicated.extension",
+                        ["/tmp/testfile.small.with.complicated.extension"],
                     ),
                     action.Wait(
                         event.Queued(
@@ -2425,10 +2359,7 @@ scenarios = [
             "ren": ActionList(
                 [
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/deep/path",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/deep/path"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -2464,10 +2395,7 @@ scenarios = [
                             ),
                         ]
                     ),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/deep/path",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/deep/path"]),
                     action.Wait(
                         event.Queued(
                             1,
@@ -2626,10 +2554,7 @@ scenarios = [
             "ren": ActionList(
                 [
                     action.ConfigureNetwork(latency="10000ms"),
-                    action.NewTransfer(
-                        "172.20.0.100",
-                        "/tmp/testfile-big",
-                    ),
+                    action.NewTransfer("172.20.0.100", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.FinishFailedTransfer(
                             0,
@@ -2650,10 +2575,7 @@ scenarios = [
                 [
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-big",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -2717,10 +2639,7 @@ scenarios = [
                 [
                     action.WaitForAnotherPeer(),
                     action.ConfigureNetwork(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-big",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -2732,10 +2651,7 @@ scenarios = [
                     action.Wait(event.Start(0, "testfile-big")),
                     action.CancelTransferRequest(0),
                     action.Wait(event.FinishTransferCanceled(0, False)),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/testfile-small",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
                             1,
@@ -2823,7 +2739,9 @@ scenarios = [
                     action.WaitForAnotherPeer(),
                     action.NewTransfer(
                         "172.20.0.15",
-                        "/tmp/thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                        [
+                            "/tmp/thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                        ],
                     ),
                     action.Wait(
                         event.Queued(
@@ -2884,10 +2802,7 @@ scenarios = [
                 [
                     # Wait for another peer to appear
                     action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        "/tmp/with-illegal-char-\x0A-",
-                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/with-illegal-char-\x0A-"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -2941,6 +2856,171 @@ scenarios = [
                     action.CheckDownloadedFiles(
                         [
                             event.File("/tmp/received/with-illegal-char-_-", 1048576),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario20",
+        "Send multiple files within a single transfer",
+        {
+            "ren": ActionList(
+                [
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        [
+                            "/tmp/testfile-small",
+                            "/tmp/testfile-big",
+                            "/tmp/deep",
+                        ],
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File("testfile-small", 1048576),
+                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    "deep",
+                                    0,
+                                    {
+                                        event.File(
+                                            "path",
+                                            0,
+                                            {
+                                                event.File("file1.ext1", 1048576),
+                                                event.File("file2.ext2", 1048576),
+                                            },
+                                        ),
+                                        event.File(
+                                            "another-path",
+                                            0,
+                                            {
+                                                event.File("file3.ext3", 1048576),
+                                                event.File("file4.ext4", 1048576),
+                                            },
+                                        ),
+                                    },
+                                ),
+                            },
+                        )
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(0, "testfile-small"),
+                            event.Start(0, "testfile-big"),
+                            event.Start(0, "deep/path/file1.ext1"),
+                            event.Start(0, "deep/path/file2.ext2"),
+                            event.Start(0, "deep/another-path/file3.ext3"),
+                            event.Start(0, "deep/another-path/file4.ext4"),
+                            event.FinishFileUploaded(0, "testfile-small"),
+                            event.FinishFileUploaded(0, "testfile-big"),
+                            event.FinishFileUploaded(0, "deep/path/file1.ext1"),
+                            event.FinishFileUploaded(0, "deep/path/file2.ext2"),
+                            event.FinishFileUploaded(0, "deep/another-path/file3.ext3"),
+                            event.FinishFileUploaded(0, "deep/another-path/file4.ext4"),
+                        ]
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File("testfile-small", 1048576),
+                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    "deep",
+                                    0,
+                                    {
+                                        event.File(
+                                            "path",
+                                            0,
+                                            {
+                                                event.File("file1.ext1", 1048576),
+                                                event.File("file2.ext2", 1048576),
+                                            },
+                                        ),
+                                        event.File(
+                                            "another-path",
+                                            0,
+                                            {
+                                                event.File("file3.ext3", 1048576),
+                                                event.File("file4.ext4", 1048576),
+                                            },
+                                        ),
+                                    },
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(0, "testfile-small", "/tmp/received/20"),
+                    action.Download(0, "testfile-big", "/tmp/received/20"),
+                    action.Download(0, "deep/path/file1.ext1", "/tmp/received/20"),
+                    action.Download(0, "deep/path/file2.ext2", "/tmp/received/20"),
+                    action.Download(
+                        0, "deep/another-path/file3.ext3", "/tmp/received/20"
+                    ),
+                    action.Download(
+                        0, "deep/another-path/file4.ext4", "/tmp/received/20"
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(0, "testfile-small"),
+                            event.Start(0, "testfile-big"),
+                            event.Start(0, "deep/path/file1.ext1"),
+                            event.Start(0, "deep/path/file2.ext2"),
+                            event.Start(0, "deep/another-path/file3.ext3"),
+                            event.Start(0, "deep/another-path/file4.ext4"),
+                            event.FinishFileDownloaded(
+                                0, "testfile-small", "testfile-small"
+                            ),
+                            event.FinishFileDownloaded(
+                                0, "testfile-big", "testfile-big"
+                            ),
+                            event.FinishFileDownloaded(
+                                0, "deep/path/file1.ext1", "file1.ext1"
+                            ),
+                            event.FinishFileDownloaded(
+                                0, "deep/path/file2.ext2", "file2.ext2"
+                            ),
+                            event.FinishFileDownloaded(
+                                0, "deep/another-path/file3.ext3", "file3.ext3"
+                            ),
+                            event.FinishFileDownloaded(
+                                0, "deep/another-path/file4.ext4", "file4.ext4"
+                            ),
+                        ]
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            event.File("/tmp/received/20/testfile-small", 1048576),
+                            event.File("/tmp/received/20/testfile-big", 10485760),
+                            event.File(
+                                "/tmp/received/20/deep/path/file1.ext1", 1048576
+                            ),
+                            event.File(
+                                "/tmp/received/20/deep/path/file2.ext2", 1048576
+                            ),
+                            event.File(
+                                "/tmp/received/20/deep/another-path/file3.ext3", 1048576
+                            ),
+                            event.File(
+                                "/tmp/received/20/deep/another-path/file4.ext4", 1048576
+                            ),
                         ],
                     ),
                     action.CancelTransferRequest(0),
