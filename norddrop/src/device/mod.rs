@@ -1,4 +1,3 @@
-pub(crate) mod error;
 pub mod types;
 
 use std::{
@@ -12,8 +11,10 @@ use drop_transfer::{utils::Hidden, File, Service, Transfer};
 use slog::{debug, error, trace, warn, Logger};
 use tokio::sync::mpsc;
 
-use self::{error::Error, types::TransferDescriptor};
-use crate::{device::types::FinishEvent, ffi::types as ffi_types};
+use self::types::TransferDescriptor;
+use crate::{device::types::FinishEvent, ffi, ffi::types as ffi_types};
+
+pub type Result<T = ()> = std::result::Result<T, ffi::types::norddrop_result>;
 
 pub(super) struct NordDropFFI {
     rt: tokio::runtime::Runtime,
@@ -51,9 +52,9 @@ impl NordDropFFI {
         trace!(logger, "norddrop_new()");
 
         Ok(NordDropFFI {
-            instance: Arc::new(tokio::sync::Mutex::new(None)),
+            instance: Arc::default(),
             logger: logger.clone(),
-            rt: tokio::runtime::Runtime::new().map_err(|_| Error::Generic)?,
+            rt: tokio::runtime::Runtime::new().map_err(|_| ffi::types::NORDDROP_RES_ERROR)?,
             event_dispatcher: Arc::new(EventDispatcher {
                 cb: event_cb,
                 logger,
@@ -74,13 +75,14 @@ impl NordDropFFI {
             }
             Err(err) => {
                 error!(logger, "Failed to parse config: {}", err);
-                return Err(Error::JsonParse);
+                return Err(ffi::types::NORDDROP_RES_JSON_PARSE);
             }
         };
         self.config = config.into();
 
         if self.config.moose.event_path.is_empty() {
-            return Err(Error::EmptyEventPath);
+            error!(logger, "Moose path cannot be empty");
+            return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
         }
 
         let moose = match drop_analytics::init_moose(
@@ -92,11 +94,17 @@ impl NordDropFFI {
             Ok(moose) => moose,
             Err(err) => {
                 error!(logger, "Failed to init moose: {:?}", err);
-                return Err(Error::Generic);
+                return Err(ffi::types::NORDDROP_RES_ERROR);
             }
         };
 
-        let addr: IpAddr = listen_addr.parse().map_err(|_| Error::BadAddr)?;
+        let addr: IpAddr = match listen_addr.parse() {
+            Ok(addr) => addr,
+            Err(err) => {
+                error!(logger, "Failed to parse IP address: {err}");
+                return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
+            }
+        };
 
         let (tx, mut rx) = mpsc::channel::<drop_transfer::Event>(16);
 
@@ -124,8 +132,8 @@ impl NordDropFFI {
                         error!(self.logger, "Failed to start the service: {}", err);
 
                         let err = match err {
-                            drop_transfer::Error::AddrInUse => Error::AddrInUse,
-                            _ => Error::InstanceNotStarted,
+                            drop_transfer::Error::AddrInUse => ffi::types::NORDDROP_RES_ADDR_IN_USE,
+                            _ => ffi::types::NORDDROP_RES_INSTANCE_START,
                         };
 
                         return Err(err);
@@ -143,11 +151,14 @@ impl NordDropFFI {
         trace!(self.logger, "norddrop_stop()");
 
         self.rt.block_on(async {
-            if let Some(instance) = self.instance.lock().await.take() {
-                instance.stop().await.map_err(|_| Error::Generic)?;
-            }
-
-            Ok::<(), Error>(())
+            self.instance
+                .lock()
+                .await
+                .take()
+                .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+                .stop()
+                .await
+                .map_err(|_| ffi::types::NORDDROP_RES_INSTANCE_STOP)
         })
     }
 
@@ -166,14 +177,19 @@ impl NordDropFFI {
                     self.logger,
                     "Failed to parse new_transfer() descriptors: {}", e
                 );
-                return Err(Error::JsonParse);
+                return Err(ffi::types::NORDDROP_RES_JSON_PARSE);
             }
         };
+
         let peer = (peer, drop_config::PORT)
             .to_socket_addrs()
-            .map_err(|_| Error::BadAddr)?
+            .map_err(|err| {
+                error!(self.logger, "Failed to perform lookup of address: {err}");
+                ffi::types::NORDDROP_RES_BAD_INPUT
+            })?
             .next()
-            .ok_or(Error::BadAddr)?;
+            .ok_or(ffi::types::NORDDROP_RES_BAD_INPUT)?;
+
         let xfer = {
             let files = descriptors
                 .iter()
@@ -186,7 +202,7 @@ impl NordDropFFI {
                                 "Specifying file descriptors in transfers is not supported under \
                                  Windows"
                             );
-                            return Err(Error::TransferCreate);
+                            return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
                         }
                     }
 
@@ -199,33 +215,40 @@ impl NordDropFFI {
                                 descriptors,
                                 e
                             );
-                            Error::TransferCreate
+                            ffi::types::NORDDROP_RES_TRANSFER_CREATE
                         },
                     )
                 })
                 .collect::<Result<Vec<File>>>()?;
 
-            Transfer::new(peer.ip(), files, &self.config.drop)
-                .map_err(|e| {
-                    error!(
-                        self.logger,
-                        "Could not create transfer ({:?}): {}", descriptors, e
-                    );
-                })
-                .map_err(|_| Error::TransferCreate)
-        }?;
+            Transfer::new(peer.ip(), files, &self.config.drop).map_err(|e| {
+                error!(
+                    self.logger,
+                    "Could not create transfer ({:?}): {}", descriptors, e
+                );
+
+                ffi::types::NORDDROP_RES_TRANSFER_CREATE
+            })?
+        };
+
         debug!(
             self.logger,
             "Created transfer with files: {:?}",
             xfer.files()
         );
+
         let xfid = xfer.id();
 
         self.rt.block_on(async {
-            let mut locked_inst = self.instance.lock().await;
-            let inst = locked_inst.as_mut().expect("Instance not initialized");
-            inst.send_request(xfer);
-        });
+            self.instance
+                .lock()
+                .await
+                .as_mut()
+                .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+                .send_request(xfer);
+
+            Result::Ok(())
+        })?;
 
         Ok(xfid)
     }
@@ -264,11 +287,7 @@ impl NordDropFFI {
                         status: From::from(&e),
                     },
                 });
-
-                return Err(e);
             }
-
-            Ok(())
         });
 
         Ok(())
@@ -341,5 +360,3 @@ impl NordDropFFI {
         Ok(())
     }
 }
-
-pub type Result<T = ()> = std::result::Result<T, Error>;
