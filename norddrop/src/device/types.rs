@@ -83,10 +83,15 @@ pub struct Config {
     pub dir_depth_limit: usize,
     pub transfer_file_limit: usize,
     pub req_connection_timeout_ms: u64,
+    #[serde(default = "default_connection_max_retry_interval_ms")]
     pub connection_max_retry_interval_ms: u64,
     pub transfer_idle_lifetime_ms: u64,
     pub moose_event_path: String,
     pub moose_prod: bool,
+}
+
+const fn default_connection_max_retry_interval_ms() -> u64 {
+    10000
 }
 
 impl From<drop_transfer::Event> for Event {
@@ -251,6 +256,21 @@ mod tests {
 
     #[test]
     fn deserialize_config() {
+        // Without `connection_max_retry_interval_ms`
+        let json = r#"
+        {
+          "dir_depth_limit": 10,
+          "transfer_file_limit": 100,
+          "req_connection_timeout_ms": 1000,
+          "transfer_idle_lifetime_ms": 2000,
+          "moose_event_path": "test/path",
+          "moose_prod": true
+        }
+        "#;
+
+        let cfg: Config = serde_json::from_str(json).expect("Failed to deserialize config");
+        assert_eq!(cfg.connection_max_retry_interval_ms, 10000);
+
         let json = r#"
         {
           "dir_depth_limit": 10,
