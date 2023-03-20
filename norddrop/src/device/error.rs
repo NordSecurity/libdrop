@@ -7,12 +7,8 @@ pub enum Error {
     BadAddr,
     #[error("Generic error")]
     Generic,
-    #[error("Malformed UUID: {0}")]
-    BadUuid(String),
     #[error("Error parsing JSON string")]
     JsonParse,
-    #[error("Error opening file")]
-    BadFile,
     #[error("Could not create transfer")]
     TransferCreate,
     #[error("Moose event path cannot be empty")]
@@ -28,9 +24,7 @@ impl From<&Error> for i32 {
         match err {
             Error::BadAddr => 0,
             Error::Generic => 1,
-            Error::BadUuid(_) => 2,
             Error::JsonParse => 3,
-            Error::BadFile => 4,
             Error::TransferCreate => 5,
             Error::EmptyEventPath => 6,
             Error::InstanceNotStarted => 7,
