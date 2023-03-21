@@ -4,11 +4,11 @@ use libc::c_char;
 use serde::Serialize;
 use slog::Level;
 
-use crate::device::{error::Error as DevError, Result as DevResult};
+use crate::device::Result as DevResult;
 
 #[allow(non_camel_case_types)]
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(C)]
 pub enum norddrop_result {
     /// Operation was success
@@ -17,11 +17,30 @@ pub enum norddrop_result {
     /// Operation resulted to unknown error.
     NORDDROP_RES_ERROR = 1,
 
-    // Failed to marshal C string to Rust
+    /// Failed to parse C string, meaning the string provided is not valid UTF8
+    /// or is a null pointer
     NORDDROP_RES_INVALID_STRING = 2,
 
-    // Bad input
+    /// One of the arguments provided is invalid
     NORDDROP_RES_BAD_INPUT = 3,
+
+    /// Failed to parse JSON argument
+    NORDDROP_RES_JSON_PARSE = 4,
+
+    /// Failed to create transfer based on arguments provided
+    NORDDROP_RES_TRANSFER_CREATE = 5,
+
+    /// The libdrop instance is not started yet
+    NORDDROP_RES_NOT_STARTED = 6,
+
+    /// Address already in use
+    NORDDROP_RES_ADDR_IN_USE = 7,
+
+    /// Failed to start the libdrop instance
+    NORDDROP_RES_INSTANCE_START = 8,
+
+    /// Failed to stop the libdrop instance
+    NORDDROP_RES_INSTANCE_STOP = 9,
 }
 
 pub use norddrop_result::*;
@@ -87,10 +106,10 @@ pub extern "C" fn __norddrop_force_export(
     _: norddrop_logger_cb,
 ) {
 }
-// Map library types to C Api types
-impl From<DevError> for norddrop_result {
-    fn from(_err: DevError) -> Self {
-        NORDDROP_RES_ERROR
+
+impl From<std::str::Utf8Error> for norddrop_result {
+    fn from(_: std::str::Utf8Error) -> Self {
+        NORDDROP_RES_INVALID_STRING
     }
 }
 
@@ -99,7 +118,7 @@ impl From<DevResult> for norddrop_result {
         use norddrop_result::*;
         match res {
             Ok(_) => NORDDROP_RES_OK,
-            Err(error) => error.into(),
+            Err(error) => error,
         }
     }
 }
