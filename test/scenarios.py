@@ -2431,6 +2431,7 @@ scenarios = [
                             ),
                         ]
                     ),
+                    action.ExpectCancel([0, 1], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2541,6 +2542,9 @@ scenarios = [
                             event.File("/tmp/received/path(1)/file2.ext2", 1048576),
                         ],
                     ),
+                    action.CancelTransferRequest(0),
+                    action.CancelTransferRequest(1),
+                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
