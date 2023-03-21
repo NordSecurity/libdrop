@@ -2729,9 +2729,10 @@ scenarios = [
             ),
         },
     ),
+    # Androind team reported that sending file with too long name multiple times produces different results
     Scenario(
         "scenario19-1",
-        "Send a filename with 256 characters in a filename, expect it to fail",
+        "Send file with too long name to two peers twice, expect it to fail each time",
         {
             "ren": ActionList(
                 [
@@ -2743,50 +2744,179 @@ scenarios = [
                             "/tmp/thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
                         ],
                     ),
-                    action.Wait(
-                        event.Queued(
-                            0,
-                            {
-                                event.File(
-                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
-                                    1048576,
-                                ),
-                            },
-                        )
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        [
+                            "/tmp/thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                        ],
                     ),
-                    action.ExpectCancel([0], True),
+                    action.NewTransfer(
+                        "172.20.0.25",
+                        [
+                            "/tmp/thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                        ],
+                    ),
+                    action.NewTransfer(
+                        "172.20.0.25",
+                        [
+                            "/tmp/thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                        ],
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Queued(
+                                0,
+                                {
+                                    event.File(
+                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                            event.Queued(
+                                1,
+                                {
+                                    event.File(
+                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                            event.Queued(
+                                2,
+                                {
+                                    event.File(
+                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                            event.Queued(
+                                3,
+                                {
+                                    event.File(
+                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                        ]
+                    ),
+                    action.ExpectCancel([0, 1, 2, 3], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
             ),
             "stimpy": ActionList(
                 [
-                    action.Wait(
-                        event.Receive(
-                            0,
-                            "172.20.0.5",
-                            {
-                                event.File(
-                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
-                                    1048576,
-                                ),
-                            },
-                        )
+                    action.WaitRacy(
+                        [
+                            event.Receive(
+                                0,
+                                "172.20.0.5",
+                                {
+                                    event.File(
+                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                            event.Receive(
+                                1,
+                                "172.20.0.5",
+                                {
+                                    event.File(
+                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                        ]
                     ),
                     action.Download(
                         0,
                         "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
-                        "/tmp/received",
+                        "/tmp/received/19-3/stimpy/0",
                     ),
-                    action.Wait(
-                        event.FinishFileFailed(
-                            0,
-                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
-                            Error.FILENAME_TOO_LONG,
-                        )
+                    action.Download(
+                        1,
+                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                        "/tmp/received/19-3/stimpy/1",
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.FinishFileFailed(
+                                0,
+                                "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                Error.FILENAME_TOO_LONG,
+                            ),
+                            event.FinishFileFailed(
+                                1,
+                                "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                Error.FILENAME_TOO_LONG,
+                            ),
+                        ]
                     ),
                     action.CancelTransferRequest(0),
-                    action.ExpectCancel([0], False),
+                    action.CancelTransferRequest(1),
+                    action.ExpectCancel([0, 1], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "george": ActionList(
+                [
+                    action.WaitRacy(
+                        [
+                            event.Receive(
+                                0,
+                                "172.20.0.5",
+                                {
+                                    event.File(
+                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                            event.Receive(
+                                1,
+                                "172.20.0.5",
+                                {
+                                    event.File(
+                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                        ]
+                    ),
+                    action.Download(
+                        0,
+                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                        "/tmp/received/19-3/stimpy/0",
+                    ),
+                    action.Download(
+                        1,
+                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                        "/tmp/received/19-3/stimpy/1",
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.FinishFileFailed(
+                                0,
+                                "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                Error.FILENAME_TOO_LONG,
+                            ),
+                            event.FinishFileFailed(
+                                1,
+                                "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                Error.FILENAME_TOO_LONG,
+                            ),
+                        ]
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.CancelTransferRequest(1),
+                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
