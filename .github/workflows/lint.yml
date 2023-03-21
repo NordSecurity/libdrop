@@ -5,7 +5,7 @@ on:
   push:
     branches: [dev, main]
 jobs:
-  lint:
+  lint-rust:
     container: rust:1.64-bullseye
     runs-on: ubuntu-latest
     steps:
@@ -45,3 +45,17 @@ jobs:
             --deny clippy::wildcard_imports
             --deny clippy::unwrap_used
             --deny warnings
+  lint-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install linters
+        run: python3 -m pip install black mypy
+      - name: Run black
+        run: black --check --diff test/
+      - name: Run mypy
+        run: mypy test/
