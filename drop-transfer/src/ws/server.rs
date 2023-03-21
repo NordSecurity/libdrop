@@ -868,15 +868,7 @@ impl FileXferTask {
                 self.xfer.clone(),
                 DownloadSuccess {
                     id: Hidden(self.file.path().into()),
-                    final_path: Hidden(
-                        PathBuf::from(
-                            dst_location
-                                .as_path()
-                                .file_name()
-                                .expect("Invalid output path"),
-                        )
-                        .into_boxed_path(),
-                    ),
+                    final_path: Hidden(dst_location.into_boxed_path()),
                 },
             )),
             Err(crate::Error::Canceled) => None,
