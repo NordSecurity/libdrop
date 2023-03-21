@@ -58,7 +58,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile-big",
-                            "testfile-big",
+                            "/tmp/received/testfile-big",
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -139,7 +139,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile-small",
-                            "testfile-small",
+                            "/tmp/received/testfile-small",
                         )
                     ),
                     action.Wait(
@@ -161,7 +161,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             1,
                             "testfile-big",
-                            "testfile-big",
+                            "/tmp/received/testfile-big",
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -275,7 +275,7 @@ scenarios = [
                                     event.FinishFileDownloaded(
                                         0,
                                         "testfile-big",
-                                        "testfile-big",
+                                        "/tmp/received/testfile-big",
                                     ),
                                     event.Start(
                                         1,
@@ -284,7 +284,7 @@ scenarios = [
                                     event.FinishFileDownloaded(
                                         1,
                                         "testfile-small",
-                                        "testfile-small",
+                                        "/tmp/received/testfile-small",
                                     ),
                                 ],
                             ],
@@ -656,7 +656,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile-small",
-                            "testfile-small",
+                            "/tmp/received/testfile-small",
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -724,7 +724,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile-small",
-                            "testfile-small",
+                            "/tmp/received/testfile-small",
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -1001,7 +1001,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "deep/path/file1.ext1",
-                            "file1.ext1",
+                            "/tmp/received/deep/path/file1.ext1",
                         ),
                     ),
                     action.Download(
@@ -1019,7 +1019,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "deep/path/file2.ext2",
-                            "file2.ext2",
+                            "/tmp/received/deep/path/file2.ext2",
                         ),
                     ),
                     action.Download(
@@ -1037,7 +1037,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "deep/another-path/file3.ext3",
-                            "file3.ext3",
+                            "/tmp/received/deep/another-path/file3.ext3",
                         ),
                     ),
                     action.Download(
@@ -1055,7 +1055,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "deep/another-path/file4.ext4",
-                            "file4.ext4",
+                            "/tmp/received/deep/another-path/file4.ext4",
                         ),
                     ),
                     action.CheckDownloadedFiles(
@@ -1131,7 +1131,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile-small",
-                            "testfile-small",
+                            "/tmp/received/testfile-small",
                         ),
                     ),
                     action.CheckDownloadedFiles(
@@ -1202,7 +1202,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile-small",
-                            "testfile-small",
+                            "/tmp/received/testfile-small",
                         )
                     ),
                     action.Wait(
@@ -1224,7 +1224,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             1,
                             "testfile-small",
-                            "testfile-small(1)",
+                            "/tmp/received/testfile-small(1)",
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -1297,7 +1297,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "file1.ext1",
-                            "file1.ext1",
+                            "/tmp/received/file1.ext1",
                         )
                     ),
                     action.Wait(
@@ -1319,7 +1319,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             1,
                             "file1.ext1",
-                            "file1(1).ext1",
+                            "/tmp/received/file1(1).ext1",
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -1591,16 +1591,16 @@ scenarios = [
                             event.Start(8, "testfile-bulk-09"),
                             event.Start(9, "testfile-bulk-10"),
 
-                            event.FinishFileDownloaded(0, "testfile-bulk-01", "testfile-bulk-01"),
-                            event.FinishFileDownloaded(1, "testfile-bulk-02", "testfile-bulk-02"),
-                            event.FinishFileDownloaded(2, "testfile-bulk-03", "testfile-bulk-03"),
-                            event.FinishFileDownloaded(3, "testfile-bulk-04", "testfile-bulk-04"),
-                            event.FinishFileDownloaded(4, "testfile-bulk-05", "testfile-bulk-05"),
-                            event.FinishFileDownloaded(5, "testfile-bulk-06", "testfile-bulk-06"),
-                            event.FinishFileDownloaded(6, "testfile-bulk-07", "testfile-bulk-07"),
-                            event.FinishFileDownloaded(7, "testfile-bulk-08", "testfile-bulk-08"),
-                            event.FinishFileDownloaded(8, "testfile-bulk-09", "testfile-bulk-09"),
-                            event.FinishFileDownloaded(9, "testfile-bulk-10", "testfile-bulk-10"),
+                            event.FinishFileDownloaded(0, "testfile-bulk-01", "/tmp/received/testfile-bulk-01"),
+                            event.FinishFileDownloaded(1, "testfile-bulk-02", "/tmp/received/testfile-bulk-02"),
+                            event.FinishFileDownloaded(2, "testfile-bulk-03", "/tmp/received/testfile-bulk-03"),
+                            event.FinishFileDownloaded(3, "testfile-bulk-04", "/tmp/received/testfile-bulk-04"),
+                            event.FinishFileDownloaded(4, "testfile-bulk-05", "/tmp/received/testfile-bulk-05"),
+                            event.FinishFileDownloaded(5, "testfile-bulk-06", "/tmp/received/testfile-bulk-06"),
+                            event.FinishFileDownloaded(6, "testfile-bulk-07", "/tmp/received/testfile-bulk-07"),
+                            event.FinishFileDownloaded(7, "testfile-bulk-08", "/tmp/received/testfile-bulk-08"),
+                            event.FinishFileDownloaded(8, "testfile-bulk-09", "/tmp/received/testfile-bulk-09"),
+                            event.FinishFileDownloaded(9, "testfile-bulk-10", "/tmp/received/testfile-bulk-10"),
                         ]
                     ),
                     # fmt: on
@@ -1668,7 +1668,7 @@ scenarios = [
                     action.Stop(),
                 ]
             ),
-            "george": ActionList(
+            "stimpy": ActionList(
                 [
                     action.Wait(
                         event.Receive(
@@ -1689,7 +1689,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile-big",
-                            "testfile-big",
+                            "/tmp/received/stimpy/testfile-big",
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -1703,7 +1703,7 @@ scenarios = [
                     action.Stop(),
                 ]
             ),
-            "stimpy": ActionList(
+            "george": ActionList(
                 [
                     action.Wait(
                         event.Receive(
@@ -1724,7 +1724,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile-big",
-                            "testfile-big",
+                            "/tmp/received/george/testfile-big",
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -1811,7 +1811,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile-small",
-                            "testfile-small",
+                            "/tmp/received/stimpy/testfile-small",
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -1848,7 +1848,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile-small",
-                            "testfile-small",
+                            "/tmp/received/george/testfile-small",
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -1917,7 +1917,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile-small",
-                            "testfile-small(1)",
+                            "/tmp/received/symtest-files/testfile-small(1)",
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -2056,7 +2056,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile-small",
-                            "testfile-small",
+                            "/tmp/received/testfile-small",
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -2128,7 +2128,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile-small",
-                            "testfile-small",
+                            "/tmp/received/testfile-small",
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -2203,7 +2203,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile-small",
-                            "testfile-small",
+                            "/tmp/received/testfile-small",
                         )
                     ),
                     action.Download(
@@ -2216,7 +2216,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile-small",
-                            "testfile-small(1)",
+                            "/tmp/received/testfile-small(1)",
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -2311,7 +2311,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile.small.with.complicated.extension",
-                            "testfile.small.with.complicated.extension",
+                            "/tmp/received/testfile.small.with.complicated.extension",
                         )
                     ),
                     action.Download(
@@ -2329,7 +2329,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "testfile.small.with.complicated.extension",
-                            "testfile.small.with.complicated(1).extension",
+                            "/tmp/received/testfile.small.with.complicated(1).extension",
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -2476,12 +2476,12 @@ scenarios = [
                             event.FinishFileDownloaded(
                                 0,
                                 "path/file1.ext1",
-                                "file1.ext1",
+                                "/tmp/received/path/file1.ext1",
                             ),
                             event.FinishFileDownloaded(
                                 0,
                                 "path/file2.ext2",
-                                "file2.ext2",
+                                "/tmp/received/path/file2.ext2",
                             ),
                         ]
                     ),
@@ -2524,12 +2524,12 @@ scenarios = [
                             event.FinishFileDownloaded(
                                 1,
                                 "path/file1.ext1",
-                                "file1.ext1",
+                                "/tmp/received/path(1)/file1.ext1",
                             ),
                             event.FinishFileDownloaded(
                                 1,
                                 "path/file2.ext2",
-                                "file2.ext2",
+                                "/tmp/received/path(1)/file2.ext2",
                             ),
                         ]
                     ),
@@ -2716,7 +2716,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             1,
                             "testfile-small",
-                            "testfile-small",
+                            "/tmp/received/18/testfile-small",
                         )
                     ),
                     action.CompareTrees(
@@ -2980,7 +2980,7 @@ scenarios = [
                         event.FinishFileDownloaded(
                             0,
                             "with-illegal-char-\x0A-",
-                            "with-illegal-char-_-",
+                            "/tmp/received/with-illegal-char-_-",
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -3116,22 +3116,30 @@ scenarios = [
                             event.Start(0, "deep/another-path/file3.ext3"),
                             event.Start(0, "deep/another-path/file4.ext4"),
                             event.FinishFileDownloaded(
-                                0, "testfile-small", "testfile-small"
+                                0, "testfile-small", "/tmp/received/20/testfile-small"
                             ),
                             event.FinishFileDownloaded(
-                                0, "testfile-big", "testfile-big"
+                                0, "testfile-big", "/tmp/received/20/testfile-big"
                             ),
                             event.FinishFileDownloaded(
-                                0, "deep/path/file1.ext1", "file1.ext1"
+                                0,
+                                "deep/path/file1.ext1",
+                                "/tmp/received/20/deep/path/file1.ext1",
                             ),
                             event.FinishFileDownloaded(
-                                0, "deep/path/file2.ext2", "file2.ext2"
+                                0,
+                                "deep/path/file2.ext2",
+                                "/tmp/received/20/deep/path/file2.ext2",
                             ),
                             event.FinishFileDownloaded(
-                                0, "deep/another-path/file3.ext3", "file3.ext3"
+                                0,
+                                "deep/another-path/file3.ext3",
+                                "/tmp/received/20/deep/another-path/file3.ext3",
                             ),
                             event.FinishFileDownloaded(
-                                0, "deep/another-path/file4.ext4", "file4.ext4"
+                                0,
+                                "deep/another-path/file4.ext4",
+                                "/tmp/received/20/deep/another-path/file4.ext4",
                             ),
                         ]
                     ),
