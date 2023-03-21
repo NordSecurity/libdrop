@@ -61,7 +61,6 @@ def cleanup_files(files: typing.Dict):
 
 
 async def main():
-
     parser = argparse.ArgumentParser(description="Run drop instance")
     parser.add_argument("--runner", required=True, help="peer name for the scenario")
     parser.add_argument("--scenario", required=True, help="scenario name")
