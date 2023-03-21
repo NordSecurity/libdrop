@@ -50,25 +50,15 @@ pub extern "C" fn norddrop_new_transfer(
             return Err(norddrop_result::NORDDROP_RES_INVALID_STRING);
         }
 
-        let peer = unsafe { CStr::from_ptr(peer) }
-            .to_str()
-            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING)?;
+        let peer = unsafe { CStr::from_ptr(peer) }.to_str()?;
 
         if descriptors.is_null() {
             return Err(norddrop_result::NORDDROP_RES_INVALID_STRING);
         }
 
-        let descriptors = unsafe { CStr::from_ptr(descriptors) }
-            .to_str()
-            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING)?;
+        let descriptors = unsafe { CStr::from_ptr(descriptors) }.to_str()?;
 
-        let xfid = match dev.new_transfer(peer, descriptors) {
-            Ok(id) => id,
-            Err(e) => {
-                error!(dev.logger, "norddrop_new_transfer: {:?}", e);
-                return Err(norddrop_result::NORDDROP_RES_ERROR);
-            }
-        };
+        let xfid = dev.new_transfer(peer, descriptors)?;
 
         Ok(xfid.to_string().into_bytes())
     });
@@ -102,20 +92,29 @@ pub extern "C" fn norddrop_download(
             .lock()
             .map_err(|_| norddrop_result::NORDDROP_RES_ERROR));
 
-        let cstr_xfid = unsafe { CStr::from_ptr(xfid) };
-        let str_xfid = ffi_try!(cstr_xfid
-            .to_str()
-            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING));
+        let str_xfid = {
+            if xfid.is_null() {
+                return norddrop_result::NORDDROP_RES_INVALID_STRING;
+            }
+            let cstr_xfid = unsafe { CStr::from_ptr(xfid) };
+            ffi_try!(cstr_xfid.to_str())
+        };
 
-        let cstr_fid = unsafe { CStr::from_ptr(fid) };
-        let str_fid = ffi_try!(cstr_fid
-            .to_str()
-            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING));
+        let str_fid = {
+            if fid.is_null() {
+                return norddrop_result::NORDDROP_RES_INVALID_STRING;
+            }
+            let cstr_fid = unsafe { CStr::from_ptr(fid) };
+            ffi_try!(cstr_fid.to_str())
+        };
 
-        let cstr_dst = unsafe { CStr::from_ptr(dst) };
-        let str_dst = ffi_try!(cstr_dst
-            .to_str()
-            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING));
+        let str_dst = {
+            if dst.is_null() {
+                return norddrop_result::NORDDROP_RES_INVALID_STRING;
+            }
+            let cstr_dst = unsafe { CStr::from_ptr(dst) };
+            ffi_try!(cstr_dst.to_str())
+        };
 
         dev.download(
             ffi_try!(str_xfid
@@ -128,7 +127,7 @@ pub extern "C" fn norddrop_download(
                 .map_err(|_| norddrop_result::NORDDROP_RES_BAD_INPUT)),
             str_dst.to_string(),
         )
-        .norddrop_log_result(dev.logger.clone(), "norddrop_download")
+        .norddrop_log_result(&dev.logger, "norddrop_download")
     });
 
     result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
@@ -137,10 +136,13 @@ pub extern "C" fn norddrop_download(
 #[no_mangle]
 pub extern "C" fn norddrop_cancel_transfer(dev: &norddrop, xfid: *const c_char) -> norddrop_result {
     let result = panic::catch_unwind(move || {
-        let cstr_xfid = unsafe { CStr::from_ptr(xfid) };
-        let str_xfid = ffi_try!(cstr_xfid
-            .to_str()
-            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING));
+        let str_xfid = {
+            if xfid.is_null() {
+                return norddrop_result::NORDDROP_RES_INVALID_STRING;
+            }
+            let cstr_xfid = unsafe { CStr::from_ptr(xfid) };
+            ffi_try!(cstr_xfid.to_str())
+        };
 
         let mut dev = ffi_try!(dev
             .0
@@ -152,7 +154,7 @@ pub extern "C" fn norddrop_cancel_transfer(dev: &norddrop, xfid: *const c_char) 
             .parse()
             .map_err(|_| norddrop_result::NORDDROP_RES_BAD_INPUT)))
             .norddrop_log_result(
-                dev.logger.clone(),
+                &dev.logger,
                 &format!("norddrop_cancel_transfer, xfid: {xfid:?}"),
             )
     });
@@ -168,20 +170,28 @@ pub extern "C" fn norddrop_cancel_file(
     fid: *const c_char,
 ) -> norddrop_result {
     let result = panic::catch_unwind(move || {
-        let cstr_xfid = unsafe { CStr::from_ptr(xfid) };
-        let str_xfid = ffi_try!(cstr_xfid
-            .to_str()
-            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING));
+        let str_xfid = {
+            if xfid.is_null() {
+                return norddrop_result::NORDDROP_RES_INVALID_STRING;
+            }
+            let cstr_xfid = unsafe { CStr::from_ptr(xfid) };
+            ffi_try!(cstr_xfid.to_str())
+        };
 
-        let cstr_fid = unsafe { CStr::from_ptr(fid) };
-        let str_fid = ffi_try!(cstr_fid
-            .to_str()
-            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING));
+        let str_fid = {
+            if fid.is_null() {
+                return norddrop_result::NORDDROP_RES_INVALID_STRING;
+            }
+
+            let cstr_fid = unsafe { CStr::from_ptr(fid) };
+            ffi_try!(cstr_fid.to_str())
+        };
 
         let mut dev = ffi_try!(dev
             .0
             .lock()
             .map_err(|_| norddrop_result::NORDDROP_RES_ERROR));
+
         dev.cancel_file(
             ffi_try!(str_xfid
                 .to_string()
@@ -191,7 +201,7 @@ pub extern "C" fn norddrop_cancel_file(
                 .parse()
                 .map_err(|_| norddrop_result::NORDDROP_RES_BAD_INPUT)),
         )
-        .norddrop_log_result(dev.logger.clone(), "norddrop_cancel_file")
+        .norddrop_log_result(&dev.logger, "norddrop_cancel_file")
     });
 
     result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
@@ -210,9 +220,7 @@ pub extern "C" fn norddrop_start(
                 return norddrop_result::NORDDROP_RES_INVALID_STRING;
             }
 
-            ffi_try!(unsafe { CStr::from_ptr(listen_addr) }
-                .to_str()
-                .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING))
+            ffi_try!(unsafe { CStr::from_ptr(listen_addr) }.to_str())
         };
 
         let config = {
@@ -220,9 +228,7 @@ pub extern "C" fn norddrop_start(
                 return norddrop_result::NORDDROP_RES_INVALID_STRING;
             }
 
-            ffi_try!(unsafe { CStr::from_ptr(config) }
-                .to_str()
-                .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_STRING))
+            ffi_try!(unsafe { CStr::from_ptr(config) }.to_str())
         };
 
         let mut dev = ffi_try!(dev
@@ -231,7 +237,7 @@ pub extern "C" fn norddrop_start(
             .map_err(|_| norddrop_result::NORDDROP_RES_ERROR));
 
         dev.start(addr, config)
-            .norddrop_log_result(dev.logger.clone(), "norddrop_start")
+            .norddrop_log_result(&dev.logger, "norddrop_start")
     });
 
     result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
@@ -246,8 +252,7 @@ pub extern "C" fn norddrop_stop(dev: &norddrop) -> norddrop_result {
             Err(poisoned) => poisoned.into_inner(),
         };
 
-        dev.stop()
-            .norddrop_log_result(dev.logger.clone(), "norddrop_stop")
+        dev.stop().norddrop_log_result(&dev.logger, "norddrop_stop")
     });
 
     result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
@@ -323,16 +328,15 @@ impl slog::Drain for norddrop_logger_cb {
 }
 
 trait FFILog {
-    fn norddrop_log_result(self, logger: Logger, caller: &str) -> norddrop_result;
+    fn norddrop_log_result(self, logger: &Logger, caller: &str) -> norddrop_result;
 }
 
 impl FFILog for DevResult {
-    fn norddrop_log_result(self, logger: Logger, caller: &str) -> norddrop_result {
-        let msg = format!("{self:?}");
+    fn norddrop_log_result(self, logger: &Logger, caller: &str) -> norddrop_result {
         let res = norddrop_result::from(self);
         match res {
             norddrop_result::NORDDROP_RES_OK => {}
-            _ => error!(logger, "{}: {}", caller, msg),
+            _ => error!(logger, "{:?}: {res:?}", caller),
         };
         res
     }

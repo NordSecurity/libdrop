@@ -1,3 +1,10 @@
+### UNRELEASED
+---
+* Return more status codes from the ffi layer methods
+
+---
+<br>
+
 ### v1.1.0
 ### **More Data Filled Dumplings**
 ---
