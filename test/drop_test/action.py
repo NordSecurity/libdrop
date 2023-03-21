@@ -137,7 +137,6 @@ class CheckDownloadedFiles(Action):
 
     async def run(self, drop: ffi.Drop):
         for f in self._files:
-
             if not os.path.exists(f._path):
                 logger.warn(f"File not found: {f._path}")
                 raise Exception("File doesn't exist")
