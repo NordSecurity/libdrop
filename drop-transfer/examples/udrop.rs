@@ -1,6 +1,7 @@
 use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet, HashSet},
     env,
+    io::Write,
     net::IpAddr,
     path::{Path, PathBuf},
     time::{Duration, Instant},
@@ -266,7 +267,7 @@ async fn main() -> anyhow::Result<()> {
             slog::LevelFilter::new(
                 slog_term::FullFormat::new(slog_term::TermDecorator::new().build())
                     .use_file_location()
-                    .use_custom_timestamp(move |writer| {
+                    .use_custom_timestamp(move |writer: &mut dyn Write| {
                         let ts = start.elapsed();
 
                         let secs = ts.as_secs();
