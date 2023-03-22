@@ -67,7 +67,7 @@ def server_run(client: DockerClient, args) -> None:
     print('Starting container…')
 
     container.start()
-    cmd = ['target/debug/examples/udrop', '-l', '0.0.0.0']
+    cmd = ['target/debug/examples/udrop', '-l', '0.0.0.0', '--output', '/root']
     res = container.exec_run(cmd, tty=True, stream=True)
 
     try:
