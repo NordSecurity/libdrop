@@ -2,13 +2,22 @@ stages:
   - build
 
 build:
-  stage: build  
+  stage: build
   variables:
-    LIBDROP_UPSTREAM_COMMIT_SHA: $CI_COMMIT_SHA
+    GITHUB_SHA: $GITHUB_SHA
     LIBDROP_COMMIT_REF_NAME: $CI_COMMIT_REF_NAME
+    LIBDROP_COMMIT_TAG: $CI_COMMIT_TAG
     LIBDROP_PROJECT_NAME: $CI_PROJECT_NAME
     LIBDROP_PROJECT_PATH: $CI_PROJECT_PATH
-    LIBDROP_COMMIT_TAG: $CI_COMMIT_TAG
+    LIBDROP_UPSTREAM_COMMIT_SHA: $CI_COMMIT_SHA
+  rules:
+    - if: $GITHUB_SHA
+      variables:
+        LIBDROP_COMMIT_REF_NAME: $GITHUB_REF_NAME
+        LIBDROP_UPSTREAM_COMMIT_SHA: $GITHUB_SHA
+    - if: $GITHUB_REF_TYPE == 'tag'
+      variables:
+        LIBDROP_COMMIT_TAG: $GITHUB_REF_NAME
   trigger:
     project: $LIBDROP_BUILD_URL
     branch: master
