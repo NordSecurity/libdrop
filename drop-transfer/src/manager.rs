@@ -1,5 +1,6 @@
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
+    ffi::OsString,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -24,7 +25,7 @@ pub struct TransferState {
     files: HashSet<PathBuf>,
     pub(crate) connection: TransferConnection,
     // Used for mapping directories inside the destination
-    dir_mappings: HashMap<PathBuf, PathBuf>,
+    dir_mappings: HashMap<PathBuf, OsString>,
 }
 
 /// Transfer manager is responsible for keeping track of all ongoing or pending
@@ -124,23 +125,27 @@ impl TransferManager {
         let mapped = match next {
             Some(next) => {
                 // Check if dir exists and is known to us
-                let mut target = match state.dir_mappings.entry(dest_dir.join(probe)) {
+                let name = match state.dir_mappings.entry(dest_dir.join(probe)) {
                     // Dir is known, reuse
                     Entry::Occupied(occ) => occ.get().clone(),
                     // Dir in new, check if there is name conflict and add to known
                     Entry::Vacant(vacc) => {
                         let mapped = crate::utils::map_path_if_exists(vacc.key())?;
-                        vacc.insert(mapped).clone()
+                        vacc.insert(
+                            mapped
+                                .file_name()
+                                .ok_or(crate::Error::BadPath)?
+                                .to_os_string(),
+                        )
+                        .clone()
                     }
                 };
 
-                target.push(next);
-                target.extend(iter);
-                target
+                [&name, next].into_iter().chain(iter).collect()
             }
             None => {
                 // Ordinary file
-                dest_dir.join(file_xfer_path)
+                probe.into()
             }
         };
 
