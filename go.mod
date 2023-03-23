@@ -1,3 +1,3 @@
 module github.com/NordSecurity/libdrop
 
-go 1.20
+go 1.420
