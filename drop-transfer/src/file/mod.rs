@@ -158,6 +158,7 @@ impl File {
     }
 
     pub fn from_path(path: &Path, fd: Option<i32>, config: &DropConfig) -> Result<Self, Error> {
+        #[allow(unused_variables)]
         if let Some(fd) = fd {
             #[cfg(target_os = "windows")]
             return Err(Error::InvalidArgument);
