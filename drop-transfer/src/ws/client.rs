@@ -3,7 +3,6 @@ use std::{
     io,
     net::IpAddr,
     ops::ControlFlow,
-    path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -24,6 +23,7 @@ use tokio_tungstenite::{
 use super::events::FileEventTx;
 use crate::{
     error::ResultExt,
+    file::FileId,
     manager::{TransferConnection, TransferGuard},
     protocol::{self, v1},
     service::State,
@@ -32,7 +32,7 @@ use crate::{
 };
 
 pub enum ClientReq {
-    Cancel { file: PathBuf },
+    Cancel { file: FileId },
 }
 
 pub(crate) async fn run(state: Arc<State>, xfer: crate::Transfer, logger: Logger) {
@@ -231,7 +231,7 @@ impl FileTask {
         state: Arc<State>,
         sink: Sender<Message>,
         xfer: crate::Transfer,
-        file: String,
+        file: FileId,
         logger: Logger,
     ) -> anyhow::Result<Self> {
         let events = Arc::new(FileEventTx::new(&state));
@@ -245,7 +245,7 @@ struct ClientHandler {
     state: Arc<State>,
     upload_tx: Sender<Message>,
     xfer: crate::Transfer,
-    tasks: HashMap<PathBuf, FileTask>,
+    tasks: HashMap<FileId, FileTask>,
     logger: Logger,
     last_recv: Instant,
 }
@@ -277,7 +277,7 @@ impl ClientHandler {
 
     async fn on_req(&mut self, socket: &mut WsSink, msg: ClientReq) -> anyhow::Result<()> {
         match msg {
-            ClientReq::Cancel { file } => self.issue_cancel(socket, file.as_ref()).await,
+            ClientReq::Cancel { file } => self.issue_cancel(socket, file).await,
         }
     }
 
@@ -306,18 +306,14 @@ impl ClientHandler {
                     v1::ServerMsg::Progress(v1::Progress {
                         file,
                         bytes_transfered,
-                    }) => self.on_progress(file.into(), bytes_transfered).await,
+                    }) => self.on_progress(file, bytes_transfered).await,
                     v1::ServerMsg::Done(v1::Progress {
                         file,
                         bytes_transfered: _,
-                    }) => self.on_done(file.into()).await,
-                    v1::ServerMsg::Error(v1::Error { file, msg }) => {
-                        self.on_error(file.as_deref().map(AsRef::as_ref), msg).await
-                    }
-                    v1::ServerMsg::Start(v1::Download { file }) => self.on_download(file.into()),
-                    v1::ServerMsg::Cancel(v1::Download { file }) => {
-                        self.on_cancel(file.as_ref()).await
-                    }
+                    }) => self.on_done(file).await,
+                    v1::ServerMsg::Error(v1::Error { file, msg }) => self.on_error(file, msg).await,
+                    v1::ServerMsg::Start(v1::Download { file }) => self.on_download(file),
+                    v1::ServerMsg::Cancel(v1::Download { file }) => self.on_cancel(file).await,
                 }
             }
             Message::Close(_) => {
@@ -378,12 +374,12 @@ impl ClientHandler {
         self.xfer
             .flat_file_list()
             .iter()
-            .filter(|file| {
+            .filter(|(file_id, _)| {
                 self.tasks
-                    .get(file.path())
+                    .get(file_id)
                     .map_or(false, |task| !task.job.is_finished())
             })
-            .for_each(|file| {
+            .for_each(|(_, file)| {
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
                     drop_analytics::Phase::End,
@@ -402,30 +398,27 @@ impl ClientHandler {
             .expect("Could not send a transfer cancelled event, channel closed");
     }
 
-    async fn on_progress(&self, file: PathBuf, transfered: u64) {
+    async fn on_progress(&self, file: FileId, transfered: u64) {
         if let Some(task) = self.tasks.get(&file) {
             task.events
                 .emit(Event::FileUploadProgress(
                     self.xfer.clone(),
-                    Hidden(file.into_boxed_path()),
+                    file,
                     transfered,
                 ))
                 .await;
         }
     }
 
-    async fn on_done(&mut self, file: PathBuf) {
+    async fn on_done(&mut self, file: FileId) {
         if let Some(task) = self.tasks.remove(&file) {
             task.events
-                .stop(Event::FileUploadSuccess(
-                    self.xfer.clone(),
-                    Hidden(file.into_boxed_path()),
-                ))
+                .stop(Event::FileUploadSuccess(self.xfer.clone(), file))
                 .await;
         }
     }
 
-    async fn on_error(&mut self, file: Option<&Path>, msg: String) {
+    async fn on_error(&mut self, file: Option<FileId>, msg: String) {
         error!(
             self.logger,
             "Server reported and error: file: {:?}, message: {}",
@@ -434,14 +427,14 @@ impl ClientHandler {
         );
 
         if let Some(file) = file {
-            if let Some(task) = self.tasks.remove(file) {
+            if let Some(task) = self.tasks.remove(&file) {
                 if !task.job.is_finished() {
                     task.job.abort();
 
                     task.events
                         .stop(Event::FileUploadFailed(
                             self.xfer.clone(),
-                            Hidden(file.into()),
+                            file,
                             crate::Error::BadTransfer,
                         ))
                         .await;
@@ -450,11 +443,9 @@ impl ClientHandler {
         }
     }
 
-    fn on_download(&mut self, file: PathBuf) {
-        let file_str = file.to_string_lossy().to_string();
-
+    fn on_download(&mut self, file: FileId) {
         let f = || {
-            match self.tasks.entry(file) {
+            match self.tasks.entry(file.clone()) {
                 Entry::Occupied(o) => {
                     let task = o.into_mut();
 
@@ -463,7 +454,7 @@ impl ClientHandler {
                             self.state.clone(),
                             self.upload_tx.clone(),
                             self.xfer.clone(),
-                            file_str,
+                            file,
                             self.logger.clone(),
                         )?;
                     } else {
@@ -475,7 +466,7 @@ impl ClientHandler {
                         self.state.clone(),
                         self.upload_tx.clone(),
                         self.xfer.clone(),
-                        file_str,
+                        file,
                         self.logger.clone(),
                     )?;
 
@@ -491,10 +482,8 @@ impl ClientHandler {
         }
     }
 
-    async fn issue_cancel(&mut self, socket: &mut WsSink, file: &Path) -> anyhow::Result<()> {
-        let msg = v1::ClientMsg::Cancel(v1::Download {
-            file: file.to_string_lossy().to_string(),
-        });
+    async fn issue_cancel(&mut self, socket: &mut WsSink, file: FileId) -> anyhow::Result<()> {
+        let msg = v1::ClientMsg::Cancel(v1::Download { file: file.clone() });
 
         socket.send(Message::from(&msg)).await?;
 
@@ -503,8 +492,8 @@ impl ClientHandler {
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: &Path) {
-        if let Some(task) = self.tasks.remove(file) {
+    async fn on_cancel(&mut self, file: FileId) {
+        if let Some(task) = self.tasks.remove(&file) {
             if !task.job.is_finished() {
                 task.job.abort();
 
@@ -514,16 +503,13 @@ impl ClientHandler {
                     self.xfer.id().to_string(),
                     0,
                     self.xfer
-                        .file(file)
+                        .file(&file)
                         .expect("File should exists since we have a transfer task running")
                         .info(),
                 );
 
                 task.events
-                    .stop(Event::FileUploadCancelled(
-                        self.xfer.clone(),
-                        Hidden(file.into()),
-                    ))
+                    .stop(Event::FileUploadCancelled(self.xfer.clone(), file))
                     .await;
             }
         }
@@ -556,10 +542,10 @@ fn start_upload(
     events: Arc<FileEventTx>,
     sink: Sender<Message>,
     xfer: crate::Transfer,
-    file: String,
+    file_id: FileId,
     logger: Logger,
 ) -> anyhow::Result<JoinHandle<()>> {
-    let xfile = xfer.file(file.as_ref()).context("File not found")?.clone();
+    let xfile = xfer.file(&file_id).context("File not found")?.clone();
 
     let transfer_time = Instant::now();
 
@@ -574,10 +560,7 @@ fn start_upload(
     let upload_job = async move {
         let send_file = async {
             events
-                .start(Event::FileUploadStarted(
-                    xfer.clone(),
-                    Hidden(PathBuf::from(&file).into()),
-                ))
+                .start(Event::FileUploadStarted(xfer.clone(), file_id.clone()))
                 .await;
 
             let mut iofile = match xfile.open() {
@@ -594,7 +577,7 @@ fn start_upload(
             loop {
                 let chunk = match iofile.read_chunk()? {
                     Some(chunk) => v1::Chunk {
-                        file: file.clone(),
+                        file: file_id.clone(),
                         data: chunk.to_vec(),
                     },
                     None => return Ok(()),
@@ -627,17 +610,13 @@ fn start_upload(
 
                 let _ = sink
                     .send(Message::from(&v1::ClientMsg::Error(v1::Error {
-                        file: Some(file.clone()),
+                        file: Some(file_id.clone()),
                         msg: err.to_string(),
                     })))
                     .await;
 
                 events
-                    .stop(Event::FileUploadFailed(
-                        xfer.clone(),
-                        Hidden(PathBuf::from(file).into_boxed_path()),
-                        err,
-                    ))
+                    .stop(Event::FileUploadFailed(xfer.clone(), file_id, err))
                     .await;
             }
         };
