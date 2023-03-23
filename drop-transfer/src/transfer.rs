@@ -1,10 +1,10 @@
-use std::{collections::HashMap, net::IpAddr, path::Path};
+use std::{collections::HashMap, net::IpAddr};
 
 use drop_analytics::TransferInfo;
 use drop_config::DropConfig;
 use uuid::Uuid;
 
-use crate::{utils::Hidden, Error, File};
+use crate::{file::FileId, utils::Hidden, Error, File};
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -12,7 +12,7 @@ type Result<T> = std::result::Result<T, Error>;
 pub struct Transfer {
     peer: IpAddr,
     uuid: Uuid,
-    files: HashMap<Hidden<Box<Path>>, File>,
+    files: HashMap<Hidden<String>, File>,
 }
 
 impl Transfer {
@@ -32,62 +32,58 @@ impl Transfer {
 
         let files = files
             .into_iter()
-            .map(|file| {
-                Ok((
-                    Hidden(
-                        AsRef::<Path>::as_ref(&file.path().file_name().ok_or(Error::BadPath)?)
-                            .into(),
-                    ),
-                    file,
-                ))
-            })
-            .collect::<Result<_>>()?;
+            .map(|file| (Hidden(file.name().to_string()), file))
+            .collect();
 
         Ok(Self { peer, uuid, files })
     }
 
-    pub(crate) fn file(&self, path: &Path) -> Option<&File> {
-        let mut components = path.components();
+    pub(crate) fn file(&self, file_id: &FileId) -> Option<&File> {
+        let mut components = file_id.iter();
 
-        if let Some(root) = components.next() {
-            if let Some(file) = self
-                .files
-                .get(&AsRef::<Path>::as_ref(&root).to_path_buf().into_boxed_path())
-            {
-                if let Some(child) = file.child(components.as_path()) {
-                    return Some(child);
-                }
+        let first = components.next()?;
+        let mut file = self.files.get(first)?;
 
-                return Some(file);
-            }
+        for name in components {
+            file = file.child(name)?;
         }
 
-        None
+        Some(file)
     }
 
-    pub fn files(&self) -> &HashMap<Hidden<Box<Path>>, File> {
+    pub fn files(&self) -> &HashMap<Hidden<String>, File> {
         &self.files
     }
 
     // Gathers all files into a flat list
-    pub fn flat_file_list(&self) -> Vec<&File> {
-        self.files()
-            .values()
-            .flat_map(|f| {
-                if f.is_dir() {
-                    f.iter().filter(|c| !c.is_dir()).collect::<Vec<_>>()
-                } else {
-                    vec![f]
+    pub fn flat_file_list(&self) -> Vec<(FileId, &File)> {
+        fn push_children<'a>(file: &'a File, file_id: &FileId, out: &mut Vec<(FileId, &'a File)>) {
+            if file.is_dir() {
+                for file in file.children() {
+                    let mut file_id = file_id.clone();
+                    file_id.append(file.name().to_string());
+                    push_children(file, &file_id, out);
                 }
-            })
-            .collect()
+            } else {
+                out.push((file_id.clone(), file));
+            }
+        }
+
+        let mut out = Vec::new();
+
+        for file in self.files().values() {
+            let file_id = FileId::from_name(file.name().to_string());
+            push_children(file, &file_id, &mut out);
+        }
+
+        out
     }
 
     pub fn info(&self) -> TransferInfo {
         let info_list = self
             .flat_file_list()
             .iter()
-            .map(|f| f.info().unwrap_or_default())
+            .map(|(_, f)| f.info().unwrap_or_default())
             .collect::<Vec<_>>();
 
         let size_list = info_list

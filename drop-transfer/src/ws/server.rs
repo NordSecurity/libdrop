@@ -4,7 +4,7 @@ use std::{
     io::{self, Write},
     net::{IpAddr, SocketAddr},
     ops::ControlFlow,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
@@ -27,6 +27,7 @@ use super::events::FileEventTx;
 use crate::{
     error::ResultExt,
     event::DownloadSuccess,
+    file::FileId,
     manager::{TransferConnection, TransferGuard},
     protocol::{self, v1},
     quarantine::PathExt,
@@ -37,11 +38,11 @@ use crate::{
 
 pub enum ServerReq {
     Download {
-        file: PathBuf,
+        file: FileId,
         task: Box<FileXferTask>,
     },
     Cancel {
-        file: PathBuf,
+        file: FileId,
     },
 }
 
@@ -336,7 +337,7 @@ async fn handle_client_v1_v2<const PING: bool>(
 struct ServerHandler {
     // Used to send feedback from file reading threads
     transfer_sink: Sender<v1::ServerMsg>,
-    jobs: HashMap<PathBuf, FileTask>,
+    jobs: HashMap<FileId, FileTask>,
     state: Arc<State>,
     xfer: Transfer,
     logger: Logger,
@@ -353,7 +354,7 @@ impl FileTask {
     fn start(
         sink: Sender<v1::ServerMsg>,
         state: Arc<State>,
-        file: PathBuf,
+        file: FileId,
         task: Box<FileXferTask>,
         logger: Logger,
     ) -> Self {
@@ -407,17 +408,14 @@ impl ServerHandler {
                 serde_json::from_str(json).context("Failed to deserialize json")?;
 
             match msg {
-                v1::ClientMsg::Error(v1::Error { file, msg }) => {
-                    self.on_error(file.as_deref().map(AsRef::as_ref), msg).await
-                }
-
-                v1::ClientMsg::Cancel(v1::Download { file }) => self.on_cancel(file.as_ref()).await,
+                v1::ClientMsg::Error(v1::Error { file, msg }) => self.on_error(file, msg).await,
+                v1::ClientMsg::Cancel(v1::Download { file }) => self.on_cancel(file).await,
             }
         } else if msg.is_binary() {
             let v1::Chunk { file, data } =
                 v1::Chunk::decode(msg.into_bytes()).context("Failed to decode file chunk")?;
 
-            self.on_chunk(socket, file.as_ref(), data).await?;
+            self.on_chunk(socket, file, data).await?;
         } else if msg.is_close() {
             debug!(self.logger, "Got CLOSE frame");
             self.on_close(true).await;
@@ -474,16 +472,14 @@ impl ServerHandler {
     async fn on_req(&mut self, socket: &mut WebSocket, req: ServerReq) -> anyhow::Result<()> {
         match req {
             ServerReq::Download { file, task } => self.issue_download(socket, file, task).await,
-            ServerReq::Cancel { file } => self.issue_cancel(socket, &file).await,
+            ServerReq::Cancel { file } => self.issue_cancel(socket, file).await,
         }
     }
 
-    async fn on_error(&mut self, file: Option<&Path>, msg: String) {
+    async fn on_error(&mut self, file: Option<FileId>, msg: String) {
         error!(
             self.logger,
-            "Client reported and error: file: {:?}, message: {}",
-            Hidden(&file),
-            msg
+            "Client reported and error: file: {:?}, message: {}", file, msg
         );
 
         if let Some(file) = file {
@@ -491,7 +487,7 @@ impl ServerHandler {
                 job: task,
                 events,
                 chunks_tx: _,
-            }) = self.jobs.remove(file)
+            }) = self.jobs.remove(&file)
             {
                 if !task.is_finished() {
                     task.abort();
@@ -499,7 +495,7 @@ impl ServerHandler {
                     events
                         .stop(Event::FileDownloadFailed(
                             self.xfer.clone(),
-                            Hidden(file.into()),
+                            file,
                             Error::BadTransfer,
                         ))
                         .await;
@@ -511,17 +507,14 @@ impl ServerHandler {
     async fn on_chunk(
         &mut self,
         socket: &mut WebSocket,
-        file: &Path,
+        file: FileId,
         chunk: Vec<u8>,
     ) -> anyhow::Result<()> {
-        if let Some(task) = self.jobs.get(file) {
+        if let Some(task) = self.jobs.get(&file) {
             if let Err(err) = task.chunks_tx.send(chunk) {
                 let msg = v1::Error {
-                    file: Some(file.to_string_lossy().to_string()),
-                    msg: format!(
-                        "Failed to consue chunk for file: {}, msg: {err}",
-                        file.display(),
-                    ),
+                    msg: format!("Failed to consue chunk for file: {file:?}, msg: {err}",),
+                    file: Some(file),
                 };
 
                 socket
@@ -539,12 +532,12 @@ impl ServerHandler {
         self.xfer
             .flat_file_list()
             .iter()
-            .filter(|file| {
+            .filter(|(file_id, _)| {
                 self.jobs
-                    .get(file.path())
+                    .get(file_id)
                     .map_or(false, |state| !state.job.is_finished())
             })
-            .for_each(|file| {
+            .for_each(|(_, file)| {
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&Error::Canceled) as i32),
                     drop_analytics::Phase::End,
@@ -563,12 +556,10 @@ impl ServerHandler {
             .expect("Could not send a file cancelled event, channel closed");
     }
 
-    async fn issue_cancel(&mut self, socket: &mut WebSocket, file: &Path) -> anyhow::Result<()> {
+    async fn issue_cancel(&mut self, socket: &mut WebSocket, file: FileId) -> anyhow::Result<()> {
         debug!(self.logger, "ServerHandler::issue_cancel");
 
-        let msg = v1::ServerMsg::Cancel(v1::Download {
-            file: file.to_string_lossy().to_string(),
-        });
+        let msg = v1::ServerMsg::Cancel(v1::Download { file: file.clone() });
         socket.send(Message::from(&msg)).await?;
 
         self.on_cancel(file).await;
@@ -576,12 +567,12 @@ impl ServerHandler {
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: &Path) {
+    async fn on_cancel(&mut self, file: FileId) {
         if let Some(FileTask {
             job: task,
             events,
             chunks_tx: _,
-        }) = self.jobs.remove(file)
+        }) = self.jobs.remove(&file)
         {
             if !task.is_finished() {
                 task.abort();
@@ -592,16 +583,13 @@ impl ServerHandler {
                     self.xfer.id().to_string(),
                     0,
                     self.xfer
-                        .file(file)
+                        .file(&file)
                         .expect("File should exists since we have a transfer task running")
                         .info(),
                 );
 
                 events
-                    .stop(Event::FileDownloadCancelled(
-                        self.xfer.clone(),
-                        Hidden(file.into()),
-                    ))
+                    .stop(Event::FileDownloadCancelled(self.xfer.clone(), file))
                     .await;
             }
         }
@@ -610,7 +598,7 @@ impl ServerHandler {
     async fn issue_download(
         &mut self,
         socket: &mut WebSocket,
-        file: PathBuf,
+        file: FileId,
         task: Box<FileXferTask>,
     ) -> anyhow::Result<()> {
         let is_running = self
@@ -622,9 +610,7 @@ impl ServerHandler {
             return Ok(());
         }
 
-        let msg = v1::ServerMsg::Start(v1::Download {
-            file: file.to_string_lossy().to_string(),
-        });
+        let msg = v1::ServerMsg::Start(v1::Download { file: file.clone() });
         socket.send(Message::from(&msg)).await?;
 
         let state = FileTask::start(
@@ -733,7 +719,7 @@ impl FileXferTask {
         events: Arc<FileEventTx>,
         sink: Sender<v1::ServerMsg>,
         mut stream: UnboundedReceiver<Vec<u8>>,
-        file: PathBuf,
+        file_id: FileId,
         logger: Logger,
     ) {
         let send_feedback =
@@ -752,7 +738,7 @@ impl FileXferTask {
         events
             .start(crate::Event::FileDownloadStarted(
                 self.xfer.clone(),
-                Hidden(self.file.path().into()),
+                file_id.clone(),
             ))
             .await;
 
@@ -791,7 +777,7 @@ impl FileXferTask {
                     // send progress to the caller
                     if current_progress != last_progress {
                         send_feedback(v1::ServerMsg::Progress(v1::Progress {
-                            file: file.to_string_lossy().to_string(),
+                            file: file_id.clone(),
                             bytes_transfered: bytes_received,
                         }))
                         .await?;
@@ -799,7 +785,7 @@ impl FileXferTask {
                         events
                             .emit(crate::Event::FileDownloadProgress(
                                 self.xfer.clone(),
-                                Hidden(self.file.path().into()),
+                                file_id.clone(),
                                 bytes_received,
                             ))
                             .await;
@@ -832,7 +818,7 @@ impl FileXferTask {
             };
 
             send_feedback(v1::ServerMsg::Done(v1::Progress {
-                file: file.to_string_lossy().to_string(),
+                file: file_id.clone(),
                 bytes_transfered: bytes_received,
             }))
             .await?;
@@ -867,23 +853,19 @@ impl FileXferTask {
             Ok(dst_location) => Some(Event::FileDownloadSuccess(
                 self.xfer.clone(),
                 DownloadSuccess {
-                    id: Hidden(self.file.path().into()),
+                    id: file_id,
                     final_path: Hidden(dst_location.into_boxed_path()),
                 },
             )),
             Err(crate::Error::Canceled) => None,
             Err(err) => {
                 let _ = send_feedback(v1::ServerMsg::Error(v1::Error {
-                    file: Some(file.to_string_lossy().to_string()),
+                    file: Some(file_id.clone()),
                     msg: err.to_string(),
                 }))
                 .await;
 
-                Some(Event::FileDownloadFailed(
-                    self.xfer.clone(),
-                    Hidden(self.file.path().into()),
-                    err,
-                ))
+                Some(Event::FileDownloadFailed(self.xfer.clone(), file_id, err))
             }
         };
 

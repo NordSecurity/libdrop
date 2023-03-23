@@ -102,67 +102,67 @@ impl From<drop_transfer::Event> for Event {
             drop_transfer::Event::FileUploadStarted(tx, fid) => {
                 Event::TransferStarted(StartEvent {
                     transfer: tx.id().to_string(),
-                    file: fid.0.to_string_lossy().to_string(),
+                    file: fid.to_string(),
                 })
             }
             drop_transfer::Event::FileDownloadStarted(tx, fid) => {
                 Event::TransferStarted(StartEvent {
                     transfer: tx.id().to_string(),
-                    file: fid.0.to_string_lossy().to_string(),
+                    file: fid.to_string(),
                 })
             }
             drop_transfer::Event::FileUploadProgress(tx, fid, progress) => {
                 Event::TransferProgress(ProgressEvent {
                     transfer: tx.id().to_string(),
-                    file: fid.0.to_string_lossy().to_string(),
+                    file: fid.to_string(),
                     transfered: progress,
                 })
             }
             drop_transfer::Event::FileDownloadProgress(tx, fid, progress) => {
                 Event::TransferProgress(ProgressEvent {
                     transfer: tx.id().to_string(),
-                    file: fid.0.to_string_lossy().to_string(),
+                    file: fid.to_string(),
                     transfered: progress,
                 })
             }
             drop_transfer::Event::FileUploadSuccess(tx, fid) => Event::TransferFinished {
                 transfer: tx.id().to_string(),
                 data: FinishEvent::FileUploaded {
-                    file: fid.0.to_string_lossy().to_string(),
+                    file: fid.to_string(),
                 },
             },
             drop_transfer::Event::FileDownloadSuccess(tx, info) => Event::TransferFinished {
                 transfer: tx.id().to_string(),
                 data: FinishEvent::FileDownloaded {
-                    file: info.id.0.to_string_lossy().to_string(),
+                    file: info.id.to_string(),
                     final_path: info.final_path.0.to_string_lossy().to_string(),
                 },
             },
             drop_transfer::Event::FileUploadCancelled(tx, fid) => Event::TransferFinished {
                 transfer: tx.id().to_string(),
                 data: FinishEvent::FileCanceled {
-                    file: fid.0.to_string_lossy().to_string(),
+                    file: fid.to_string(),
                     by_peer: true,
                 },
             },
             drop_transfer::Event::FileDownloadCancelled(tx, fid) => Event::TransferFinished {
                 transfer: tx.id().to_string(),
                 data: FinishEvent::FileCanceled {
-                    file: fid.0.to_string_lossy().to_string(),
+                    file: fid.to_string(),
                     by_peer: false,
                 },
             },
             drop_transfer::Event::FileUploadFailed(tx, fid, status) => Event::TransferFinished {
                 transfer: tx.id().to_string(),
                 data: FinishEvent::FileFailed {
-                    file: fid.0.to_string_lossy().to_string(),
+                    file: fid.to_string(),
                     status: From::from(&status),
                 },
             },
             drop_transfer::Event::FileDownloadFailed(tx, fid, status) => Event::TransferFinished {
                 transfer: tx.id().to_string(),
                 data: FinishEvent::FileFailed {
-                    file: fid.0.to_string_lossy().to_string(),
+                    file: fid.to_string(),
                     status: From::from(&status),
                 },
             },
@@ -201,11 +201,11 @@ impl From<drop_transfer::Transfer> for EventTransferRequest {
 impl From<&drop_transfer::File> for File {
     fn from(f: &drop_transfer::File) -> Self {
         Self {
-            id: f.name().unwrap_or_default(),
+            id: f.name().to_string(),
             size: f.size().unwrap_or_default(),
             children: f
                 .children()
-                .map(|c| (c.name().unwrap_or_default(), c.into()))
+                .map(|c| (c.name().to_string(), c.into()))
                 .collect(),
         }
     }
