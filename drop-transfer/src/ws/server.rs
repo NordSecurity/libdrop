@@ -670,7 +670,9 @@ pub struct FileXferTask {
     pub size: u64,
     pub xfer: crate::Transfer,
 }
+
 const MAX_FILENAME_LENGTH: usize = 255;
+const REPORT_PROGRESS_THRESHOLD: u64 = 1024 * 64;
 
 impl FileXferTask {
     pub fn new(file: crate::File, xfer: crate::Transfer, location: PathBuf) -> crate::Result<Self> {
@@ -785,11 +787,8 @@ impl FileXferTask {
 
                     bytes_received += chunk_size as u64;
 
-                    let current_progress =
-                        ((bytes_received as f64 / self.size as f64) * 100.0) as u8;
-
-                    // send progress to the caller
-                    if current_progress != last_progress {
+                    if last_progress + REPORT_PROGRESS_THRESHOLD <= bytes_received {
+                        // send progress to the caller
                         send_feedback(v1::ServerMsg::Progress(v1::Progress {
                             file: file.to_string_lossy().to_string(),
                             bytes_transfered: bytes_received,
@@ -803,9 +802,9 @@ impl FileXferTask {
                                 bytes_received,
                             ))
                             .await;
-                    }
 
-                    last_progress = current_progress;
+                        last_progress = bytes_received;
+                    }
                 }
 
                 if bytes_received > self.size {

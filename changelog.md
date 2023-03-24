@@ -1,3 +1,11 @@
+### UNRELEASED
+---
+* Emit `Progress` event on each file chunk received
+
+---
+<br>
+
+
 ### v1.1.0
 ### **More Data Filled Dumplings**
 ---
