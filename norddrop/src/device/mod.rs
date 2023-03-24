@@ -106,7 +106,7 @@ impl NordDropFFI {
         let event_logger = self.logger.clone();
         self.rt.spawn(async move {
             while let Some(e) = rx.recv().await {
-                debug!(event_logger, "emitting event: {:?}", e);
+                debug!(event_logger, "emitting event: {:#?}", e);
 
                 // Android team reported problems with the event ordering.
                 // The events where dispatched in different order than where emitted.
