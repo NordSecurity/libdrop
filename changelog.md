@@ -1,6 +1,6 @@
 ### UNRELEASED
 ---
-* Emit `Progress` event on each file chunk received
+* Emit `Progress` event only when at least 64K of file data received since the last report
 
 ---
 <br>
