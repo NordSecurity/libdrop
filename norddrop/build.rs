@@ -1,6 +1,6 @@
 use std::{collections::HashSet, env, error::Error, iter::FromIterator, process::Command, str};
 
-fn parse_version() -> Result<(), Box<dyn Error>> {
+fn parse_version() -> Result<String, Box<dyn Error>> {
     println!("cargo:rerun-if-changed=.git/HEAD");
 
     let version = match option_env!("LIBDROP_RELEASE_NAME") {
@@ -18,6 +18,38 @@ fn parse_version() -> Result<(), Box<dyn Error>> {
     };
 
     println!("cargo:rustc-env=DROP_VERSION={}", &version);
+
+    Ok(version)
+}
+
+fn create_winres(version: &str) -> Result<(), Box<dyn Error>> {
+    fn parse_ver(parse: &str) -> Option<[u16; 3]> {
+        let (major, parse) = parse.split_once('.')?;
+        let major: u16 = major.parse().ok()?;
+
+        let (minor, parse) = parse.split_once('.')?;
+        let minor: u16 = minor.parse().ok()?;
+
+        let patch: u16 = parse.parse().ok()?;
+
+        Some([major, minor, patch])
+    }
+
+    let version = version.strip_prefix('v').unwrap_or(version);
+
+    let ver_uint = if let Some([major, minor, patch]) = parse_ver(version) {
+        // Win version is of the form: MAJOR << 48 | MINOR << 32 | PATCH << 16 | RELEASE
+        (major as u64) << 48 | (minor as u64) << 32 | (patch as u64) << 16
+    } else {
+        0
+    };
+
+    winresource::WindowsResource::new()
+        .set_version_info(winresource::VersionInfo::FILEVERSION, ver_uint)
+        .set_version_info(winresource::VersionInfo::PRODUCTVERSION, ver_uint)
+        .set("ProductVersion", version)
+        .set("FileVersion", version)
+        .compile()?;
 
     Ok(())
 }
@@ -89,5 +121,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         build.compile("suppressSourceFortificationCheck")
     }
 
-    parse_version()
+    let version = parse_version()?;
+
+    if target_os == "windows" {
+        create_winres(&version)?;
+    }
+
+    Ok(())
 }

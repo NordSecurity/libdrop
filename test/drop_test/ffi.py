@@ -432,4 +432,5 @@ def new_event(event_str: str) -> event.Event:
 
 
 def log_callback(ctx, level, msg):
+    msg = msg.decode("utf-8")
     logger.log(LOG_LEVEL_MAP.get(level), f"callback: {level}: {msg}")
