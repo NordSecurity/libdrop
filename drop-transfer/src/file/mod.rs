@@ -127,6 +127,7 @@ impl File {
     ) -> Result<Self, Error> {
         let path = path.into();
 
+        #[allow(unused_variables)]
         if let Some(fd) = fd {
             #[cfg(target_os = "windows")]
             return Err(Error::InvalidArgument);

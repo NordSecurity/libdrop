@@ -1,0 +1,18 @@
+name: Trigger GitLab pipeline
+on:
+  pull_request_target:
+    branches: [dev, main]
+    types: [opened, synchronize]
+  push:
+    branches: [dev, main]
+permissions: {}
+jobs:
+  trigger-gitlab-pipeline:
+    runs-on: [self-hosted, libdrop]
+    steps:
+      - uses: NordSecurity/trigger-gitlab-pipeline@v1
+        with:
+          ci-api-v4-url: ${{ secrets.CI_API_V4_URL }}
+          project-id: ${{ secrets.PROJECT_ID }}
+          ref: ${{ secrets.REF }}
+          token: ${{ secrets.TOKEN }}
