@@ -1,5 +1,7 @@
-### UNRELEASED
+### v1.1.1
+### **More Data Filled Dumplings**
 ---
+* Add windows dll version info
 * Emit `Progress` event only when at least 64K of file data received since the last report
 
 ---
