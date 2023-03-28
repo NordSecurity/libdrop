@@ -102,6 +102,7 @@ pub(crate) fn start(
                             protocol::Version::V2 => {
                                 on_client_v2(socket, peer.ip(), state, stop, logger).await
                             }
+                            protocol::Version::V3 => unimplemented!(),
                         }
                     })
                 },
