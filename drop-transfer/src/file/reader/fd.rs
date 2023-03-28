@@ -1,4 +1,4 @@
-use std::{fs, mem::ManuallyDrop, os::unix::prelude::*};
+use std::{fs, io, mem::ManuallyDrop, os::unix::prelude::*};
 
 // This reader performs positional reads from the given file descriptor
 pub struct FileReader {
@@ -23,14 +23,16 @@ impl Drop for FileReader {
     }
 }
 
-impl super::Reader for FileReader {
-    fn read(&mut self, buf: &mut [u8]) -> crate::Result<usize> {
+impl io::Read for FileReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         // Use positional read in order to not use the internal FD cursor
         let n = self.file.read_at(buf, self.pos)?;
         self.pos += n as u64;
         Ok(n)
     }
+}
 
+impl super::Reader for FileReader {
     fn bytes_read(&self) -> u64 {
         self.pos
     }

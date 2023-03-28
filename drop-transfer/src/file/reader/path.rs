@@ -1,4 +1,4 @@
-use std::{fs, io::Read, path::Path};
+use std::{fs, io, path::Path};
 
 // Reads a file from the given path
 pub struct FileReader {
@@ -13,13 +13,15 @@ impl FileReader {
     }
 }
 
-impl super::Reader for FileReader {
-    fn read(&mut self, buf: &mut [u8]) -> crate::Result<usize> {
+impl io::Read for FileReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let n = self.file.read(buf)?;
         self.pos += n as u64;
         Ok(n)
     }
+}
 
+impl super::Reader for FileReader {
     fn bytes_read(&self) -> u64 {
         self.pos
     }
