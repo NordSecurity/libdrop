@@ -8,7 +8,7 @@ use std::{
     fs::{
         OpenOptions, {self},
     },
-    io::Read,
+    io::{self, Read},
     iter,
     path::{Path, PathBuf},
 };
@@ -17,6 +17,7 @@ use drop_analytics::FileInfo;
 use drop_config::DropConfig;
 pub use id::FileId;
 pub use reader::FileReader;
+use sha2::Digest;
 
 use crate::{utils::Hidden, Error};
 
@@ -252,11 +253,27 @@ impl File {
 
     // Open the file if it wasn't already opened and return the std::fs::File
     // instance
-    pub(crate) fn open(&self) -> Result<FileReader, Error> {
+    pub(crate) fn open(&self) -> crate::Result<FileReader> {
         match &self.kind {
-            FileKind::FileToSend { meta, source, .. } => FileReader::new(source, meta.0.clone()),
+            FileKind::FileToSend { meta, source, .. } => {
+                FileReader::new(reader::open(source)?, meta.0.clone())
+            }
             _ => Err(Error::BadFile),
         }
+    }
+
+    // Calculate sha2 of a file. This is a blocking operation
+    // TODO(msz): remove unused
+    #[allow(unused)]
+    pub(crate) fn checksum(&self, limit: u64) -> crate::Result<[u8; 32]> {
+        let reader = match &self.kind {
+            FileKind::FileToSend { source, .. } => reader::open(source)?,
+            _ => return Err(Error::BadFile),
+        };
+
+        let mut reader = io::BufReader::new(reader).take(limit);
+        let csum = checksum(&mut reader)?;
+        Ok(csum)
     }
 
     pub fn is_dir(&self) -> bool {
@@ -270,5 +287,44 @@ impl File {
                 .flat_map(|hm| hm.values())
                 .flat_map(|c| iter::once(c).chain(c.iter())),
         )
+    }
+}
+
+pub fn checksum(reader: &mut impl io::Read) -> io::Result<[u8; 32]> {
+    let mut csum = sha2::Sha256::new();
+    io::copy(reader, &mut csum)?;
+    Ok(csum.finalize().into())
+}
+
+#[cfg(test)]
+mod tests {
+    const TEST: &[u8] = b"abc";
+    const EXPECTED: &[u8] = b"\xba\x78\x16\xbf\x8f\x01\xcf\xea\x41\x41\x40\xde\x5d\xae\x22\x23\xb0\x03\x61\xa3\x96\x17\x7a\x9c\xb4\x10\xff\x61\xf2\x00\x15\xad";
+
+    #[test]
+    fn checksum() {
+        let csum = super::checksum(&mut &TEST[..]).unwrap();
+        assert_eq!(csum.as_slice(), EXPECTED);
+    }
+
+    #[test]
+    fn file_checksum() {
+        use std::io::Write;
+
+        use drop_config::DropConfig;
+
+        let csum = {
+            let mut tmp = tempfile::NamedTempFile::new().expect("Failed to create tmp file");
+            tmp.write_all(TEST).unwrap();
+
+            let file = super::File::from_path(tmp.path(), None, &DropConfig::default()).unwrap();
+            let size = file.size().unwrap();
+
+            assert_eq!(size, TEST.len() as u64);
+
+            file.checksum(size).unwrap()
+        };
+
+        assert_eq!(csum.as_slice(), EXPECTED);
     }
 }

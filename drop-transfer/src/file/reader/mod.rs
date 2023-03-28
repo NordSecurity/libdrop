@@ -3,7 +3,7 @@ mod fd;
 
 mod path;
 
-use std::fs;
+use std::{fs, io};
 
 use crate::Error;
 
@@ -16,16 +16,20 @@ pub struct FileReader {
     meta: fs::Metadata,
 }
 
-impl FileReader {
-    pub(super) fn new(source: &super::FileSource, meta: fs::Metadata) -> crate::Result<Self> {
-        let inner: Box<dyn Reader> = match source {
-            super::FileSource::Path(path) => Box::new(path::FileReader::new(path)?),
-            #[cfg(unix)]
-            super::FileSource::Fd(fd) => Box::new(unsafe { fd::FileReader::new(*fd) }),
-        };
+pub(super) fn open(source: &super::FileSource) -> crate::Result<Box<dyn Reader>> {
+    let reader: Box<dyn Reader> = match source {
+        super::FileSource::Path(path) => Box::new(path::FileReader::new(path)?),
+        #[cfg(unix)]
+        super::FileSource::Fd(fd) => Box::new(unsafe { fd::FileReader::new(*fd) }),
+    };
 
+    Ok(reader)
+}
+
+impl FileReader {
+    pub(super) fn new(reader: Box<dyn Reader>, meta: fs::Metadata) -> crate::Result<Self> {
         Ok(Self {
-            inner,
+            inner: reader,
             buffer: vec![0u8; CHUNK_SIZE].into_boxed_slice(),
             meta,
         })
@@ -66,8 +70,7 @@ impl FileReader {
     }
 }
 
-trait Reader: Send + Sync {
-    fn read(&mut self, buf: &mut [u8]) -> crate::Result<usize>;
+pub(super) trait Reader: io::Read + Send + Sync {
     fn bytes_read(&self) -> u64;
     fn meta(&mut self) -> crate::Result<fs::Metadata>;
 }

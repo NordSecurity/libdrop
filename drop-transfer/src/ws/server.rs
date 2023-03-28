@@ -27,7 +27,7 @@ use super::events::FileEventTx;
 use crate::{
     error::ResultExt,
     event::DownloadSuccess,
-    file::FileId,
+    file::{self, FileId},
     manager::{TransferConnection, TransferGuard},
     protocol::{self, v1},
     quarantine::PathExt,
@@ -657,6 +657,11 @@ pub struct FileXferTask {
     pub xfer: crate::Transfer,
 }
 
+pub struct TmpFileState {
+    pub meta: fs::Metadata,
+    pub csum: [u8; 32],
+}
+
 const MAX_FILENAME_LENGTH: usize = 255;
 const REPORT_PROGRESS_THRESHOLD: u64 = 1024 * 64;
 
@@ -701,6 +706,17 @@ impl FileXferTask {
             tmp_location: Hidden(tmp_location),
             size,
         })
+    }
+
+    // Blocking operation
+    // TODO(msz): remove unused
+    #[allow(unused)]
+    pub fn tmp_state(&self) -> io::Result<TmpFileState> {
+        let file = fs::File::open(&self.tmp_location.0)?;
+
+        let meta = file.metadata()?;
+        let csum = file::checksum(&mut io::BufReader::new(file))?;
+        Ok(TmpFileState { meta, csum })
     }
 
     fn move_tmp_to_dst(&self, logger: &Logger) -> crate::Result<PathBuf> {
