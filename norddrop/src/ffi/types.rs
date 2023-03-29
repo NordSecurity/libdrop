@@ -41,6 +41,9 @@ pub enum norddrop_result {
 
     /// Failed to stop the libdrop instance
     NORDDROP_RES_INSTANCE_STOP = 9,
+
+    /// Database error
+    NORDDROP_RES_DB_ERROR = 10,
 }
 
 pub use norddrop_result::*;

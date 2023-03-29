@@ -4,6 +4,7 @@ resolver = "2"
 members = [
     "drop-analytics",
     "drop-transfer",
+    "drop-storage",
     "norddrop",
 ]
 

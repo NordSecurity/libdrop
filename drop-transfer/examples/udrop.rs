@@ -4,6 +4,7 @@ use std::{
     io::Write,
     net::IpAddr,
     path::{Path, PathBuf},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -324,8 +325,18 @@ async fn main() -> anyhow::Result<()> {
         .get_one::<PathBuf>("output")
         .expect("Missing `output` flag");
 
-    let mut service = Service::start(addr, tx, logger, config, drop_analytics::moose_mock())
-        .context("Failed to start service")?;
+    let storage = drop_storage::Storage::new(logger.clone(), ":memory:")
+        .await
+        .unwrap();
+    let mut service = Service::start(
+        addr,
+        Arc::new(Mutex::new(storage)),
+        tx,
+        logger,
+        config,
+        drop_analytics::moose_mock(),
+    )
+    .context("Failed to start service")?;
 
     if let Some(xfer) = xfer {
         service.send_request(xfer);

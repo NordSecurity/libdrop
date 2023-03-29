@@ -8,7 +8,7 @@ use std::{
 use drop_config::Config;
 use drop_transfer::{utils::Hidden, File, Service, Transfer};
 use slog::{debug, error, trace, warn, Logger};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 
 use self::types::TransferDescriptor;
 use crate::{device::types::FinishEvent, ffi, ffi::types as ffi_types};
@@ -124,20 +124,33 @@ impl NordDropFFI {
         });
 
         self.rt.block_on(async {
-            let service =
-                match Service::start(addr, tx, self.logger.clone(), self.config.drop, moose) {
-                    Ok(srv) => srv,
-                    Err(err) => {
-                        error!(self.logger, "Failed to start the service: {}", err);
+            let storage = drop_storage::Storage::new(self.logger.clone(), "libdrop.sqlite")
+                .await
+                .map_err(|e| {
+                    error!(self.logger, "Failed to prepare storage: {}", e);
+                    ffi::types::NORDDROP_RES_DB_ERROR
+                })?;
 
-                        let err = match err {
-                            drop_transfer::Error::AddrInUse => ffi::types::NORDDROP_RES_ADDR_IN_USE,
-                            _ => ffi::types::NORDDROP_RES_INSTANCE_START,
-                        };
+            let service = match Service::start(
+                addr,
+                Arc::new(Mutex::new(storage)),
+                tx,
+                self.logger.clone(),
+                self.config.drop,
+                moose,
+            ) {
+                Ok(srv) => srv,
+                Err(err) => {
+                    error!(self.logger, "Failed to start the service: {}", err);
 
-                        return Err(err);
-                    }
-                };
+                    let err = match err {
+                        drop_transfer::Error::AddrInUse => ffi::types::NORDDROP_RES_ADDR_IN_USE,
+                        _ => ffi::types::NORDDROP_RES_INSTANCE_START,
+                    };
+
+                    return Err(err);
+                }
+            };
 
             self.instance.lock().await.replace(service);
             Ok(())

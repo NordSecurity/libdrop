@@ -64,6 +64,7 @@ macro_rules! moose_try_file {
 impl Service {
     pub fn start(
         addr: IpAddr,
+        _storage: Arc<Mutex<drop_storage::Storage>>,
         event_tx: mpsc::Sender<Event>,
         logger: Logger,
         config: DropConfig,

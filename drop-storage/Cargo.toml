@@ -1,0 +1,22 @@
+[package]
+name = "drop-storage"
+version = "1.0.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+sqlx = { version = "0.6", features = [ "runtime-tokio-rustls", "sqlite" ] }
+anyhow = "1.0.69"
+slog = { workspace = true }
+tokio = { version = "1.15.0", features = ["full"] }
+tokio-util = "*"
+tokio-test = "*"
+strum = { version = "0.24.1", features = ["derive"] }
+inspect = "0.1.2"
+async-std = { version = "1", features = ["attributes", "tokio1"] }
+log = "0.4"
+
+[dev-dependencies]
+env_logger = "*"
+test-log = "*"

@@ -1,0 +1,41 @@
+CREATE TABLE IF NOT EXISTS outgoing_transfers (
+  id VARCHAR PRIMARY KEY UNIQUE NOT NULL, 
+  peer VARCHAR NOT NULL, 
+  state VARCHAR NOT NULL, 
+  failed_status_code INT, 
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS outgoing_transfer_paths (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, 
+  outgoing_transfer VARCHAR NOT NULL, 
+  path VARCHAR NOT NULL, 
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, 
+  FOREIGN KEY(outgoing_transfer) REFERENCES outgoing_transfers(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE TABLE IF NOT EXISTS outgoing_traversed_paths (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, 
+  outgoing_path INTEGER NOT NULL, 
+  size INT, 
+  path VARCHAR NOT NULL, 
+  state VARCHAR NOT NULL, 
+  failed_status_code INT, 
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, 
+  FOREIGN KEY(outgoing_path) REFERENCES outgoing_transfer_paths(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE TABLE IF NOT EXISTS incoming_transfers (
+  id VARCHAR PRIMARY KEY UNIQUE NOT NULL, 
+  peer VARCHAR NOT NULL,
+  state VARCHAR NOT NULL, 
+  failed_status_code INT,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS incoming_transfer_paths (
+  id INTEGER PRIMARY KEY UNIQUE NOT NULL, 
+  incoming_transfer VARCHAR NOT NULL, 
+  path VARCHAR NOT NULL, 
+  size INT, 
+  state VARCHAR NOT NULL, 
+  failed_status_code INT, 
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, 
+  FOREIGN KEY(incoming_transfer) REFERENCES incoming_transfers(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
