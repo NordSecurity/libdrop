@@ -1,20 +1,22 @@
+mod handler;
+mod v2;
+
 use std::{
-    collections::HashMap,
     fs,
     io::{self, Write},
     net::{IpAddr, SocketAddr},
-    ops::ControlFlow,
     path::PathBuf,
     sync::Arc,
-    time::{Duration, Instant, SystemTime},
+    time::{Instant, SystemTime},
 };
 
 use anyhow::Context;
 use futures::{SinkExt, StreamExt};
+use handler::{FeedbackReport, HandlerInit, HandlerLoop, Pinger, Request};
 use sha1::{Digest, Sha1};
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
-    sync::mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
+    sync::mpsc::{self, UnboundedReceiver},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
@@ -29,12 +31,15 @@ use crate::{
     event::DownloadSuccess,
     file::{self, FileId},
     manager::{TransferConnection, TransferGuard},
-    protocol::{self, v1},
+    protocol,
     quarantine::PathExt,
     service::State,
     utils::Hidden,
     Error, Event, Transfer,
 };
+
+const MAX_FILENAME_LENGTH: usize = 255;
+const REPORT_PROGRESS_THRESHOLD: u64 = 1024 * 64;
 
 pub enum ServerReq {
     Download {
@@ -44,6 +49,22 @@ pub enum ServerReq {
     Cancel {
         file: FileId,
     },
+}
+
+pub struct FileXferTask {
+    pub file: crate::File,
+    pub location: Hidden<PathBuf>,
+    pub filename: String,
+    pub tmp_location: Hidden<PathBuf>,
+    pub size: u64,
+    pub xfer: crate::Transfer,
+}
+
+// TODO(msz): remove unused
+#[allow(unused)]
+struct TmpFileState {
+    meta: fs::Metadata,
+    csum: [u8; 32],
 }
 
 pub(crate) fn start(
@@ -131,7 +152,8 @@ async fn on_client_v1(
     stop: CancellationToken,
     logger: Logger,
 ) {
-    on_client_v1_v2::<false>(socket, peer, state, stop, logger).await
+    let handler = v2::HandlerInit::<false>::new(peer, state.clone(), logger.clone());
+    on_client(socket, handler, state, stop, logger).await
 }
 
 async fn on_client_v2(
@@ -141,29 +163,18 @@ async fn on_client_v2(
     stop: CancellationToken,
     logger: Logger,
 ) {
-    on_client_v1_v2::<true>(socket, peer, state, stop, logger).await
+    let handler = v2::HandlerInit::<true>::new(peer, state.clone(), logger.clone());
+    on_client(socket, handler, state, stop, logger).await
 }
 
-async fn receive_request(socket: &mut WebSocket) -> anyhow::Result<v1::TransferRequest> {
-    let msg = socket
-        .next()
-        .await
-        .context("Did not received transfer request")?
-        .context("Failed to receive transfer request")?;
-
-    let msg = msg.to_str().ok().context("Expected JOSN message")?;
-
-    serde_json::from_str(msg).context("Failed to deserialize transfer request")
-}
-
-async fn on_client_v1_v2<const PING: bool>(
+async fn on_client(
     mut socket: WebSocket,
-    peer: IpAddr,
+    mut handler: impl HandlerInit,
     state: Arc<State>,
     stop: CancellationToken,
     logger: Logger,
 ) {
-    let recv_task = receive_request(&mut socket);
+    let recv_task = handler.recv_req(&mut socket);
 
     let xfer = tokio::select! {
         biased;
@@ -183,28 +194,13 @@ async fn on_client_v1_v2<const PING: bool>(
         },
     };
 
-    let xfer = match crate::Transfer::try_from((xfer, peer, &state.config)) {
+    let xfer = match xfer.parse() {
         Ok(xfer) => {
             debug!(logger, "on_connect_v1() called with {:?}", xfer);
             xfer
         }
         Err(err) => {
-            let close_on_err = async {
-                let msg = v1::ServerMsg::Error(v1::Error {
-                    file: None,
-                    msg: err.to_string(),
-                });
-
-                socket
-                    .send(Message::from(&msg))
-                    .await
-                    .context("Failed to send error message")?;
-                socket.close().await.context("Failed to close socket")?;
-
-                anyhow::Ok(())
-            };
-
-            if let Err(err) = close_on_err.await {
+            if let Err(err) = handler.on_error(&mut socket, err).await {
                 error!(
                     logger,
                     "Failed to close connection on invalid request: {:?}", err
@@ -232,7 +228,7 @@ async fn on_client_v1_v2<const PING: bool>(
         }
     };
 
-    let job = handle_client_v1_v2::<PING>(socket, xfer, state, logger);
+    let job = handle_client(socket, handler, xfer, state, logger);
 
     tokio::select! {
         biased;
@@ -244,8 +240,9 @@ async fn on_client_v1_v2<const PING: bool>(
     };
 }
 
-async fn handle_client_v1_v2<const PING: bool>(
+async fn handle_client(
     mut socket: WebSocket,
+    mut hander: impl handler::HandlerInit,
     xfer: Transfer,
     state: Arc<State>,
     logger: Logger,
@@ -262,12 +259,12 @@ async fn handle_client_v1_v2<const PING: bool>(
         {
             error!(logger, "Failed to insert a new trasfer: {}", err);
 
-            let msg = v1::Error {
-                file: None,
-                msg: err.to_string(),
-            };
-
-            let _ = socket.send(Message::from(&v1::ServerMsg::Error(msg))).await;
+            let _ = hander
+                .on_error(
+                    &mut socket,
+                    anyhow::anyhow!("Failed to init transfer: {err}"),
+                )
+                .await;
             let _ = socket.close().await;
 
             return;
@@ -281,9 +278,8 @@ async fn handle_client_v1_v2<const PING: bool>(
     }
 
     let (send_tx, mut send_rx) = mpsc::channel(2);
-    let mut ping = super::utils::Pinger::<PING>::new(&state);
-
-    let mut handler = ServerHandler::new(send_tx, state, xfer, logger.clone());
+    let mut ping = hander.pinger();
+    let mut handler = hander.upgrade(send_tx, xfer);
 
     let task = async {
         loop {
@@ -301,7 +297,7 @@ async fn handle_client_v1_v2<const PING: bool>(
                     }
                 },
                 // Message received
-                recv = super::utils::recv(&mut socket, handler.timeout::<PING>()) => {
+                recv = super::utils::recv(&mut socket, handler.recv_timeout()) => {
                     match recv? {
                         Some(msg) => {
                             if handler.on_recv(&mut socket, msg).await?.is_break() {
@@ -314,7 +310,7 @@ async fn handle_client_v1_v2<const PING: bool>(
                 // Message to send down the wire
                 msg = send_rx.recv() => {
                     let msg = msg.expect("Handler channel should always be open");
-                    socket.send(Message::from(&msg)).await?;
+                    socket.send(msg).await?;
                 },
                 _ = ping.tick() => {
                     socket.send(Message::ping(Vec::new())).await.context("Failed to send PING message")?;
@@ -325,345 +321,29 @@ async fn handle_client_v1_v2<const PING: bool>(
     };
 
     let result = task.await;
-    handler.stop_jobs().await;
+    handler.on_stop().await;
 
     if let Err(err) = result {
-        handler.on_finalize_failure(err).await;
+        handler.finalize_failure(err).await;
     } else {
-        handler.on_finalize_success(socket).await;
-    }
-}
-
-struct ServerHandler {
-    // Used to send feedback from file reading threads
-    transfer_sink: Sender<v1::ServerMsg>,
-    jobs: HashMap<FileId, FileTask>,
-    state: Arc<State>,
-    xfer: Transfer,
-    logger: Logger,
-    last_recv: Instant,
-}
-
-struct FileTask {
-    job: JoinHandle<()>,
-    chunks_tx: UnboundedSender<Vec<u8>>,
-    events: Arc<FileEventTx>,
-}
-
-impl FileTask {
-    fn start(
-        sink: Sender<v1::ServerMsg>,
-        state: Arc<State>,
-        file: FileId,
-        task: Box<FileXferTask>,
-        logger: Logger,
-    ) -> Self {
-        let events = Arc::new(FileEventTx::new(&state));
-        let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
-
-        let job = tokio::spawn(task.run(state, Arc::clone(&events), sink, chunks_rx, file, logger));
-
-        Self {
-            job,
-            chunks_tx,
-            events,
-        }
-    }
-}
-
-impl ServerHandler {
-    fn new(sink: Sender<v1::ServerMsg>, state: Arc<State>, xfer: Transfer, logger: Logger) -> Self {
-        Self {
-            transfer_sink: sink,
-            state,
-            jobs: HashMap::new(),
-            xfer,
-            logger,
-            last_recv: Instant::now(),
-        }
-    }
-
-    fn timeout<const PING: bool>(&self) -> Option<Duration> {
-        if PING {
-            Some(
-                self.state
-                    .config
-                    .transfer_idle_lifetime
-                    .saturating_sub(self.last_recv.elapsed()),
-            )
-        } else {
-            None
-        }
-    }
-
-    async fn on_recv(
-        &mut self,
-        socket: &mut WebSocket,
-        msg: Message,
-    ) -> anyhow::Result<ControlFlow<()>> {
-        self.last_recv = Instant::now();
-
-        if let Ok(json) = msg.to_str() {
-            let msg: v1::ClientMsg =
-                serde_json::from_str(json).context("Failed to deserialize json")?;
-
-            match msg {
-                v1::ClientMsg::Error(v1::Error { file, msg }) => self.on_error(file, msg).await,
-                v1::ClientMsg::Cancel(v1::Download { file }) => self.on_cancel(file).await,
-            }
-        } else if msg.is_binary() {
-            let v1::Chunk { file, data } =
-                v1::Chunk::decode(msg.into_bytes()).context("Failed to decode file chunk")?;
-
-            self.on_chunk(socket, file, data).await?;
-        } else if msg.is_close() {
-            debug!(self.logger, "Got CLOSE frame");
-            self.on_close(true).await;
-
-            return Ok(ControlFlow::Break(()));
-        } else if msg.is_ping() {
-            debug!(self.logger, "PING");
-        } else if msg.is_pong() {
-            debug!(self.logger, "PONG");
-        } else {
-            warn!(self.logger, "Server received invalid WS message type");
-        }
-
-        anyhow::Ok(ControlFlow::Continue(()))
-    }
-
-    async fn on_finalize_failure(&self, err: anyhow::Error) {
-        error!(self.logger, "Server failed to handle WS message: {:?}", err);
-
-        let err = match err.downcast::<crate::Error>() {
-            Ok(err) => err,
-            Err(err) => match err.downcast::<warp::Error>() {
-                Ok(err) => err.into(),
-                Err(_) => crate::Error::BadTransferState,
-            },
-        };
-
-        self.state
-            .event_tx
-            .send(Event::TransferFailed(self.xfer.clone(), err))
-            .await
-            .expect("Event channel should always be open");
-    }
-
-    async fn on_finalize_success(&self, mut socket: WebSocket) {
         let task = async {
             socket.send(Message::close()).await?;
-
             // Drain messages
             while socket.next().await.transpose()?.is_some() {}
+
             socket.close().await
         };
 
         if let Err(err) = task.await {
             warn!(
-                self.logger,
+                logger,
                 "Failed to gracefully close the client connection: {}", err
             );
         } else {
-            debug!(self.logger, "WS client disconnected");
+            debug!(logger, "WS client disconnected");
         }
-    }
-
-    async fn on_req(&mut self, socket: &mut WebSocket, req: ServerReq) -> anyhow::Result<()> {
-        match req {
-            ServerReq::Download { file, task } => self.issue_download(socket, file, task).await,
-            ServerReq::Cancel { file } => self.issue_cancel(socket, file).await,
-        }
-    }
-
-    async fn on_error(&mut self, file: Option<FileId>, msg: String) {
-        error!(
-            self.logger,
-            "Client reported and error: file: {:?}, message: {}", file, msg
-        );
-
-        if let Some(file) = file {
-            if let Some(FileTask {
-                job: task,
-                events,
-                chunks_tx: _,
-            }) = self.jobs.remove(&file)
-            {
-                if !task.is_finished() {
-                    task.abort();
-
-                    events
-                        .stop(Event::FileDownloadFailed(
-                            self.xfer.clone(),
-                            file,
-                            Error::BadTransfer,
-                        ))
-                        .await;
-                }
-            }
-        }
-    }
-
-    async fn on_chunk(
-        &mut self,
-        socket: &mut WebSocket,
-        file: FileId,
-        chunk: Vec<u8>,
-    ) -> anyhow::Result<()> {
-        if let Some(task) = self.jobs.get(&file) {
-            if let Err(err) = task.chunks_tx.send(chunk) {
-                let msg = v1::Error {
-                    msg: format!("Failed to consue chunk for file: {file:?}, msg: {err}",),
-                    file: Some(file),
-                };
-
-                socket
-                    .send(Message::from(&v1::ServerMsg::Error(msg)))
-                    .await?;
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn on_close(&mut self, by_peer: bool) {
-        debug!(self.logger, "ServerHandler::on_close(by_peer: {})", by_peer);
-
-        self.xfer
-            .flat_file_list()
-            .iter()
-            .filter(|(file_id, _)| {
-                self.jobs
-                    .get(file_id)
-                    .map_or(false, |state| !state.job.is_finished())
-            })
-            .for_each(|(_, file)| {
-                self.state.moose.service_quality_transfer_file(
-                    Err(u32::from(&Error::Canceled) as i32),
-                    drop_analytics::Phase::End,
-                    self.xfer.id().to_string(),
-                    0,
-                    file.info(),
-                );
-            });
-
-        self.stop_jobs().await;
-
-        self.state
-            .event_tx
-            .send(Event::TransferCanceled(self.xfer.clone(), by_peer))
-            .await
-            .expect("Could not send a file cancelled event, channel closed");
-    }
-
-    async fn issue_cancel(&mut self, socket: &mut WebSocket, file: FileId) -> anyhow::Result<()> {
-        debug!(self.logger, "ServerHandler::issue_cancel");
-
-        let msg = v1::ServerMsg::Cancel(v1::Download { file: file.clone() });
-        socket.send(Message::from(&msg)).await?;
-
-        self.on_cancel(file).await;
-
-        Ok(())
-    }
-
-    async fn on_cancel(&mut self, file: FileId) {
-        if let Some(FileTask {
-            job: task,
-            events,
-            chunks_tx: _,
-        }) = self.jobs.remove(&file)
-        {
-            if !task.is_finished() {
-                task.abort();
-
-                self.state.moose.service_quality_transfer_file(
-                    Err(u32::from(&crate::Error::Canceled) as i32),
-                    drop_analytics::Phase::End,
-                    self.xfer.id().to_string(),
-                    0,
-                    self.xfer
-                        .file(&file)
-                        .expect("File should exists since we have a transfer task running")
-                        .info(),
-                );
-
-                events
-                    .stop(Event::FileDownloadCancelled(self.xfer.clone(), file))
-                    .await;
-            }
-        }
-    }
-
-    async fn issue_download(
-        &mut self,
-        socket: &mut WebSocket,
-        file: FileId,
-        task: Box<FileXferTask>,
-    ) -> anyhow::Result<()> {
-        let is_running = self
-            .jobs
-            .get(&file)
-            .map_or(false, |state| !state.job.is_finished());
-
-        if is_running {
-            return Ok(());
-        }
-
-        let msg = v1::ServerMsg::Start(v1::Download { file: file.clone() });
-        socket.send(Message::from(&msg)).await?;
-
-        let state = FileTask::start(
-            self.transfer_sink.clone(),
-            self.state.clone(),
-            file.clone(),
-            task,
-            self.logger.clone(),
-        );
-
-        self.jobs.insert(file, state);
-
-        Ok(())
-    }
-
-    async fn stop_jobs(&mut self) {
-        debug!(self.logger, "Waiting for background jobs to finish");
-
-        let tasks = self.jobs.drain().map(|(_, task)| {
-            task.job.abort();
-
-            async move {
-                task.events.stop_silent().await;
-            }
-        });
-
-        futures::future::join_all(tasks).await;
     }
 }
-
-impl Drop for ServerHandler {
-    fn drop(&mut self) {
-        debug!(self.logger, "Stopping server handler");
-        self.jobs.values().for_each(|task| task.job.abort());
-    }
-}
-
-pub struct FileXferTask {
-    pub file: crate::File,
-    pub location: Hidden<PathBuf>,
-    pub filename: String,
-    pub tmp_location: Hidden<PathBuf>,
-    pub size: u64,
-    pub xfer: crate::Transfer,
-}
-
-pub struct TmpFileState {
-    pub meta: fs::Metadata,
-    pub csum: [u8; 32],
-}
-
-const MAX_FILENAME_LENGTH: usize = 255;
-const REPORT_PROGRESS_THRESHOLD: u64 = 1024 * 64;
 
 impl FileXferTask {
     pub fn new(file: crate::File, xfer: crate::Transfer, location: PathBuf) -> crate::Result<Self> {
@@ -711,7 +391,7 @@ impl FileXferTask {
     // Blocking operation
     // TODO(msz): remove unused
     #[allow(unused)]
-    pub fn tmp_state(&self) -> io::Result<TmpFileState> {
+    fn tmp_state(&self) -> io::Result<TmpFileState> {
         let file = fs::File::open(&self.tmp_location.0)?;
 
         let meta = file.metadata()?;
@@ -735,14 +415,11 @@ impl FileXferTask {
         self,
         state: Arc<State>,
         events: Arc<FileEventTx>,
-        sink: Sender<v1::ServerMsg>,
+        mut feedback: impl FeedbackReport,
         mut stream: UnboundedReceiver<Vec<u8>>,
         file_id: FileId,
         logger: Logger,
     ) {
-        let send_feedback =
-            |msg| async { sink.send(msg).await.map_err(|_| crate::Error::Canceled) };
-
         let transfer_time = Instant::now();
 
         state.moose.service_quality_transfer_file(
@@ -791,11 +468,7 @@ impl FileXferTask {
 
                     if last_progress + REPORT_PROGRESS_THRESHOLD <= bytes_received {
                         // send progress to the caller
-                        send_feedback(v1::ServerMsg::Progress(v1::Progress {
-                            file: file_id.clone(),
-                            bytes_transfered: bytes_received,
-                        }))
-                        .await?;
+                        feedback.progress(bytes_received).await?;
 
                         events
                             .emit(crate::Event::FileDownloadProgress(
@@ -832,11 +505,7 @@ impl FileXferTask {
                 }
             };
 
-            send_feedback(v1::ServerMsg::Done(v1::Progress {
-                file: file_id.clone(),
-                bytes_transfered: bytes_received,
-            }))
-            .await?;
+            feedback.done(bytes_received).await?;
 
             let dst = match self.move_tmp_to_dst(&logger) {
                 Ok(dst) => dst,
@@ -874,12 +543,7 @@ impl FileXferTask {
             )),
             Err(crate::Error::Canceled) => None,
             Err(err) => {
-                let _ = send_feedback(v1::ServerMsg::Error(v1::Error {
-                    file: Some(file_id.clone()),
-                    msg: err.to_string(),
-                }))
-                .await;
-
+                let _ = feedback.error(err.to_string()).await;
                 Some(Event::FileDownloadFailed(self.xfer.clone(), file_id, err))
             }
         };
