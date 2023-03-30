@@ -108,6 +108,7 @@ pub(crate) async fn run(state: Arc<State>, xfer: crate::Transfer, logger: Logger
     match ver {
         protocol::Version::V1 => client_task_v1(client, state, xfer, rx, logger).await,
         protocol::Version::V2 => client_task_v2(client, state, xfer, rx, logger).await,
+        protocol::Version::V3 => unimplemented!(),
     }
 }
 

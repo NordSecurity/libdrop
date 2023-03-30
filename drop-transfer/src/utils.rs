@@ -80,7 +80,7 @@ pub fn map_path_if_exists(location: &Path) -> crate::Result<PathBuf> {
 }
 
 /// Replace invalid characters or invalid file names
-/// Rules taken from: https://stackoverflow.com/questions/1976007/what-characters-are-forbidden-in-windows-and-linux-directory-names
+/// Rules taken from: <https://stackoverflow.com/questions/1976007/what-characters-are-forbidden-in-windows-and-linux-directory-names>
 pub fn normalize_filename(filename: impl AsRef<str>) -> String {
     const REPLACEMENT_CHAR: &str = "_";
 
