@@ -1,3 +1,11 @@
+### UNRELEASED
+### **ANGERY**
+---
+* Improve moose error handling
+
+---
+<br>
+
 ### v1.1.1
 ### **More Data Filled Dumplings**
 ---
