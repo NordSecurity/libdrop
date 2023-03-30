@@ -13,8 +13,11 @@ impl<const PING: bool> Pinger<PING> {
         let interval = tokio::time::interval(state.config.transfer_idle_lifetime / 2);
         Self { interval }
     }
+}
 
-    pub async fn tick(&mut self) {
+#[async_trait::async_trait]
+impl<const PING: bool> super::Pinger for Pinger<PING> {
+    async fn tick(&mut self) {
         if PING {
             self.interval.tick().await;
         } else {
