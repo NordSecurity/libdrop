@@ -35,7 +35,7 @@ thiserror = "1.0"
 tokio = { workspace = true }
 tokio-tungstenite = "0.17.2"
 tokio-util = "0.7.3"
-uuid = { version = "1.2", features = ["v4"] }
+uuid = { version = "1.2", features = ["v4", "serde"] }
 warp = { version = "0.3.3", default-features = false, features = ["websocket"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]

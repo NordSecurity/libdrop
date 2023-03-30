@@ -139,18 +139,18 @@ impl TransferManager {
     }
 }
 
-pub(crate) struct TransferGuard {
-    state: Arc<State>,
+pub(crate) struct TransferGuard<'a> {
+    state: &'a Arc<State>,
     id: Uuid,
 }
 
-impl TransferGuard {
-    pub(crate) fn new(state: Arc<State>, id: Uuid) -> Self {
+impl<'a> TransferGuard<'a> {
+    pub(crate) fn new(state: &'a Arc<State>, id: Uuid) -> Self {
         Self { state, id }
     }
 }
 
-impl Drop for TransferGuard {
+impl Drop for TransferGuard<'_> {
     fn drop(&mut self) {
         let state = self.state.clone();
         let id = self.id;
