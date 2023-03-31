@@ -15,7 +15,6 @@ variables:
 build:
   stage: build
   variables:
-    GITHUB_SHA: $GITHUB_SHA
     LIBDROP_COMMIT_REF_NAME: $CI_COMMIT_REF_NAME
     LIBDROP_COMMIT_TAG: $CI_COMMIT_TAG
     LIBDROP_PROJECT_NAME: $CI_PROJECT_NAME
@@ -24,6 +23,7 @@ build:
   rules:
     - if: $GITHUB_SHA != ''
       variables:
+        GITHUB_SHA: $GITHUB_SHA
         LIBDROP_COMMIT_REF_NAME: $GITHUB_REF_NAME
         LIBDROP_UPSTREAM_COMMIT_SHA: $GITHUB_SHA
     - if: $GITHUB_REF_TYPE == 'tag'
