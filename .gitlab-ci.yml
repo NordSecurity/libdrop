@@ -23,7 +23,6 @@ build:
   rules:
     - if: $GITHUB_SHA != ''
       variables:
-        GITHUB_SHA: $GITHUB_SHA
         LIBDROP_COMMIT_REF_NAME: $GITHUB_REF_NAME
         LIBDROP_UPSTREAM_COMMIT_SHA: $GITHUB_SHA
     - if: $GITHUB_REF_TYPE == 'tag'
@@ -33,3 +32,5 @@ build:
     project: $LIBDROP_BUILD_URL
     branch: master
     strategy: depend
+    forward:
+      pipeline_variables: true
