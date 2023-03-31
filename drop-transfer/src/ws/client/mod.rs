@@ -1,5 +1,6 @@
 mod handler;
 mod v2;
+mod v3;
 
 use std::{
     io,
@@ -77,7 +78,7 @@ pub(crate) async fn run(state: Arc<State>, xfer: crate::Transfer, logger: Logger
                 .await
         }
         protocol::Version::V2 => ctx.run(v2::HandlerInit::<true>::new(&state, &logger)).await,
-        protocol::Version::V3 => unimplemented!(),
+        protocol::Version::V3 => ctx.run(v3::HandlerInit::new(&state, &logger)).await,
     }
 }
 
@@ -93,7 +94,13 @@ async fn establish_ws_conn(
     .await
     .map_err(|err| io::Error::new(io::ErrorKind::TimedOut, err))?;
 
-    let mut versions_to_try = [protocol::Version::V2, protocol::Version::V1].into_iter();
+    let mut versions_to_try = [
+        // TODO(msz): uncoment when server impl ready
+        // protocol::Version::V3,
+        protocol::Version::V2,
+        protocol::Version::V1,
+    ]
+    .into_iter();
 
     let ver = loop {
         let ver = versions_to_try.next().ok_or_else(|| {
@@ -263,11 +270,11 @@ impl RunContext<'_> {
 
 fn start_upload(
     state: Arc<State>,
+    logger: slog::Logger,
     events: Arc<FileEventTx>,
     mut uploader: impl Uploader,
     xfer: crate::Transfer,
     file_id: FileId,
-    logger: slog::Logger,
 ) -> anyhow::Result<JoinHandle<()>> {
     let xfile = xfer.file(&file_id).context("File not found")?.clone();
 
@@ -287,7 +294,9 @@ fn start_upload(
                 .start(Event::FileUploadStarted(xfer.clone(), file_id.clone()))
                 .await;
 
-            let mut iofile = match xfile.open() {
+            let offset = uploader.init(&xfile).await?;
+
+            let mut iofile = match xfile.open(offset) {
                 Ok(f) => f,
                 Err(err) => {
                     error!(

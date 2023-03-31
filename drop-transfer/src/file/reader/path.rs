@@ -21,6 +21,13 @@ impl io::Read for FileReader {
     }
 }
 
+impl io::Seek for FileReader {
+    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
+        self.pos = self.file.seek(pos)?;
+        Ok(self.pos)
+    }
+}
+
 impl super::Reader for FileReader {
     fn bytes_read(&self) -> u64 {
         self.pos
