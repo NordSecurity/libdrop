@@ -28,6 +28,7 @@ build:
     - if: $GITHUB_REF_TYPE == 'tag'
       variables:
         LIBDROP_COMMIT_TAG: $GITHUB_REF_NAME
+    - when: always
   trigger:
     project: $LIBDROP_BUILD_URL
     branch: master
