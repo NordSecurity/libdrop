@@ -1,6 +1,17 @@
 stages:
   - build
 
+variables:
+  GITHUB_REF_NAME:
+    description: "Name of triggering GitHub name"
+    expand: false
+  GITHUB_REF_TYPE:
+    description: "Type of triggering GitHub ref"
+    expand: false
+  GITHUB_SHA:
+    description: "Commit hash of a GitHub commit to build"
+    expand: false
+
 build:
   stage: build
   variables:
