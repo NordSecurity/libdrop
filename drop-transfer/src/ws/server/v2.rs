@@ -17,25 +17,26 @@ use tokio::{
 use warp::ws::{Message, WebSocket};
 
 use super::{handler, ServerReq};
-use crate::{protocol::v2, service::State, ws::events::FileEventTx, FileId};
+use crate::{
+    protocol::v2,
+    service::State,
+    ws::{self, events::FileEventTx},
+    FileId,
+};
 
-pub struct HandlerInit<const PING: bool = true> {
+pub struct HandlerInit<'a, const PING: bool = true> {
     peer: IpAddr,
-    state: Arc<State>,
-    logger: slog::Logger,
+    state: &'a Arc<State>,
+    logger: &'a slog::Logger,
 }
 
-pub struct HandlerLoop<const PING: bool> {
-    state: Arc<State>,
+pub struct HandlerLoop<'a, const PING: bool> {
+    state: &'a Arc<State>,
+    logger: &'a slog::Logger,
     msg_tx: Sender<Message>,
     xfer: crate::Transfer,
     last_recv: Instant,
     jobs: HashMap<FileId, FileTask>,
-    logger: slog::Logger,
-}
-
-pub struct Pinger<const PING: bool = true> {
-    interval: tokio::time::Interval,
 }
 
 struct FeedbackReport {
@@ -49,8 +50,8 @@ struct FileTask {
     events: Arc<FileEventTx>,
 }
 
-impl<const PING: bool> HandlerInit<PING> {
-    pub(crate) fn new(peer: IpAddr, state: Arc<State>, logger: slog::Logger) -> Self {
+impl<'a, const PING: bool> HandlerInit<'a, PING> {
+    pub(crate) fn new(peer: IpAddr, state: &'a Arc<State>, logger: &'a slog::Logger) -> Self {
         Self {
             peer,
             state,
@@ -60,10 +61,10 @@ impl<const PING: bool> HandlerInit<PING> {
 }
 
 #[async_trait::async_trait]
-impl<const PING: bool> handler::HandlerInit for HandlerInit<PING> {
+impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
     type Request = (v2::TransferRequest, IpAddr, DropConfig);
-    type Loop = HandlerLoop<PING>;
-    type Pinger = Pinger<PING>;
+    type Loop = HandlerLoop<'a, PING>;
+    type Pinger = ws::utils::Pinger<PING>;
 
     async fn recv_req(&mut self, ws: &mut WebSocket) -> anyhow::Result<Self::Request> {
         let msg = ws
@@ -109,11 +110,11 @@ impl<const PING: bool> handler::HandlerInit for HandlerInit<PING> {
     }
 
     fn pinger(&mut self) -> Self::Pinger {
-        Pinger::<PING>::new(&self.state)
+        ws::utils::Pinger::<PING>::new(self.state)
     }
 }
 
-impl<const PING: bool> HandlerLoop<PING> {
+impl<const PING: bool> HandlerLoop<'_, PING> {
     async fn issue_download(
         &mut self,
         socket: &mut WebSocket,
@@ -236,7 +237,7 @@ impl<const PING: bool> HandlerLoop<PING> {
 }
 
 #[async_trait::async_trait]
-impl<const PING: bool> handler::HandlerLoop for HandlerLoop<PING> {
+impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     async fn on_req(&mut self, ws: &mut WebSocket, req: ServerReq) -> anyhow::Result<()> {
         match req {
             ServerReq::Download { file, task } => self.issue_download(ws, file, task).await?,
@@ -358,28 +359,10 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<PING> {
     }
 }
 
-impl<const PING: bool> Drop for HandlerLoop<PING> {
+impl<const PING: bool> Drop for HandlerLoop<'_, PING> {
     fn drop(&mut self) {
         debug!(self.logger, "Stopping server handler");
         self.jobs.values().for_each(|task| task.job.abort());
-    }
-}
-
-impl<const PING: bool> Pinger<PING> {
-    fn new(state: &State) -> Self {
-        let interval = tokio::time::interval(state.config.transfer_idle_lifetime / 2);
-        Self { interval }
-    }
-}
-
-#[async_trait::async_trait]
-impl<const PING: bool> handler::Pinger for Pinger<PING> {
-    async fn tick(&mut self) {
-        if PING {
-            self.interval.tick().await;
-        } else {
-            std::future::pending::<()>().await;
-        }
     }
 }
 
