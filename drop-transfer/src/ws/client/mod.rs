@@ -95,8 +95,7 @@ async fn establish_ws_conn(
     .map_err(|err| io::Error::new(io::ErrorKind::TimedOut, err))?;
 
     let mut versions_to_try = [
-        // TODO(msz): uncoment when server impl ready
-        // protocol::Version::V3,
+        protocol::Version::V3,
         protocol::Version::V2,
         protocol::Version::V1,
     ]
