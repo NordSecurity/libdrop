@@ -12,7 +12,7 @@ use std::{
 
 use anyhow::Context;
 use futures::{SinkExt, StreamExt};
-use handler::{FeedbackReport, HandlerInit, HandlerLoop, Pinger, Request};
+use handler::{FeedbackReport, HandlerInit, HandlerLoop, Request};
 use sha1::{Digest, Sha1};
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
@@ -35,7 +35,8 @@ use crate::{
     quarantine::PathExt,
     service::State,
     utils::Hidden,
-    Error, Event, Transfer,
+    ws::Pinger,
+    Error, Event,
 };
 
 const MAX_FILENAME_LENGTH: usize = 255;
@@ -95,12 +96,21 @@ pub(crate) fn start(
                     ws.on_upgrade(move |socket| async move {
                         info!(logger, "Client requested protocol version: {}", version);
 
+                        let ctx = RunContext {
+                            logger: &logger,
+                            state: &state,
+                            socket,
+                            stop: &stop,
+                        };
+
                         match version {
                             protocol::Version::V1 => {
-                                on_client_v1(socket, peer.ip(), state, stop, logger).await
+                                ctx.run(v2::HandlerInit::<false>::new(peer.ip(), &state, &logger))
+                                    .await
                             }
                             protocol::Version::V2 => {
-                                on_client_v2(socket, peer.ip(), state, stop, logger).await
+                                ctx.run(v2::HandlerInit::<true>::new(peer.ip(), &state, &logger))
+                                    .await
                             }
                             protocol::Version::V3 => unimplemented!(),
                         }
@@ -146,109 +156,84 @@ pub(crate) fn start(
     Ok(task)
 }
 
-async fn on_client_v1(
+struct RunContext<'a> {
+    logger: &'a slog::Logger,
+    state: &'a Arc<State>,
+    stop: &'a CancellationToken,
     socket: WebSocket,
-    peer: IpAddr,
-    state: Arc<State>,
-    stop: CancellationToken,
-    logger: Logger,
-) {
-    let handler = v2::HandlerInit::<false>::new(peer, state.clone(), logger.clone());
-    on_client(socket, handler, state, stop, logger).await
 }
 
-async fn on_client_v2(
-    socket: WebSocket,
-    peer: IpAddr,
-    state: Arc<State>,
-    stop: CancellationToken,
-    logger: Logger,
-) {
-    let handler = v2::HandlerInit::<true>::new(peer, state.clone(), logger.clone());
-    on_client(socket, handler, state, stop, logger).await
-}
+impl RunContext<'_> {
+    async fn run(mut self, mut handler: impl HandlerInit) {
+        let recv_task = handler.recv_req(&mut self.socket);
 
-async fn on_client(
-    mut socket: WebSocket,
-    mut handler: impl HandlerInit,
-    state: Arc<State>,
-    stop: CancellationToken,
-    logger: Logger,
-) {
-    let recv_task = handler.recv_req(&mut socket);
+        let xfer = tokio::select! {
+            biased;
 
-    let xfer = tokio::select! {
-        biased;
-
-        _ = stop.cancelled() => {
-            debug!(logger, "Stoppint client request on shutdown");
-            return;
-        },
-        r = recv_task => {
-            match r {
-                Ok(xfer) => xfer,
-                Err(err) => {
-                    error!(logger, "Failed to initiate transfer: {:?}", err);
-                    return;
+            _ = self.stop.cancelled() => {
+                debug!(self.logger, "Stopping client request on shutdown");
+                return;
+            },
+            r = recv_task => {
+                match r {
+                    Ok(xfer) => xfer,
+                    Err(err) => {
+                        error!(self.logger, "Failed to initiate transfer: {:?}", err);
+                        return;
+                    }
                 }
+            },
+        };
+
+        let xfer = match xfer.parse() {
+            Ok(xfer) => {
+                debug!(self.logger, "RunContext::run() called with {:?}", xfer);
+                xfer
             }
-        },
-    };
+            Err(err) => {
+                if let Err(err) = handler.on_error(&mut self.socket, err).await {
+                    error!(
+                        self.logger,
+                        "Failed to close connection on invalid request: {:?}", err
+                    );
+                }
 
-    let xfer = match xfer.parse() {
-        Ok(xfer) => {
-            debug!(logger, "on_connect_v1() called with {:?}", xfer);
-            xfer
-        }
-        Err(err) => {
-            if let Err(err) = handler.on_error(&mut socket, err).await {
-                error!(
-                    logger,
-                    "Failed to close connection on invalid request: {:?}", err
-                );
+                return;
             }
+        };
 
-            return;
-        }
-    };
-
-    let stop_job = {
-        let state = state.clone();
-        let xfer = xfer.clone();
-        let logger = logger.clone();
-
-        async move {
+        let stop_job = async {
             // Stop the download job
-            info!(logger, "Aborting transfer download");
+            info!(self.logger, "Aborting transfer download");
 
-            state
+            self.state
                 .event_tx
-                .send(Event::TransferFailed(xfer, Error::Canceled))
+                .send(Event::TransferFailed(xfer.clone(), Error::Canceled))
                 .await
                 .expect("Failed to send TransferFailed event");
-        }
-    };
+        };
 
-    let job = handle_client(socket, handler, xfer, state, logger);
+        let job = handle_client(self.state, self.logger, self.socket, handler, xfer.clone());
 
-    tokio::select! {
-        biased;
+        tokio::select! {
+            biased;
 
-        _ = stop.cancelled() => {
-            stop_job.await;
-        },
-        _ = job => (),
-    };
+            _ = self.stop.cancelled() => {
+                stop_job.await;
+            },
+            _ = job => (),
+        };
+    }
 }
 
 async fn handle_client(
+    state: &Arc<State>,
+    logger: &slog::Logger,
     mut socket: WebSocket,
     mut hander: impl handler::HandlerInit,
-    xfer: Transfer,
-    state: Arc<State>,
-    logger: Logger,
+    xfer: crate::Transfer,
 ) {
-    let _guard = TransferGuard::new(state.clone(), xfer.id());
+    let _guard = TransferGuard::new(state, xfer.id());
     let (req_send, mut req_rx) = mpsc::unbounded_channel();
 
     {
