@@ -1,10 +1,10 @@
-use std::{ops::ControlFlow, time::Duration};
+use std::{fs, ops::ControlFlow, path::PathBuf, time::Duration};
 
 use tokio::sync::mpsc::Sender;
 use warp::ws::{Message, WebSocket};
 
 use super::ServerReq;
-use crate::ws;
+use crate::{utils::Hidden, ws};
 
 #[async_trait::async_trait]
 pub trait HandlerInit {
@@ -39,8 +39,15 @@ pub trait Request {
 }
 
 #[async_trait::async_trait]
-pub trait FeedbackReport {
-    async fn progress(&mut self, bytes: u64) -> Result<(), crate::Error>;
-    async fn done(&mut self, bytes: u64) -> Result<(), crate::Error>;
-    async fn error(&mut self, msg: String) -> Result<(), crate::Error>;
+pub trait Downloader {
+    async fn eval_tmp_location(
+        &mut self,
+        task: &super::FileXferTask,
+    ) -> crate::Result<Hidden<PathBuf>>;
+
+    async fn init(&mut self, tmp_location: &Hidden<PathBuf>) -> crate::Result<()>;
+    async fn open(&mut self, tmp_location: &Hidden<PathBuf>) -> crate::Result<fs::File>;
+    async fn progress(&mut self, bytes: u64) -> crate::Result<()>;
+    async fn done(&mut self, bytes: u64) -> crate::Result<()>;
+    async fn error(&mut self, msg: String) -> crate::Result<()>;
 }
