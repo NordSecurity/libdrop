@@ -30,9 +30,7 @@ struct MooseInitCallback {
 impl moose::InitCallback for MooseInitCallback {
     fn on_init(&self, result_code: &Result<moose::ContextState, moose::MooseError>) {
         info!(self.logger, "[Moose] Init callback: {:?}", result_code);
-        self.init_tx
-            .send(*result_code)
-            .expect("Failed to send moose init result to channel");
+        let _ = self.init_tx.send(*result_code);
     }
 }
 
@@ -108,7 +106,7 @@ impl MooseImpl {
 
         let res = rx
             .recv_timeout(Duration::from_secs(2))
-            .context("Failed to receive moose init callback result")?;
+            .context("Failed to receive moose init callback result, channel timed out")?;
         moose_debug!(logger, res, "init");
 
         anyhow::ensure!(res.is_ok(), "Failed to initialize moose: {:?}", res.err());
