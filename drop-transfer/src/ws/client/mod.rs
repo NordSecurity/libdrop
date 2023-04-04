@@ -42,7 +42,7 @@ pub enum ClientReq {
 
 struct RunContext<'a> {
     logger: &'a slog::Logger,
-    state: &'a Arc<State>,
+    state: Arc<State>,
     socket: WebSocket,
     xfer: crate::Transfer,
 }
@@ -67,7 +67,7 @@ pub(crate) async fn run(state: Arc<State>, xfer: crate::Transfer, logger: Logger
 
     let ctx = RunContext {
         logger: &logger,
-        state: &state,
+        state: state.clone(),
         socket,
         xfer,
     };
@@ -78,7 +78,7 @@ pub(crate) async fn run(state: Arc<State>, xfer: crate::Transfer, logger: Logger
                 .await
         }
         protocol::Version::V2 => ctx.run(v2::HandlerInit::<true>::new(&state, &logger)).await,
-        protocol::Version::V3 => ctx.run(v3::HandlerInit::new(&state, &logger)).await,
+        protocol::Version::V3 => ctx.run(v3::HandlerInit::new(state, &logger)).await,
     }
 }
 
@@ -176,7 +176,7 @@ impl RunContext<'_> {
     }
 
     async fn run(mut self, mut handler: impl HandlerInit) {
-        let _guard = TransferGuard::new(self.state, self.xfer.id());
+        let _guard = TransferGuard::new(self.state.clone(), self.xfer.id());
 
         let mut api_req_rx = match self.start(&mut handler).await {
             Ok(rx) => rx,

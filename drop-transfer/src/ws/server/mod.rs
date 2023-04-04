@@ -95,7 +95,7 @@ pub(crate) fn start(
 
                         let ctx = RunContext {
                             logger: &logger,
-                            state: &state,
+                            state: state.clone(),
                             socket,
                             stop: &stop,
                         };
@@ -110,7 +110,7 @@ pub(crate) fn start(
                                     .await
                             }
                             protocol::Version::V3 => {
-                                ctx.run(v3::HandlerInit::new(peer.ip(), &state, &logger))
+                                ctx.run(v3::HandlerInit::new(peer.ip(), state, &logger))
                                     .await
                             }
                         }
@@ -158,7 +158,7 @@ pub(crate) fn start(
 
 struct RunContext<'a> {
     logger: &'a slog::Logger,
-    state: &'a Arc<State>,
+    state: Arc<State>,
     stop: &'a CancellationToken,
     socket: WebSocket,
 }
@@ -213,7 +213,7 @@ impl RunContext<'_> {
                 .expect("Failed to send TransferFailed event");
         };
 
-        let job = handle_client(self.state, self.logger, self.socket, handler, xfer.clone());
+        let job = handle_client(&self.state, self.logger, self.socket, handler, xfer.clone());
 
         tokio::select! {
             biased;
@@ -233,7 +233,7 @@ async fn handle_client(
     mut hander: impl handler::HandlerInit,
     xfer: crate::Transfer,
 ) {
-    let _guard = TransferGuard::new(state, xfer.id());
+    let _guard = TransferGuard::new(state.clone(), xfer.id());
     let (req_send, mut req_rx) = mpsc::unbounded_channel();
 
     {
