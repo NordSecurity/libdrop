@@ -26,12 +26,12 @@ use crate::{protocol::v3, service::State, utils::Hidden, ws::events::FileEventTx
 
 pub struct HandlerInit<'a> {
     peer: IpAddr,
-    state: &'a Arc<State>,
+    state: Arc<State>,
     logger: &'a slog::Logger,
 }
 
 pub struct HandlerLoop<'a> {
-    state: &'a Arc<State>,
+    state: Arc<State>,
     logger: &'a slog::Logger,
     msg_tx: Sender<Message>,
     xfer: crate::Transfer,
@@ -56,7 +56,7 @@ struct FileTask {
 }
 
 impl<'a> HandlerInit<'a> {
-    pub(crate) fn new(peer: IpAddr, state: &'a Arc<State>, logger: &'a slog::Logger) -> Self {
+    pub(crate) fn new(peer: IpAddr, state: Arc<State>, logger: &'a slog::Logger) -> Self {
         Self {
             peer,
             state,

@@ -18,12 +18,12 @@ use super::{handler, ClientReq, WebSocket};
 use crate::{protocol::v3, service::State, utils::Hidden, ws, FileId};
 
 pub struct HandlerInit<'a> {
-    state: &'a Arc<State>,
+    state: Arc<State>,
     logger: &'a slog::Logger,
 }
 
 pub struct HandlerLoop<'a> {
-    state: &'a Arc<State>,
+    state: Arc<State>,
     logger: &'a slog::Logger,
     upload_tx: Sender<Message>,
     tasks: HashMap<FileId, FileTask>,
@@ -49,7 +49,7 @@ struct Uploader {
 }
 
 impl<'a> HandlerInit<'a> {
-    pub(crate) fn new(state: &'a Arc<State>, logger: &'a slog::Logger) -> Self {
+    pub(crate) fn new(state: Arc<State>, logger: &'a slog::Logger) -> Self {
         Self { state, logger }
     }
 }
@@ -149,7 +149,7 @@ impl HandlerLoop<'_> {
 
                     if task.job.is_finished() {
                         *task = FileTask::start(
-                            self.state,
+                            self.state.clone(),
                             self.logger,
                             self.upload_tx.clone(),
                             self.xfer.clone(),
@@ -162,7 +162,7 @@ impl HandlerLoop<'_> {
                 }
                 Entry::Vacant(v) => {
                     let task = FileTask::start(
-                        self.state,
+                        self.state.clone(),
                         self.logger,
                         self.upload_tx.clone(),
                         self.xfer.clone(),
@@ -446,14 +446,14 @@ impl handler::Uploader for Uploader {
 
 impl FileTask {
     fn start(
-        state: &Arc<State>,
+        state: Arc<State>,
         logger: &slog::Logger,
         sink: Sender<Message>,
         xfer: crate::Transfer,
         file_id: FileId,
         csum: Option<v3::ReqChsum>,
     ) -> anyhow::Result<Self> {
-        let events = Arc::new(ws::events::FileEventTx::new(state));
+        let events = Arc::new(ws::events::FileEventTx::new(&state));
         let (start_tx, start_rx) = oneshot::channel();
 
         let uploader = Uploader {
@@ -464,7 +464,7 @@ impl FileTask {
         };
 
         let job = super::start_upload(
-            state.clone(),
+            state,
             logger.clone(),
             Arc::clone(&events),
             uploader,
