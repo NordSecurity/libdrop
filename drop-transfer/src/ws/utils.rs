@@ -10,7 +10,7 @@ pub struct Pinger<const PING: bool = true> {
 
 impl<const PING: bool> Pinger<PING> {
     pub(crate) fn new(state: &State) -> Self {
-        let interval = tokio::time::interval(state.config.transfer_idle_lifetime / 2);
+        let interval = tokio::time::interval(state.config.ping_interval());
         Self { interval }
     }
 }
@@ -41,4 +41,11 @@ where
     };
 
     Ok(msg)
+}
+
+#[async_trait::async_trait]
+impl super::Pinger for tokio::time::Interval {
+    async fn tick(&mut self) {
+        self.tick().await;
+    }
 }

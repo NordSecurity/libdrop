@@ -70,7 +70,7 @@ impl FileReader {
     }
 }
 
-pub(super) trait Reader: io::Read + Send + Sync {
+pub(super) trait Reader: io::Read + io::Seek + Send + Sync {
     fn bytes_read(&self) -> u64;
     fn meta(&mut self) -> crate::Result<fs::Metadata>;
 }

@@ -32,6 +32,18 @@ impl io::Read for FileReader {
     }
 }
 
+impl io::Seek for FileReader {
+    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
+        self.pos = match pos {
+            io::SeekFrom::Start(off) => off,
+            io::SeekFrom::End(off) => self.file.metadata()?.size().wrapping_add(off as _),
+            io::SeekFrom::Current(off) => self.pos.wrapping_add(off as _),
+        };
+
+        Ok(self.pos)
+    }
+}
+
 impl super::Reader for FileReader {
     fn bytes_read(&self) -> u64 {
         self.pos

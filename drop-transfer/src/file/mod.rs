@@ -253,18 +253,18 @@ impl File {
 
     // Open the file if it wasn't already opened and return the std::fs::File
     // instance
-    pub(crate) fn open(&self) -> crate::Result<FileReader> {
+    pub(crate) fn open(&self, offset: u64) -> crate::Result<FileReader> {
         match &self.kind {
             FileKind::FileToSend { meta, source, .. } => {
-                FileReader::new(reader::open(source)?, meta.0.clone())
+                let mut reader = reader::open(source)?;
+                reader.seek(io::SeekFrom::Start(offset))?;
+                FileReader::new(reader, meta.0.clone())
             }
             _ => Err(Error::BadFile),
         }
     }
 
-    // Calculate sha2 of a file. This is a blocking operation
-    // TODO(msz): remove unused
-    #[allow(unused)]
+    /// Calculate sha2 of a file. This is a blocking operation
     pub(crate) fn checksum(&self, limit: u64) -> crate::Result<[u8; 32]> {
         let reader = match &self.kind {
             FileKind::FileToSend { source, .. } => reader::open(source)?,

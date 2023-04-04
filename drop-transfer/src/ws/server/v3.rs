@@ -5,37 +5,33 @@ use std::{
     ops::ControlFlow,
     path::PathBuf,
     sync::Arc,
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant},
 };
 
 use anyhow::Context;
 use drop_config::DropConfig;
 use futures::{SinkExt, StreamExt};
-use sha1::Digest;
-use slog::{debug, error, warn};
+use slog::{debug, error, info, warn};
 use tokio::{
-    sync::mpsc::{self, Sender, UnboundedSender},
+    sync::{
+        mpsc::{self, Sender, UnboundedSender},
+        oneshot,
+    },
     task::JoinHandle,
 };
 use warp::ws::{Message, WebSocket};
 
 use super::{handler, ServerReq};
-use crate::{
-    protocol::v2,
-    service::State,
-    utils::Hidden,
-    ws::{self, events::FileEventTx},
-    FileId,
-};
+use crate::{protocol::v3, service::State, utils::Hidden, ws::events::FileEventTx, FileId};
 
-pub struct HandlerInit<'a, const PING: bool = true> {
+pub struct HandlerInit<'a> {
     peer: IpAddr,
-    state: &'a Arc<State>,
+    state: Arc<State>,
     logger: &'a slog::Logger,
 }
 
-pub struct HandlerLoop<'a, const PING: bool> {
-    state: &'a Arc<State>,
+pub struct HandlerLoop<'a> {
+    state: Arc<State>,
     logger: &'a slog::Logger,
     msg_tx: Sender<Message>,
     xfer: crate::Transfer,
@@ -44,19 +40,23 @@ pub struct HandlerLoop<'a, const PING: bool> {
 }
 
 struct Downloader {
+    logger: slog::Logger,
     file_id: crate::FileId,
     msg_tx: Sender<Message>,
     tmp_loc: Option<Hidden<PathBuf>>,
+    csum_rx: Option<oneshot::Receiver<v3::ReportChsum>>,
+    offset: u64,
 }
 
 struct FileTask {
     job: JoinHandle<()>,
     chunks_tx: UnboundedSender<Vec<u8>>,
     events: Arc<FileEventTx>,
+    csum_tx: Option<oneshot::Sender<v3::ReportChsum>>,
 }
 
-impl<'a, const PING: bool> HandlerInit<'a, PING> {
-    pub(crate) fn new(peer: IpAddr, state: &'a Arc<State>, logger: &'a slog::Logger) -> Self {
+impl<'a> HandlerInit<'a> {
+    pub(crate) fn new(peer: IpAddr, state: Arc<State>, logger: &'a slog::Logger) -> Self {
         Self {
             peer,
             state,
@@ -66,10 +66,10 @@ impl<'a, const PING: bool> HandlerInit<'a, PING> {
 }
 
 #[async_trait::async_trait]
-impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
-    type Request = (v2::TransferRequest, IpAddr, DropConfig);
-    type Loop = HandlerLoop<'a, PING>;
-    type Pinger = ws::utils::Pinger<PING>;
+impl<'a> handler::HandlerInit for HandlerInit<'a> {
+    type Request = (v3::TransferRequest, IpAddr, DropConfig);
+    type Loop = HandlerLoop<'a>;
+    type Pinger = tokio::time::Interval;
 
     async fn recv_req(&mut self, ws: &mut WebSocket) -> anyhow::Result<Self::Request> {
         let msg = ws
@@ -86,7 +86,7 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
     }
 
     async fn on_error(&mut self, ws: &mut WebSocket, err: anyhow::Error) -> anyhow::Result<()> {
-        let msg = v2::ServerMsg::Error(v2::Error {
+        let msg = v3::ServerMsg::Error(v3::Error {
             file: None,
             msg: err.to_string(),
         });
@@ -115,11 +115,11 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
     }
 
     fn pinger(&mut self) -> Self::Pinger {
-        ws::utils::Pinger::<PING>::new(self.state)
+        tokio::time::interval(self.state.config.ping_interval())
     }
 }
 
-impl<const PING: bool> HandlerLoop<'_, PING> {
+impl HandlerLoop<'_> {
     fn issue_download(
         &mut self,
         _: &mut WebSocket,
@@ -151,7 +151,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
     async fn issue_cancel(&mut self, socket: &mut WebSocket, file: FileId) -> anyhow::Result<()> {
         debug!(self.logger, "ServerHandler::issue_cancel");
 
-        let msg = v2::ServerMsg::Cancel(v2::Download { file: file.clone() });
+        let msg = v3::ServerMsg::Cancel(v3::Cancel { file: file.clone() });
         socket.send(Message::from(&msg)).await?;
 
         self.on_cancel(file).await;
@@ -167,13 +167,13 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
     ) -> anyhow::Result<()> {
         if let Some(task) = self.jobs.get(&file) {
             if let Err(err) = task.chunks_tx.send(chunk) {
-                let msg = v2::Error {
-                    msg: format!("Failed to consue chunk for file: {file:?}, msg: {err}",),
+                let msg = v3::Error {
+                    msg: format!("Failed to consume chunk for file: {file:?}, msg: {err}",),
                     file: Some(file),
                 };
 
                 socket
-                    .send(Message::from(&v2::ServerMsg::Error(msg)))
+                    .send(Message::from(&v3::ServerMsg::Error(msg)))
                     .await?;
             }
         }
@@ -186,6 +186,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
             job: task,
             events,
             chunks_tx: _,
+            csum_tx: _,
         }) = self.jobs.remove(&file)
         {
             if !task.is_finished() {
@@ -220,6 +221,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                 job: task,
                 events,
                 chunks_tx: _,
+                csum_tx: _,
             }) = self.jobs.remove(&file)
             {
                 if !task.is_finished() {
@@ -236,10 +238,25 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
             }
         }
     }
+
+    fn on_checksum(&mut self, report: v3::ReportChsum) {
+        if let Some(send) = self
+            .jobs
+            .get_mut(&report.file)
+            .and_then(|task| task.csum_tx.take())
+        {
+            if send.send(report).is_err() {
+                warn!(
+                    self.logger,
+                    "Failed to pass checksum report to receiver task"
+                );
+            }
+        }
+    }
 }
 
 #[async_trait::async_trait]
-impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
+impl handler::HandlerLoop for HandlerLoop<'_> {
     async fn on_req(&mut self, ws: &mut WebSocket, req: ServerReq) -> anyhow::Result<()> {
         match req {
             ServerReq::Download { file, task } => self.issue_download(ws, file, task)?,
@@ -287,16 +304,17 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         self.last_recv = Instant::now();
 
         if let Ok(json) = msg.to_str() {
-            let msg: v2::ClientMsg =
+            let msg: v3::ClientMsg =
                 serde_json::from_str(json).context("Failed to deserialize json")?;
 
             match msg {
-                v2::ClientMsg::Error(v2::Error { file, msg }) => self.on_error(file, msg).await,
-                v2::ClientMsg::Cancel(v2::Download { file }) => self.on_cancel(file).await,
+                v3::ClientMsg::Error(v3::Error { file, msg }) => self.on_error(file, msg).await,
+                v3::ClientMsg::Cancel(v3::Cancel { file }) => self.on_cancel(file).await,
+                v3::ClientMsg::ReportChsum(report) => self.on_checksum(report),
             }
         } else if msg.is_binary() {
-            let v2::Chunk { file, data } =
-                v2::Chunk::decode(msg.into_bytes()).context("Failed to decode file chunk")?;
+            let v3::Chunk { file, data } =
+                v3::Chunk::decode(msg.into_bytes()).context("Failed to decode file chunk")?;
 
             self.on_chunk(ws, file, data).await?;
         } else if msg.is_close() {
@@ -348,20 +366,16 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     }
 
     fn recv_timeout(&mut self) -> Option<Duration> {
-        if PING {
-            Some(
-                self.state
-                    .config
-                    .transfer_idle_lifetime
-                    .saturating_sub(self.last_recv.elapsed()),
-            )
-        } else {
-            None
-        }
+        Some(
+            self.state
+                .config
+                .transfer_idle_lifetime
+                .saturating_sub(self.last_recv.elapsed()),
+        )
     }
 }
 
-impl<const PING: bool> Drop for HandlerLoop<'_, PING> {
+impl Drop for HandlerLoop<'_> {
     fn drop(&mut self) {
         debug!(self.logger, "Stopping server handler");
         self.jobs.values().for_each(|task| task.job.abort());
@@ -377,14 +391,6 @@ impl Downloader {
     }
 }
 
-impl Drop for Downloader {
-    fn drop(&mut self) {
-        if let Some(path) = self.tmp_loc.as_ref() {
-            let _ = fs::remove_file(&path.0);
-        }
-    }
-}
-
 #[async_trait::async_trait]
 impl handler::Downloader for Downloader {
     async fn eval_tmp_location(
@@ -394,45 +400,74 @@ impl handler::Downloader for Downloader {
         if let Some(tmp_loc) = self.tmp_loc.clone() {
             return Ok(tmp_loc);
         }
-
-        let mut suffix = sha1::Sha1::new();
-
-        suffix.update(task.xfer.id().as_bytes());
-        if let Ok(time) = SystemTime::now().elapsed() {
-            suffix.update(time.as_nanos().to_ne_bytes());
-        }
-
-        let suffix: String = suffix
-            .finalize()
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect();
-        let tmp_location: PathBuf = format!(
-            "{}.dropdl-{}",
-            task.location.display(),
-            suffix.get(..8).unwrap_or(&suffix),
-        )
-        .into();
-
+        let tmp_location: PathBuf = format!("{}.dropdl-part", task.location.display(),).into();
         self.tmp_loc = Some(Hidden(tmp_location.clone()));
 
         Ok(Hidden(tmp_location))
     }
 
-    async fn init(&mut self, _: &Hidden<PathBuf>) -> crate::Result<()> {
-        let msg = v2::ServerMsg::Start(v2::Download {
+    async fn init(&mut self, tmp_location: &Hidden<PathBuf>) -> crate::Result<()> {
+        match tokio::task::block_in_place(|| super::TmpFileState::load(&tmp_location.0)) {
+            Ok(super::TmpFileState { meta, csum }) => {
+                debug!(
+                    self.logger,
+                    "Found temporary file: {tmp_location:?}, of size: {}",
+                    meta.len()
+                );
+
+                let msg = v3::ServerMsg::Init(v3::Init {
+                    file: self.file_id.clone(),
+                    checksum: Some(v3::ReqChsum { limit: meta.len() }),
+                });
+                self.send(Message::from(&msg)).await?;
+
+                let report = self
+                    .csum_rx
+                    .take()
+                    .expect("Checksum report should still be in the pending state")
+                    .await
+                    .map_err(|_| crate::Error::Canceled)?;
+
+                if report.limit == meta.len() && report.checksum == csum {
+                    // All matches, we can continue with temp file
+                    self.offset = meta.len();
+                } else {
+                    info!(
+                        self.logger,
+                        "Found missmatch in partially downloaded file, overwriting"
+                    );
+                }
+            }
+            Err(err) => {
+                debug!(self.logger, "Failed to load temporary file info: {err}");
+
+                let msg = v3::ServerMsg::Init(v3::Init {
+                    file: self.file_id.clone(),
+                    checksum: None,
+                });
+                self.send(Message::from(&msg)).await?;
+            }
+        };
+
+        let msg = v3::ServerMsg::Start(v3::Start {
             file: self.file_id.clone(),
+            offset: self.offset,
         });
         self.send(Message::from(&msg)).await
     }
 
     async fn open(&mut self, path: &Hidden<PathBuf>) -> crate::Result<fs::File> {
-        let file = fs::File::create(&path.0)?;
+        let file = if self.offset == 0 {
+            fs::File::create(&path.0)?
+        } else {
+            fs::File::options().append(true).open(&path.0)?
+        };
+
         Ok(file)
     }
 
     async fn progress(&mut self, bytes: u64) -> crate::Result<()> {
-        self.send(&v2::ServerMsg::Progress(v2::Progress {
+        self.send(&v3::ServerMsg::Progress(v3::Progress {
             file: self.file_id.clone(),
             bytes_transfered: bytes,
         }))
@@ -440,7 +475,7 @@ impl handler::Downloader for Downloader {
     }
 
     async fn done(&mut self, bytes: u64) -> crate::Result<()> {
-        self.send(&v2::ServerMsg::Done(v2::Progress {
+        self.send(&v3::ServerMsg::Done(v3::Done {
             file: self.file_id.clone(),
             bytes_transfered: bytes,
         }))
@@ -448,7 +483,7 @@ impl handler::Downloader for Downloader {
     }
 
     async fn error(&mut self, msg: String) -> crate::Result<()> {
-        self.send(&v2::ServerMsg::Error(v2::Error {
+        self.send(&v3::ServerMsg::Error(v3::Error {
             file: Some(self.file_id.clone()),
             msg,
         }))
@@ -466,6 +501,7 @@ impl FileTask {
     ) -> Self {
         let events = Arc::new(FileEventTx::new(&state));
         let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
+        let (csum_tx, csum_rx) = oneshot::channel();
 
         let job = tokio::spawn(task.run(
             state,
@@ -474,6 +510,9 @@ impl FileTask {
                 file_id: file_id.clone(),
                 msg_tx,
                 tmp_loc: None,
+                logger: logger.clone(),
+                csum_rx: Some(csum_rx),
+                offset: 0,
             },
             chunks_rx,
             file_id,
@@ -484,11 +523,12 @@ impl FileTask {
             job,
             chunks_tx,
             events,
+            csum_tx: Some(csum_tx),
         }
     }
 }
 
-impl handler::Request for (v2::TransferRequest, IpAddr, DropConfig) {
+impl handler::Request for (v3::TransferRequest, IpAddr, DropConfig) {
     fn parse(self) -> anyhow::Result<crate::Transfer> {
         self.try_into().context("Failed to parse transfer request")
     }
