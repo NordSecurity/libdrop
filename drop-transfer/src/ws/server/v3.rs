@@ -115,7 +115,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
     }
 
     fn pinger(&mut self) -> Self::Pinger {
-        tokio::time::interval(self.state.config.transfer_idle_lifetime / 2)
+        tokio::time::interval(self.state.config.ping_interval())
     }
 }
 
