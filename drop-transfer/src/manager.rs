@@ -1,5 +1,6 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
+    mem::ManuallyDrop,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -139,20 +140,23 @@ impl TransferManager {
     }
 }
 
-pub(crate) struct TransferGuard<'a> {
-    state: &'a Arc<State>,
+pub(crate) struct TransferGuard {
+    state: ManuallyDrop<Arc<State>>,
     id: Uuid,
 }
 
-impl<'a> TransferGuard<'a> {
-    pub(crate) fn new(state: &'a Arc<State>, id: Uuid) -> Self {
-        Self { state, id }
+impl TransferGuard {
+    pub(crate) fn new(state: Arc<State>, id: Uuid) -> Self {
+        Self {
+            state: ManuallyDrop::new(state),
+            id,
+        }
     }
 }
 
-impl Drop for TransferGuard<'_> {
+impl Drop for TransferGuard {
     fn drop(&mut self) {
-        let state = self.state.clone();
+        let state = unsafe { ManuallyDrop::take(&mut self.state) };
         let id = self.id;
 
         tokio::spawn(async move {

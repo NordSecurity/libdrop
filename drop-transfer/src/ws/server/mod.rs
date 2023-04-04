@@ -1,19 +1,19 @@
 mod handler;
 mod v2;
+mod v3;
 
 use std::{
     fs,
     io::{self, Write},
     net::{IpAddr, SocketAddr},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
-    time::{Instant, SystemTime},
+    time::Instant,
 };
 
 use anyhow::Context;
 use futures::{SinkExt, StreamExt};
-use handler::{FeedbackReport, HandlerInit, HandlerLoop, Request};
-use sha1::{Digest, Sha1};
+use handler::{Downloader, HandlerInit, HandlerLoop, Request};
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
     sync::mpsc::{self, UnboundedReceiver},
@@ -56,13 +56,10 @@ pub struct FileXferTask {
     pub file: crate::File,
     pub location: Hidden<PathBuf>,
     pub filename: String,
-    pub tmp_location: Hidden<PathBuf>,
     pub size: u64,
     pub xfer: crate::Transfer,
 }
 
-// TODO(msz): remove unused
-#[allow(unused)]
 struct TmpFileState {
     meta: fs::Metadata,
     csum: [u8; 32],
@@ -98,7 +95,7 @@ pub(crate) fn start(
 
                         let ctx = RunContext {
                             logger: &logger,
-                            state: &state,
+                            state: state.clone(),
                             socket,
                             stop: &stop,
                         };
@@ -112,7 +109,10 @@ pub(crate) fn start(
                                 ctx.run(v2::HandlerInit::<true>::new(peer.ip(), &state, &logger))
                                     .await
                             }
-                            protocol::Version::V3 => unimplemented!(),
+                            protocol::Version::V3 => {
+                                ctx.run(v3::HandlerInit::new(peer.ip(), state, &logger))
+                                    .await
+                            }
                         }
                     })
                 },
@@ -158,7 +158,7 @@ pub(crate) fn start(
 
 struct RunContext<'a> {
     logger: &'a slog::Logger,
-    state: &'a Arc<State>,
+    state: Arc<State>,
     stop: &'a CancellationToken,
     socket: WebSocket,
 }
@@ -213,7 +213,7 @@ impl RunContext<'_> {
                 .expect("Failed to send TransferFailed event");
         };
 
-        let job = handle_client(self.state, self.logger, self.socket, handler, xfer.clone());
+        let job = handle_client(&self.state, self.logger, self.socket, handler, xfer.clone());
 
         tokio::select! {
             biased;
@@ -233,7 +233,7 @@ async fn handle_client(
     mut hander: impl handler::HandlerInit,
     xfer: crate::Transfer,
 ) {
-    let _guard = TransferGuard::new(state, xfer.id());
+    let _guard = TransferGuard::new(state.clone(), xfer.id());
     let (req_send, mut req_rx) = mpsc::unbounded_channel();
 
     {
@@ -338,57 +338,26 @@ impl FileXferTask {
             .ok_or(crate::Error::BadFile)?
             .to_string_lossy()
             .to_string();
-        let mut suffix = Sha1::new();
 
-        suffix.update(xfer.id().as_bytes());
-        if let Ok(time) = SystemTime::now().elapsed() {
-            suffix.update(time.as_nanos().to_ne_bytes());
-        }
-
-        let suffix: String = suffix
-            .finalize()
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect();
-        let tmp_location: PathBuf = format!(
-            "{}.dropdl-{}",
-            location.display(),
-            suffix.get(..8).unwrap_or(&suffix),
-        )
-        .into();
         let size = file.size().ok_or(crate::Error::DirectoryNotExpected)?;
-        let char_count = tmp_location
-            .file_name()
-            .expect("Cannot extract filename")
-            .len();
-        if char_count > MAX_FILENAME_LENGTH {
-            return Err(crate::Error::FilenameTooLong);
-        }
+
         Ok(Self {
             file,
             xfer,
             location: Hidden(location),
             filename,
-            tmp_location: Hidden(tmp_location),
             size,
         })
     }
 
-    // Blocking operation
-    // TODO(msz): remove unused
-    #[allow(unused)]
-    fn tmp_state(&self) -> io::Result<TmpFileState> {
-        let file = fs::File::open(&self.tmp_location.0)?;
-
-        let meta = file.metadata()?;
-        let csum = file::checksum(&mut io::BufReader::new(file))?;
-        Ok(TmpFileState { meta, csum })
-    }
-
-    fn move_tmp_to_dst(&self, logger: &Logger) -> crate::Result<PathBuf> {
+    fn move_tmp_to_dst(
+        &self,
+        tmp_location: &Hidden<PathBuf>,
+        logger: &Logger,
+    ) -> crate::Result<PathBuf> {
         let dst_location = crate::utils::map_path_if_exists(&self.location.0)?;
 
-        fs::rename(&self.tmp_location.0, &dst_location)?;
+        fs::rename(&tmp_location.0, &dst_location)?;
 
         if let Err(err) = dst_location.quarantine() {
             error!(logger, "Failed to quarantine downloaded file: {}", err);
@@ -401,11 +370,40 @@ impl FileXferTask {
         self,
         state: Arc<State>,
         events: Arc<FileEventTx>,
-        mut feedback: impl FeedbackReport,
+        mut downloader: impl Downloader,
         mut stream: UnboundedReceiver<Vec<u8>>,
         file_id: FileId,
         logger: Logger,
     ) {
+        let init = async {
+            let tmp_location = downloader.eval_tmp_location(&self).await?;
+
+            let char_count = tmp_location
+                .file_name()
+                .expect("Cannot extract filename")
+                .len();
+            if char_count > MAX_FILENAME_LENGTH {
+                return Err(crate::Error::FilenameTooLong);
+            }
+
+            downloader.init(&tmp_location).await?;
+            Ok(tmp_location)
+        };
+
+        let tmp_location = match init.await {
+            Ok(tl) => tl,
+            Err(err) => {
+                events
+                    .emit_force(crate::Event::FileDownloadFailed(
+                        self.xfer.clone(),
+                        file_id,
+                        err,
+                    ))
+                    .await;
+                return;
+            }
+        };
+
         let transfer_time = Instant::now();
 
         state.moose.service_quality_transfer_file(
@@ -424,21 +422,21 @@ impl FileXferTask {
             .await;
 
         let receive_file = async {
-            let mut out_file = match fs::File::create(&self.tmp_location.0) {
+            let mut out_file = match downloader.open(&tmp_location).await {
                 Ok(out_file) => out_file,
                 Err(err) => {
                     error!(
                         logger,
-                        "Could not create {:?} for downloading: {}", self.tmp_location, err
+                        "Could not create {tmp_location:?} for downloading: {err}"
                     );
 
-                    return Err(crate::Error::from(err));
+                    return Err(err);
                 }
             };
 
             let consume_file_chunks = async {
-                let mut bytes_received = 0;
-                let mut last_progress = 0;
+                let mut bytes_received = out_file.metadata()?.len();
+                let mut last_progress = bytes_received;
 
                 while bytes_received < self.size {
                     let chunk = stream.recv().await.ok_or(crate::Error::Canceled)?;
@@ -454,7 +452,7 @@ impl FileXferTask {
 
                     if last_progress + REPORT_PROGRESS_THRESHOLD <= bytes_received {
                         // send progress to the caller
-                        feedback.progress(bytes_received).await?;
+                        downloader.progress(bytes_received).await?;
 
                         events
                             .emit(crate::Event::FileDownloadProgress(
@@ -478,11 +476,11 @@ impl FileXferTask {
             let bytes_received = match consume_file_chunks.await {
                 Ok(br) => br,
                 Err(err) => {
-                    if let Err(ioerr) = fs::remove_file(&self.tmp_location.0) {
+                    if let Err(ioerr) = fs::remove_file(&tmp_location.0) {
                         error!(
                             logger,
-                            "Could not remove temporary file {:?} after failed download: {}",
-                            self.tmp_location,
+                            "Could not remove temporary file {tmp_location:?} after failed \
+                             download: {}",
                             ioerr
                         );
                     }
@@ -491,9 +489,9 @@ impl FileXferTask {
                 }
             };
 
-            feedback.done(bytes_received).await?;
+            downloader.done(bytes_received).await?;
 
-            let dst = match self.move_tmp_to_dst(&logger) {
+            let dst = match self.move_tmp_to_dst(&tmp_location, &logger) {
                 Ok(dst) => dst,
                 Err(err) => {
                     error!(
@@ -529,7 +527,7 @@ impl FileXferTask {
             )),
             Err(crate::Error::Canceled) => None,
             Err(err) => {
-                let _ = feedback.error(err.to_string()).await;
+                let _ = downloader.error(err.to_string()).await;
                 Some(Event::FileDownloadFailed(self.xfer.clone(), file_id, err))
             }
         };
@@ -540,8 +538,13 @@ impl FileXferTask {
     }
 }
 
-impl Drop for FileXferTask {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&*self.tmp_location);
+impl TmpFileState {
+    // Blocking operation
+    fn load(path: &Path) -> io::Result<Self> {
+        let file = fs::File::open(path)?;
+
+        let meta = file.metadata()?;
+        let csum = file::checksum(&mut io::BufReader::new(file))?;
+        Ok(TmpFileState { meta, csum })
     }
 }

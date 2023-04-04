@@ -213,11 +213,11 @@ impl TryFrom<&crate::File> for File {
     }
 }
 
-impl TryFrom<(TransferRequest, IpAddr, &DropConfig)> for crate::Transfer {
+impl TryFrom<(TransferRequest, IpAddr, DropConfig)> for crate::Transfer {
     type Error = crate::Error;
 
     fn try_from(
-        (TransferRequest { files, id }, peer, config): (TransferRequest, IpAddr, &DropConfig),
+        (TransferRequest { files, id }, peer, config): (TransferRequest, IpAddr, DropConfig),
     ) -> Result<Self, Self::Error> {
         Self::new_with_uuid(
             peer,
@@ -226,7 +226,7 @@ impl TryFrom<(TransferRequest, IpAddr, &DropConfig)> for crate::Transfer {
                 .map(TryInto::try_into)
                 .collect::<Result<_, crate::Error>>()?,
             id,
-            config,
+            &config,
         )
     }
 }

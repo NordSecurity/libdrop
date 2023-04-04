@@ -8,19 +8,22 @@ use std::{
 use anyhow::Context;
 use futures::SinkExt;
 use slog::{debug, error, warn};
-use tokio::{sync::mpsc::Sender, task::JoinHandle};
+use tokio::{
+    sync::{mpsc::Sender, oneshot},
+    task::JoinHandle,
+};
 use tokio_tungstenite::tungstenite::{self, Message};
 
 use super::{handler, ClientReq, WebSocket};
-use crate::{protocol::v2, service::State, utils::Hidden, ws, FileId};
+use crate::{protocol::v3, service::State, utils::Hidden, ws, FileId};
 
-pub struct HandlerInit<'a, const PING: bool = true> {
-    state: &'a Arc<State>,
+pub struct HandlerInit<'a> {
+    state: Arc<State>,
     logger: &'a slog::Logger,
 }
 
-pub struct HandlerLoop<'a, const PING: bool> {
-    state: &'a Arc<State>,
+pub struct HandlerLoop<'a> {
+    state: Arc<State>,
     logger: &'a slog::Logger,
     upload_tx: Sender<Message>,
     tasks: HashMap<FileId, FileTask>,
@@ -28,29 +31,36 @@ pub struct HandlerLoop<'a, const PING: bool> {
     xfer: crate::Transfer,
 }
 
-struct Uploader {
-    sink: Sender<Message>,
-    file_id: FileId,
-}
-
 struct FileTask {
     job: JoinHandle<()>,
     events: Arc<ws::events::FileEventTx>,
+    start: Option<oneshot::Sender<FileTaskStart>>,
 }
 
-impl<'a, const PING: bool> HandlerInit<'a, PING> {
-    pub(crate) fn new(state: &'a Arc<State>, logger: &'a slog::Logger) -> Self {
+struct FileTaskStart {
+    offset: u64,
+}
+
+struct Uploader {
+    sink: Sender<Message>,
+    file_id: FileId,
+    csum: Option<v3::ReqChsum>,
+    start: Option<oneshot::Receiver<FileTaskStart>>,
+}
+
+impl<'a> HandlerInit<'a> {
+    pub(crate) fn new(state: Arc<State>, logger: &'a slog::Logger) -> Self {
         Self { state, logger }
     }
 }
 
 #[async_trait::async_trait]
-impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
-    type Pinger = ws::utils::Pinger<PING>;
-    type Loop = HandlerLoop<'a, PING>;
+impl<'a> handler::HandlerInit for HandlerInit<'a> {
+    type Pinger = tokio::time::Interval;
+    type Loop = HandlerLoop<'a>;
 
     async fn start(&mut self, socket: &mut WebSocket, xfer: &crate::Transfer) -> crate::Result<()> {
-        let req = v2::TransferRequest::try_from(xfer)?;
+        let req = v3::TransferRequest::try_from(xfer)?;
         socket.send(Message::from(&req)).await?;
         Ok(())
     }
@@ -69,13 +79,13 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
     }
 
     fn pinger(&mut self) -> Self::Pinger {
-        ws::utils::Pinger::<PING>::new(self.state)
+        tokio::time::interval(self.state.config.ping_interval())
     }
 }
 
-impl<const PING: bool> HandlerLoop<'_, PING> {
+impl HandlerLoop<'_> {
     async fn issue_cancel(&mut self, socket: &mut WebSocket, file: FileId) -> anyhow::Result<()> {
-        let msg = v2::ClientMsg::Cancel(v2::Download { file: file.clone() });
+        let msg = v3::ClientMsg::Cancel(v3::Cancel { file: file.clone() });
         socket.send(Message::from(&msg)).await?;
 
         self.on_cancel(file).await;
@@ -95,7 +105,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                     0,
                     self.xfer
                         .file(&file)
-                        .expect("File should exist since we have a transfer task running")
+                        .expect("File should exists since we have a transfer task running")
                         .info(),
                 );
 
@@ -126,37 +136,38 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         }
     }
 
-    fn on_download(&mut self, file_id: FileId) {
+    async fn on_init(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+        checksum: Option<v3::ReqChsum>,
+    ) -> anyhow::Result<()> {
         let f = || {
             match self.tasks.entry(file_id.clone()) {
                 Entry::Occupied(o) => {
                     let task = o.into_mut();
 
                     if task.job.is_finished() {
-                        *task = FileTask::new(
-                            self.state,
-                            Uploader {
-                                sink: self.upload_tx.clone(),
-                                file_id: file_id.clone(),
-                            },
-                            self.xfer.clone(),
-                            file_id,
+                        *task = FileTask::start(
+                            self.state.clone(),
                             self.logger,
+                            self.upload_tx.clone(),
+                            self.xfer.clone(),
+                            file_id.clone(),
+                            checksum,
                         )?;
                     } else {
                         anyhow::bail!("Transfer already in progress");
                     }
                 }
                 Entry::Vacant(v) => {
-                    let task = FileTask::new(
-                        self.state,
-                        Uploader {
-                            sink: self.upload_tx.clone(),
-                            file_id: file_id.clone(),
-                        },
-                        self.xfer.clone(),
-                        file_id,
+                    let task = FileTask::start(
+                        self.state.clone(),
                         self.logger,
+                        self.upload_tx.clone(),
+                        self.xfer.clone(),
+                        file_id.clone(),
+                        checksum,
                     )?;
 
                     v.insert(task);
@@ -167,8 +178,57 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         };
 
         if let Err(err) = f() {
-            error!(self.logger, "Failed to start upload: {:?}", err);
+            error!(self.logger, "Failed to init upload: {:?}", err);
+
+            let msg = v3::Error {
+                file: Some(file_id),
+                msg: err.to_string(),
+            };
+            socket
+                .send(Message::from(&v3::ClientMsg::Error(msg)))
+                .await
+                .context("Failed to report error")?;
         }
+
+        Ok(())
+    }
+
+    async fn on_start(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+        offset: u64,
+    ) -> anyhow::Result<()> {
+        let mut f = || {
+            let send = self
+                .tasks
+                .get_mut(&file_id)
+                .context("Missing file upload")?
+                .start
+                .take()
+                .context("File upload already started")?;
+
+            anyhow::ensure!(
+                send.send(FileTaskStart { offset }).is_ok(),
+                "Failed to start file upload"
+            );
+            anyhow::Ok(())
+        };
+
+        if let Err(err) = f() {
+            error!(self.logger, "Failed to start upload: {:?}", err);
+
+            let msg = v3::Error {
+                file: Some(file_id),
+                msg: err.to_string(),
+            };
+            socket
+                .send(Message::from(&v3::ClientMsg::Error(msg)))
+                .await
+                .context("Failed to report error")?;
+        }
+
+        Ok(())
     }
 
     async fn on_error(&mut self, file: Option<FileId>, msg: String) {
@@ -198,7 +258,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
 }
 
 #[async_trait::async_trait]
-impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
+impl handler::HandlerLoop for HandlerLoop<'_> {
     async fn on_req(&mut self, socket: &mut WebSocket, req: ClientReq) -> anyhow::Result<()> {
         match req {
             ClientReq::Cancel { file } => self.issue_cancel(socket, file).await,
@@ -237,28 +297,33 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 
     async fn on_recv(
         &mut self,
-        _: &mut WebSocket,
+        socket: &mut WebSocket,
         msg: Message,
     ) -> anyhow::Result<ControlFlow<()>> {
         self.last_recv = Instant::now();
 
         match msg {
             Message::Text(json) => {
-                let msg: v2::ServerMsg =
+                let msg: v3::ServerMsg =
                     serde_json::from_str(&json).context("Failed to deserialize server message")?;
 
                 match msg {
-                    v2::ServerMsg::Progress(v2::Progress {
+                    v3::ServerMsg::Progress(v3::Progress {
                         file,
                         bytes_transfered,
                     }) => self.on_progress(file, bytes_transfered).await,
-                    v2::ServerMsg::Done(v2::Progress {
+                    v3::ServerMsg::Done(v3::Done {
                         file,
                         bytes_transfered: _,
                     }) => self.on_done(file).await,
-                    v2::ServerMsg::Error(v2::Error { file, msg }) => self.on_error(file, msg).await,
-                    v2::ServerMsg::Start(v2::Download { file }) => self.on_download(file),
-                    v2::ServerMsg::Cancel(v2::Download { file }) => self.on_cancel(file).await,
+                    v3::ServerMsg::Error(v3::Error { file, msg }) => self.on_error(file, msg).await,
+                    v3::ServerMsg::Init(v3::Init { file, checksum }) => {
+                        self.on_init(socket, file, checksum).await?
+                    }
+                    v3::ServerMsg::Start(v3::Start { file, offset }) => {
+                        self.on_start(socket, file, offset).await?
+                    }
+                    v3::ServerMsg::Cancel(v3::Cancel { file }) => self.on_cancel(file).await,
                 }
             }
             Message::Close(_) => {
@@ -311,20 +376,16 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     }
 
     fn recv_timeout(&mut self) -> Option<Duration> {
-        if PING {
-            Some(
-                self.state
-                    .config
-                    .transfer_idle_lifetime
-                    .saturating_sub(self.last_recv.elapsed()),
-            )
-        } else {
-            None
-        }
+        Some(
+            self.state
+                .config
+                .transfer_idle_lifetime
+                .saturating_sub(self.last_recv.elapsed()),
+        )
     }
 }
 
-impl<const PING: bool> Drop for HandlerLoop<'_, PING> {
+impl Drop for HandlerLoop<'_> {
     fn drop(&mut self) {
         debug!(self.logger, "Stopping client handler");
         self.tasks.values().for_each(|task| task.job.abort());
@@ -334,7 +395,7 @@ impl<const PING: bool> Drop for HandlerLoop<'_, PING> {
 #[async_trait::async_trait]
 impl handler::Uploader for Uploader {
     async fn chunk(&mut self, chunk: &[u8]) -> Result<(), crate::Error> {
-        let msg = v2::Chunk {
+        let msg = v3::Chunk {
             file: self.file_id.clone(),
             data: chunk.to_vec(),
         };
@@ -348,7 +409,7 @@ impl handler::Uploader for Uploader {
     }
 
     async fn error(&mut self, msg: String) {
-        let msg = v2::ClientMsg::Error(v2::Error {
+        let msg = v3::ClientMsg::Error(v3::Error {
             file: Some(self.file_id.clone()),
             msg,
         });
@@ -356,29 +417,65 @@ impl handler::Uploader for Uploader {
         let _ = self.sink.send(Message::from(&msg)).await;
     }
 
-    async fn init(&mut self, _: &crate::File) -> crate::Result<u64> {
-        Ok(0)
+    async fn init(&mut self, xfile: &crate::File) -> crate::Result<u64> {
+        if let Some(v3::ReqChsum { limit }) = self.csum.take() {
+            let checksum = tokio::task::block_in_place(|| xfile.checksum(limit))?;
+
+            let msg = v3::ReportChsum {
+                file: self.file_id.clone(),
+                limit,
+                checksum,
+            };
+
+            self.sink
+                .send(Message::from(&v3::ClientMsg::ReportChsum(msg)))
+                .await
+                .map_err(|_| crate::Error::Canceled)?;
+        }
+
+        let FileTaskStart { offset } = self
+            .start
+            .take()
+            .expect("Start channel should always be there")
+            .await
+            .map_err(|_| crate::Error::Canceled)?;
+
+        Ok(offset)
     }
 }
 
 impl FileTask {
-    fn new(
-        state: &Arc<State>,
-        uploader: Uploader,
-        xfer: crate::Transfer,
-        file: FileId,
+    fn start(
+        state: Arc<State>,
         logger: &slog::Logger,
+        sink: Sender<Message>,
+        xfer: crate::Transfer,
+        file_id: FileId,
+        csum: Option<v3::ReqChsum>,
     ) -> anyhow::Result<Self> {
-        let events = Arc::new(ws::events::FileEventTx::new(state));
+        let events = Arc::new(ws::events::FileEventTx::new(&state));
+        let (start_tx, start_rx) = oneshot::channel();
+
+        let uploader = Uploader {
+            sink,
+            file_id: file_id.clone(),
+            csum,
+            start: Some(start_rx),
+        };
+
         let job = super::start_upload(
-            state.clone(),
+            state,
             logger.clone(),
             Arc::clone(&events),
             uploader,
             xfer,
-            file,
+            file_id,
         )?;
 
-        Ok(Self { job, events })
+        Ok(Self {
+            job,
+            events,
+            start: Some(start_tx),
+        })
     }
 }
