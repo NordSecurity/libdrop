@@ -34,3 +34,9 @@ pub struct MooseConfig {
 }
 
 pub const PORT: u16 = 49111;
+
+impl DropConfig {
+    pub fn ping_interval(&self) -> Duration {
+        self.transfer_idle_lifetime / 2
+    }
+}
