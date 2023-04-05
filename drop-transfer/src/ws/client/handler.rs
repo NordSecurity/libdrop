@@ -36,6 +36,7 @@ pub trait HandlerLoop {
 pub trait Uploader: Send + 'static {
     async fn chunk(&mut self, chunk: &[u8]) -> crate::Result<()>;
     async fn error(&mut self, msg: String);
-    /// Initalizes the file transfer and return an offset from where to start
-    async fn init(&mut self, xfile: &crate::File) -> crate::Result<u64>;
+
+    // File stream offset
+    fn offset(&self) -> u64;
 }
