@@ -82,7 +82,7 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
 
         let req = serde_json::from_str(msg).context("Failed to deserialize transfer request")?;
 
-        Ok((req, self.peer, self.state.config))
+        Ok((req, self.peer, self.state.config.clone()))
     }
 
     async fn on_error(&mut self, ws: &mut WebSocket, err: anyhow::Error) -> anyhow::Result<()> {

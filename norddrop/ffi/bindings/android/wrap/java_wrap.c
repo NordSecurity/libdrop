@@ -478,6 +478,90 @@ SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NORDDROP_1RES_1
 }
 
 
+SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NORDDROP_1RES_1JSON_1PARSE_1get(JNIEnv *jenv, jclass jcls) {
+  jint jresult = 0 ;
+  enum norddrop_result result;
+  
+  (void)jenv;
+  (void)jcls;
+  result = (enum norddrop_result)NORDDROP_RES_JSON_PARSE;
+  jresult = (jint)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NORDDROP_1RES_1TRANSFER_1CREATE_1get(JNIEnv *jenv, jclass jcls) {
+  jint jresult = 0 ;
+  enum norddrop_result result;
+  
+  (void)jenv;
+  (void)jcls;
+  result = (enum norddrop_result)NORDDROP_RES_TRANSFER_CREATE;
+  jresult = (jint)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NORDDROP_1RES_1NOT_1STARTED_1get(JNIEnv *jenv, jclass jcls) {
+  jint jresult = 0 ;
+  enum norddrop_result result;
+  
+  (void)jenv;
+  (void)jcls;
+  result = (enum norddrop_result)NORDDROP_RES_NOT_STARTED;
+  jresult = (jint)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NORDDROP_1RES_1ADDR_1IN_1USE_1get(JNIEnv *jenv, jclass jcls) {
+  jint jresult = 0 ;
+  enum norddrop_result result;
+  
+  (void)jenv;
+  (void)jcls;
+  result = (enum norddrop_result)NORDDROP_RES_ADDR_IN_USE;
+  jresult = (jint)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NORDDROP_1RES_1INSTANCE_1START_1get(JNIEnv *jenv, jclass jcls) {
+  jint jresult = 0 ;
+  enum norddrop_result result;
+  
+  (void)jenv;
+  (void)jcls;
+  result = (enum norddrop_result)NORDDROP_RES_INSTANCE_START;
+  jresult = (jint)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NORDDROP_1RES_1INSTANCE_1STOP_1get(JNIEnv *jenv, jclass jcls) {
+  jint jresult = 0 ;
+  enum norddrop_result result;
+  
+  (void)jenv;
+  (void)jcls;
+  result = (enum norddrop_result)NORDDROP_RES_INSTANCE_STOP;
+  jresult = (jint)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NORDDROP_1RES_1DB_1ERROR_1get(JNIEnv *jenv, jclass jcls) {
+  jint jresult = 0 ;
+  enum norddrop_result result;
+  
+  (void)jenv;
+  (void)jcls;
+  result = (enum norddrop_result)NORDDROP_RES_DB_ERROR;
+  jresult = (jint)result; 
+  return jresult;
+}
+
+
 SWIGEXPORT jlong JNICALL Java_com_nordsec_norddrop_libnorddropJNI_new_1NordDrop(JNIEnv *jenv, jclass jcls, jobject jarg1, jint jarg2, jobject jarg3) {
   jlong jresult = 0 ;
   norddrop_event_cb arg1 ;
@@ -683,6 +767,21 @@ SWIGEXPORT jstring JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1ne
   if (arg2) (*jenv)->ReleaseStringUTFChars(jenv, jarg2, (const char *)arg2);
   if (arg3) (*jenv)->ReleaseStringUTFChars(jenv, jarg3, (const char *)arg3);
   free(result);
+  return jresult;
+}
+
+
+SWIGEXPORT jstring JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1getState(JNIEnv *jenv, jclass jcls, jlong jarg1, jobject jarg1_) {
+  jstring jresult = 0 ;
+  struct norddrop *arg1 = (struct norddrop *) 0 ;
+  char *result = 0 ;
+  
+  (void)jenv;
+  (void)jcls;
+  (void)jarg1_;
+  arg1 = *(struct norddrop **)&jarg1; 
+  result = (char *)norddrop_get_state(arg1);
+  if (result) jresult = (*jenv)->NewStringUTF(jenv, (const char *)result);
   return jresult;
 }
 

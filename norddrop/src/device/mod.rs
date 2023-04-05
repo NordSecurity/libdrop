@@ -7,6 +7,7 @@ use std::{
 
 use drop_config::Config;
 use drop_transfer::{utils::Hidden, File, Service, Transfer};
+
 use slog::{debug, error, trace, warn, Logger};
 use tokio::sync::{mpsc, Mutex};
 
@@ -59,6 +60,26 @@ impl NordDropFFI {
                 logger,
             }),
             config: Config::default(),
+        })
+    }
+
+    pub(super) fn get_state(&self) -> Result<Vec<drop_storage::SerializedTransferStorage>> {
+        self.rt.block_on(async {
+            match self
+                .instance
+                .lock()
+                .await
+                .as_ref()
+                .expect("lol why unwrap")
+                .get_state()
+                .await
+            {
+                Ok(state) => Ok(state),
+                Err(err) => {
+                    println!("+++++ err: {:?}", err);
+                    Err(ffi::types::NORDDROP_RES_ERROR)
+                }
+            }
         })
     }
 
@@ -124,19 +145,20 @@ impl NordDropFFI {
         });
 
         self.rt.block_on(async {
-            let storage = drop_storage::Storage::new(self.logger.clone(), "libdrop.sqlite")
-                .await
-                .map_err(|e| {
-                    error!(self.logger, "Failed to prepare storage: {}", e);
-                    ffi::types::NORDDROP_RES_DB_ERROR
-                })?;
+            let storage =
+                drop_storage::Storage::new(self.logger.clone(), &self.config.drop.storage_path)
+                    .await
+                    .map_err(|e| {
+                        error!(self.logger, "Failed to prepare storage: {}", e);
+                        ffi::types::NORDDROP_RES_DB_ERROR
+                    })?;
 
             let service = match Service::start(
                 addr,
                 Arc::new(Mutex::new(storage)),
                 tx,
                 self.logger.clone(),
-                self.config.drop,
+                self.config.drop.clone(),
                 moose,
             ) {
                 Ok(srv) => srv,

@@ -45,6 +45,10 @@ LOG_LEVEL_MAP = {
 }
 
 
+class State:
+    pass
+
+
 class EventsDontMatch(Exception):
     def __init__(self, expected, received):
         super().__init__("Events don't match")
@@ -169,6 +173,9 @@ class Drop:
         norddrop_lib.norddrop_version.restype = ctypes.c_char_p
         norddrop_lib.norddrop_new_transfer.restype = ctypes.c_char_p
 
+        norddrop_lib.norddrop_get_state.restype = ctypes.c_char_p
+        norddrop_lib.norddrop_get_state.argtypes = (ctypes.c_void_p,)
+
         norddrop_lib.norddrop_start.argtypes = (
             ctypes.c_void_p,
             ctypes.c_char_p,
@@ -285,7 +292,12 @@ class Drop:
             err_type = LibResult(err).name
             raise Exception(f"cancel_file has failed with code: {err}({err_type})")
 
-    def start(self, addr: str):
+    def get_state(self) -> str:
+        state = self._lib.norddrop_get_state(self._instance)
+        print("============= retrieved the state: ", state, flush=True)
+        return json.loads(state.decode("utf-8"))
+
+    def start(self, addr: str, runner: str):
         cfg = {
             "dir_depth_limit": 5,
             "transfer_file_limit": 1000,
@@ -294,6 +306,7 @@ class Drop:
             "transfer_idle_lifetime_ms": 10000,
             "moose_event_path": "/tmp/moose-events",
             "moose_prod": False,
+            "storage_path": f"/src/libdrop_{runner}.sqlite",
         }
 
         err = self._lib.norddrop_start(

@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{mpsc::UnboundedSender, Mutex};
 use uuid::Uuid;
 
 use crate::{
@@ -30,9 +30,9 @@ pub struct TransferState {
 
 /// Transfer manager is responsible for keeping track of all ongoing or pending
 /// transfers and their status
-#[derive(Default)]
 pub(crate) struct TransferManager {
     transfers: HashMap<Uuid, TransferState>,
+    storage: Arc<Mutex<drop_storage::Storage>>,
 }
 
 impl TransferState {
@@ -46,6 +46,30 @@ impl TransferState {
 }
 
 impl TransferManager {
+    pub(crate) fn new(storage: Arc<Mutex<drop_storage::Storage>>) -> TransferManager {
+        TransferManager {
+            transfers: HashMap::new(),
+            storage,
+        }
+    }
+
+    // TODO: add `since`
+    pub async fn get_state(&self) -> Result<Vec<drop_storage::SerializedTransferStorage>, Error> {
+        Ok(
+            match self
+                .storage
+                .lock()
+                .await
+                .get_serialized_transfer_data()
+                .await
+            {
+                Ok(it) => it,
+                Err(_err) => {
+                    return Err(Error::BadTransfer); // TODO
+                }
+            },
+        )
+    }
     /// Get ALL of the ongoing file transfers for a given transfer ID
     /// returns None if a transfer does not exist
     pub(crate) fn get_transfer_files(&self, transfer_id: Uuid) -> Option<Vec<FileId>> {
@@ -70,11 +94,53 @@ impl TransferManager {
         Ok(())
     }
 
-    pub(crate) fn insert_transfer(
+    pub(crate) async fn insert_transfer(
         &mut self,
         xfer: Transfer,
         connection: TransferConnection,
     ) -> crate::Result<()> {
+        let peer = xfer.peer();
+        let id = xfer.id();
+
+        match connection {
+            TransferConnection::Client(_) => {
+                let mut lock = self.storage.lock().await;
+
+                match lock.get_outgoing_transfer(&id.to_string()).await {
+                    Ok(_) => return Err(Error::BadTransfer),
+                    Err(err) => match err {
+                        drop_storage::error::Error::InternalError(_) => {
+                            return Err(Error::StorageError)
+                        }
+                        drop_storage::error::Error::DBError(_) => return Err(Error::StorageError),
+                        drop_storage::error::Error::RowNotFound => {
+                            lock.insert_outgoing_transfer(&id.to_string(), &peer.to_string())
+                                .await
+                                .map_err(|_| Error::StorageError)?;
+                        }
+                    },
+                }
+            }
+            TransferConnection::Server(_) => {
+                let mut lock = self.storage.lock().await;
+
+                match lock.get_incoming_transfer(&xfer.id().to_string()).await {
+                    Ok(_) => return Err(Error::BadTransfer),
+                    Err(err) => match err {
+                        drop_storage::error::Error::InternalError(_) => {
+                            return Err(Error::StorageError)
+                        }
+                        drop_storage::error::Error::DBError(_) => return Err(Error::StorageError),
+                        drop_storage::error::Error::RowNotFound => {
+                            lock.insert_incoming_transfer(&id.to_string(), &peer.to_string())
+                                .await
+                                .map_err(|_| Error::StorageError)?;
+                        }
+                    },
+                }
+            }
+        }
+
         match self.transfers.entry(xfer.id()) {
             Entry::Occupied(_) => Err(Error::BadTransferState),
             Entry::Vacant(entry) => {

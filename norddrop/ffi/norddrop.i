@@ -83,6 +83,8 @@ struct norddrop {};
     // Create a new transfer for the given descriptor(s). Returns transfer id(xfid)
     char* new_transfer(const char* peer, const char* descriptors);
 
+    char* get_state();
+    
     // Returns current version of the library
     static char* version();
 };

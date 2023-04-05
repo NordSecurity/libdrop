@@ -36,6 +36,10 @@ cargo run --example udrop -- -l 0.0.0.0 transfer $DROP_SERVER <path>
 
 You can verify the transfer by checking the file system in the server container under `/root/<path>`
 
+# FAQ
+- Q: Python tests are segfaulting
+- A: Note if you have modified API layer recently as ctypes must be properly annotated for each
+API call in order for Python to work or else it's going to segfault
 # Contributing
 [CONTRIBUTING.md](CONTRIBUTING.md)
 

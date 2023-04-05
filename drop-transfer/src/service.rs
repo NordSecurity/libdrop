@@ -64,7 +64,7 @@ macro_rules! moose_try_file {
 impl Service {
     pub fn start(
         addr: IpAddr,
-        _storage: Arc<Mutex<drop_storage::Storage>>,
+        storage: Arc<Mutex<drop_storage::Storage>>,
         event_tx: mpsc::Sender<Event>,
         logger: Logger,
         config: DropConfig,
@@ -73,7 +73,7 @@ impl Service {
         let task = || {
             let state = Arc::new(State {
                 event_tx,
-                transfer_manager: Mutex::default(),
+                transfer_manager: Mutex::new(TransferManager::new(storage)),
                 moose: moose.clone(),
                 config,
             });
@@ -93,6 +93,10 @@ impl Service {
         moose.service_quality_initialization_init(res.to_status(), drop_analytics::Phase::Start);
 
         res
+    }
+
+    pub async fn get_state(&self) -> Result<Vec<drop_storage::SerializedTransferStorage>, Error> {
+        self.state.transfer_manager.lock().await.get_state().await
     }
 
     pub async fn stop(self) -> Result<(), Error> {

@@ -471,15 +471,17 @@ version = "1.0.0"
 name = "drop-storage"
 version = "1.0.0"
 dependencies = [
- "anyhow",
  "async-std",
  "env_logger",
  "inspect",
  "log",
+ "serde",
+ "serde_json",
  "slog",
  "sqlx",
  "strum",
  "test-log",
+ "thiserror",
  "tokio",
  "tokio-test",
  "tokio-util",

@@ -64,6 +64,10 @@ public class NordDrop {
     return libnorddropJNI.NordDrop_newTransfer(swigCPtr, this, peer, descriptors);
   }
 
+  public String getState() {
+    return libnorddropJNI.NordDrop_getState(swigCPtr, this);
+  }
+
   public static String version() {
     return libnorddropJNI.NordDrop_version();
   }

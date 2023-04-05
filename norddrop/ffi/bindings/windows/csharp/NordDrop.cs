@@ -26,7 +26,14 @@ public enum NorddropResult {
   ResOk = 0,
   ResError = 1,
   ResInvalidString = 2,
-  ResBadInput = 3
+  ResBadInput = 3,
+  ResJsonParse = 4,
+  ResTransferCreate = 5,
+  ResNotStarted = 6,
+  ResAddrInUse = 7,
+  ResInstanceStart = 8,
+  ResInstanceStop = 9,
+  ResDbError = 10
 }
 
 }
@@ -100,6 +107,11 @@ public class Norddrop : global::System.IDisposable {
 
   public string NewTransfer(string peer, string descriptors) {
     string ret = libnorddropPINVOKE.Norddrop_NewTransfer(swigCPtr, peer, descriptors);
+    return ret;
+  }
+
+  public string GetState() {
+    string ret = libnorddropPINVOKE.Norddrop_GetState(swigCPtr);
     return ret;
   }
 
@@ -319,6 +331,9 @@ class libnorddropPINVOKE {
 
   [global::System.Runtime.InteropServices.DllImport("norddrop", EntryPoint="CSharp_NordSecfNordDrop_Norddrop_NewTransfer___")]
   public static extern string Norddrop_NewTransfer(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2, string jarg3);
+
+  [global::System.Runtime.InteropServices.DllImport("norddrop", EntryPoint="CSharp_NordSecfNordDrop_Norddrop_GetState___")]
+  public static extern string Norddrop_GetState(global::System.Runtime.InteropServices.HandleRef jarg1);
 
   [global::System.Runtime.InteropServices.DllImport("norddrop", EntryPoint="CSharp_NordSecfNordDrop_Norddrop_Version___")]
   public static extern string Norddrop_Version();

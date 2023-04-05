@@ -31,8 +31,43 @@ typedef enum norddrop_result {
    * Operation resulted to unknown error.
    */
   NORDDROP_RES_ERROR = 1,
+  /**
+   * Failed to parse C string, meaning the string provided is not valid UTF8
+   * or is a null pointer
+   */
   NORDDROP_RES_INVALID_STRING = 2,
+  /**
+   * One of the arguments provided is invalid
+   */
   NORDDROP_RES_BAD_INPUT = 3,
+  /**
+   * Failed to parse JSON argument
+   */
+  NORDDROP_RES_JSON_PARSE = 4,
+  /**
+   * Failed to create transfer based on arguments provided
+   */
+  NORDDROP_RES_TRANSFER_CREATE = 5,
+  /**
+   * The libdrop instance is not started yet
+   */
+  NORDDROP_RES_NOT_STARTED = 6,
+  /**
+   * Address already in use
+   */
+  NORDDROP_RES_ADDR_IN_USE = 7,
+  /**
+   * Failed to start the libdrop instance
+   */
+  NORDDROP_RES_INSTANCE_START = 8,
+  /**
+   * Failed to stop the libdrop instance
+   */
+  NORDDROP_RES_INSTANCE_STOP = 9,
+  /**
+   * Database error
+   */
+  NORDDROP_RES_DB_ERROR = 10,
 } norddrop_result;
 
 typedef struct norddrop norddrop;
@@ -83,6 +118,8 @@ char *norddrop_new_transfer(const struct norddrop *dev, const char *peer, const 
  * Destroy libdrop instance
  */
 void norddrop_destroy(struct norddrop *dev);
+
+char *norddrop_get_state(const struct norddrop *dev);
 
 /**
  * Download a file from the peer

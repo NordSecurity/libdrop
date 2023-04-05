@@ -436,6 +436,18 @@ SWIGEXPORT char * SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_NewTransfer___(vo
 }
 
 
+SWIGEXPORT char * SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_GetState___(void * jarg1) {
+  char * jresult ;
+  struct norddrop *arg1 = (struct norddrop *) 0 ;
+  char *result = 0 ;
+  
+  arg1 = (struct norddrop *)jarg1; 
+  result = (char *)norddrop_get_state(arg1);
+  jresult = SWIG_csharp_string_callback((const char *)result); 
+  return jresult;
+}
+
+
 SWIGEXPORT char * SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_Version___() {
   char * jresult ;
   char *result = 0 ;

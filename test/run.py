@@ -118,7 +118,7 @@ async def main():
 
     drop = ffi.Drop(lib)
     logger.info(f"NordDrop version: {drop.version}")
-    drop.start(addr)
+    drop.start(addr, runner)
 
     try:
         await script.run(runner, drop)

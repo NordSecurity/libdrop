@@ -78,6 +78,36 @@ pub extern "C" fn norddrop_destroy(dev: *mut norddrop) {
     }
 }
 
+#[no_mangle]
+pub extern "C" fn norddrop_get_state(dev: &norddrop) -> *mut c_char {
+    let res = panic::catch_unwind(move || {
+        let dev = dev.0.lock().expect("lock instance");
+
+        let state = dev.get_state();
+        match state {
+            Ok(state) => {
+                let json = serde_json::to_string(&state);
+                match json {
+                    Ok(str) => Ok(str),
+                    Err(err) => {
+                        error!(&dev.logger, "serialize state to json: {:?}", err);
+                        Err(norddrop_result::NORDDROP_RES_ERROR)
+                    }
+                }
+            }
+            Err(err) => {
+                error!(&dev.logger, "dev.get_state(): {:?}", err);
+                Err(norddrop_result::NORDDROP_RES_ERROR)
+            }
+        }
+    });
+
+    match res {
+        Ok(Ok(state)) => new_unmanaged_str(state.as_bytes()),
+        _ => std::ptr::null_mut(),
+    }
+}
+
 /// Download a file from the peer
 #[no_mangle]
 pub extern "C" fn norddrop_download(

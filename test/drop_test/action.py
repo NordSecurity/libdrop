@@ -174,6 +174,17 @@ class CheckFileDoesNotExist(Action):
         return f"CheckFileDoesNotExist({self._files})"
 
 
+class DumpState(Action):
+    def __init__(self):
+        pass
+
+    async def run(self, drop: ffi.Drop):
+        drop.get_state()
+
+    def __str__(self):
+        return f"DumpState()"
+
+
 class WaitForAnotherPeer(Action):
     def __init__(self):
         pass

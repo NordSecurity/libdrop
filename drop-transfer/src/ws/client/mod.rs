@@ -164,6 +164,7 @@ impl RunContext<'_> {
 
         let mut lock = self.state.transfer_manager.lock().await;
         lock.insert_transfer(self.xfer.clone(), TransferConnection::Client(tx))
+            .await
             .map_err(|_| crate::Error::BadTransfer)?;
 
         self.state
