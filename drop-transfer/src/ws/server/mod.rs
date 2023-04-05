@@ -470,22 +470,7 @@ impl FileXferTask {
         mut stream: UnboundedReceiver<Vec<u8>>,
         logger: Logger,
     ) {
-        let init = async {
-            let tmp_location = downloader.eval_tmp_location(&self).await?;
-
-            let char_count = tmp_location
-                .file_name()
-                .expect("Cannot extract filename")
-                .len();
-            if char_count > MAX_FILENAME_LENGTH {
-                return Err(crate::Error::FilenameTooLong);
-            }
-
-            let init = downloader.init(&tmp_location).await?;
-            Ok((tmp_location, init))
-        };
-
-        let (tmp_location, init_res) = match init.await {
+        let init_res = match downloader.init(&self).await {
             Ok(init) => init,
             Err(err) => {
                 events
@@ -500,7 +485,10 @@ impl FileXferTask {
         };
 
         match init_res {
-            handler::DownloadInit::Stream { offset } => {
+            handler::DownloadInit::Stream {
+                offset,
+                tmp_location,
+            } => {
                 let transfer_time = Instant::now();
 
                 state.moose.service_quality_transfer_file(
@@ -584,4 +572,17 @@ impl TmpFileState {
         let csum = file::checksum(&mut io::BufReader::new(file))?;
         Ok(TmpFileState { meta, csum })
     }
+}
+
+fn validate_tmp_location_path(tmp_location: &Hidden<PathBuf>) -> crate::Result<()> {
+    let char_count = tmp_location
+        .file_name()
+        .expect("Cannot extract filename")
+        .len();
+
+    if char_count > MAX_FILENAME_LENGTH {
+        return Err(crate::Error::FilenameTooLong);
+    }
+
+    Ok(())
 }

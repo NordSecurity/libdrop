@@ -8,10 +8,7 @@ use std::{
 use anyhow::Context;
 use futures::SinkExt;
 use slog::{debug, error, warn};
-use tokio::{
-    sync::{mpsc::Sender, oneshot},
-    task::JoinHandle,
-};
+use tokio::{sync::mpsc::Sender, task::JoinHandle};
 use tokio_tungstenite::tungstenite::{self, Message};
 
 use super::{handler, ClientReq, WebSocket};
@@ -34,18 +31,12 @@ pub struct HandlerLoop<'a> {
 struct FileTask {
     job: JoinHandle<()>,
     events: Arc<ws::events::FileEventTx>,
-    start: Option<oneshot::Sender<FileTaskStart>>,
-}
-
-struct FileTaskStart {
-    offset: u64,
 }
 
 struct Uploader {
     sink: Sender<Message>,
     file_id: FileId,
-    csum: Option<v3::ReqChsum>,
-    start: Option<oneshot::Receiver<FileTaskStart>>,
+    offset: u64,
 }
 
 impl<'a> HandlerInit<'a> {
@@ -136,58 +127,42 @@ impl HandlerLoop<'_> {
         }
     }
 
-    async fn on_init(
+    async fn on_checksum(
         &mut self,
         socket: &mut WebSocket,
         file_id: FileId,
-        checksum: Option<v3::ReqChsum>,
+        limit: u64,
     ) -> anyhow::Result<()> {
         let f = || {
-            match self.tasks.entry(file_id.clone()) {
-                Entry::Occupied(o) => {
-                    let task = o.into_mut();
+            let xfile = self.xfer.file(&file_id).context("File not found")?;
+            let checksum = tokio::task::block_in_place(|| xfile.checksum(limit))?;
 
-                    if task.job.is_finished() {
-                        *task = FileTask::start(
-                            self.state.clone(),
-                            self.logger,
-                            self.upload_tx.clone(),
-                            self.xfer.clone(),
-                            file_id.clone(),
-                            checksum,
-                        )?;
-                    } else {
-                        anyhow::bail!("Transfer already in progress");
-                    }
-                }
-                Entry::Vacant(v) => {
-                    let task = FileTask::start(
-                        self.state.clone(),
-                        self.logger,
-                        self.upload_tx.clone(),
-                        self.xfer.clone(),
-                        file_id.clone(),
-                        checksum,
-                    )?;
-
-                    v.insert(task);
-                }
-            };
-
-            anyhow::Ok(())
+            anyhow::Ok(v3::ReportChsum {
+                file: file_id.clone(),
+                limit,
+                checksum,
+            })
         };
 
-        if let Err(err) = f() {
-            error!(self.logger, "Failed to init upload: {:?}", err);
+        match f() {
+            Ok(report) => {
+                socket
+                    .send(Message::from(&v3::ClientMsg::ReportChsum(report)))
+                    .await
+                    .context("Failed to send checksum report")?;
+            }
+            Err(err) => {
+                error!(self.logger, "Failed to report checksum: {:?}", err);
 
-            let msg = v3::Error {
-                file: Some(file_id),
-                msg: err.to_string(),
-            };
-            socket
-                .send(Message::from(&v3::ClientMsg::Error(msg)))
-                .await
-                .context("Failed to report error")?;
+                let msg = v3::Error {
+                    file: Some(file_id),
+                    msg: err.to_string(),
+                };
+                socket
+                    .send(Message::from(&v3::ClientMsg::Error(msg)))
+                    .await
+                    .context("Failed to report error")?;
+            }
         }
 
         Ok(())
@@ -200,18 +175,37 @@ impl HandlerLoop<'_> {
         offset: u64,
     ) -> anyhow::Result<()> {
         let mut f = || {
-            let send = self
-                .tasks
-                .get_mut(&file_id)
-                .context("Missing file upload")?
-                .start
-                .take()
-                .context("File upload already started")?;
+            match self.tasks.entry(file_id.clone()) {
+                Entry::Occupied(o) => {
+                    let task = o.into_mut();
 
-            anyhow::ensure!(
-                send.send(FileTaskStart { offset }).is_ok(),
-                "Failed to start file upload"
-            );
+                    if task.job.is_finished() {
+                        *task = FileTask::start(
+                            self.state.clone(),
+                            self.logger,
+                            self.upload_tx.clone(),
+                            self.xfer.clone(),
+                            file_id.clone(),
+                            offset,
+                        )?;
+                    } else {
+                        anyhow::bail!("Transfer already in progress");
+                    }
+                }
+                Entry::Vacant(v) => {
+                    let task = FileTask::start(
+                        self.state.clone(),
+                        self.logger,
+                        self.upload_tx.clone(),
+                        self.xfer.clone(),
+                        file_id.clone(),
+                        offset,
+                    )?;
+
+                    v.insert(task);
+                }
+            };
+
             anyhow::Ok(())
         };
 
@@ -317,8 +311,8 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
                         bytes_transfered: _,
                     }) => self.on_done(file).await,
                     v3::ServerMsg::Error(v3::Error { file, msg }) => self.on_error(file, msg).await,
-                    v3::ServerMsg::Init(v3::Init { file, checksum }) => {
-                        self.on_init(socket, file, checksum).await?
+                    v3::ServerMsg::ReqChsum(v3::ReqChsum { file, limit }) => {
+                        self.on_checksum(socket, file, limit).await?
                     }
                     v3::ServerMsg::Start(v3::Start { file, offset }) => {
                         self.on_start(socket, file, offset).await?
@@ -417,30 +411,8 @@ impl handler::Uploader for Uploader {
         let _ = self.sink.send(Message::from(&msg)).await;
     }
 
-    async fn init(&mut self, xfile: &crate::File) -> crate::Result<u64> {
-        if let Some(v3::ReqChsum { limit }) = self.csum.take() {
-            let checksum = tokio::task::block_in_place(|| xfile.checksum(limit))?;
-
-            let msg = v3::ReportChsum {
-                file: self.file_id.clone(),
-                limit,
-                checksum,
-            };
-
-            self.sink
-                .send(Message::from(&v3::ClientMsg::ReportChsum(msg)))
-                .await
-                .map_err(|_| crate::Error::Canceled)?;
-        }
-
-        let FileTaskStart { offset } = self
-            .start
-            .take()
-            .expect("Start channel should always be there")
-            .await
-            .map_err(|_| crate::Error::Canceled)?;
-
-        Ok(offset)
+    fn offset(&self) -> u64 {
+        self.offset
     }
 }
 
@@ -451,16 +423,14 @@ impl FileTask {
         sink: Sender<Message>,
         xfer: crate::Transfer,
         file_id: FileId,
-        csum: Option<v3::ReqChsum>,
+        offset: u64,
     ) -> anyhow::Result<Self> {
         let events = Arc::new(ws::events::FileEventTx::new(&state));
-        let (start_tx, start_rx) = oneshot::channel();
 
         let uploader = Uploader {
             sink,
             file_id: file_id.clone(),
-            csum,
-            start: Some(start_rx),
+            offset,
         };
 
         let job = super::start_upload(
@@ -472,10 +442,6 @@ impl FileTask {
             file_id,
         )?;
 
-        Ok(Self {
-            job,
-            events,
-            start: Some(start_tx),
-        })
+        Ok(Self { job, events })
     }
 }

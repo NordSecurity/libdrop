@@ -293,9 +293,7 @@ fn start_upload(
                 .start(Event::FileUploadStarted(xfer.clone(), file_id.clone()))
                 .await;
 
-            let offset = uploader.init(&xfile).await?;
-
-            let mut iofile = match xfile.open(offset) {
+            let mut iofile = match xfile.open(uploader.offset()) {
                 Ok(f) => f,
                 Err(err) => {
                     error!(

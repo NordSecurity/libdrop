@@ -356,8 +356,8 @@ impl handler::Uploader for Uploader {
         let _ = self.sink.send(Message::from(&msg)).await;
     }
 
-    async fn init(&mut self, _: &crate::File) -> crate::Result<u64> {
-        Ok(0)
+    fn offset(&self) -> u64 {
+        0
     }
 }
 

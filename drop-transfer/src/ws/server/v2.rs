@@ -386,45 +386,40 @@ impl Drop for Downloader {
 
 #[async_trait::async_trait]
 impl handler::Downloader for Downloader {
-    async fn eval_tmp_location(
-        &mut self,
-        task: &super::FileXferTask,
-    ) -> crate::Result<Hidden<PathBuf>> {
-        if let Some(tmp_loc) = self.tmp_loc.clone() {
-            return Ok(tmp_loc);
-        }
-
+    async fn init(&mut self, task: &super::FileXferTask) -> crate::Result<handler::DownloadInit> {
         let mut suffix = sha1::Sha1::new();
 
         suffix.update(task.xfer.id().as_bytes());
         if let Ok(time) = SystemTime::now().elapsed() {
             suffix.update(time.as_nanos().to_ne_bytes());
         }
-
         let suffix: String = suffix
             .finalize()
             .iter()
             .map(|b| format!("{:02x}", b))
             .collect();
-        let tmp_location: PathBuf = format!(
-            "{}.dropdl-{}",
-            task.location.display(),
-            suffix.get(..8).unwrap_or(&suffix),
-        )
-        .into();
 
-        self.tmp_loc = Some(Hidden(tmp_location.clone()));
+        let tmp_location: Hidden<PathBuf> = Hidden(
+            format!(
+                "{}.dropdl-{}",
+                task.location.display(),
+                suffix.get(..8).unwrap_or(&suffix),
+            )
+            .into(),
+        );
 
-        Ok(Hidden(tmp_location))
-    }
+        super::validate_tmp_location_path(&tmp_location)?;
 
-    async fn init(&mut self, _: &Hidden<PathBuf>) -> crate::Result<handler::DownloadInit> {
         let msg = v2::ServerMsg::Start(v2::Download {
             file: self.file_id.clone(),
         });
         self.send(Message::from(&msg)).await?;
 
-        Ok(handler::DownloadInit::Stream { offset: 0 })
+        self.tmp_loc = Some(tmp_location.clone());
+        Ok(handler::DownloadInit::Stream {
+            offset: 0,
+            tmp_location,
+        })
     }
 
     async fn open(&mut self, path: &Hidden<PathBuf>) -> crate::Result<fs::File> {

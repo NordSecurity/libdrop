@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fs,
+    fs, io,
     net::IpAddr,
     ops::ControlFlow,
     path::PathBuf,
@@ -13,16 +13,13 @@ use drop_config::DropConfig;
 use futures::{SinkExt, StreamExt};
 use slog::{debug, error, info, warn};
 use tokio::{
-    sync::{
-        mpsc::{self, Sender, UnboundedSender},
-        oneshot,
-    },
+    sync::mpsc::{self, Sender, UnboundedSender},
     task::JoinHandle,
 };
 use warp::ws::{Message, WebSocket};
 
 use super::{handler, ServerReq};
-use crate::{protocol::v3, service::State, utils::Hidden, ws::events::FileEventTx, FileId};
+use crate::{file, protocol::v3, service::State, utils::Hidden, ws::events::FileEventTx, FileId};
 
 pub struct HandlerInit<'a> {
     peer: IpAddr,
@@ -43,8 +40,7 @@ struct Downloader {
     logger: slog::Logger,
     file_id: crate::FileId,
     msg_tx: Sender<Message>,
-    tmp_loc: Option<Hidden<PathBuf>>,
-    csum_rx: Option<oneshot::Receiver<v3::ReportChsum>>,
+    csum_rx: mpsc::Receiver<v3::ReportChsum>,
     offset: u64,
 }
 
@@ -52,7 +48,7 @@ struct FileTask {
     job: JoinHandle<()>,
     chunks_tx: UnboundedSender<Vec<u8>>,
     events: Arc<FileEventTx>,
-    csum_tx: Option<oneshot::Sender<v3::ReportChsum>>,
+    csum_tx: mpsc::Sender<v3::ReportChsum>,
 }
 
 impl<'a> HandlerInit<'a> {
@@ -238,13 +234,9 @@ impl HandlerLoop<'_> {
         }
     }
 
-    fn on_checksum(&mut self, report: v3::ReportChsum) {
-        if let Some(send) = self
-            .jobs
-            .get_mut(&report.file)
-            .and_then(|task| task.csum_tx.take())
-        {
-            if send.send(report).is_err() {
+    async fn on_checksum(&mut self, report: v3::ReportChsum) {
+        if let Some(job) = self.jobs.get_mut(&report.file) {
+            if job.csum_tx.send(report).await.is_err() {
                 warn!(
                     self.logger,
                     "Failed to pass checksum report to receiver task"
@@ -309,7 +301,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             match msg {
                 v3::ClientMsg::Error(v3::Error { file, msg }) => self.on_error(file, msg).await,
                 v3::ClientMsg::Cancel(v3::Cancel { file }) => self.on_cancel(file).await,
-                v3::ClientMsg::ReportChsum(report) => self.on_checksum(report),
+                v3::ClientMsg::ReportChsum(report) => self.on_checksum(report).await,
             }
         } else if msg.is_binary() {
             let v3::Chunk { file, data } =
@@ -388,27 +380,98 @@ impl Downloader {
             .await
             .map_err(|_| crate::Error::Canceled)
     }
+
+    async fn request_csum(&mut self, limit: u64) -> crate::Result<v3::ReportChsum> {
+        let msg = v3::ServerMsg::ReqChsum(v3::ReqChsum {
+            file: self.file_id.clone(),
+            limit,
+        });
+        self.send(Message::from(&msg)).await?;
+
+        let report = self.csum_rx.recv().await.ok_or(crate::Error::Canceled)?;
+
+        Ok(report)
+    }
+
+    async fn check_candidate_file(
+        &mut self,
+        task: &super::FileXferTask,
+    ) -> crate::Result<Option<Hidden<PathBuf>>> {
+        let mut csum = None;
+        for variant in crate::utils::filepath_variants(&task.location.0)?.map(Hidden) {
+            let meta = if let Ok(meta) = variant.symlink_metadata() {
+                meta
+            } else {
+                // If the file does not exists we expect that furter iteration will not yield
+                // more file with (i) suffix
+                break;
+            };
+
+            if !meta.is_file() {
+                continue;
+            }
+
+            if meta.len() != task.size {
+                info!(
+                    self.logger,
+                    "Fould file {variant:?} but size does not match equals {}", task.size
+                );
+                continue;
+            }
+
+            // The file exists let's compare checksum
+            let target_csum = if let Some(csum) = &csum {
+                csum
+            } else {
+                let report = self.request_csum(task.size).await?;
+                if report.limit != task.size {
+                    error!(
+                        self.logger,
+                        "Checksum report missmatch. Most likely protocol error"
+                    );
+                    return Err(crate::Error::BadTransferState);
+                }
+
+                &*csum.insert(report.checksum)
+            };
+
+            let candidate_csum = match tokio::task::block_in_place(|| {
+                let file = fs::File::open(&*variant)?;
+                file::checksum(&mut io::BufReader::new(file))
+            }) {
+                Ok(csum) => csum,
+                Err(err) => {
+                    warn!(
+                        self.logger,
+                        "Failed to compute checksum for candidate file {variant:?}: {err}",
+                    );
+                    continue;
+                }
+            };
+
+            if candidate_csum == *target_csum {
+                // We found the file
+                return Ok(Some(variant));
+            }
+        }
+
+        Ok(None)
+    }
 }
 
 #[async_trait::async_trait]
 impl handler::Downloader for Downloader {
-    async fn eval_tmp_location(
-        &mut self,
-        task: &super::FileXferTask,
-    ) -> crate::Result<Hidden<PathBuf>> {
-        if let Some(tmp_loc) = self.tmp_loc.clone() {
-            return Ok(tmp_loc);
-        }
-        let tmp_location: PathBuf = format!("{}.dropdl-part", task.location.display(),).into();
-        self.tmp_loc = Some(Hidden(tmp_location.clone()));
+    async fn init(&mut self, task: &super::FileXferTask) -> crate::Result<handler::DownloadInit> {
+        // Check if the file is already there
+        match self.check_candidate_file(task).await? {
+            Some(destination) => return Ok(handler::DownloadInit::AlreadyDone { destination }),
+            None => debug!(self.logger, "Did not find any candidate files"),
+        };
 
-        Ok(Hidden(tmp_location))
-    }
+        let tmp_location: Hidden<PathBuf> =
+            Hidden(format!("{}.dropdl-part", task.location.display(),).into());
+        super::validate_tmp_location_path(&tmp_location)?;
 
-    async fn init(
-        &mut self,
-        tmp_location: &Hidden<PathBuf>,
-    ) -> crate::Result<handler::DownloadInit> {
         // Check if we can resume the temporary file
         match tokio::task::block_in_place(|| super::TmpFileState::load(&tmp_location.0)) {
             Ok(super::TmpFileState { meta, csum }) => {
@@ -418,18 +481,7 @@ impl handler::Downloader for Downloader {
                     meta.len()
                 );
 
-                let msg = v3::ServerMsg::Init(v3::Init {
-                    file: self.file_id.clone(),
-                    checksum: Some(v3::ReqChsum { limit: meta.len() }),
-                });
-                self.send(Message::from(&msg)).await?;
-
-                let report = self
-                    .csum_rx
-                    .take()
-                    .expect("Checksum report should still be in the pending state")
-                    .await
-                    .map_err(|_| crate::Error::Canceled)?;
+                let report = self.request_csum(meta.len()).await?;
 
                 if report.limit == meta.len() && report.checksum == csum {
                     // All matches, we can continue with temp file
@@ -443,12 +495,6 @@ impl handler::Downloader for Downloader {
             }
             Err(err) => {
                 debug!(self.logger, "Failed to load temporary file info: {err}");
-
-                let msg = v3::ServerMsg::Init(v3::Init {
-                    file: self.file_id.clone(),
-                    checksum: None,
-                });
-                self.send(Message::from(&msg)).await?;
             }
         };
 
@@ -460,6 +506,7 @@ impl handler::Downloader for Downloader {
 
         Ok(handler::DownloadInit::Stream {
             offset: self.offset,
+            tmp_location,
         })
     }
 
@@ -507,14 +554,13 @@ impl FileTask {
     ) -> Self {
         let events = Arc::new(FileEventTx::new(&state));
         let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
-        let (csum_tx, csum_rx) = oneshot::channel();
+        let (csum_tx, csum_rx) = mpsc::channel(4);
 
         let downloader = Downloader {
             file_id: task.file_id.clone(),
             msg_tx,
-            tmp_loc: None,
             logger: logger.clone(),
-            csum_rx: Some(csum_rx),
+            csum_rx,
             offset: 0,
         };
         let job = tokio::spawn(task.run(state, Arc::clone(&events), downloader, chunks_rx, logger));
@@ -523,7 +569,7 @@ impl FileTask {
             job,
             chunks_tx,
             events,
-            csum_tx: Some(csum_tx),
+            csum_tx,
         }
     }
 }
