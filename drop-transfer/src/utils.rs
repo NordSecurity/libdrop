@@ -1,6 +1,6 @@
 use std::{
     borrow::Borrow,
-    fmt, io, ops,
+    fmt, io, iter, ops,
     path::{Path, PathBuf},
 };
 
@@ -51,32 +51,38 @@ impl<T> Borrow<T> for Hidden<T> {
     }
 }
 
-pub fn map_path_if_exists(location: &Path) -> crate::Result<PathBuf> {
+/// Returns an iterator yielding first the original path and then appends (i) i
+/// = 1,2,3 ... to the file name
+pub fn filepath_variants(location: &'_ Path) -> crate::Result<impl Iterator<Item = PathBuf> + '_> {
     let filename = location
         .file_stem()
         .ok_or(crate::Error::BadPath)?
         .to_string_lossy();
 
-    let mut dst_location = location.to_path_buf();
+    let iter = iter::once(location.to_path_buf()).chain((1..).map(move |i| {
+        let mut filename = format!("{filename}({i})");
+        if let Some(extension) = location.extension() {
+            filename.extend([".", &extension.to_string_lossy()]);
+        };
 
-    for rep_count in 1.. {
+        let mut dst_loc = location.to_path_buf();
+        dst_loc.set_file_name(filename);
+        dst_loc
+    }));
+
+    Ok(iter)
+}
+
+pub fn map_path_if_exists(location: &Path) -> crate::Result<PathBuf> {
+    let dst_loc = filepath_variants(location)?.find(|dst_location| {
         // Skip if there is already a file with the same name.
         // Additionaly there could be a dangling symlink with the same name,
         // the `symlink_metadata()` ensures we can catch that.
-        if matches!(dst_location.symlink_metadata() , Err(err) if err.kind() == io::ErrorKind::NotFound)
-        {
-            break;
-        } else {
-            let mut filename = format!("{filename}({rep_count})");
-            if let Some(extension) = location.extension() {
-                filename.extend([".", &extension.to_string_lossy()]);
-            };
+        matches!(dst_location.symlink_metadata() , Err(err) if err.kind() == io::ErrorKind::NotFound)
+    })
+    .expect("The filepath variants iterator should never end");
 
-            dst_location.set_file_name(filename);
-        };
-    }
-
-    Ok(dst_location)
+    Ok(dst_loc)
 }
 
 /// Replace invalid characters or invalid file names
@@ -159,5 +165,15 @@ mod tests {
             let norm = normalize_filename(special_name);
             assert_eq!(norm, "_COM1.txt.png");
         }
+    }
+
+    #[test]
+    fn filepath_variant_iteration() {
+        let mut iter = filepath_variants("file.ext".as_ref()).unwrap();
+
+        assert_eq!(iter.next(), Some(PathBuf::from("file.ext")));
+        assert_eq!(iter.next(), Some(PathBuf::from("file(1).ext")));
+        assert_eq!(iter.next(), Some(PathBuf::from("file(2).ext")));
+        assert_eq!(iter.next(), Some(PathBuf::from("file(3).ext")));
     }
 }
