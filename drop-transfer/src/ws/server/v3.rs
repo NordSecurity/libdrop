@@ -414,7 +414,7 @@ impl Downloader {
             if meta.len() != task.size {
                 info!(
                     self.logger,
-                    "Fould file {variant:?} but size does not match equals {}", task.size
+                    "Fould file {variant:?} but size does not match {}", task.size
                 );
                 continue;
             }
@@ -449,10 +449,16 @@ impl Downloader {
                 }
             };
 
-            if candidate_csum == *target_csum {
-                // We found the file
-                return Ok(Some(variant));
+            if candidate_csum != *target_csum {
+                info!(
+                    self.logger,
+                    "Fould file {variant:?} but checksum does not match"
+                );
+                continue;
             }
+
+            // We found the file
+            return Ok(Some(variant));
         }
 
         Ok(None)
@@ -464,7 +470,20 @@ impl handler::Downloader for Downloader {
     async fn init(&mut self, task: &super::FileXferTask) -> crate::Result<handler::DownloadInit> {
         // Check if the file is already there
         match self.check_candidate_file(task).await? {
-            Some(destination) => return Ok(handler::DownloadInit::AlreadyDone { destination }),
+            Some(destination) => {
+                info!(
+                    self.logger,
+                    "Found the file here {destination:?}, it's already downloaded"
+                );
+
+                let msg = v3::ServerMsg::Done(v3::Done {
+                    file: self.file_id.clone(),
+                    bytes_transfered: task.size,
+                });
+                self.send(Message::from(&msg)).await?;
+
+                return Ok(handler::DownloadInit::AlreadyDone { destination });
+            }
             None => debug!(self.logger, "Did not find any candidate files"),
         };
 

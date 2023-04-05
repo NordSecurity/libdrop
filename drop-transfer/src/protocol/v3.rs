@@ -13,6 +13,8 @@
 //! * client (sender)   -> server (receiver): `Chunk (file)`
 //! * server (receiver) ->   client (sender): `Progress (file)`
 //!
+//! This message indicate that the file is downloaded. Can be sent without
+//! `Start` in case the downloaded file is already there
 //! * server (receiver) ->   client (sender): `Done (file)`
 
 use std::{collections::HashMap, net::IpAddr};
