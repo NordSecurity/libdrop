@@ -1148,7 +1148,7 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario8",
+        "scenario8-1",
         "Send two identical files one by one, expect no overwrites to happen",
         {
             "ren": ActionList(
@@ -1165,7 +1165,9 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, "testfile-small")),
                     action.Wait(event.FinishFileUploaded(0, "testfile-small")),
-                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.NewTransfer(
+                        "172.20.0.15", ["/tmp/duplicate/testfile-small"]
+                    ),
                     action.Wait(
                         event.Queued(
                             1,
@@ -1243,8 +1245,143 @@ scenarios = [
         },
     ),
     Scenario(
+        "scenario8-2",
+        "Send two identical files with complicated extensions one by one, expect appending (1), no reanme or other weird stuff",
+        {
+            "ren": ActionList(
+                [
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        ["/tmp/testfile.small.with.complicated.extension"],
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    "testfile.small.with.complicated.extension", 1048576
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(
+                        event.Start(
+                            0,
+                            "testfile.small.with.complicated.extension",
+                        )
+                    ),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            "testfile.small.with.complicated.extension",
+                        )
+                    ),
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        ["/tmp/duplicate/testfile.small.with.complicated.extension"],
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            1,
+                            {
+                                event.File(
+                                    "testfile.small.with.complicated.extension", 1048576
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(
+                        event.Start(1, "testfile.small.with.complicated.extension")
+                    ),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            1, "testfile.small.with.complicated.extension"
+                        )
+                    ),
+                    action.ExpectCancel([0, 1], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    "testfile.small.with.complicated.extension", 1048576
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        "testfile.small.with.complicated.extension",
+                        "/tmp/received",
+                    ),
+                    action.Wait(
+                        event.Start(0, "testfile.small.with.complicated.extension")
+                    ),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            "testfile.small.with.complicated.extension",
+                            "/tmp/received/testfile.small.with.complicated.extension",
+                        )
+                    ),
+                    action.Wait(
+                        event.Receive(
+                            1,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    "testfile.small.with.complicated.extension", 1048576
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        1,
+                        "testfile.small.with.complicated.extension",
+                        "/tmp/received",
+                    ),
+                    action.Wait(
+                        event.Start(1, "testfile.small.with.complicated.extension")
+                    ),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            1,
+                            "testfile.small.with.complicated.extension",
+                            "/tmp/received/testfile.small.with.complicated(1).extension",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            event.File(
+                                "/tmp/received/testfile.small.with.complicated.extension",
+                                1048576,
+                            ),
+                            event.File(
+                                "/tmp/received/testfile.small.with.complicated(1).extension",
+                                1048576,
+                            ),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.CancelTransferRequest(1),
+                    action.ExpectCancel([0, 1], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
         "scenario9",
-        "Send two identical files with extensions one by one, expect no overwrites to happen",
+        "Send the same file twice, expect reporting that the file is already downloaded",
         {
             "ren": ActionList(
                 [
@@ -1269,7 +1406,6 @@ scenarios = [
                             },
                         )
                     ),
-                    action.Wait(event.Start(1, "file1.ext1")),
                     action.Wait(event.FinishFileUploaded(1, "file1.ext1")),
                     action.ExpectCancel([0, 1], True),
                     action.NoEvent(),
@@ -1314,18 +1450,16 @@ scenarios = [
                         "file1.ext1",
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(1, "file1.ext1")),
                     action.Wait(
                         event.FinishFileDownloaded(
                             1,
                             "file1.ext1",
-                            "/tmp/received/file1(1).ext1",
+                            "/tmp/received/file1.ext1",
                         )
                     ),
                     action.CheckDownloadedFiles(
                         [
                             event.File("/tmp/received/file1.ext1", 1048576),
-                            event.File("/tmp/received/file1(1).ext1", 1048576),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -2149,7 +2283,7 @@ scenarios = [
     ),
     Scenario(
         "scenario15-1",
-        "Repeated file download",
+        "Repeated file download within single transfer",
         {
             "ren": ActionList(
                 [
@@ -2161,13 +2295,6 @@ scenarios = [
                             {
                                 event.File("testfile-small", 1048576),
                             },
-                        )
-                    ),
-                    action.Wait(event.Start(0, "testfile-small")),
-                    action.Wait(
-                        event.FinishFileUploaded(
-                            0,
-                            "testfile-small",
                         )
                     ),
                     action.Wait(event.Start(0, "testfile-small")),
@@ -2211,18 +2338,16 @@ scenarios = [
                         "testfile-small",
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
                             "testfile-small",
-                            "/tmp/received/testfile-small(1)",
+                            "/tmp/received/testfile-small",
                         )
                     ),
                     action.CheckDownloadedFiles(
                         [
                             event.File("/tmp/received/testfile-small", 1048576),
-                            event.File("/tmp/received/testfile-small(1)", 1048576),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -2235,125 +2360,6 @@ scenarios = [
     ),
     Scenario(
         "scenario15-2",
-        "Repeated file download with complicated extension, expect appending (1), no reanme or other weird stuff",
-        {
-            "ren": ActionList(
-                [
-                    action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        ["/tmp/testfile.small.with.complicated.extension"],
-                    ),
-                    action.Wait(
-                        event.Queued(
-                            0,
-                            {
-                                event.File(
-                                    "testfile.small.with.complicated.extension", 1048576
-                                ),
-                            },
-                        )
-                    ),
-                    action.Wait(
-                        event.Start(
-                            0,
-                            "testfile.small.with.complicated.extension",
-                        )
-                    ),
-                    action.Wait(
-                        event.FinishFileUploaded(
-                            0,
-                            "testfile.small.with.complicated.extension",
-                        )
-                    ),
-                    action.Wait(
-                        event.Start(
-                            0,
-                            "testfile.small.with.complicated.extension",
-                        )
-                    ),
-                    action.Wait(
-                        event.FinishFileUploaded(
-                            0,
-                            "testfile.small.with.complicated.extension",
-                        )
-                    ),
-                    action.ExpectCancel([0], True),
-                    action.NoEvent(),
-                    action.Stop(),
-                ]
-            ),
-            "stimpy": ActionList(
-                [
-                    action.Wait(
-                        event.Receive(
-                            0,
-                            "172.20.0.5",
-                            {
-                                event.File(
-                                    "testfile.small.with.complicated.extension", 1048576
-                                ),
-                            },
-                        )
-                    ),
-                    action.Download(
-                        0,
-                        "testfile.small.with.complicated.extension",
-                        "/tmp/received",
-                    ),
-                    action.Wait(
-                        event.Start(
-                            0,
-                            "testfile.small.with.complicated.extension",
-                        )
-                    ),
-                    action.Wait(
-                        event.FinishFileDownloaded(
-                            0,
-                            "testfile.small.with.complicated.extension",
-                            "/tmp/received/testfile.small.with.complicated.extension",
-                        )
-                    ),
-                    action.Download(
-                        0,
-                        "testfile.small.with.complicated.extension",
-                        "/tmp/received",
-                    ),
-                    action.Wait(
-                        event.Start(
-                            0,
-                            "testfile.small.with.complicated.extension",
-                        )
-                    ),
-                    action.Wait(
-                        event.FinishFileDownloaded(
-                            0,
-                            "testfile.small.with.complicated.extension",
-                            "/tmp/received/testfile.small.with.complicated(1).extension",
-                        )
-                    ),
-                    action.CheckDownloadedFiles(
-                        [
-                            event.File(
-                                "/tmp/received/testfile.small.with.complicated.extension",
-                                1048576,
-                            ),
-                            event.File(
-                                "/tmp/received/testfile.small.with.complicated(1).extension",
-                                1048576,
-                            ),
-                        ],
-                    ),
-                    action.CancelTransferRequest(0),
-                    action.ExpectCancel([0], False),
-                    action.NoEvent(),
-                    action.Stop(),
-                ]
-            ),
-        },
-    ),
-    Scenario(
-        "scenario15-3",
         "Send nested directory twice, expect (1) be added",
         {
             "ren": ActionList(
