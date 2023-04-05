@@ -123,27 +123,26 @@ impl HandlerLoop<'_> {
     fn issue_download(
         &mut self,
         _: &mut WebSocket,
-        file: FileId,
-        task: Box<super::FileXferTask>,
+        task: super::FileXferTask,
     ) -> anyhow::Result<()> {
         let is_running = self
             .jobs
-            .get(&file)
+            .get(&task.file_id)
             .map_or(false, |state| !state.job.is_finished());
 
         if is_running {
             return Ok(());
         }
 
+        let file_id = task.file_id.clone();
         let state = FileTask::start(
             self.msg_tx.clone(),
             self.state.clone(),
-            file.clone(),
             task,
             self.logger.clone(),
         );
 
-        self.jobs.insert(file, state);
+        self.jobs.insert(file_id, state);
 
         Ok(())
     }
@@ -259,7 +258,7 @@ impl HandlerLoop<'_> {
 impl handler::HandlerLoop for HandlerLoop<'_> {
     async fn on_req(&mut self, ws: &mut WebSocket, req: ServerReq) -> anyhow::Result<()> {
         match req {
-            ServerReq::Download { file, task } => self.issue_download(ws, file, task)?,
+            ServerReq::Download { task } => self.issue_download(ws, *task)?,
             ServerReq::Cancel { file } => self.issue_cancel(ws, file).await?,
         }
 
@@ -406,7 +405,11 @@ impl handler::Downloader for Downloader {
         Ok(Hidden(tmp_location))
     }
 
-    async fn init(&mut self, tmp_location: &Hidden<PathBuf>) -> crate::Result<()> {
+    async fn init(
+        &mut self,
+        tmp_location: &Hidden<PathBuf>,
+    ) -> crate::Result<handler::DownloadInit> {
+        // Check if we can resume the temporary file
         match tokio::task::block_in_place(|| super::TmpFileState::load(&tmp_location.0)) {
             Ok(super::TmpFileState { meta, csum }) => {
                 debug!(
@@ -453,7 +456,11 @@ impl handler::Downloader for Downloader {
             file: self.file_id.clone(),
             offset: self.offset,
         });
-        self.send(Message::from(&msg)).await
+        self.send(Message::from(&msg)).await?;
+
+        Ok(handler::DownloadInit::Stream {
+            offset: self.offset,
+        })
     }
 
     async fn open(&mut self, path: &Hidden<PathBuf>) -> crate::Result<fs::File> {
@@ -495,29 +502,22 @@ impl FileTask {
     fn start(
         msg_tx: Sender<Message>,
         state: Arc<State>,
-        file_id: FileId,
-        task: Box<super::FileXferTask>,
+        task: super::FileXferTask,
         logger: slog::Logger,
     ) -> Self {
         let events = Arc::new(FileEventTx::new(&state));
         let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
         let (csum_tx, csum_rx) = oneshot::channel();
 
-        let job = tokio::spawn(task.run(
-            state,
-            Arc::clone(&events),
-            Downloader {
-                file_id: file_id.clone(),
-                msg_tx,
-                tmp_loc: None,
-                logger: logger.clone(),
-                csum_rx: Some(csum_rx),
-                offset: 0,
-            },
-            chunks_rx,
-            file_id,
-            logger,
-        ));
+        let downloader = Downloader {
+            file_id: task.file_id.clone(),
+            msg_tx,
+            tmp_loc: None,
+            logger: logger.clone(),
+            csum_rx: Some(csum_rx),
+            offset: 0,
+        };
+        let job = tokio::spawn(task.run(state, Arc::clone(&events), downloader, chunks_rx, logger));
 
         Self {
             job,
