@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     ops::ControlFlow,
     sync::Arc,
     time::{Duration, Instant},
@@ -24,6 +24,7 @@ pub struct HandlerLoop<'a> {
     logger: &'a slog::Logger,
     upload_tx: Sender<Message>,
     tasks: HashMap<FileId, FileTask>,
+    done: HashSet<FileId>,
     last_recv: Instant,
     xfer: crate::Transfer,
 }
@@ -65,6 +66,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             upload_tx,
             xfer,
             tasks: HashMap::new(),
+            done: HashSet::new(),
             last_recv: Instant::now(),
         }
     }
@@ -120,11 +122,19 @@ impl HandlerLoop<'_> {
     }
 
     async fn on_done(&mut self, file: FileId) {
+        let event = crate::Event::FileUploadSuccess(self.xfer.clone(), file.clone());
+
         if let Some(task) = self.tasks.remove(&file) {
-            task.events
-                .stop(crate::Event::FileUploadSuccess(self.xfer.clone(), file))
-                .await;
+            task.events.stop(event).await;
+        } else if !self.done.contains(&file) {
+            self.state
+                .event_tx
+                .send(event)
+                .await
+                .expect("Failed to emit event");
         }
+
+        self.done.insert(file);
     }
 
     async fn on_checksum(
@@ -206,6 +216,7 @@ impl HandlerLoop<'_> {
                 }
             };
 
+            self.done.remove(&file_id);
             anyhow::Ok(())
         };
 
