@@ -223,14 +223,13 @@ impl Service {
 
         let task = moose_try_file!(
             self.state.moose,
-            FileXferTask::new(file, xfer, location),
+            FileXferTask::new(file, file_id, xfer, location),
             uuid,
             file_info
         );
 
         channel
             .send(ServerReq::Download {
-                file: file_id,
                 task: Box::new(task),
             })
             .map_err(|_| Error::BadTransfer)?;

@@ -43,17 +43,13 @@ const MAX_FILENAME_LENGTH: usize = 255;
 const REPORT_PROGRESS_THRESHOLD: u64 = 1024 * 64;
 
 pub enum ServerReq {
-    Download {
-        file: FileId,
-        task: Box<FileXferTask>,
-    },
-    Cancel {
-        file: FileId,
-    },
+    Download { task: Box<FileXferTask> },
+    Cancel { file: FileId },
 }
 
 pub struct FileXferTask {
     pub file: crate::File,
+    pub file_id: crate::FileId,
     pub location: Hidden<PathBuf>,
     pub filename: String,
     pub size: u64,
@@ -332,7 +328,12 @@ async fn handle_client(
 }
 
 impl FileXferTask {
-    pub fn new(file: crate::File, xfer: crate::Transfer, location: PathBuf) -> crate::Result<Self> {
+    pub fn new(
+        file: crate::File,
+        file_id: crate::FileId,
+        xfer: crate::Transfer,
+        location: PathBuf,
+    ) -> crate::Result<Self> {
         let filename = location
             .file_stem()
             .ok_or(crate::Error::BadFile)?
@@ -343,6 +344,7 @@ impl FileXferTask {
 
         Ok(Self {
             file,
+            file_id,
             xfer,
             location: Hidden(location),
             filename,
@@ -366,13 +368,106 @@ impl FileXferTask {
         Ok(dst_location)
     }
 
+    async fn stream_file(
+        &mut self,
+        logger: &slog::Logger,
+        downloader: &mut impl Downloader,
+        tmp_location: &Hidden<PathBuf>,
+        stream: &mut UnboundedReceiver<Vec<u8>>,
+        events: &FileEventTx,
+        offset: u64,
+    ) -> crate::Result<PathBuf> {
+        let mut out_file = match downloader.open(tmp_location).await {
+            Ok(out_file) => out_file,
+            Err(err) => {
+                error!(
+                    logger,
+                    "Could not create {tmp_location:?} for downloading: {err}"
+                );
+
+                return Err(err);
+            }
+        };
+
+        let consume_file_chunks = async {
+            let mut bytes_received = offset;
+            let mut last_progress = bytes_received;
+
+            while bytes_received < self.size {
+                let chunk = stream.recv().await.ok_or(crate::Error::Canceled)?;
+
+                let chunk_size = chunk.len();
+                if chunk_size as u64 + bytes_received > self.size {
+                    return Err(crate::Error::MismatchedSize);
+                }
+
+                out_file.write_all(&chunk)?;
+
+                bytes_received += chunk_size as u64;
+
+                if last_progress + REPORT_PROGRESS_THRESHOLD <= bytes_received {
+                    // send progress to the caller
+                    downloader.progress(bytes_received).await?;
+
+                    events
+                        .emit(crate::Event::FileDownloadProgress(
+                            self.xfer.clone(),
+                            self.file_id.clone(),
+                            bytes_received,
+                        ))
+                        .await;
+
+                    last_progress = bytes_received;
+                }
+            }
+
+            if bytes_received > self.size {
+                Err(crate::Error::UnexpectedData)
+            } else {
+                Ok(bytes_received)
+            }
+        };
+
+        let bytes_received = match consume_file_chunks.await {
+            Ok(br) => br,
+            Err(err) => {
+                if let Err(ioerr) = fs::remove_file(&tmp_location.0) {
+                    error!(
+                        logger,
+                        "Could not remove temporary file {tmp_location:?} after failed download: \
+                         {}",
+                        ioerr
+                    );
+                }
+
+                return Err(err);
+            }
+        };
+
+        downloader.done(bytes_received).await?;
+
+        let dst = match self.move_tmp_to_dst(tmp_location, logger) {
+            Ok(dst) => dst,
+            Err(err) => {
+                error!(
+                    logger,
+                    "Could not rename temporary file {:?} after downloading: {}",
+                    self.location,
+                    err
+                );
+                return Err(err);
+            }
+        };
+
+        Ok(dst)
+    }
+
     async fn run(
-        self,
+        mut self,
         state: Arc<State>,
         events: Arc<FileEventTx>,
         mut downloader: impl Downloader,
         mut stream: UnboundedReceiver<Vec<u8>>,
-        file_id: FileId,
         logger: Logger,
     ) {
         let init = async {
@@ -386,17 +481,17 @@ impl FileXferTask {
                 return Err(crate::Error::FilenameTooLong);
             }
 
-            downloader.init(&tmp_location).await?;
-            Ok(tmp_location)
+            let init = downloader.init(&tmp_location).await?;
+            Ok((tmp_location, init))
         };
 
-        let tmp_location = match init.await {
-            Ok(tl) => tl,
+        let (tmp_location, init_res) = match init.await {
+            Ok(init) => init,
             Err(err) => {
                 events
                     .emit_force(crate::Event::FileDownloadFailed(
                         self.xfer.clone(),
-                        file_id,
+                        self.file_id,
                         err,
                     ))
                     .await;
@@ -404,136 +499,78 @@ impl FileXferTask {
             }
         };
 
-        let transfer_time = Instant::now();
+        match init_res {
+            handler::DownloadInit::Stream { offset } => {
+                let transfer_time = Instant::now();
 
-        state.moose.service_quality_transfer_file(
-            Ok(()),
-            drop_analytics::Phase::Start,
-            self.xfer.id().to_string(),
-            0,
-            self.file.info(),
-        );
+                state.moose.service_quality_transfer_file(
+                    Ok(()),
+                    drop_analytics::Phase::Start,
+                    self.xfer.id().to_string(),
+                    0,
+                    self.file.info(),
+                );
 
-        events
-            .start(crate::Event::FileDownloadStarted(
-                self.xfer.clone(),
-                file_id.clone(),
-            ))
-            .await;
+                events
+                    .start(crate::Event::FileDownloadStarted(
+                        self.xfer.clone(),
+                        self.file_id.clone(),
+                    ))
+                    .await;
 
-        let receive_file = async {
-            let mut out_file = match downloader.open(&tmp_location).await {
-                Ok(out_file) => out_file,
-                Err(err) => {
-                    error!(
-                        logger,
-                        "Could not create {tmp_location:?} for downloading: {err}"
-                    );
+                let result = self
+                    .stream_file(
+                        &logger,
+                        &mut downloader,
+                        &tmp_location,
+                        &mut stream,
+                        &events,
+                        offset,
+                    )
+                    .await;
 
-                    return Err(err);
-                }
-            };
+                state.moose.service_quality_transfer_file(
+                    result.to_status(),
+                    drop_analytics::Phase::End,
+                    self.xfer.id().to_string(),
+                    transfer_time.elapsed().as_millis() as i32,
+                    self.file.info(),
+                );
 
-            let consume_file_chunks = async {
-                let mut bytes_received = out_file.metadata()?.len();
-                let mut last_progress = bytes_received;
-
-                while bytes_received < self.size {
-                    let chunk = stream.recv().await.ok_or(crate::Error::Canceled)?;
-
-                    let chunk_size = chunk.len();
-                    if chunk_size as u64 + bytes_received > self.size {
-                        return Err(crate::Error::MismatchedSize);
+                let event = match result {
+                    Ok(dst_location) => Some(Event::FileDownloadSuccess(
+                        self.xfer.clone(),
+                        DownloadSuccess {
+                            id: self.file_id,
+                            final_path: Hidden(dst_location.into_boxed_path()),
+                        },
+                    )),
+                    Err(crate::Error::Canceled) => None,
+                    Err(err) => {
+                        let _ = downloader.error(err.to_string()).await;
+                        Some(Event::FileDownloadFailed(
+                            self.xfer.clone(),
+                            self.file_id,
+                            err,
+                        ))
                     }
+                };
 
-                    out_file.write_all(&chunk)?;
-
-                    bytes_received += chunk_size as u64;
-
-                    if last_progress + REPORT_PROGRESS_THRESHOLD <= bytes_received {
-                        // send progress to the caller
-                        downloader.progress(bytes_received).await?;
-
-                        events
-                            .emit(crate::Event::FileDownloadProgress(
-                                self.xfer.clone(),
-                                file_id.clone(),
-                                bytes_received,
-                            ))
-                            .await;
-
-                        last_progress = bytes_received;
-                    }
+                if let Some(event) = event {
+                    events.stop(event).await;
                 }
-
-                if bytes_received > self.size {
-                    Err(crate::Error::UnexpectedData)
-                } else {
-                    Ok(bytes_received)
-                }
-            };
-
-            let bytes_received = match consume_file_chunks.await {
-                Ok(br) => br,
-                Err(err) => {
-                    if let Err(ioerr) = fs::remove_file(&tmp_location.0) {
-                        error!(
-                            logger,
-                            "Could not remove temporary file {tmp_location:?} after failed \
-                             download: {}",
-                            ioerr
-                        );
-                    }
-
-                    return Err(err);
-                }
-            };
-
-            downloader.done(bytes_received).await?;
-
-            let dst = match self.move_tmp_to_dst(&tmp_location, &logger) {
-                Ok(dst) => dst,
-                Err(err) => {
-                    error!(
-                        logger,
-                        "Could not rename temporary file {:?} after downloading: {}",
-                        self.location,
-                        err
-                    );
-                    return Err(err);
-                }
-            };
-
-            Ok(dst)
-        };
-
-        let result = receive_file.await;
-
-        state.moose.service_quality_transfer_file(
-            result.to_status(),
-            drop_analytics::Phase::End,
-            self.xfer.id().to_string(),
-            transfer_time.elapsed().as_millis() as i32,
-            self.file.info(),
-        );
-
-        let event = match result {
-            Ok(dst_location) => Some(Event::FileDownloadSuccess(
-                self.xfer.clone(),
-                DownloadSuccess {
-                    id: file_id,
-                    final_path: Hidden(dst_location.into_boxed_path()),
-                },
-            )),
-            Err(crate::Error::Canceled) => None,
-            Err(err) => {
-                let _ = downloader.error(err.to_string()).await;
-                Some(Event::FileDownloadFailed(self.xfer.clone(), file_id, err))
             }
-        };
-
-        if let Some(event) = event {
-            events.stop(event).await;
+            handler::DownloadInit::AlreadyDone { destination } => {
+                events
+                    .emit_force(crate::Event::FileDownloadSuccess(
+                        self.xfer.clone(),
+                        DownloadSuccess {
+                            id: self.file_id,
+                            final_path: Hidden(destination.0.into_boxed_path()),
+                        },
+                    ))
+                    .await;
+            }
         }
     }
 }

@@ -38,6 +38,12 @@ pub trait Request {
     fn parse(self) -> anyhow::Result<crate::Transfer>;
 }
 
+#[derive(Debug, Clone)]
+pub enum DownloadInit {
+    Stream { offset: u64 },
+    AlreadyDone { destination: Hidden<PathBuf> },
+}
+
 #[async_trait::async_trait]
 pub trait Downloader {
     async fn eval_tmp_location(
@@ -45,7 +51,7 @@ pub trait Downloader {
         task: &super::FileXferTask,
     ) -> crate::Result<Hidden<PathBuf>>;
 
-    async fn init(&mut self, tmp_location: &Hidden<PathBuf>) -> crate::Result<()>;
+    async fn init(&mut self, tmp_location: &Hidden<PathBuf>) -> crate::Result<DownloadInit>;
     async fn open(&mut self, tmp_location: &Hidden<PathBuf>) -> crate::Result<fs::File>;
     async fn progress(&mut self, bytes: u64) -> crate::Result<()>;
     async fn done(&mut self, bytes: u64) -> crate::Result<()>;
