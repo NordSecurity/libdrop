@@ -107,6 +107,8 @@ async def main():
         "nested/big/testfile-02": 10 * 1024,
         "testfile.small.with.complicated.extension": 1 * 1024,
         "with-illegal-char-\x0A-": 1 * 1024,
+        "duplicate/testfile-small": 1 * 1024,
+        "duplicate/testfile.small.with.complicated.extension": 1 * 1024,
     }
 
     symlinks = {
