@@ -2,10 +2,10 @@
 //!
 //! * client (sender)   -> server (receiver): `TransferRequest`
 //!
-//! * server (receiver) ->   client (sender): `Init (file)`
-//!
-//! If the server has the file or a part of it, the `Init` request contains
-//! the `checksum` field. In that case sender mut reqport the checksum
+//! If the server has the file or a part of it, the server can request checksum
+//! from the client. In that case sender mut reqport the checksum. The request
+//! can be repeated
+//! * server (receiver) ->   client (sender): `ReqChsum (file)`
 //! * client (sender)   -> server (receiver): `ReportChsum (file)`
 //!
 //! If the server needs to download something:
@@ -13,6 +13,8 @@
 //! * client (sender)   -> server (receiver): `Chunk (file)`
 //! * server (receiver) ->   client (sender): `Progress (file)`
 //!
+//! This message indicate that the file is downloaded. Can be sent without
+//! `Start` in case the downloaded file is already there
 //! * server (receiver) ->   client (sender): `Done (file)`
 
 use std::{collections::HashMap, net::IpAddr};
@@ -40,13 +42,8 @@ pub struct TransferRequest {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct Init {
-    pub file: FileId,
-    pub checksum: Option<ReqChsum>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
 pub struct ReqChsum {
+    pub file: FileId,
     // Up to which point calculate checksum
     pub limit: u64,
 }
@@ -93,7 +90,7 @@ pub enum ServerMsg {
     Progress(Progress),
     Done(Done),
     Error(Error),
-    Init(Init),
+    ReqChsum(ReqChsum),
     Start(Start),
     Cancel(Cancel),
 }
