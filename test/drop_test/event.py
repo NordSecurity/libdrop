@@ -114,9 +114,12 @@ class Start(Event):
 
 
 class Progress(Event):
-    def __init__(self, uuid_slot: int, file: str):
+    def __init__(
+        self, uuid_slot: int, file: str, transferred: typing.Optional[int] = None
+    ):
         self._uuid_slot = uuid_slot
         self._file = file
+        self._transferred = transferred
 
     def __eq__(self, rhs) -> bool:
         if not isinstance(rhs, Progress):
@@ -126,10 +129,14 @@ class Progress(Event):
         if self._file != rhs._file:
             return False
 
+        if self._transferred is not None and rhs._transferred is not None:
+            if self._transferred != rhs._transferred:
+                return False
+
         return True
 
     def __str__(self):
-        return f"Progress(transfer={print_uuid(self._uuid_slot)}, file={self._file})"
+        return f"Progress(transfer={print_uuid(self._uuid_slot)}, file={self._file}, transfered={self._transferred})"
 
 
 class FinishTransferCanceled(Event):
