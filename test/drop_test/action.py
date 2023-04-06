@@ -201,7 +201,9 @@ class Wait(Action):
         self._event: Event = event
 
     async def run(self, drop: ffi.Drop):
-        await drop._events.wait_for(self._event)
+        await drop._events.wait_for(
+            self._event, not isinstance(self._event, event.Progress)
+        )
 
     def __str__(self):
         return f"Wait({str(self._event)})"
@@ -324,3 +326,20 @@ class CompareTrees(Action):
 
     def __str__(self):
         return f"CompareTrees({self._out_dir}, {self._tree})"
+
+
+class WaitForResume(Action):
+    def __init__(self, uuid_slot: int, file_id: str, tmp_file_path: str):
+        self._uuid_slot = uuid_slot
+        self._file_id = file_id
+        self._tmp_file_path = tmp_file_path
+
+    async def run(self, drop: ffi.Drop):
+        stat = os.stat(self._tmp_file_path)
+        await drop._events.wait_for(event.Start(self._uuid_slot, self._file_id), False)
+        await drop._events.wait_for(
+            event.Progress(self._uuid_slot, self._file_id, stat.st_size), False
+        )
+
+    def __str__(self):
+        return f"WaitForResume({print_uuid(self._uuid_slot)}, {self._file_id}, {self._tmp_file_path})"
