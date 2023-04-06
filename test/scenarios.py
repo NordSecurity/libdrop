@@ -3204,7 +3204,7 @@ scenarios = [
                         "/tmp/received/21-1",
                     ),
                     action.Wait(event.Start(0, "testfile-big")),
-                    # wait for the initial progress indicating that we start form the beginning
+                    # wait for the initial progress indicating that we start from the beginning
                     action.Wait(event.Progress(0, "testfile-big", 0)),
                     # make sure we have received something, so that we have non-empty tmp file
                     action.Wait(event.Progress(0, "testfile-big")),
@@ -3307,7 +3307,7 @@ scenarios = [
                         "/tmp/received/21-2",
                     ),
                     action.Wait(event.Start(0, "testfile-big")),
-                    # wait for the initial progress indicating that we start form the beginning
+                    # wait for the initial progress indicating that we start from the beginning
                     action.Wait(event.Progress(0, "testfile-big", 0)),
                     # make sure we have received something, so that we have non-empty tmp file
                     action.Wait(event.Progress(0, "testfile-big")),
