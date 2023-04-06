@@ -393,6 +393,16 @@ impl FileXferTask {
             let mut bytes_received = offset;
             let mut last_progress = bytes_received;
 
+            // Announce initial state of the transfer
+            downloader.progress(bytes_received).await?;
+            events
+                .emit(crate::Event::FileDownloadProgress(
+                    self.xfer.clone(),
+                    self.file_id.clone(),
+                    bytes_received,
+                ))
+                .await;
+
             while bytes_received < self.size {
                 let chunk = stream.recv().await.ok_or(crate::Error::Canceled)?;
 
@@ -408,7 +418,6 @@ impl FileXferTask {
                 if last_progress + REPORT_PROGRESS_THRESHOLD <= bytes_received {
                     // send progress to the caller
                     downloader.progress(bytes_received).await?;
-
                     events
                         .emit(crate::Event::FileDownloadProgress(
                             self.xfer.clone(),
