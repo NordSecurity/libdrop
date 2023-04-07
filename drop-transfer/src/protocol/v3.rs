@@ -28,63 +28,65 @@ use crate::{
     utils::Hidden,
 };
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct File {
     pub name: String,
     pub size: Option<u64>,
     pub children: Vec<File>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct TransferRequest {
     pub files: Vec<File>,
     pub id: uuid::Uuid,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct ReqChsum {
     pub file: FileId,
     // Up to which point calculate checksum
     pub limit: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct ReportChsum {
     pub file: FileId,
     pub limit: u64,
+    #[serde(serialize_with = "hex::serialize")]
+    #[serde(deserialize_with = "hex::deserialize")]
     pub checksum: [u8; 32],
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Progress {
     pub file: FileId,
     pub bytes_transfered: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Done {
     pub file: FileId,
     pub bytes_transfered: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Error {
     pub file: Option<FileId>,
     pub msg: String,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Start {
     pub file: FileId,
     pub offset: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Cancel {
     pub file: FileId,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(tag = "type")]
 pub enum ServerMsg {
     Progress(Progress),
@@ -95,7 +97,7 @@ pub enum ServerMsg {
     Cancel(Cancel),
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(tag = "type")]
 pub enum ClientMsg {
     ReportChsum(ReportChsum),
@@ -258,6 +260,8 @@ impl From<Chunk> for tokio_tungstenite::tungstenite::Message {
 
 #[cfg(test)]
 mod tests {
+    use serde::de::DeserializeOwned;
+
     use super::*;
 
     #[test]
@@ -280,5 +284,213 @@ mod tests {
 
         assert_eq!(file, FileId::from(FILE_ID));
         assert_eq!(data, FILE_CONTNET);
+    }
+
+    fn test_json<T: Serialize + DeserializeOwned + Eq>(message: T, expected: &str) {
+        let json_msg = serde_json::to_value(&message).expect("Failed to serialize");
+        let json_exp: serde_json::Value =
+            serde_json::from_str(expected).expect("Failed to convert expected josn to value");
+        assert_eq!(json_msg, json_exp);
+
+        let deserialized: T = serde_json::from_str(expected).expect("Failed to serialize");
+        assert!(deserialized == message);
+    }
+
+    #[test]
+    fn client_json_messages() {
+        test_json(
+            TransferRequest {
+                files: vec![File {
+                    name: "dir".into(),
+                    size: None,
+                    children: vec![
+                        File {
+                            name: "a.txt".into(),
+                            size: Some(41),
+                            children: vec![],
+                        },
+                        File {
+                            name: "b.txt".into(),
+                            size: Some(4141),
+                            children: vec![],
+                        },
+                    ],
+                }],
+                id: uuid::uuid!("1b0397eb-66e9-4252-b7cf-71782698ee3d"),
+            },
+            r#"
+            {
+              "files": [
+                {
+                  "name": "dir",
+                  "size": null,
+                  "children": [
+                    {
+                      "name": "a.txt",
+                      "size": 41,
+                      "children": []
+                    },
+                    {
+                      "name": "b.txt",
+                      "size": 4141,
+                      "children": []
+                    }
+                  ]
+                }
+              ],
+              "id": "1b0397eb-66e9-4252-b7cf-71782698ee3d"
+            }"#,
+        );
+
+        test_json(
+            ClientMsg::ReportChsum(ReportChsum {
+                file: FileId::from("test/file.ext"),
+                limit: 41,
+                checksum: [
+                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+                    22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+                ],
+            }),
+            r#"
+            {
+              "type": "ReportChsum",
+              "file": "test/file.ext",
+              "limit": 41,
+              "checksum": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+            }
+            "#,
+        );
+
+        test_json(
+            ClientMsg::Error(Error {
+                file: Some(FileId::from("test/file.ext")),
+                msg: "test message".to_string(),
+            }),
+            r#"
+            {
+              "type": "Error",
+              "file": "test/file.ext",
+              "msg": "test message"
+            }
+            "#,
+        );
+
+        test_json(
+            ClientMsg::Error(Error {
+                file: None,
+                msg: "test message".to_string(),
+            }),
+            r#"
+            {
+              "type": "Error",
+              "file": null,
+              "msg": "test message"
+            }
+            "#,
+        );
+
+        test_json(
+            ClientMsg::Cancel(Cancel {
+                file: FileId::from("test/file.ext"),
+            }),
+            r#"
+            {
+              "type": "Cancel",
+              "file": "test/file.ext"
+            }
+            "#,
+        );
+    }
+
+    #[test]
+    fn server_json_messages() {
+        test_json(
+            ServerMsg::Progress(Progress {
+                file: FileId::from("test/file.ext"),
+                bytes_transfered: 41,
+            }),
+            r#"
+            {
+              "type": "Progress",
+              "file": "test/file.ext",
+              "bytes_transfered": 41
+            }"#,
+        );
+
+        test_json(
+            ServerMsg::Done(Done {
+                file: FileId::from("test/file.ext"),
+                bytes_transfered: 41,
+            }),
+            r#"
+            {
+              "type": "Done",
+              "file": "test/file.ext",
+              "bytes_transfered": 41
+            }"#,
+        );
+
+        test_json(
+            ServerMsg::Error(Error {
+                file: Some(FileId::from("test/file.ext")),
+                msg: "test message".to_string(),
+            }),
+            r#"
+            {
+              "type": "Error",
+              "file": "test/file.ext",
+              "msg": "test message"
+            }"#,
+        );
+
+        test_json(
+            ServerMsg::Error(Error {
+                file: None,
+                msg: "test message".to_string(),
+            }),
+            r#"
+            {
+              "type": "Error",
+              "file": null,
+              "msg": "test message"
+            }"#,
+        );
+
+        test_json(
+            ServerMsg::ReqChsum(ReqChsum {
+                file: FileId::from("test/file.ext"),
+                limit: 41,
+            }),
+            r#"
+            {
+              "type": "ReqChsum",
+              "file": "test/file.ext",
+              "limit": 41
+            }"#,
+        );
+
+        test_json(
+            ServerMsg::Start(Start {
+                file: FileId::from("test/file.ext"),
+                offset: 41,
+            }),
+            r#"
+            {
+              "type": "Start",
+              "file": "test/file.ext",
+              "offset": 41
+            }"#,
+        );
+
+        test_json(
+            ServerMsg::Cancel(Cancel {
+                file: FileId::from("test/file.ext"),
+            }),
+            r#"
+            {
+              "type": "Cancel",
+              "file": "test/file.ext"
+            }"#,
+        );
     }
 }
