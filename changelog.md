@@ -1,6 +1,8 @@
 ### UNRELEASED
 ### **ANGERY**
 ---
+* When requesting the file, perform the check if the file is already downloaded. If yes, report successful file transfer
+* Do not remove temporary files in case of transfer failure, resume transfer when the temporaries are available
 * Return more status codes from the ffi layer methods
 * The `FileDownloaded` event reports the full file path
 * Improve moose error handling
