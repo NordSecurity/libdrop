@@ -14,6 +14,7 @@ use std::{
 use anyhow::Context;
 use futures::{SinkExt, StreamExt};
 use handler::{Downloader, HandlerInit, HandlerLoop, Request};
+use hyper::StatusCode;
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
     sync::mpsc::{self, UnboundedReceiver},
@@ -61,12 +62,38 @@ struct TmpFileState {
     csum: [u8; 32],
 }
 
+const AUTH_REALM: &str = "drop";
+
 pub(crate) fn start(
     addr: IpAddr,
     stop: CancellationToken,
     state: Arc<State>,
     logger: Logger,
 ) -> crate::Result<JoinHandle<()>> {
+    #[derive(Debug)]
+    struct MissingAuth;
+    impl warp::reject::Reject for MissingAuth {}
+
+    #[derive(Debug)]
+    struct Unauthrorized;
+    impl warp::reject::Reject for Unauthrorized {}
+
+    async fn handle_rejection(
+        err: warp::Rejection,
+    ) -> Result<Box<dyn warp::Reply>, warp::Rejection> {
+        if let Some(MissingAuth) = err.find() {
+            Ok(Box::new(warp::reply::with_header(
+                StatusCode::UNAUTHORIZED,
+                "www-authenticate",
+                AUTH_REALM,
+            )))
+        } else if let Some(Unauthrorized) = err.find() {
+            Ok(Box::new(StatusCode::UNAUTHORIZED))
+        } else {
+            Err(err)
+        }
+    }
+
     let service = {
         let stop = stop.clone();
         let logger = logger.clone();
@@ -77,6 +104,20 @@ pub(crate) fn start(
                     .parse::<protocol::Version>()
                     .map_err(|_| warp::reject::not_found())
             }))
+            .and(warp::filters::header::optional("authorization"))
+            .and_then(
+                |version: protocol::Version, auth: Option<String>| async move {
+                    match version {
+                        protocol::Version::V1 | protocol::Version::V2 => (),
+                        protocol::Version::V3 => match auth {
+                            Some(_) => (),
+                            None => return Err(warp::reject::custom(MissingAuth)),
+                        },
+                    };
+
+                    Ok(version)
+                },
+            )
             .and(warp::ws())
             .and(warp::filters::addr::remote())
             .map(
@@ -113,6 +154,7 @@ pub(crate) fn start(
                     })
                 },
             )
+            .recover(handle_rejection)
     };
 
     let future = match warp::serve(service)
