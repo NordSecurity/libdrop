@@ -44,7 +44,7 @@ pub struct OutgoingTraversedPath {
     pub id: i64,
     pub outgoing_path: i64,
     pub path: String,
-    pub size: i64,
+    pub size: Option<i64>,
     pub state: State,
 }
 
@@ -91,7 +91,7 @@ impl Storage {
             .map_err(|e| error::Error::InternalError(e.to_string()))
             .map_err(|e| error::Error::InternalError(e.to_string()))?;
 
-        sqlx::migrate!("db/migrations")
+        sqlx::migrate!("./migrations")
             .run(&conn)
             .await
             .map_err(|e| error::Error::InternalError(e.to_string()))?;
@@ -135,120 +135,98 @@ impl Storage {
     }
 
     pub async fn get_outgoing_transfers(&self) -> Result<Vec<Transfer>> {
-        let query = sqlx::query("SELECT * FROM outgoing_transfers").map(
-            |row: sqlx::sqlite::SqliteRow| -> Result<Transfer> {
-                Ok(Transfer {
-                    id: row.try_get::<String, _>("id")?, // TODO: _?
-                    peer: row.try_get::<String, _>("peer")?,
-                    state: State::from_str(row.try_get::<&str, _>("state")?).map_err(|e| {
-                        error::Error::InternalError(format!("failed to parse: {}", e))
-                    })?,
-                })
-            },
-        );
-
+        let query = sqlx::query!("SELECT * FROM outgoing_transfers");
         let res = query.fetch_all(&self.conn).await?;
 
-        Ok(res
-            .into_iter()
-            .map(|r| r.expect("failed to get outgoing transfers"))
-            .collect::<Vec<Transfer>>())
+        let transfers: Vec<Transfer> = res.into_iter().try_fold(Vec::new(), |mut acc, r| {
+            let transfer = Transfer {
+                id: r.id,
+                peer: r.peer,
+                state: State::from_str(&r.state)
+                    .map_err(|e| error::Error::InternalError(e.to_string()))?,
+            };
+            acc.push(transfer);
+            Ok::<Vec<Transfer>, error::Error>(acc)
+        })?;
+
+        Ok(transfers)
     }
 
     pub async fn get_incoming_transfers(&self) -> Result<Vec<Transfer>> {
-        let query = sqlx::query("SELECT * FROM incoming_transfers").map(
-            |row: sqlx::sqlite::SqliteRow| -> Result<Transfer> {
-                Ok(Transfer {
-                    id: row.try_get::<String, _>("id")?, // TODO: _?
-                    peer: row.try_get::<String, _>("peer")?,
-                    state: State::from_str(row.try_get::<&str, _>("state")?).map_err(|e| {
-                        error::Error::InternalError(format!("failed to parse: {}", e))
-                    })?,
-                })
-            },
-        );
-
+        let query = sqlx::query!("SELECT * FROM incoming_transfers");
         let res = query.fetch_all(&self.conn).await?;
 
-        Ok(res
-            .into_iter()
-            .map(|r| r.expect("failed to get incoming transfers"))
-            .collect::<Vec<Transfer>>())
+        Ok(res.into_iter().try_fold(Vec::new(), |mut acc, r| {
+            let transfer = Transfer {
+                id: r.id,
+                peer: r.peer,
+                state: State::from_str(&r.state)
+                    .map_err(|e| error::Error::InternalError(e.to_string()))?,
+            };
+            acc.push(transfer);
+            Ok::<Vec<Transfer>, error::Error>(acc)
+        })?)
     }
 
     pub async fn get_outgoing_transfer(&self, id: &str) -> Result<Transfer> {
-        let query = sqlx::query("SELECT * FROM outgoing_transfers WHERE id = ?")
-            .bind(id)
-            .map(|row: sqlx::sqlite::SqliteRow| {
-                Ok(Transfer {
-                    id: row.try_get::<String, _>("id")?, // TODO: _?
-                    peer: row.try_get::<String, _>("peer")?,
-                    state: State::from_str(row.try_get::<&str, _>("state")?).map_err(|e| {
-                        error::Error::InternalError(format!("failed to parse: {}", e))
-                    })?,
-                })
-            });
+        let query = sqlx::query!("SELECT * FROM outgoing_transfers WHERE id = ?", id);
 
-        query.fetch_one(&self.conn).await.map_err(|e| {
+        let rec = query.fetch_one(&self.conn).await.map_err(|e| {
             if matches!(e, sqlx::Error::RowNotFound) {
                 Error::RowNotFound
             } else {
                 Error::DBError(e)
             }
-        })?
+        })?;
+
+        Ok(Transfer {
+            id: rec.id,
+            peer: rec.peer,
+            state: State::from_str(&rec.state)
+                .map_err(|e| error::Error::InternalError(e.to_string()))?,
+        })
     }
 
     pub async fn get_outgoing_transfer_paths(
         &self,
         outgoing_transfer: &str,
     ) -> Result<Vec<OutgoingTransferPath>> {
-        let query =
-            sqlx::query("SELECT * FROM outgoing_transfer_paths WHERE outgoing_transfer = ?")
-                .bind(outgoing_transfer)
-                .map(
-                    |row: sqlx::sqlite::SqliteRow| -> Result<OutgoingTransferPath> {
-                        Ok(OutgoingTransferPath {
-                            id: row.try_get::<i64, _>("id")?,
-                            outgoing_transfer: row.try_get::<String, _>("outgoing_transfer")?,
-                            path: row.try_get::<String, _>("path")?,
-                        })
-                    },
-                );
+        let query = sqlx::query!(
+            "SELECT * FROM outgoing_transfer_paths WHERE outgoing_transfer = ?",
+            outgoing_transfer
+        );
 
         let res = query.fetch_all(&self.conn).await?;
 
         Ok(res
             .into_iter()
-            .map(|r| r.expect("failed to get outgoing transfer paths"))
-            .collect::<Vec<OutgoingTransferPath>>())
+            .map(|r| OutgoingTransferPath {
+                id: r.id,
+                outgoing_transfer: r.outgoing_transfer,
+                path: r.path,
+            })
+            .collect())
     }
 
     pub async fn get_outgoing_traversed_paths(
         &self,
         id: i64,
     ) -> Result<Vec<OutgoingTraversedPath>> {
-        let query = sqlx::query("SELECT * FROM outgoing_traversed_paths WHERE id = ?")
-            .bind(id)
-            .map(
-                |row: sqlx::sqlite::SqliteRow| -> Result<OutgoingTraversedPath> {
-                    Ok(OutgoingTraversedPath {
-                        id: row.try_get::<i64, _>("id")?,
-                        outgoing_path: row.try_get::<i64, _>("outgoing_path")?,
-                        path: row.try_get::<String, _>("path")?,
-                        size: row.try_get::<i64, _>("size")?,
-                        state: State::from_str(row.try_get::<&str, _>("state")?).map_err(|e| {
-                            error::Error::InternalError(format!("failed to parse: {}", e))
-                        })?,
-                    })
-                },
-            );
-
+        let query = sqlx::query!("SELECT * FROM outgoing_traversed_paths WHERE id = ?", id);
         let res = query.fetch_all(&self.conn).await?;
 
-        Ok(res
-            .into_iter()
-            .map(|r| r.expect("failed to get outgoing traversed path"))
-            .collect::<Vec<OutgoingTraversedPath>>())
+        Ok(res.into_iter().try_fold(Vec::new(), |mut acc, r| {
+            let path = OutgoingTraversedPath {
+                id: r.id,
+                path: r.path,
+                outgoing_path: r.outgoing_path,
+                size: r.size,
+                state: State::from_str(&r.state)
+                    .map_err(|e| error::Error::InternalError(e.to_string()))?,
+            };
+            acc.push(path);
+            Ok::<Vec<OutgoingTraversedPath>, error::Error>(acc)
+        })?)
     }
 
     pub async fn get_incoming_transfer(&self, id: &str) -> Result<Transfer> {

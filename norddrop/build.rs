@@ -2,7 +2,7 @@ use std::{collections::HashSet, env, error::Error, iter::FromIterator, process::
 
 fn parse_version() -> Result<String, Box<dyn Error>> {
     println!("cargo:rerun-if-changed=.git/HEAD");
-    println!("cargo:rerun-if-changed=db/migrations");
+    println!("cargo:rerun-if-changed=migrations");
 
     let version = match option_env!("LIBDROP_RELEASE_NAME") {
         Some(v) => v.to_string(),

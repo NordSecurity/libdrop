@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 thiserror = "*"
-sqlx = { version = "0.6", features = [ "runtime-tokio-rustls", "sqlite" ] }
+sqlx = { version = "0.6", features = [ "runtime-tokio-rustls", "sqlite", "time", "chrono" ] }
 slog = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7.3"
