@@ -52,6 +52,8 @@ pub struct ReqChsum {
 pub struct ReportChsum {
     pub file: FileId,
     pub limit: u64,
+    #[serde(serialize_with = "hex::serialize")]
+    #[serde(deserialize_with = "hex::deserialize")]
     pub checksum: [u8; 32],
 }
 
