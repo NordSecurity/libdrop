@@ -3,7 +3,7 @@
 //! * client (sender)   -> server (receiver): `TransferRequest`
 //!
 //! If the server has the file or a part of it, the server can request checksum
-//! from the client. In that case sender mut reqport the checksum. The request
+//! from the client. In that case sender must report the checksum. The request
 //! can be repeated
 //! * server (receiver) ->   client (sender): `ReqChsum (file)`
 //! * client (sender)   -> server (receiver): `ReportChsum (file)`

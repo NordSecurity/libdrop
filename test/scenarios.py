@@ -3145,4 +3145,210 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario21-1",
+        "Cancel the file transfer in flight, expect second transfer to resume using the temporary file",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File("testfile-big", 10485760),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.FinishTransferCanceled(0, True)),
+                    action.WaitForAnotherPeer(),
+                    # new transfer
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            1,
+                            {
+                                event.File("testfile-big", 10485760),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(1, "testfile-big")),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            1,
+                            "testfile-big",
+                        )
+                    ),
+                    action.ExpectCancel([1], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File("testfile-big", 10485760),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        "testfile-big",
+                        "/tmp/received/21-1",
+                    ),
+                    action.Wait(event.Start(0, "testfile-big")),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(event.Progress(0, "testfile-big", 0)),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(event.Progress(0, "testfile-big")),
+                    action.CancelTransferRequest(0),
+                    action.Wait(event.FinishTransferCanceled(0, False)),
+                    # new transfer
+                    action.Wait(
+                        event.Receive(
+                            1,
+                            "172.20.0.5",
+                            {
+                                event.File("testfile-big", 10485760),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        1,
+                        "testfile-big",
+                        "/tmp/received/21-1",
+                    ),
+                    action.WaitForResume(
+                        1, "testfile-big", "/tmp/received/21-1/testfile-big.dropdl-part"
+                    ),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            1,
+                            "testfile-big",
+                            "/tmp/received/21-1/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            event.File("/tmp/received/21-1/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest(1),
+                    action.ExpectCancel([1], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario21-2",
+        "Cancel the file transfer in flight and modify the temporary file, expect discarding the temporary file",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File("testfile-big", 10485760),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.FinishTransferCanceled(0, True)),
+                    action.WaitForAnotherPeer(),
+                    # new transfer
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            1,
+                            {
+                                event.File("testfile-big", 10485760),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(1, "testfile-big")),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            1,
+                            "testfile-big",
+                        )
+                    ),
+                    action.ExpectCancel([1], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File("testfile-big", 10485760),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        "testfile-big",
+                        "/tmp/received/21-2",
+                    ),
+                    action.Wait(event.Start(0, "testfile-big")),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(event.Progress(0, "testfile-big", 0)),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(event.Progress(0, "testfile-big")),
+                    action.CancelTransferRequest(0),
+                    action.Wait(event.FinishTransferCanceled(0, False)),
+                    # new transfer
+                    action.ModifyFile("/tmp/received/21-2/testfile-big.dropdl-part"),
+                    action.Wait(
+                        event.Receive(
+                            1,
+                            "172.20.0.5",
+                            {
+                                event.File("testfile-big", 10485760),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        1,
+                        "testfile-big",
+                        "/tmp/received/21-2",
+                    ),
+                    action.Wait(event.Start(1, "testfile-big")),
+                    action.Wait(event.Progress(1, "testfile-big", 0)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            1,
+                            "testfile-big",
+                            "/tmp/received/21-2/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            event.File("/tmp/received/21-2/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest(1),
+                    action.ExpectCancel([1], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]
