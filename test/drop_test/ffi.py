@@ -386,8 +386,9 @@ def new_event(event_str: str) -> event.Event:
         transfer_slot = event.UUIDS.index(transfer)
 
         file = event_data["file"]
+        progress: int = event_data["transfered"]
 
-        return event.Progress(transfer_slot, file)
+        return event.Progress(transfer_slot, file, progress)
 
     elif event_type == "TransferFinished":
         transfer = event_data["transfer"]
