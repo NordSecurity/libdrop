@@ -26,6 +26,7 @@ use tokio_tungstenite::{
 use self::handler::{HandlerInit, HandlerLoop, Uploader};
 use super::events::FileEventTx;
 use crate::{
+    auth,
     error::ResultExt,
     file::FileId,
     manager::{TransferConnection, TransferGuard},
@@ -112,7 +113,7 @@ async fn establish_ws_conn(
 
         let url = format!("ws://{}:{}/drop/{ver}", ip, drop_config::PORT);
 
-        match make_request(&mut socket, &url, logger).await {
+        match make_request(&mut socket, &url, state.auth.as_ref(), logger).await {
             Ok(_) => break ver,
             Err(tungstenite::Error::Http(resp)) if resp.status().is_client_error() => {
                 debug!(
@@ -131,6 +132,7 @@ async fn establish_ws_conn(
 async fn make_request(
     socket: &mut TcpStream,
     url: &str,
+    auth: &dyn auth::Context,
     logger: &slog::Logger,
 ) -> Result<(), tungstenite::Error> {
     let err = match tokio_tungstenite::client_async(url, &mut *socket).await {
@@ -145,10 +147,6 @@ async fn make_request(
         if resp.status() == StatusCode::UNAUTHORIZED {
             debug!(logger, "Creating 'authorization' header");
 
-            let secret = drop_auth::test_priv_key();
-            let public = drop_auth::test_pub_key();
-            let keypair = drop_auth::Keypair { secret, public };
-
             let extract_www_auth = || {
                 let val = resp
                     .headers()
@@ -159,7 +157,7 @@ async fn make_request(
                 let resp = drop_auth::http::WWWAuthenticate::parse(val)
                     .context("Failed to parse 'www-authenticate' header")?;
 
-                drop_auth::create_ticket(&keypair, resp).context("Failed to creaate auth ticket")
+                drop_auth::create_ticket(&auth.own(), resp).context("Failed to creaate auth ticket")
             };
 
             match extract_www_auth() {

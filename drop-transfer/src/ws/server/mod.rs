@@ -33,6 +33,7 @@ use warp::{
 
 use super::events::FileEventTx;
 use crate::{
+    auth,
     error::ResultExt,
     event::DownloadSuccess,
     file::{self, FileId},
@@ -71,6 +72,7 @@ pub(crate) fn start(
     addr: IpAddr,
     stop: CancellationToken,
     state: Arc<State>,
+    auth: Arc<dyn auth::Context>,
     logger: Logger,
 ) -> crate::Result<JoinHandle<()>> {
     let nonce_store = Arc::new(Mutex::new(HashMap::new()));
@@ -123,8 +125,9 @@ pub(crate) fn start(
             )
             .and(warp::filters::header::optional("authorization"))
             .and_then(
-                move |version: protocol::Version, peer: SocketAddr, auth: Option<String>| {
+                move |version: protocol::Version, peer: SocketAddr, auth_header: Option<String>| {
                     let nonces = nonces.clone();
+                    let auth = auth.clone();
 
                     async move {
                         match version {
@@ -132,24 +135,18 @@ pub(crate) fn start(
                             protocol::Version::V3 => {
                                 let nonce = nonces.lock().await.remove(&peer.ip());
 
-                                match auth {
+                                match auth_header {
                                     Some(auth_value) => {
-                                        let nonce = nonce.ok_or(warp::reject::custom(
-                                            Unauthrorized(peer.ip()),
-                                        ))?;
+                                        let authorize = || {
+                                            let auth_req =
+                                                drop_auth::http::Authorization::parse(&auth_value)?;
+                                            let pubkey = auth.peer_public(peer.ip())?;
+                                            drop_auth::authorize(&nonce?, &pubkey, &auth_req)
+                                        };
 
-                                        let auth =
-                                            drop_auth::http::Authorization::parse(&auth_value)
-                                                .ok_or(warp::reject::custom(Unauthrorized(
-                                                    peer.ip(),
-                                                )))?;
-
-                                        drop_auth::authorize(
-                                            &nonce,
-                                            &drop_auth::test_pub_key(),
-                                            &auth,
-                                        )
-                                        .ok_or(warp::reject::custom(Unauthrorized(peer.ip())))?;
+                                        authorize().ok_or(warp::reject::custom(Unauthrorized(
+                                            peer.ip(),
+                                        )))?;
                                     }
                                     None => {
                                         return Err(warp::reject::custom(MissingAuth(peer.ip())))
