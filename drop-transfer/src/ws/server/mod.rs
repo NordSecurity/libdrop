@@ -3,6 +3,7 @@ mod v2;
 mod v3;
 
 use std::{
+    collections::HashMap,
     fs,
     io::{self, Write},
     net::{IpAddr, SocketAddr},
@@ -12,12 +13,16 @@ use std::{
 };
 
 use anyhow::Context;
+use drop_auth::Nonce;
 use futures::{SinkExt, StreamExt};
 use handler::{Downloader, HandlerInit, HandlerLoop, Request};
 use hyper::StatusCode;
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
-    sync::mpsc::{self, UnboundedReceiver},
+    sync::{
+        mpsc::{self, UnboundedReceiver},
+        Mutex,
+    },
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
@@ -62,32 +67,38 @@ struct TmpFileState {
     csum: [u8; 32],
 }
 
-const AUTH_REALM: &str = "drop";
-
 pub(crate) fn start(
     addr: IpAddr,
     stop: CancellationToken,
     state: Arc<State>,
     logger: Logger,
 ) -> crate::Result<JoinHandle<()>> {
+    let nonce_store = Arc::new(Mutex::new(HashMap::new()));
+
     #[derive(Debug)]
-    struct MissingAuth;
+    struct MissingAuth(IpAddr);
     impl warp::reject::Reject for MissingAuth {}
 
     #[derive(Debug)]
-    struct Unauthrorized;
+    struct Unauthrorized(IpAddr);
     impl warp::reject::Reject for Unauthrorized {}
 
     async fn handle_rejection(
+        nonces: &Mutex<HashMap<IpAddr, Nonce>>,
         err: warp::Rejection,
     ) -> Result<Box<dyn warp::Reply>, warp::Rejection> {
-        if let Some(MissingAuth) = err.find() {
+        if let Some(MissingAuth(peer)) = err.find() {
+            let nonce = Nonce::generate();
+            let value = drop_auth::http::WWWAuthenticate::new(nonce);
+
+            nonces.lock().await.insert(*peer, nonce);
+
             Ok(Box::new(warp::reply::with_header(
                 StatusCode::UNAUTHORIZED,
-                "www-authenticate",
-                AUTH_REALM,
+                drop_auth::http::WWWAuthenticate::KEY,
+                value.to_string(),
             )))
-        } else if let Some(Unauthrorized) = err.find() {
+        } else if let Some(Unauthrorized(_)) = err.find() {
             Ok(Box::new(StatusCode::UNAUTHORIZED))
         } else {
             Err(err)
@@ -97,6 +108,7 @@ pub(crate) fn start(
     let service = {
         let stop = stop.clone();
         let logger = logger.clone();
+        let nonces = nonce_store.clone();
 
         warp::path("drop")
             .and(warp::path::param().and_then(|version: String| async move {
@@ -104,26 +116,57 @@ pub(crate) fn start(
                     .parse::<protocol::Version>()
                     .map_err(|_| warp::reject::not_found())
             }))
+            .and(
+                warp::filters::addr::remote().then(|peer: Option<SocketAddr>| async move {
+                    peer.expect("Transport should use IP addresses")
+                }),
+            )
             .and(warp::filters::header::optional("authorization"))
             .and_then(
-                |version: protocol::Version, auth: Option<String>| async move {
-                    match version {
-                        protocol::Version::V1 | protocol::Version::V2 => (),
-                        protocol::Version::V3 => match auth {
-                            Some(_) => (),
-                            None => return Err(warp::reject::custom(MissingAuth)),
-                        },
-                    };
+                move |version: protocol::Version, peer: SocketAddr, auth: Option<String>| {
+                    let nonces = nonces.clone();
 
-                    Ok(version)
+                    async move {
+                        match version {
+                            protocol::Version::V1 | protocol::Version::V2 => (),
+                            protocol::Version::V3 => {
+                                let nonce = nonces.lock().await.remove(&peer.ip());
+
+                                match auth {
+                                    Some(auth_value) => {
+                                        let nonce = nonce.ok_or(warp::reject::custom(
+                                            Unauthrorized(peer.ip()),
+                                        ))?;
+
+                                        let auth =
+                                            drop_auth::http::Authorization::parse(&auth_value)
+                                                .ok_or(warp::reject::custom(Unauthrorized(
+                                                    peer.ip(),
+                                                )))?;
+
+                                        drop_auth::authorize(
+                                            &nonce,
+                                            &drop_auth::test_pub_key(),
+                                            &auth,
+                                        )
+                                        .ok_or(warp::reject::custom(Unauthrorized(peer.ip())))?;
+                                    }
+                                    None => {
+                                        return Err(warp::reject::custom(MissingAuth(peer.ip())))
+                                    }
+                                }
+                            }
+                        };
+
+                        Ok((version, peer))
+                    }
                 },
             )
+            .untuple_one()
             .and(warp::ws())
-            .and(warp::filters::addr::remote())
             .map(
-                move |version: protocol::Version, ws: warp::ws::Ws, peer: Option<SocketAddr>| {
+                move |version: protocol::Version, peer: SocketAddr, ws: warp::ws::Ws| {
                     let state = Arc::clone(&state);
-                    let peer = peer.expect("Transport should use IP addresses");
                     let stop = stop.clone();
                     let logger = logger.clone();
 
@@ -154,7 +197,10 @@ pub(crate) fn start(
                     })
                 },
             )
-            .recover(handle_rejection)
+            .recover(move |err| {
+                let nonces = Arc::clone(&nonce_store);
+                async move { handle_rejection(&nonces, err).await }
+            })
     };
 
     let future = match warp::serve(service)

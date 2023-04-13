@@ -11,6 +11,7 @@ use std::{
 
 use anyhow::Context;
 use futures::{SinkExt, StreamExt};
+use hyper::{http::HeaderValue, StatusCode};
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
     net::TcpStream,
@@ -18,7 +19,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_tungstenite::{
-    tungstenite::{self, protocol::Role, Message},
+    tungstenite::{self, client::IntoClientRequest, protocol::Role, Message},
     WebSocketStream,
 };
 
@@ -111,7 +112,7 @@ async fn establish_ws_conn(
 
         let url = format!("ws://{}:{}/drop/{ver}", ip, drop_config::PORT);
 
-        match tokio_tungstenite::client_async(url, &mut socket).await {
+        match make_request(&mut socket, &url, logger).await {
             Ok(_) => break ver,
             Err(tungstenite::Error::Http(resp)) if resp.status().is_client_error() => {
                 debug!(
@@ -125,6 +126,65 @@ async fn establish_ws_conn(
 
     let client = WebSocketStream::from_raw_socket(socket, Role::Client, None).await;
     Ok((client, ver))
+}
+
+async fn make_request(
+    socket: &mut TcpStream,
+    url: &str,
+    logger: &slog::Logger,
+) -> Result<(), tungstenite::Error> {
+    let err = match tokio_tungstenite::client_async(url, &mut *socket).await {
+        Ok(_) => {
+            debug!(logger, "Connected to {url} without authorization");
+            return Ok(());
+        }
+        Err(err) => err,
+    };
+
+    if let tungstenite::Error::Http(resp) = &err {
+        if resp.status() == StatusCode::UNAUTHORIZED {
+            debug!(logger, "Creating 'authorization' header");
+
+            let secret = drop_auth::test_priv_key();
+            let public = drop_auth::test_pub_key();
+            let keypair = drop_auth::Keypair { secret, public };
+
+            let extract_www_auth = || {
+                let val = resp
+                    .headers()
+                    .get(drop_auth::http::WWWAuthenticate::KEY)
+                    .context("Missing 'www-authenticate' header")?
+                    .to_str()?;
+
+                let resp = drop_auth::http::WWWAuthenticate::parse(val)
+                    .context("Failed to parse 'www-authenticate' header")?;
+
+                drop_auth::create_ticket(&keypair, resp).context("Failed to creaate auth ticket")
+            };
+
+            match extract_www_auth() {
+                Ok(auth_header) => {
+                    debug!(logger, "Building 'authorization' request");
+
+                    let mut req = url.into_client_request()?;
+                    req.headers_mut().insert(
+                        drop_auth::http::Authorization::KEY,
+                        HeaderValue::from_str(&auth_header.to_string())?,
+                    );
+
+                    debug!(logger, "Re-sending request with the 'authorization' header");
+                    tokio_tungstenite::client_async(req, &mut *socket).await?;
+                    return Ok(());
+                }
+                Err(err) => warn!(
+                    logger,
+                    "Failed to extract 'www-authenticate' header: {err:?}"
+                ),
+            }
+        }
+    }
+
+    Err(err)
 }
 
 async fn tcp_connect(state: &State, ip: IpAddr, logger: &Logger) -> TcpStream {
