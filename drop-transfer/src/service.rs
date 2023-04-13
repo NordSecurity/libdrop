@@ -16,6 +16,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
+    auth,
     error::ResultExt,
     file::FileId,
     manager::TransferConnection,
@@ -32,6 +33,7 @@ pub(super) struct State {
     pub(super) transfer_manager: Mutex<TransferManager>,
     pub(crate) moose: Arc<dyn Moose>,
     pub(crate) config: DropConfig,
+    pub(crate) auth: Arc<dyn auth::Context>,
 }
 
 pub struct Service {
@@ -68,6 +70,7 @@ impl Service {
         logger: Logger,
         config: DropConfig,
         moose: Arc<dyn Moose>,
+        auth: Arc<dyn auth::Context>,
     ) -> Result<Self, Error> {
         let task = || {
             let state = Arc::new(State {
@@ -75,10 +78,12 @@ impl Service {
                 transfer_manager: Mutex::default(),
                 moose: moose.clone(),
                 config,
+                auth: auth.clone(),
             });
 
             let stop = CancellationToken::new();
-            let join_handle = ws::server::start(addr, stop.clone(), state.clone(), logger.clone())?;
+            let join_handle =
+                ws::server::start(addr, stop.clone(), state.clone(), auth, logger.clone())?;
 
             Ok(Self {
                 state,

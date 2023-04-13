@@ -87,25 +87,18 @@ fn message(pubkey: &PublicKey, nonce: &Nonce) -> [u8; PUBLIC_KEY_LENGTH + NONCE_
     message
 }
 
-const TEST_PRIV_KEY: [u8; SECRET_KEY_LENGTH] = [
-    164, 70, 230, 247, 55, 28, 255, 147, 128, 74, 83, 50, 181, 222, 212, 18, 178, 162, 242, 102,
-    220, 203, 153, 161, 142, 206, 123, 188, 87, 77, 126, 183,
-];
-const TEST_PUB_KEY: [u8; PUBLIC_KEY_LENGTH] = [
-    68, 103, 21, 143, 132, 253, 95, 17, 203, 20, 154, 169, 66, 197, 210, 103, 56, 18, 143, 142,
-    142, 47, 53, 103, 186, 66, 91, 201, 181, 186, 12, 136,
-];
-
-pub fn test_pub_key() -> PublicKey {
-    PublicKey::from_bytes(&TEST_PUB_KEY).unwrap()
-}
-pub fn test_priv_key() -> SecretKey {
-    SecretKey::from_bytes(&TEST_PRIV_KEY).unwrap()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const TEST_PRIV_KEY: [u8; SECRET_KEY_LENGTH] = [
+        164, 70, 230, 247, 55, 28, 255, 147, 128, 74, 83, 50, 181, 222, 212, 18, 178, 162, 242,
+        102, 220, 203, 153, 161, 142, 206, 123, 188, 87, 77, 126, 183,
+    ];
+    const TEST_PUB_KEY: [u8; PUBLIC_KEY_LENGTH] = [
+        68, 103, 21, 143, 132, 253, 95, 17, 203, 20, 154, 169, 66, 197, 210, 103, 56, 18, 143, 142,
+        142, 47, 53, 103, 186, 66, 91, 201, 181, 186, 12, 136,
+    ];
 
     #[test]
     fn ticket_validation() {
