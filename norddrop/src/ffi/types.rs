@@ -1,4 +1,7 @@
-use std::{ffi::c_void, panic};
+use std::{
+    ffi::{c_int, c_void},
+    panic,
+};
 
 use libc::c_char;
 use serde::Serialize;
@@ -41,6 +44,9 @@ pub enum norddrop_result {
 
     /// Failed to stop the libdrop instance
     NORDDROP_RES_INSTANCE_STOP = 9,
+
+    /// Invalid private key provided
+    NORDDROP_RES_INVALID_PRIVKEY = 10,
 }
 
 pub use norddrop_result::*;
@@ -99,11 +105,34 @@ pub struct norddrop_logger_cb {
     pub cb: norddrop_logger_fn,
 }
 
+#[allow(non_camel_case_types)]
+/// Writes the peer's public key into the buffer of length 32.
+/// The peer is identifed by IPv4 address passed as octets (4 bytes), the
+/// special one 0.0.0.0 means the caller itself. Returns 0 on success and 1 on
+/// failure or missing key
+pub type norddrop_pubkey_fn =
+    unsafe extern "C" fn(*mut c_void, *const c_char, *mut c_char) -> c_int;
+
+unsafe impl Send for norddrop_pubkey_cb {}
+
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Copy, Clone)]
+/// Fetch peer public key callback
+pub struct norddrop_pubkey_cb {
+    /// Context to pass to callback.
+    /// User must ensure safe access of this var from multitheaded context.
+    pub ctx: *mut c_void,
+    /// Function to be called
+    pub cb: norddrop_pubkey_fn,
+}
+
 #[no_mangle]
 pub extern "C" fn __norddrop_force_export(
     _: norddrop_result,
     _: norddrop_event_cb,
     _: norddrop_logger_cb,
+    _: norddrop_pubkey_cb,
 ) {
 }
 

@@ -147,7 +147,7 @@ async fn make_request(
         if resp.status() == StatusCode::UNAUTHORIZED {
             debug!(logger, "Creating 'authorization' header");
 
-            let extract_www_auth = || {
+            let extract_www_auth = async {
                 let val = resp
                     .headers()
                     .get(drop_auth::http::WWWAuthenticate::KEY)
@@ -157,10 +157,12 @@ async fn make_request(
                 let resp = drop_auth::http::WWWAuthenticate::parse(val)
                     .context("Failed to parse 'www-authenticate' header")?;
 
-                drop_auth::create_ticket(&auth.own(), resp).context("Failed to creaate auth ticket")
+                let (secret, pubkey) = auth.own().await.context("Failed to fetch own keys")?;
+                drop_auth::create_ticket(secret, &pubkey, resp)
+                    .context("Failed to create auth ticket")
             };
 
-            match extract_www_auth() {
+            match extract_www_auth.await {
                 Ok(auth_header) => {
                     debug!(logger, "Building 'authorization' request");
 
