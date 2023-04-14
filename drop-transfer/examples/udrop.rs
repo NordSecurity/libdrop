@@ -19,7 +19,7 @@ use tokio::sync::{mpsc, watch, Mutex};
 use uuid::Uuid;
 
 // Use static keys for authorization in udrop example
-struct Auth;
+struct Auth(drop_auth::SecretKey, drop_auth::PublicKey);
 
 impl Auth {
     const PRIV_KEY: [u8; SECRET_KEY_LENGTH] = [
@@ -30,18 +30,23 @@ impl Auth {
         68, 103, 21, 143, 132, 253, 95, 17, 203, 20, 154, 169, 66, 197, 210, 103, 56, 18, 143, 142,
         142, 47, 53, 103, 186, 66, 91, 201, 181, 186, 12, 136,
     ];
+
+    fn new() -> Self {
+        Self(
+            drop_auth::SecretKey::from_bytes(&Self::PRIV_KEY).unwrap(),
+            drop_auth::PublicKey::from_bytes(&Self::PUB_KEY).unwrap(),
+        )
+    }
 }
 
+#[async_trait::async_trait]
 impl drop_transfer::auth::Context for Auth {
-    fn own(&self) -> drop_auth::Keypair {
-        drop_auth::Keypair {
-            secret: drop_auth::SecretKey::from_bytes(&Self::PRIV_KEY).unwrap(),
-            public: drop_auth::PublicKey::from_bytes(&Self::PUB_KEY).unwrap(),
-        }
+    async fn own(&self) -> Option<(&drop_auth::SecretKey, drop_auth::PublicKey)> {
+        Some((&self.0, self.1))
     }
 
-    fn peer_public(&self, _: IpAddr) -> Option<drop_auth::PublicKey> {
-        Some(drop_auth::PublicKey::from_bytes(&Self::PUB_KEY).unwrap())
+    async fn peer_public(&self, _: IpAddr) -> Option<drop_auth::PublicKey> {
+        Some(self.1)
     }
 }
 
@@ -359,7 +364,7 @@ async fn main() -> anyhow::Result<()> {
         logger,
         config,
         drop_analytics::moose_mock(),
-        Arc::new(Auth),
+        Arc::new(Auth::new()),
     )
     .context("Failed to start service")?;
 

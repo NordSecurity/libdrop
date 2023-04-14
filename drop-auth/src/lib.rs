@@ -1,7 +1,7 @@
 pub mod http;
 
 use base64::Engine;
-use ed25519_dalek::Signer;
+use ed25519_dalek::ExpandedSecretKey;
 use rand::RngCore;
 
 pub const AUTH_SCHEME: &str = "drop";
@@ -9,8 +9,7 @@ pub const AUTH_SCHEME: &str = "drop";
 pub const NONCE_LEN: usize = 32;
 use base64::engine::general_purpose::STANDARD_NO_PAD as BASE64;
 pub use ed25519_dalek::{
-    Keypair, PublicKey, SecretKey, Signature, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH,
-    SIGNATURE_LENGTH,
+    PublicKey, SecretKey, Signature, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH, SIGNATURE_LENGTH,
 };
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -55,36 +54,28 @@ pub fn authorize(
 }
 
 pub fn create_ticket(
-    keypair: &Keypair,
+    secret: &SecretKey,
+    pubkey: &PublicKey,
     http::WWWAuthenticate { nonce }: http::WWWAuthenticate,
 ) -> Option<http::Authorization> {
     let nonce_bytes = Nonce::from(BASE64.decode(&nonce).ok()?.as_slice());
 
     let ticket = {
-        let signature = sign(keypair, &nonce_bytes);
+        let signature = sign(secret, pubkey, &nonce_bytes);
         BASE64.encode(signature)
     };
 
     Some(http::Authorization { ticket, nonce })
 }
 
-fn sign(keypair: &Keypair, nonce: &Nonce) -> Signature {
-    let msg = message(&keypair.public, nonce);
-    keypair.sign(&msg)
+fn sign(secret: &SecretKey, pubkey: &PublicKey, nonce: &Nonce) -> Signature {
+    let expanded: ExpandedSecretKey = secret.into();
+
+    expanded.sign(&nonce.0, pubkey)
 }
 
 fn validate(ticket: &Signature, pubkey: &PublicKey, nonce: &Nonce) -> bool {
-    let message = message(pubkey, nonce);
-    pubkey.verify_strict(&message, ticket).is_ok()
-}
-
-fn message(pubkey: &PublicKey, nonce: &Nonce) -> [u8; PUBLIC_KEY_LENGTH + NONCE_LEN] {
-    let mut message = [0u8; PUBLIC_KEY_LENGTH + NONCE_LEN];
-
-    message[0..PUBLIC_KEY_LENGTH].copy_from_slice(pubkey.as_bytes());
-    message[PUBLIC_KEY_LENGTH..].copy_from_slice(&nonce.0);
-
-    message
+    pubkey.verify_strict(&nonce.0, ticket).is_ok()
 }
 
 #[cfg(test)]
@@ -104,12 +95,11 @@ mod tests {
     fn ticket_validation() {
         let public = PublicKey::from_bytes(&TEST_PUB_KEY).unwrap();
         let secret = SecretKey::from_bytes(&TEST_PRIV_KEY).unwrap();
-        let keypair = Keypair { secret, public };
 
         let nonce = Nonce([42; NONCE_LEN]);
 
-        let ticket = sign(&keypair, &nonce);
-        let valid = validate(&ticket, &keypair.public, &nonce);
+        let ticket = sign(&secret, &public, &nonce);
+        let valid = validate(&ticket, &public, &nonce);
         assert!(valid);
     }
 }

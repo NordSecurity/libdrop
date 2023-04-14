@@ -137,16 +137,16 @@ pub(crate) fn start(
 
                                 match auth_header {
                                     Some(auth_value) => {
-                                        let authorize = || {
+                                        let authorize = async {
                                             let auth_req =
                                                 drop_auth::http::Authorization::parse(&auth_value)?;
-                                            let pubkey = auth.peer_public(peer.ip())?;
+                                            let pubkey = auth.peer_public(peer.ip()).await?;
                                             drop_auth::authorize(&nonce?, &pubkey, &auth_req)
                                         };
 
-                                        authorize().ok_or(warp::reject::custom(Unauthrorized(
-                                            peer.ip(),
-                                        )))?;
+                                        authorize.await.ok_or_else(|| {
+                                            warp::reject::custom(Unauthrorized(peer.ip()))
+                                        })?;
                                     }
                                     None => {
                                         return Err(warp::reject::custom(MissingAuth(peer.ip())))

@@ -829,8 +829,10 @@ dependencies = [
 name = "norddrop"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "cc",
  "drop-analytics",
+ "drop-auth",
  "drop-config",
  "drop-transfer",
  "libc",

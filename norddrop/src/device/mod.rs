@@ -1,14 +1,15 @@
 pub mod types;
 
 use std::{
-    net::{IpAddr, ToSocketAddrs},
+    net::{IpAddr, Ipv4Addr, ToSocketAddrs},
     sync::Arc,
 };
 
+use drop_auth::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH};
 use drop_config::Config;
-use drop_transfer::{utils::Hidden, File, Service, Transfer};
+use drop_transfer::{auth, utils::Hidden, File, Service, Transfer};
 use slog::{debug, error, trace, warn, Logger};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 
 use self::types::TransferDescriptor;
 use crate::{device::types::FinishEvent, ffi, ffi::types as ffi_types};
@@ -18,14 +19,54 @@ pub type Result<T = ()> = std::result::Result<T, ffi::types::norddrop_result>;
 pub(super) struct NordDropFFI {
     rt: tokio::runtime::Runtime,
     pub logger: Logger,
-    instance: Arc<tokio::sync::Mutex<Option<drop_transfer::Service>>>,
+    instance: Arc<Mutex<Option<drop_transfer::Service>>>,
     event_dispatcher: Arc<EventDispatcher>,
     config: Config,
+    keys: Arc<KeysContext>,
 }
 
 struct EventDispatcher {
     cb: ffi_types::norddrop_event_cb,
     logger: Logger,
+}
+
+struct KeysContext {
+    secret: SecretKey,
+    cb: Mutex<ffi_types::norddrop_pubkey_cb>,
+}
+
+impl KeysContext {
+    async fn public(&self, ip: Ipv4Addr) -> Option<PublicKey> {
+        let mut buf = [0u8; PUBLIC_KEY_LENGTH];
+        let ip = ip.octets();
+        let guard = self.cb.lock().await;
+        let res = tokio::task::block_in_place(|| unsafe {
+            (guard.cb)(guard.ctx, ip.as_ptr() as _, buf.as_mut_ptr() as _)
+        });
+        drop(guard);
+
+        if res == 0 {
+            PublicKey::from_bytes(&buf).ok()
+        } else {
+            None
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl auth::Context for KeysContext {
+    async fn own(&self) -> Option<(&SecretKey, PublicKey)> {
+        let public = self.public(Ipv4Addr::UNSPECIFIED).await?;
+        Some((&self.secret, public))
+    }
+
+    async fn peer_public(&self, ip: IpAddr) -> Option<PublicKey> {
+        if let IpAddr::V4(ip) = ip {
+            self.public(ip).await
+        } else {
+            None
+        }
+    }
 }
 
 impl EventDispatcher {
@@ -47,7 +88,12 @@ impl EventDispatcher {
 }
 
 impl NordDropFFI {
-    pub(super) fn new(event_cb: ffi_types::norddrop_event_cb, logger: Logger) -> Result<Self> {
+    pub(super) fn new(
+        event_cb: ffi_types::norddrop_event_cb,
+        pubkey_cb: ffi_types::norddrop_pubkey_cb,
+        privkey: SecretKey,
+        logger: Logger,
+    ) -> Result<Self> {
         trace!(logger, "norddrop_new()");
 
         Ok(NordDropFFI {
@@ -59,6 +105,10 @@ impl NordDropFFI {
                 logger,
             }),
             config: Config::default(),
+            keys: Arc::new(KeysContext {
+                secret: privkey,
+                cb: Mutex::new(pubkey_cb),
+            }),
         })
     }
 
@@ -124,20 +174,26 @@ impl NordDropFFI {
         });
 
         self.rt.block_on(async {
-            let service =
-                match Service::start(addr, tx, self.logger.clone(), self.config.drop, moose) {
-                    Ok(srv) => srv,
-                    Err(err) => {
-                        error!(self.logger, "Failed to start the service: {}", err);
+            let service = match Service::start(
+                addr,
+                tx,
+                self.logger.clone(),
+                self.config.drop,
+                moose,
+                self.keys.clone(),
+            ) {
+                Ok(srv) => srv,
+                Err(err) => {
+                    error!(self.logger, "Failed to start the service: {}", err);
 
-                        let err = match err {
-                            drop_transfer::Error::AddrInUse => ffi::types::NORDDROP_RES_ADDR_IN_USE,
-                            _ => ffi::types::NORDDROP_RES_INSTANCE_START,
-                        };
+                    let err = match err {
+                        drop_transfer::Error::AddrInUse => ffi::types::NORDDROP_RES_ADDR_IN_USE,
+                        _ => ffi::types::NORDDROP_RES_INSTANCE_START,
+                    };
 
-                        return Err(err);
-                    }
-                };
+                    return Err(err);
+                }
+            };
 
             self.instance.lock().await.replace(service);
             Ok(())
