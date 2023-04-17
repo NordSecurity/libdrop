@@ -227,9 +227,10 @@ static void* Swig_malloc(int c) {
 
 #include "../../norddrop.h"
 
-SWIGINTERN struct norddrop *new_norddrop(norddrop_event_cb events,enum norddrop_log_level level,norddrop_logger_cb logger){
+SWIGINTERN struct norddrop *new_norddrop(norddrop_event_cb events,enum norddrop_log_level level,norddrop_logger_cb logger,norddrop_pubkey_cb pubkey_cb,char const *privkey){
+
         norddrop *t = NULL;
-        if (NORDDROP_RES_OK != norddrop_new(&t, events, level, logger)) {
+        if (NORDDROP_RES_OK != norddrop_new(&t, events, level, logger, pubkey_cb, privkey)) {
             return NULL;
         }
         return t;
@@ -241,7 +242,7 @@ SWIGINTERN void delete_norddrop(struct norddrop *self){
 extern "C" {
 #endif
 
-void _wrap_Swig_free_norddropgo_f047dbdea53195cf(void *_swig_go_0) {
+void _wrap_Swig_free_norddropgo_7f406083ff4c9731(void *_swig_go_0) {
   void *arg1 = (void *) 0 ;
   
   arg1 = *(void **)&_swig_go_0; 
@@ -251,7 +252,7 @@ void _wrap_Swig_free_norddropgo_f047dbdea53195cf(void *_swig_go_0) {
 }
 
 
-void *_wrap_Swig_malloc_norddropgo_f047dbdea53195cf(intgo _swig_go_0) {
+void *_wrap_Swig_malloc_norddropgo_7f406083ff4c9731(intgo _swig_go_0) {
   int arg1 ;
   void *result = 0 ;
   void *_swig_go_result;
@@ -264,7 +265,7 @@ void *_wrap_Swig_malloc_norddropgo_f047dbdea53195cf(intgo _swig_go_0) {
 }
 
 
-intgo _wrap_NORDDROPLOGCRITICAL_norddropgo_f047dbdea53195cf() {
+intgo _wrap_NORDDROPLOGCRITICAL_norddropgo_7f406083ff4c9731() {
   enum norddrop_log_level result;
   intgo _swig_go_result;
   
@@ -276,7 +277,7 @@ intgo _wrap_NORDDROPLOGCRITICAL_norddropgo_f047dbdea53195cf() {
 }
 
 
-intgo _wrap_NORDDROPLOGERROR_norddropgo_f047dbdea53195cf() {
+intgo _wrap_NORDDROPLOGERROR_norddropgo_7f406083ff4c9731() {
   enum norddrop_log_level result;
   intgo _swig_go_result;
   
@@ -288,7 +289,7 @@ intgo _wrap_NORDDROPLOGERROR_norddropgo_f047dbdea53195cf() {
 }
 
 
-intgo _wrap_NORDDROPLOGWARNING_norddropgo_f047dbdea53195cf() {
+intgo _wrap_NORDDROPLOGWARNING_norddropgo_7f406083ff4c9731() {
   enum norddrop_log_level result;
   intgo _swig_go_result;
   
@@ -300,7 +301,7 @@ intgo _wrap_NORDDROPLOGWARNING_norddropgo_f047dbdea53195cf() {
 }
 
 
-intgo _wrap_NORDDROPLOGINFO_norddropgo_f047dbdea53195cf() {
+intgo _wrap_NORDDROPLOGINFO_norddropgo_7f406083ff4c9731() {
   enum norddrop_log_level result;
   intgo _swig_go_result;
   
@@ -312,7 +313,7 @@ intgo _wrap_NORDDROPLOGINFO_norddropgo_f047dbdea53195cf() {
 }
 
 
-intgo _wrap_NORDDROPLOGDEBUG_norddropgo_f047dbdea53195cf() {
+intgo _wrap_NORDDROPLOGDEBUG_norddropgo_7f406083ff4c9731() {
   enum norddrop_log_level result;
   intgo _swig_go_result;
   
@@ -324,7 +325,7 @@ intgo _wrap_NORDDROPLOGDEBUG_norddropgo_f047dbdea53195cf() {
 }
 
 
-intgo _wrap_NORDDROPLOGTRACE_norddropgo_f047dbdea53195cf() {
+intgo _wrap_NORDDROPLOGTRACE_norddropgo_7f406083ff4c9731() {
   enum norddrop_log_level result;
   intgo _swig_go_result;
   
@@ -336,7 +337,7 @@ intgo _wrap_NORDDROPLOGTRACE_norddropgo_f047dbdea53195cf() {
 }
 
 
-intgo _wrap_NORDDROPRESOK_norddropgo_f047dbdea53195cf() {
+intgo _wrap_NORDDROPRESOK_norddropgo_7f406083ff4c9731() {
   enum norddrop_result result;
   intgo _swig_go_result;
   
@@ -348,7 +349,7 @@ intgo _wrap_NORDDROPRESOK_norddropgo_f047dbdea53195cf() {
 }
 
 
-intgo _wrap_NORDDROPRESERROR_norddropgo_f047dbdea53195cf() {
+intgo _wrap_NORDDROPRESERROR_norddropgo_7f406083ff4c9731() {
   enum norddrop_result result;
   intgo _swig_go_result;
   
@@ -360,7 +361,7 @@ intgo _wrap_NORDDROPRESERROR_norddropgo_f047dbdea53195cf() {
 }
 
 
-intgo _wrap_NORDDROPRESINVALIDSTRING_norddropgo_f047dbdea53195cf() {
+intgo _wrap_NORDDROPRESINVALIDSTRING_norddropgo_7f406083ff4c9731() {
   enum norddrop_result result;
   intgo _swig_go_result;
   
@@ -372,7 +373,7 @@ intgo _wrap_NORDDROPRESINVALIDSTRING_norddropgo_f047dbdea53195cf() {
 }
 
 
-intgo _wrap_NORDDROPRESBADINPUT_norddropgo_f047dbdea53195cf() {
+intgo _wrap_NORDDROPRESBADINPUT_norddropgo_7f406083ff4c9731() {
   enum norddrop_result result;
   intgo _swig_go_result;
   
@@ -384,7 +385,91 @@ intgo _wrap_NORDDROPRESBADINPUT_norddropgo_f047dbdea53195cf() {
 }
 
 
-void _wrap_NorddropEventCb_Ctx_set_norddropgo_f047dbdea53195cf(struct norddrop_event_cb *_swig_go_0, void *_swig_go_1) {
+intgo _wrap_NORDDROPRESJSONPARSE_norddropgo_7f406083ff4c9731() {
+  enum norddrop_result result;
+  intgo _swig_go_result;
+  
+  
+  result = NORDDROP_RES_JSON_PARSE;
+  
+  _swig_go_result = (intgo)result; 
+  return _swig_go_result;
+}
+
+
+intgo _wrap_NORDDROPRESTRANSFERCREATE_norddropgo_7f406083ff4c9731() {
+  enum norddrop_result result;
+  intgo _swig_go_result;
+  
+  
+  result = NORDDROP_RES_TRANSFER_CREATE;
+  
+  _swig_go_result = (intgo)result; 
+  return _swig_go_result;
+}
+
+
+intgo _wrap_NORDDROPRESNOTSTARTED_norddropgo_7f406083ff4c9731() {
+  enum norddrop_result result;
+  intgo _swig_go_result;
+  
+  
+  result = NORDDROP_RES_NOT_STARTED;
+  
+  _swig_go_result = (intgo)result; 
+  return _swig_go_result;
+}
+
+
+intgo _wrap_NORDDROPRESADDRINUSE_norddropgo_7f406083ff4c9731() {
+  enum norddrop_result result;
+  intgo _swig_go_result;
+  
+  
+  result = NORDDROP_RES_ADDR_IN_USE;
+  
+  _swig_go_result = (intgo)result; 
+  return _swig_go_result;
+}
+
+
+intgo _wrap_NORDDROPRESINSTANCESTART_norddropgo_7f406083ff4c9731() {
+  enum norddrop_result result;
+  intgo _swig_go_result;
+  
+  
+  result = NORDDROP_RES_INSTANCE_START;
+  
+  _swig_go_result = (intgo)result; 
+  return _swig_go_result;
+}
+
+
+intgo _wrap_NORDDROPRESINSTANCESTOP_norddropgo_7f406083ff4c9731() {
+  enum norddrop_result result;
+  intgo _swig_go_result;
+  
+  
+  result = NORDDROP_RES_INSTANCE_STOP;
+  
+  _swig_go_result = (intgo)result; 
+  return _swig_go_result;
+}
+
+
+intgo _wrap_NORDDROPRESINVALIDPRIVKEY_norddropgo_7f406083ff4c9731() {
+  enum norddrop_result result;
+  intgo _swig_go_result;
+  
+  
+  result = NORDDROP_RES_INVALID_PRIVKEY;
+  
+  _swig_go_result = (intgo)result; 
+  return _swig_go_result;
+}
+
+
+void _wrap_NorddropEventCb_Ctx_set_norddropgo_7f406083ff4c9731(struct norddrop_event_cb *_swig_go_0, void *_swig_go_1) {
   struct norddrop_event_cb *arg1 = (struct norddrop_event_cb *) 0 ;
   void *arg2 = (void *) 0 ;
   
@@ -396,7 +481,7 @@ void _wrap_NorddropEventCb_Ctx_set_norddropgo_f047dbdea53195cf(struct norddrop_e
 }
 
 
-void *_wrap_NorddropEventCb_Ctx_get_norddropgo_f047dbdea53195cf(struct norddrop_event_cb *_swig_go_0) {
+void *_wrap_NorddropEventCb_Ctx_get_norddropgo_7f406083ff4c9731(struct norddrop_event_cb *_swig_go_0) {
   struct norddrop_event_cb *arg1 = (struct norddrop_event_cb *) 0 ;
   void *result = 0 ;
   void *_swig_go_result;
@@ -409,7 +494,7 @@ void *_wrap_NorddropEventCb_Ctx_get_norddropgo_f047dbdea53195cf(struct norddrop_
 }
 
 
-void _wrap_NorddropEventCb_Cb_set_norddropgo_f047dbdea53195cf(struct norddrop_event_cb *_swig_go_0, void* _swig_go_1) {
+void _wrap_NorddropEventCb_Cb_set_norddropgo_7f406083ff4c9731(struct norddrop_event_cb *_swig_go_0, void* _swig_go_1) {
   struct norddrop_event_cb *arg1 = (struct norddrop_event_cb *) 0 ;
   norddrop_event_fn arg2 = (norddrop_event_fn) 0 ;
   
@@ -421,7 +506,7 @@ void _wrap_NorddropEventCb_Cb_set_norddropgo_f047dbdea53195cf(struct norddrop_ev
 }
 
 
-void* _wrap_NorddropEventCb_Cb_get_norddropgo_f047dbdea53195cf(struct norddrop_event_cb *_swig_go_0) {
+void* _wrap_NorddropEventCb_Cb_get_norddropgo_7f406083ff4c9731(struct norddrop_event_cb *_swig_go_0) {
   struct norddrop_event_cb *arg1 = (struct norddrop_event_cb *) 0 ;
   norddrop_event_fn result;
   void* _swig_go_result;
@@ -434,7 +519,7 @@ void* _wrap_NorddropEventCb_Cb_get_norddropgo_f047dbdea53195cf(struct norddrop_e
 }
 
 
-struct norddrop_event_cb *_wrap_new_NorddropEventCb_norddropgo_f047dbdea53195cf() {
+struct norddrop_event_cb *_wrap_new_NorddropEventCb_norddropgo_7f406083ff4c9731() {
   struct norddrop_event_cb *result = 0 ;
   struct norddrop_event_cb *_swig_go_result;
   
@@ -445,7 +530,7 @@ struct norddrop_event_cb *_wrap_new_NorddropEventCb_norddropgo_f047dbdea53195cf(
 }
 
 
-void _wrap_delete_NorddropEventCb_norddropgo_f047dbdea53195cf(struct norddrop_event_cb *_swig_go_0) {
+void _wrap_delete_NorddropEventCb_norddropgo_7f406083ff4c9731(struct norddrop_event_cb *_swig_go_0) {
   struct norddrop_event_cb *arg1 = (struct norddrop_event_cb *) 0 ;
   
   arg1 = *(struct norddrop_event_cb **)&_swig_go_0; 
@@ -455,7 +540,7 @@ void _wrap_delete_NorddropEventCb_norddropgo_f047dbdea53195cf(struct norddrop_ev
 }
 
 
-void _wrap_NorddropLoggerCb_Ctx_set_norddropgo_f047dbdea53195cf(struct norddrop_logger_cb *_swig_go_0, void *_swig_go_1) {
+void _wrap_NorddropLoggerCb_Ctx_set_norddropgo_7f406083ff4c9731(struct norddrop_logger_cb *_swig_go_0, void *_swig_go_1) {
   struct norddrop_logger_cb *arg1 = (struct norddrop_logger_cb *) 0 ;
   void *arg2 = (void *) 0 ;
   
@@ -467,7 +552,7 @@ void _wrap_NorddropLoggerCb_Ctx_set_norddropgo_f047dbdea53195cf(struct norddrop_
 }
 
 
-void *_wrap_NorddropLoggerCb_Ctx_get_norddropgo_f047dbdea53195cf(struct norddrop_logger_cb *_swig_go_0) {
+void *_wrap_NorddropLoggerCb_Ctx_get_norddropgo_7f406083ff4c9731(struct norddrop_logger_cb *_swig_go_0) {
   struct norddrop_logger_cb *arg1 = (struct norddrop_logger_cb *) 0 ;
   void *result = 0 ;
   void *_swig_go_result;
@@ -480,7 +565,7 @@ void *_wrap_NorddropLoggerCb_Ctx_get_norddropgo_f047dbdea53195cf(struct norddrop
 }
 
 
-void _wrap_NorddropLoggerCb_Cb_set_norddropgo_f047dbdea53195cf(struct norddrop_logger_cb *_swig_go_0, void* _swig_go_1) {
+void _wrap_NorddropLoggerCb_Cb_set_norddropgo_7f406083ff4c9731(struct norddrop_logger_cb *_swig_go_0, void* _swig_go_1) {
   struct norddrop_logger_cb *arg1 = (struct norddrop_logger_cb *) 0 ;
   norddrop_logger_fn arg2 = (norddrop_logger_fn) 0 ;
   
@@ -492,7 +577,7 @@ void _wrap_NorddropLoggerCb_Cb_set_norddropgo_f047dbdea53195cf(struct norddrop_l
 }
 
 
-void* _wrap_NorddropLoggerCb_Cb_get_norddropgo_f047dbdea53195cf(struct norddrop_logger_cb *_swig_go_0) {
+void* _wrap_NorddropLoggerCb_Cb_get_norddropgo_7f406083ff4c9731(struct norddrop_logger_cb *_swig_go_0) {
   struct norddrop_logger_cb *arg1 = (struct norddrop_logger_cb *) 0 ;
   norddrop_logger_fn result;
   void* _swig_go_result;
@@ -505,7 +590,7 @@ void* _wrap_NorddropLoggerCb_Cb_get_norddropgo_f047dbdea53195cf(struct norddrop_
 }
 
 
-struct norddrop_logger_cb *_wrap_new_NorddropLoggerCb_norddropgo_f047dbdea53195cf() {
+struct norddrop_logger_cb *_wrap_new_NorddropLoggerCb_norddropgo_7f406083ff4c9731() {
   struct norddrop_logger_cb *result = 0 ;
   struct norddrop_logger_cb *_swig_go_result;
   
@@ -516,7 +601,7 @@ struct norddrop_logger_cb *_wrap_new_NorddropLoggerCb_norddropgo_f047dbdea53195c
 }
 
 
-void _wrap_delete_NorddropLoggerCb_norddropgo_f047dbdea53195cf(struct norddrop_logger_cb *_swig_go_0) {
+void _wrap_delete_NorddropLoggerCb_norddropgo_7f406083ff4c9731(struct norddrop_logger_cb *_swig_go_0) {
   struct norddrop_logger_cb *arg1 = (struct norddrop_logger_cb *) 0 ;
   
   arg1 = *(struct norddrop_logger_cb **)&_swig_go_0; 
@@ -526,10 +611,84 @@ void _wrap_delete_NorddropLoggerCb_norddropgo_f047dbdea53195cf(struct norddrop_l
 }
 
 
-struct norddrop *_wrap_new_Norddrop_norddropgo_f047dbdea53195cf(norddrop_event_cb _swig_go_0, intgo _swig_go_1, norddrop_logger_cb _swig_go_2) {
+void _wrap_NorddropPubkeyCb_Ctx_set_norddropgo_7f406083ff4c9731(struct norddrop_pubkey_cb *_swig_go_0, void *_swig_go_1) {
+  struct norddrop_pubkey_cb *arg1 = (struct norddrop_pubkey_cb *) 0 ;
+  void *arg2 = (void *) 0 ;
+  
+  arg1 = *(struct norddrop_pubkey_cb **)&_swig_go_0; 
+  arg2 = *(void **)&_swig_go_1; 
+  
+  if (arg1) (arg1)->ctx = arg2;
+  
+}
+
+
+void *_wrap_NorddropPubkeyCb_Ctx_get_norddropgo_7f406083ff4c9731(struct norddrop_pubkey_cb *_swig_go_0) {
+  struct norddrop_pubkey_cb *arg1 = (struct norddrop_pubkey_cb *) 0 ;
+  void *result = 0 ;
+  void *_swig_go_result;
+  
+  arg1 = *(struct norddrop_pubkey_cb **)&_swig_go_0; 
+  
+  result = (void *) ((arg1)->ctx);
+  *(void **)&_swig_go_result = (void *)result; 
+  return _swig_go_result;
+}
+
+
+void _wrap_NorddropPubkeyCb_Cb_set_norddropgo_7f406083ff4c9731(struct norddrop_pubkey_cb *_swig_go_0, void* _swig_go_1) {
+  struct norddrop_pubkey_cb *arg1 = (struct norddrop_pubkey_cb *) 0 ;
+  norddrop_pubkey_fn arg2 = (norddrop_pubkey_fn) 0 ;
+  
+  arg1 = *(struct norddrop_pubkey_cb **)&_swig_go_0; 
+  arg2 = *(norddrop_pubkey_fn *)&_swig_go_1; 
+  
+  if (arg1) (arg1)->cb = arg2;
+  
+}
+
+
+void* _wrap_NorddropPubkeyCb_Cb_get_norddropgo_7f406083ff4c9731(struct norddrop_pubkey_cb *_swig_go_0) {
+  struct norddrop_pubkey_cb *arg1 = (struct norddrop_pubkey_cb *) 0 ;
+  norddrop_pubkey_fn result;
+  void* _swig_go_result;
+  
+  arg1 = *(struct norddrop_pubkey_cb **)&_swig_go_0; 
+  
+  result = (norddrop_pubkey_fn) ((arg1)->cb);
+  *(norddrop_pubkey_fn *)&_swig_go_result = (norddrop_pubkey_fn)result; 
+  return _swig_go_result;
+}
+
+
+struct norddrop_pubkey_cb *_wrap_new_NorddropPubkeyCb_norddropgo_7f406083ff4c9731() {
+  struct norddrop_pubkey_cb *result = 0 ;
+  struct norddrop_pubkey_cb *_swig_go_result;
+  
+  
+  result = (struct norddrop_pubkey_cb *)calloc(1, sizeof(struct norddrop_pubkey_cb));
+  *(struct norddrop_pubkey_cb **)&_swig_go_result = (struct norddrop_pubkey_cb *)result; 
+  return _swig_go_result;
+}
+
+
+void _wrap_delete_NorddropPubkeyCb_norddropgo_7f406083ff4c9731(struct norddrop_pubkey_cb *_swig_go_0) {
+  struct norddrop_pubkey_cb *arg1 = (struct norddrop_pubkey_cb *) 0 ;
+  
+  arg1 = *(struct norddrop_pubkey_cb **)&_swig_go_0; 
+  
+  free((char *) arg1);
+  
+}
+
+
+struct norddrop *_wrap_new_Norddrop_norddropgo_7f406083ff4c9731(norddrop_event_cb _swig_go_0, intgo _swig_go_1, norddrop_logger_cb _swig_go_2, struct norddrop_pubkey_cb *_swig_go_3, _gostring_ _swig_go_4) {
   norddrop_event_cb arg1 ;
   enum norddrop_log_level arg2 ;
   norddrop_logger_cb arg3 ;
+  norddrop_pubkey_cb arg4 ;
+  char *arg5 = (char *) 0 ;
+  norddrop_pubkey_cb *argp4 ;
   struct norddrop *result = 0 ;
   struct norddrop *_swig_go_result;
   
@@ -541,13 +700,26 @@ struct norddrop *_wrap_new_Norddrop_norddropgo_f047dbdea53195cf(norddrop_event_c
     arg3 = _swig_go_2;
   }
   
-  result = (struct norddrop *)new_norddrop(arg1,arg2,arg3);
+  argp4 = (norddrop_pubkey_cb *)_swig_go_3;
+  if (argp4 == NULL) {
+    _swig_gopanic("Attempt to dereference null norddrop_pubkey_cb");
+  }
+  arg4 = (norddrop_pubkey_cb)*argp4;
+  
+  
+  arg5 = (char *)malloc(_swig_go_4.n + 1);
+  memcpy(arg5, _swig_go_4.p, _swig_go_4.n);
+  arg5[_swig_go_4.n] = '\0';
+  
+  
+  result = (struct norddrop *)new_norddrop(arg1,arg2,arg3,arg4,(char const *)arg5);
   *(struct norddrop **)&_swig_go_result = (struct norddrop *)result; 
+  free(arg5); 
   return _swig_go_result;
 }
 
 
-void _wrap_delete_Norddrop_norddropgo_f047dbdea53195cf(struct norddrop *_swig_go_0) {
+void _wrap_delete_Norddrop_norddropgo_7f406083ff4c9731(struct norddrop *_swig_go_0) {
   struct norddrop *arg1 = (struct norddrop *) 0 ;
   
   arg1 = *(struct norddrop **)&_swig_go_0; 
@@ -557,7 +729,7 @@ void _wrap_delete_Norddrop_norddropgo_f047dbdea53195cf(struct norddrop *_swig_go
 }
 
 
-intgo _wrap_Norddrop_Start_norddropgo_f047dbdea53195cf(struct norddrop *_swig_go_0, _gostring_ _swig_go_1, _gostring_ _swig_go_2) {
+intgo _wrap_Norddrop_Start_norddropgo_7f406083ff4c9731(struct norddrop *_swig_go_0, _gostring_ _swig_go_1, _gostring_ _swig_go_2) {
   struct norddrop *arg1 = (struct norddrop *) 0 ;
   char *arg2 = (char *) 0 ;
   char *arg3 = (char *) 0 ;
@@ -584,7 +756,7 @@ intgo _wrap_Norddrop_Start_norddropgo_f047dbdea53195cf(struct norddrop *_swig_go
 }
 
 
-intgo _wrap_Norddrop_Stop_norddropgo_f047dbdea53195cf(struct norddrop *_swig_go_0) {
+intgo _wrap_Norddrop_Stop_norddropgo_7f406083ff4c9731(struct norddrop *_swig_go_0) {
   struct norddrop *arg1 = (struct norddrop *) 0 ;
   enum norddrop_result result;
   intgo _swig_go_result;
@@ -597,7 +769,7 @@ intgo _wrap_Norddrop_Stop_norddropgo_f047dbdea53195cf(struct norddrop *_swig_go_
 }
 
 
-intgo _wrap_Norddrop_CancelTransfer_norddropgo_f047dbdea53195cf(struct norddrop *_swig_go_0, _gostring_ _swig_go_1) {
+intgo _wrap_Norddrop_CancelTransfer_norddropgo_7f406083ff4c9731(struct norddrop *_swig_go_0, _gostring_ _swig_go_1) {
   struct norddrop *arg1 = (struct norddrop *) 0 ;
   char *arg2 = (char *) 0 ;
   enum norddrop_result result;
@@ -617,7 +789,7 @@ intgo _wrap_Norddrop_CancelTransfer_norddropgo_f047dbdea53195cf(struct norddrop 
 }
 
 
-intgo _wrap_Norddrop_CancelFile_norddropgo_f047dbdea53195cf(struct norddrop *_swig_go_0, _gostring_ _swig_go_1, _gostring_ _swig_go_2) {
+intgo _wrap_Norddrop_CancelFile_norddropgo_7f406083ff4c9731(struct norddrop *_swig_go_0, _gostring_ _swig_go_1, _gostring_ _swig_go_2) {
   struct norddrop *arg1 = (struct norddrop *) 0 ;
   char *arg2 = (char *) 0 ;
   char *arg3 = (char *) 0 ;
@@ -644,7 +816,7 @@ intgo _wrap_Norddrop_CancelFile_norddropgo_f047dbdea53195cf(struct norddrop *_sw
 }
 
 
-intgo _wrap_Norddrop_Download_norddropgo_f047dbdea53195cf(struct norddrop *_swig_go_0, _gostring_ _swig_go_1, _gostring_ _swig_go_2, _gostring_ _swig_go_3) {
+intgo _wrap_Norddrop_Download_norddropgo_7f406083ff4c9731(struct norddrop *_swig_go_0, _gostring_ _swig_go_1, _gostring_ _swig_go_2, _gostring_ _swig_go_3) {
   struct norddrop *arg1 = (struct norddrop *) 0 ;
   char *arg2 = (char *) 0 ;
   char *arg3 = (char *) 0 ;
@@ -678,7 +850,7 @@ intgo _wrap_Norddrop_Download_norddropgo_f047dbdea53195cf(struct norddrop *_swig
 }
 
 
-_gostring_ _wrap_Norddrop_NewTransfer_norddropgo_f047dbdea53195cf(struct norddrop *_swig_go_0, _gostring_ _swig_go_1, _gostring_ _swig_go_2) {
+_gostring_ _wrap_Norddrop_NewTransfer_norddropgo_7f406083ff4c9731(struct norddrop *_swig_go_0, _gostring_ _swig_go_1, _gostring_ _swig_go_2) {
   struct norddrop *arg1 = (struct norddrop *) 0 ;
   char *arg2 = (char *) 0 ;
   char *arg3 = (char *) 0 ;
@@ -706,7 +878,7 @@ _gostring_ _wrap_Norddrop_NewTransfer_norddropgo_f047dbdea53195cf(struct norddro
 }
 
 
-_gostring_ _wrap_Norddrop_Version_norddropgo_f047dbdea53195cf() {
+_gostring_ _wrap_Norddrop_Version_norddropgo_7f406083ff4c9731() {
   char *result = 0 ;
   _gostring_ _swig_go_result;
   
