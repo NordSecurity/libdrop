@@ -1,5 +1,7 @@
 #if SWIGJAVA
 
+%include "various.i"
+
 %rename("%(lowercamelcase)s") "";
 %rename("NordDrop") "norddrop";
 
@@ -8,6 +10,40 @@
 #define PKG "com/nordsec/norddrop/"
 static JavaVM *jvm = NULL;
 %}
+
+%apply char *BYTE { char *privkey };
+
+%extend norddrop {
+    norddrop(norddrop_event_cb events,
+        enum norddrop_log_level level,
+        norddrop_logger_cb logger,
+        norddrop_pubkey_cb pubkey_cb,
+        const char *privkey) {
+
+        JNIEnv *env = NULL;
+        norddrop *t = NULL;
+        enum norddrop_result result;
+
+        if ((*jvm)->GetEnv(jvm, (void**)&env, JNI_VERSION_1_6)) {
+            SWIG_JavaThrowException(env, SWIG_JavaRuntimeException, "Thread not attached to JVM");
+            return NULL;
+        }
+
+        result = norddrop_new(&t, events, level, logger, pubkey_cb, privkey);
+        if (result != NORDDROP_RES_OK) {
+            SWIG_JavaThrowException(env, SWIG_JavaIllegalArgumentException, "Could not initialize library");
+            return NULL;
+        }
+
+        // Find necessary methods and classes so they are cached
+        GET_CACHED_METHOD_ID(env, iNordDropLoggerCbloggerHandleID);
+        GET_CACHED_METHOD_ID(env, iNordDropEventCbeventHandleID);
+        GET_CACHED_METHOD_ID(env, iNordDropPubkeyCbPubkeyHandleID);
+        GET_CACHED_CLASS(env, norddropLogLevel);
+
+        return t;
+    }
+}
 
 ///////////////////////////////////////////////////////////////
 // Wrap norddrop_event_cb into java interface
@@ -18,31 +54,6 @@ static JavaVM *jvm = NULL;
 %typemap(jni) norddrop_event_cb "jobject"
 %typemap(javain) norddrop_event_cb "$javainput"
 
-%extend norddrop {
-    norddrop(norddrop_event_cb events, enum norddrop_log_level level, norddrop_logger_cb logger) {
-        JNIEnv *env = NULL;
-        norddrop *t = NULL;
-        enum norddrop_result result;
-
-        if ((*jvm)->GetEnv(jvm, (void**)&env, JNI_VERSION_1_6)) {
-            SWIG_JavaThrowException(env, SWIG_JavaRuntimeException, "Thread not attached to JVM");
-            return NULL;
-        }
-
-        result = norddrop_new(&t, events, level, logger);
-        if (result != NORDDROP_RES_OK) {
-            SWIG_JavaThrowException(env, SWIG_JavaIllegalArgumentException, "Could not initialize library");
-            return NULL;
-        }
-
-        // Find necessary methods and classes so they are cached
-        GET_CACHED_METHOD_ID(env, iNordDropLoggerCbloggerHandleID);
-        GET_CACHED_METHOD_ID(env, iNordDropEventCbeventHandleID);
-        GET_CACHED_CLASS(env, norddropLogLevel);
-
-        return t;
-    }
-}
 
 %{
 DECLARE_CACHED_CLASS(iNordDropEventCb, PKG "INordDropEventCb");
@@ -191,6 +202,81 @@ static void norddrop_jni_call_logger_cb(void *ctx, enum norddrop_log_level level
     };
     $1 = cb;
 }
+
+
+///////////////////////////////////////////////////////////////
+// Wrap norddrop_pubkey_cb into java interface
+
+// INordDroppubkeyCb.java is manualy written.
+%typemap(jstype) norddrop_pubkey_cb "INordDropPubkeyCb"
+%typemap(jtype) norddrop_pubkey_cb "INordDropPubkeyCb"
+%typemap(jni) norddrop_pubkey_cb "jobject"
+%typemap(javain) norddrop_pubkey_cb "$javainput"
+
+%{
+
+DECLARE_CACHED_CLASS(iNordDropPubkeyCb, PKG "INordDropPubkeyCb");
+DECLARE_CACHED_METHOD_ID(iNordDropPubkeyCb, iNordDropPubkeyCbPubkeyHandleID, "pubkeyHandle", "(Ljava/lang/byte[];Ljava/lang/byte[];)Ljava/lang/int");
+
+static int norddrop_jni_call_pubkey_cb(void *ctx, const char* ip, char *pubkey) {
+    if (!jvm) {
+        return 1;
+    }
+
+    JNIEnv *env = NULL;
+    int res = 1;
+
+    jint res = (*jvm)->GetEnv(jvm, (void**)&env, JNI_VERSION_1_6);
+    int attached = 0;
+    if (JNI_EDETACHED == res) {
+        JavaVMAttachArgs args = {
+            .version = JNI_VERSION_1_6,
+            .name = NULL,
+            .group = NULL,
+        };
+
+        if ((*jvm)->AttachCurrentThread(jvm, &env, (void*)&args)) {
+            return res;
+        }
+        attached = 1;
+    } else if (JNI_OK != res) {
+        return res;
+    }
+
+    jmethodID handle = GET_CACHED_METHOD_ID(env, iNordDropPubkeyCbPubkeyHandleID);
+    RETURN_AND_THROW_IF_NULL(env, handle, "pubkeyHandle not found.");
+
+    jstring jip = (*env)->NewByteArray(env, 4);
+    RETURN_AND_THROW_IF_NULL(env, jip, "Cannot crate IP array.");
+    SetByteArrayRegion(env, jip, 0, 4, ip);
+
+    jstring jpubkey = (*env)->NewByteArray(env, 32);
+    RETURN_AND_THROW_IF_NULL(env, jpubkey, "Cannot crate pubkey array.");
+
+    res = (*env)->CallIntMethod(env, (jobject)ctx, handle, jip, jpubkey);
+    GetByteArrayRegion(env, jpubkey, 0, 32, pubkey);
+
+    (*env)->DeleteLocalRef(env, jip);
+    (*env)->DeleteLocalRef(env, jpubkey);
+    if (attached) {
+        (*jvm)->DetachCurrentThread(jvm);
+    }
+
+    return res;
+}
+%}
+
+%typemap(in) norddrop_pubkey_cb {
+    if (!jvm) {
+        (*jenv)->GetJavaVM(jenv, &jvm);
+    }
+    norddrop_pubkey_cb cb = {
+        .ctx = (*jenv)->NewGlobalRef(jenv, $input),
+        .cb = norddrop_jni_call_pubkey_cb,
+    };
+    $1 = cb;
+}
+
 
 #endif
 

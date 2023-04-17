@@ -4,6 +4,7 @@
 %insert(go_wrapper) %{
 var eventCallbacks = map[uintptr]func(string){}
 var loggerCallbacks = map[uintptr]func(int, string){}
+var pubkeyCallbacks = map[uintptr]func(byte[]) *byte[]{}
 // Note: This can only ensure enough place for 8 callbacks
 // Application can crash when creating more if these the last
 // items on stack
@@ -24,6 +25,16 @@ func maxEventCbIndex() uintptr {
 func maxLoggerCbIndex() uintptr {
         maxI := arbitraryAddress
         for i := range loggerCallbacks {
+                if i > maxI {
+                        maxI = i
+                }
+        }
+        return maxI
+}
+
+func maxPubkeyCbIndex() uintptr {
+        maxI := arbitraryAddress
+        for i := range pubkeyCallbacks {
                 if i > maxI {
                         maxI = i
                 }
@@ -86,6 +97,41 @@ func call_norddrop_logger_cb(ctx uintptr, level C.int, str *C.char) {
         if callback, ok := loggerCallbacks[ctx]; ok {
                 callback(int(level), C.GoString(str))
         }
+}
+
+
+%typemap(gotype) norddrop_pubkey_cb "func(byte[], *byte) int";
+%typemap(imtype) norddrop_pubkey_cb "C.norddrop_pubkey_cb";
+%typemap(goin) norddrop_pubkey_cb {
+        index := maxPubkeyCbIndex() + 1
+        cb := C.norddrop_pubkey_cb{
+                ctx: unsafe.Pointer(index),
+                cb: (C.norddrop_pubkey_fn)(C.call_norddrop_pubkey_cb),
+        }
+        pubkeyCallbacks[index] = $input
+        $result = cb
+}
+%typemap(in) norddrop_pubkey_cb {
+        $1 = $input;
+}
+
+%insert(go_wrapper) %{
+//export call_norddrop_pubkey_cb
+func call_norddrop_pubkey_cb(ctx uintptr, ip *C.char, pubkey *C.char) C.int {
+        if callback, ok := pubkeyCallbacks[ctx]; ok {
+                goip := C.GoBytes(ip, 4)
+                gokey := callback(go_ip)
+
+                if gokey != nil {
+                        ckey := C.CBytes(gokey)
+                        C.memcpy(pubkey, ckey, 32)
+                        C.free(ckey)
+
+                        return 0
+                }
+        }
+
+        return 1
 }
 %}
 #endif
