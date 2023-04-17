@@ -6,6 +6,7 @@
 * Return more status codes from the ffi layer methods
 * The `FileDownloaded` event reports the full file path
 * Improve moose error handling
+* Configure Android SONAME
 
 ---
 <br>
