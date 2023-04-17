@@ -9,7 +9,7 @@ import typing
 
 from . import event, ffi
 from .logger import logger
-from .event import Event, File, print_uuid, UUIDS
+from .event import Event, File, print_uuid, UUIDS, UUIDS_LOCK
 
 import sys
 
@@ -45,8 +45,12 @@ class NewTransfer(Action):
         self._paths: list[str] = paths
 
     async def run(self, drop: ffi.Drop):
+        UUIDS_LOCK.acquire()
+
         xfid = drop.new_transfer(self._peer, self._paths)
         UUIDS.append(xfid)
+
+        UUIDS_LOCK.release()
 
     def __str__(self):
         return f"NewTransfer({self._peer}, {self._paths})"
@@ -65,8 +69,13 @@ class NewTransferWithFD(Action):
         self._fd = open(self._path, "r")
 
         fo = self._fd.fileno()
+
+        UUIDS_LOCK.acquire()
+
         xfid = drop.new_transfer_with_fd(self._peer, self._path, fo)
         UUIDS.append(xfid)
+
+        UUIDS_LOCK.release()
 
     def __str__(self):
         return f"NewTransferWithFD({self._peer}, {self._path}, {self._fd})"
@@ -86,8 +95,12 @@ class MultipleNewTransfersWithSameFD(Action):
         fo = self._fd.fileno()
 
         for peer in self._peers:
+            UUIDS_LOCK.acquire()
+
             xfid = drop.new_transfer_with_fd(peer, self._path, fo)
             UUIDS.append(xfid)
+
+            UUIDS_LOCK.release()
 
     def __str__(self):
         return (
@@ -102,7 +115,9 @@ class Download(Action):
         self._dst = dst
 
     async def run(self, drop: ffi.Drop):
+        UUIDS_LOCK.acquire()
         drop.download(UUIDS[self._uuid_slot], self._fid, self._dst)
+        UUIDS_LOCK.release()
 
     def __str__(self):
         return f"DownloadFile({print_uuid(self._uuid_slot)}, {self._fid}, {self._dst})"
@@ -113,7 +128,9 @@ class CancelTransferRequest(Action):
         self._uuid_slot = uuid_slot
 
     async def run(self, drop: ffi.Drop):
+        UUIDS_LOCK.acquire()
         drop.cancel_transfer_request(UUIDS[self._uuid_slot])
+        UUIDS_LOCK.release()
 
     def __str__(self):
         return f"CancelTransferRequest({print_uuid(self._uuid_slot)})"
@@ -125,7 +142,9 @@ class CancelTransferFile(Action):
         self._fid = fid
 
     async def run(self, drop: ffi.Drop):
+        UUIDS_LOCK.acquire()
         drop.cancel_transfer_file(UUIDS[self._uuid_slot], self._fid)
+        UUIDS_LOCK.release()
 
     def __str__(self):
         return f"CancelTransferFile({print_uuid(self._uuid_slot)}, {self._fid})"
