@@ -290,9 +290,16 @@ void call_norddrop_logger_cb(void *ctx, int l, const char *msg) {
   cb(l, msg);
 }
 
-SWIGINTERN struct norddrop *new_norddrop(norddrop_event_cb events,enum norddrop_log_level level,norddrop_logger_cb logger){
+typedef int(*cs_norddrop_pubkey_cb)(const unsigned char*, unsigned char*);
+int call_norddrop_pubkey_cb(void *ctx, const char* ip, char* privkey) {
+  cs_norddrop_pubkey_cb cb = ctx;
+  return cb(ip, privkey);
+}
+
+SWIGINTERN struct norddrop *new_norddrop(norddrop_event_cb events,enum norddrop_log_level level,norddrop_logger_cb logger,norddrop_pubkey_cb pubkey_cb,char const *privkey){
+
         norddrop *t = NULL;
-        if (NORDDROP_RES_OK != norddrop_new(&t, events, level, logger)) {
+        if (NORDDROP_RES_OK != norddrop_new(&t, events, level, logger, pubkey_cb, privkey)) {
             SWIG_CSharpSetPendingException(SWIG_CSharpSystemException,
                                            "Could not initialize library");
             return NULL;
@@ -307,11 +314,13 @@ SWIGINTERN void delete_norddrop(struct norddrop *self){
 extern "C" {
 #endif
 
-SWIGEXPORT void * SWIGSTDCALL CSharp_NordSecfNordDrop_new_Norddrop___(cs_norddrop_event_cb jarg1, int jarg2, cs_norddrop_logger_cb jarg3) {
+SWIGEXPORT void * SWIGSTDCALL CSharp_NordSecfNordDrop_new_Norddrop___(cs_norddrop_event_cb jarg1, int jarg2, cs_norddrop_logger_cb jarg3, cs_norddrop_pubkey_cb jarg4, char * jarg5) {
   void * jresult ;
   norddrop_event_cb arg1 ;
   enum norddrop_log_level arg2 ;
   norddrop_logger_cb arg3 ;
+  norddrop_pubkey_cb arg4 ;
+  char *arg5 = (char *) 0 ;
   struct norddrop *result = 0 ;
   
   
@@ -328,7 +337,14 @@ SWIGEXPORT void * SWIGSTDCALL CSharp_NordSecfNordDrop_new_Norddrop___(cs_norddro
   };
   
   
-  result = (struct norddrop *)new_norddrop(arg1,arg2,arg3);
+  arg4 = (struct norddrop_pubkey_cb) {
+    .ctx = jarg4,
+    .cb = call_norddrop_pubkey_cb,
+  };
+  
+  arg5 = (char *)jarg5; 
+  
+  result = (struct norddrop *)new_norddrop(arg1,arg2,arg3,arg4,(char const *)arg5);
   
   jresult = (void *)result; 
   return jresult;
