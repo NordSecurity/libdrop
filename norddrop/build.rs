@@ -126,6 +126,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     if target_os == "windows" {
         create_winres(&version)?;
     }
+    if target_os == "android" {
+        let pkg_name = env!("CARGO_PKG_NAME");
+        let soname = format!("lib{}.so", pkg_name);
+        println!("cargo:rustc-cdylib-link-arg=-Wl,-soname,{}", soname);
+    }
 
     Ok(())
 }
