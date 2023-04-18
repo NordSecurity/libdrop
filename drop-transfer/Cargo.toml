@@ -8,36 +8,36 @@ resolver = "2"
 name = "udrop"
 
 [dev-dependencies]
-clap = { version = "3.2", features = ["cargo"] }
+clap = { version = "4.2", features = ["cargo"] }
 tokio = { version = "1", features = ["signal"] }
 slog-async = "2.7.0"
 slog-scope = "4.4.0"
 slog-term = "2.9"
-tempfile = "3.4.0"
+tempfile = "3.5.0"
 
 [dependencies]
-anyhow = "1.0.68"
+anyhow = "1.0.70"
 async-trait = "0.1.68"
 drop-analytics = { version = "1.0.0", path = "../drop-analytics" }
 drop-config = { version = "1.0.0", path = "../drop-config" }
 futures = "0.3"
 futures-util = "0.3"
 hex = { version = "0.4.3", features = ["serde"] }
-hyper = "0.14.24"
-infer = "0.12.0"
+hyper = "0.14.26"
+infer = "0.13.0"
 libc = "0.2"
-serde = { version = "1.0.152", features = ["derive"] }
-serde_json = "1.0.91"
+serde = { version = "1.0.160", features = ["derive"] }
+serde_json = "1.0.96"
 sha-1 = "0.10"
 sha2 = "0.10.6"
 slog = { workspace = true }
 strum = { version = "0.24.1", features = ["derive"] }
 thiserror = "1.0"
 tokio = { workspace = true }
-tokio-tungstenite = "0.17.2"
-tokio-util = "0.7.3"
-uuid = { version = "1.2", features = ["v4", "serde"] }
-warp = { version = "0.3.3", default-features = false, features = ["websocket"] }
+tokio-tungstenite = "0.18.0"
+tokio-util = "0.7.7"
+uuid = { version = "1.3", features = ["v4", "serde"] }
+warp = { version = "0.3.4", default-features = false, features = ["websocket"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.9"
