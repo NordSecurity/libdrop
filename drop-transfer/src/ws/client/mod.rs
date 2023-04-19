@@ -116,10 +116,14 @@ async fn establish_ws_conn(
         match make_request(&mut socket, &url, state.auth.as_ref(), logger).await {
             Ok(_) => break ver,
             Err(tungstenite::Error::Http(resp)) if resp.status().is_client_error() => {
-                debug!(
-                    logger,
-                    "Failed to connect to version {}, response: {:?}", ver, resp
-                );
+                if resp.status() == StatusCode::UNAUTHORIZED {
+                    return Err(crate::Error::AuthenticationFailed);
+                } else {
+                    debug!(
+                        logger,
+                        "Failed to connect to version {}, response: {:?}", ver, resp
+                    );
+                }
             }
             Err(err) => return Err(err.into()),
         }
