@@ -361,8 +361,11 @@ def new_event(event_str: str) -> event.Event:
 
     elif event_type == "RequestReceived":
         transfer: str = event_data["transfer"]
+
+        event.UUIDS_LOCK.acquire()
         transfer_slot: int = len(event.UUIDS)
         event.UUIDS.append(transfer)
+        event.UUIDS_LOCK.release()
 
         return event.Receive(
             transfer_slot,
@@ -375,7 +378,10 @@ def new_event(event_str: str) -> event.Event:
 
     elif event_type == "TransferStarted":
         transfer = event_data["transfer"]
+
+        event.UUIDS_LOCK.acquire()
         trasnfer_slot = event.UUIDS.index(transfer)
+        event.UUIDS_LOCK.release()
 
         file: str = event_data["file"]
 
@@ -383,7 +389,10 @@ def new_event(event_str: str) -> event.Event:
 
     elif event_type == "TransferProgress":
         transfer = event_data["transfer"]
+
+        event.UUIDS_LOCK.acquire()
         transfer_slot = event.UUIDS.index(transfer)
+        event.UUIDS_LOCK.release()
 
         file = event_data["file"]
         progress: int = event_data["transfered"]
@@ -392,7 +401,10 @@ def new_event(event_str: str) -> event.Event:
 
     elif event_type == "TransferFinished":
         transfer = event_data["transfer"]
+
+        event.UUIDS_LOCK.acquire()
         transfer_slot = event.UUIDS.index(transfer)
+        event.UUIDS_LOCK.release()
 
         reason = event_data["reason"]
 
@@ -419,7 +431,10 @@ def new_event(event_str: str) -> event.Event:
 
     elif event_type == "RequestQueued":
         transfer = event_data["transfer"]
+
+        event.UUIDS_LOCK.acquire()
         transfer_slot = event.UUIDS.index(transfer)
+        event.UUIDS_LOCK.release()
 
         return event.Queued(
             transfer_slot,
