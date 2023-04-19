@@ -33,7 +33,7 @@ pub(super) struct State {
     pub(super) transfer_manager: Mutex<TransferManager>,
     pub(crate) moose: Arc<dyn Moose>,
     pub(crate) config: DropConfig,
-    pub(crate) auth: Arc<dyn auth::Context>,
+    pub(crate) auth: Arc<auth::Context>,
 }
 
 pub struct Service {
@@ -70,7 +70,7 @@ impl Service {
         logger: Logger,
         config: DropConfig,
         moose: Arc<dyn Moose>,
-        auth: Arc<dyn auth::Context>,
+        auth: Arc<auth::Context>,
     ) -> Result<Self, Error> {
         let task = || {
             let state = Arc::new(State {

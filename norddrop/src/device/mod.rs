@@ -22,51 +22,12 @@ pub(super) struct NordDropFFI {
     instance: Arc<Mutex<Option<drop_transfer::Service>>>,
     event_dispatcher: Arc<EventDispatcher>,
     config: Config,
-    keys: Arc<KeysContext>,
+    keys: Arc<auth::Context>,
 }
 
 struct EventDispatcher {
     cb: ffi_types::norddrop_event_cb,
     logger: Logger,
-}
-
-struct KeysContext {
-    secret: SecretKey,
-    cb: Mutex<ffi_types::norddrop_pubkey_cb>,
-}
-
-impl KeysContext {
-    async fn public(&self, ip: Ipv4Addr) -> Option<PublicKey> {
-        let mut buf = [0u8; PUBLIC_KEY_LENGTH];
-        let ip = ip.octets();
-        let guard = self.cb.lock().await;
-        let res = tokio::task::block_in_place(|| unsafe {
-            (guard.cb)(guard.ctx, ip.as_ptr() as _, buf.as_mut_ptr() as _)
-        });
-        drop(guard);
-
-        if res == 0 {
-            PublicKey::from_bytes(&buf).ok()
-        } else {
-            None
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl auth::Context for KeysContext {
-    async fn own(&self) -> Option<(&SecretKey, PublicKey)> {
-        let public = self.public(Ipv4Addr::UNSPECIFIED).await?;
-        Some((&self.secret, public))
-    }
-
-    async fn peer_public(&self, ip: IpAddr) -> Option<PublicKey> {
-        if let IpAddr::V4(ip) = ip {
-            self.public(ip).await
-        } else {
-            None
-        }
-    }
 }
 
 impl EventDispatcher {
@@ -105,10 +66,7 @@ impl NordDropFFI {
                 logger,
             }),
             config: Config::default(),
-            keys: Arc::new(KeysContext {
-                secret: privkey,
-                cb: Mutex::new(pubkey_cb),
-            }),
+            keys: Arc::new(crate_key_context(privkey, pubkey_cb)),
         })
     }
 
@@ -412,4 +370,33 @@ impl NordDropFFI {
 
         Ok(())
     }
+}
+
+fn crate_key_context(
+    privkey: SecretKey,
+    pubkey_cb: ffi_types::norddrop_pubkey_cb,
+) -> auth::Context {
+    let pubkey_cb = std::sync::Mutex::new(pubkey_cb);
+    let pubkey_cb = move |ip: Ipv4Addr| {
+        let mut buf = [0u8; PUBLIC_KEY_LENGTH];
+        let ip = ip.octets();
+
+        let guard = pubkey_cb.lock().expect("Failed to lock pubkey callback");
+        let res = unsafe { (guard.cb)(guard.ctx, ip.as_ptr() as _, buf.as_mut_ptr() as _) };
+        drop(guard);
+
+        if res == 0 {
+            PublicKey::from_bytes(&buf).ok()
+        } else {
+            None
+        }
+    };
+
+    let public = move |ip| match ip {
+        Some(IpAddr::V4(ip)) => pubkey_cb(ip),
+        None => pubkey_cb(Ipv4Addr::UNSPECIFIED),
+        _ => None,
+    };
+
+    auth::Context::new(privkey, public)
 }
