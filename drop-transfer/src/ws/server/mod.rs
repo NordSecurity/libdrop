@@ -72,7 +72,7 @@ pub(crate) fn start(
     addr: IpAddr,
     stop: CancellationToken,
     state: Arc<State>,
-    auth: Arc<dyn auth::Context>,
+    auth: Arc<auth::Context>,
     logger: Logger,
 ) -> crate::Result<JoinHandle<()>> {
     let nonce_store = Arc::new(Mutex::new(HashMap::new()));
@@ -130,27 +130,21 @@ pub(crate) fn start(
                     let auth = auth.clone();
 
                     async move {
+                        // Uncache the peer nonce first
+                        let nonce = nonces.lock().await.remove(&peer.ip());
+
                         match version {
                             protocol::Version::V1 | protocol::Version::V2 => (),
                             protocol::Version::V3 => {
-                                let nonce = nonces.lock().await.remove(&peer.ip());
+                                let auth_header = auth_header
+                                    .ok_or_else(|| warp::reject::custom(MissingAuth(peer.ip())))?;
 
-                                match auth_header {
-                                    Some(auth_value) => {
-                                        let authorize = async {
-                                            let auth_req =
-                                                drop_auth::http::Authorization::parse(&auth_value)?;
-                                            let pubkey = auth.peer_public(peer.ip()).await?;
-                                            drop_auth::authorize(&nonce?, &pubkey, &auth_req)
-                                        };
+                                let nonce = nonce.ok_or_else(|| {
+                                    warp::reject::custom(Unauthrorized(peer.ip()))
+                                })?;
 
-                                        authorize.await.ok_or_else(|| {
-                                            warp::reject::custom(Unauthrorized(peer.ip()))
-                                        })?;
-                                    }
-                                    None => {
-                                        return Err(warp::reject::custom(MissingAuth(peer.ip())))
-                                    }
+                                if !auth.authorize(peer.ip(), &auth_header, &nonce) {
+                                    return Err(warp::reject::custom(Unauthrorized(peer.ip())));
                                 }
                             }
                         };

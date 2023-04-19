@@ -132,7 +132,7 @@ async fn establish_ws_conn(
 async fn make_request(
     socket: &mut TcpStream,
     url: &str,
-    auth: &dyn auth::Context,
+    auth: &auth::Context,
     logger: &slog::Logger,
 ) -> Result<(), tungstenite::Error> {
     let err = match tokio_tungstenite::client_async(url, &mut *socket).await {
@@ -147,22 +147,17 @@ async fn make_request(
         if resp.status() == StatusCode::UNAUTHORIZED {
             debug!(logger, "Creating 'authorization' header");
 
-            let extract_www_auth = async {
+            let extract_www_auth = || {
                 let val = resp
                     .headers()
                     .get(drop_auth::http::WWWAuthenticate::KEY)
                     .context("Missing 'www-authenticate' header")?
                     .to_str()?;
 
-                let resp = drop_auth::http::WWWAuthenticate::parse(val)
-                    .context("Failed to parse 'www-authenticate' header")?;
-
-                let (secret, pubkey) = auth.own().await.context("Failed to fetch own keys")?;
-                drop_auth::create_ticket(secret, &pubkey, resp)
-                    .context("Failed to create auth ticket")
+                auth.create_ticket_header_val(val)
             };
 
-            match extract_www_auth.await {
+            match extract_www_auth() {
                 Ok(auth_header) => {
                     debug!(logger, "Building 'authorization' request");
 
