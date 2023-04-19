@@ -2,16 +2,23 @@ from __future__ import annotations
 from pathlib import Path
 from collections import Counter
 import typing
+from threading import Lock
 
 from drop_test.error import Error
 
 UUIDS: typing.List[str] = []
+UUIDS_LOCK: Lock = Lock()
 
 
 def print_uuid(slot: int) -> str:
     uuid: str = "MISSING"
+
+    UUIDS_LOCK.acquire()
+
     if slot < len(UUIDS):
         uuid = UUIDS[slot]
+
+    UUIDS_LOCK.release()
 
     return f"{uuid} (slot: {slot})"
 
