@@ -10,7 +10,9 @@ use std::{
 use libc::c_char;
 use slog::{error, o, warn, Drain, Logger};
 
-use self::types::{norddrop_event_cb, norddrop_log_level, norddrop_logger_cb, norddrop_result};
+use self::types::{
+    norddrop_event_cb, norddrop_log_level, norddrop_logger_cb, norddrop_pubkey_cb, norddrop_result,
+};
 use crate::{
     device::{NordDropFFI, Result as DevResult},
     ffi::types::PanicError,
@@ -266,6 +268,8 @@ pub extern "C" fn norddrop_new(
     event_cb: norddrop_event_cb,
     log_level: norddrop_log_level,
     logger_cb: norddrop_logger_cb,
+    pubkey_cb: norddrop_pubkey_cb,
+    privkey: *const c_char,
 ) -> norddrop_result {
     unsafe {
         fortify_source();
@@ -297,7 +301,16 @@ pub extern "C" fn norddrop_new(
     });
 
     let result = panic::catch_unwind(move || {
-        let drive = ffi_try!(NordDropFFI::new(event_cb, logger));
+        if privkey.is_null() {
+            return norddrop_result::NORDDROP_RES_INVALID_PRIVKEY;
+        }
+        let privkey = unsafe {
+            std::slice::from_raw_parts(privkey as *const u8, drop_auth::SECRET_KEY_LENGTH)
+        };
+        let privkey = ffi_try!(drop_auth::SecretKey::from_bytes(privkey)
+            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_PRIVKEY));
+
+        let drive = ffi_try!(NordDropFFI::new(event_cb, pubkey_cb, privkey, logger));
         unsafe { *dev = Box::into_raw(Box::new(norddrop(Mutex::new(drive)))) };
 
         norddrop_result::NORDDROP_RES_OK

@@ -7,8 +7,6 @@ import sys
 import os
 import json
 
-runners = ["ren", "stimpy", "george"]
-
 
 def run():
     print("*** Test suite launched", flush=True)

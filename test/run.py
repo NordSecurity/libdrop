@@ -118,7 +118,7 @@ async def main():
 
     prepare_files(test_files, symlinks)
 
-    drop = ffi.Drop(lib)
+    drop = ffi.Drop(lib, ffi.KeysCtx(runner))
     logger.info(f"NordDrop version: {drop.version}")
     drop.start(addr)
 

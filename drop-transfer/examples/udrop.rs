@@ -4,17 +4,28 @@ use std::{
     io::Write,
     net::IpAddr,
     path::{Path, PathBuf},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
 use anyhow::Context;
-use clap::{arg, command, value_parser, ArgAction, Command, Result};
+use clap::{arg, command, value_parser, ArgAction, Command};
+use drop_auth::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
 use drop_config::DropConfig;
-use drop_transfer::{Event, File, Service, Transfer};
+use drop_transfer::{auth, Event, File, Service, Transfer};
 use slog::{o, Drain, Logger};
 use slog_scope::{info, warn};
 use tokio::sync::{mpsc, watch, Mutex};
 use uuid::Uuid;
+
+const PRIV_KEY: [u8; SECRET_KEY_LENGTH] = [
+    164, 70, 230, 247, 55, 28, 255, 147, 128, 74, 83, 50, 181, 222, 212, 18, 178, 162, 242, 102,
+    220, 203, 153, 161, 142, 206, 123, 188, 87, 77, 126, 183,
+];
+const PUB_KEY: [u8; PUBLIC_KEY_LENGTH] = [
+    68, 103, 21, 143, 132, 253, 95, 17, 203, 20, 154, 169, 66, 197, 210, 103, 56, 18, 143, 142,
+    142, 47, 53, 103, 186, 66, 91, 201, 181, 186, 12, 136,
+];
 
 async fn listen(
     service: &Mutex<Service>,
@@ -324,8 +335,24 @@ async fn main() -> anyhow::Result<()> {
         .get_one::<PathBuf>("output")
         .expect("Missing `output` flag");
 
-    let mut service = Service::start(addr, tx, logger, config, drop_analytics::moose_mock())
-        .context("Failed to start service")?;
+    let auth = {
+        let pubkey = drop_auth::PublicKey::from_bytes(&PUB_KEY).unwrap();
+
+        auth::Context::new(
+            drop_auth::SecretKey::from_bytes(&PRIV_KEY).unwrap(),
+            move |_| Some(pubkey),
+        )
+    };
+
+    let mut service = Service::start(
+        addr,
+        tx,
+        logger,
+        config,
+        drop_analytics::moose_mock(),
+        Arc::new(auth),
+    )
+    .context("Failed to start service")?;
 
     if let Some(xfer) = xfer {
         service.send_request(xfer);
