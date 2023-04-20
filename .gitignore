@@ -41,3 +41,7 @@ target/
 /norddrop/ffi/bindings/linux/go/go.mod
 /norddrop/ffi/bindings/android/go/go.mod
 /norddrop/ffi/bindings/windows/go/go.mod
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+/drop-storage/sqlx-data.json

@@ -32,8 +32,8 @@ pub(super) struct State {
     pub(super) event_tx: mpsc::Sender<Event>,
     pub(super) transfer_manager: Mutex<TransferManager>,
     pub(crate) moose: Arc<dyn Moose>,
-    pub(crate) config: DropConfig,
     pub(crate) auth: Arc<auth::Context>,
+    pub(crate) config: Arc<DropConfig>,
 }
 
 pub struct Service {
@@ -66,16 +66,17 @@ macro_rules! moose_try_file {
 impl Service {
     pub fn start(
         addr: IpAddr,
+        storage: drop_storage::Storage,
         event_tx: mpsc::Sender<Event>,
         logger: Logger,
-        config: DropConfig,
+        config: Arc<DropConfig>,
         moose: Arc<dyn Moose>,
         auth: Arc<auth::Context>,
     ) -> Result<Self, Error> {
         let task = || {
             let state = Arc::new(State {
                 event_tx,
-                transfer_manager: Mutex::default(),
+                transfer_manager: Mutex::new(TransferManager::new(storage)),
                 moose: moose.clone(),
                 config,
                 auth: auth.clone(),

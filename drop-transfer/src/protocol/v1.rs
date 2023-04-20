@@ -8,7 +8,7 @@
 //!
 //! * server (receiver) ->   client (sender): `Done (file)`
 
-use std::net::IpAddr;
+use std::{net::IpAddr, sync::Arc};
 
 use drop_config::DropConfig;
 use serde::{Deserialize, Serialize};
@@ -43,11 +43,11 @@ pub enum ClientMsg {
     Cancel(Download),
 }
 
-impl TryFrom<(TransferRequest, IpAddr, DropConfig)> for crate::Transfer {
+impl TryFrom<(TransferRequest, IpAddr, Arc<DropConfig>)> for crate::Transfer {
     type Error = crate::Error;
 
     fn try_from(
-        (TransferRequest { files }, peer, config): (TransferRequest, IpAddr, DropConfig),
+        (TransferRequest { files }, peer, config): (TransferRequest, IpAddr, Arc<DropConfig>),
     ) -> Result<Self, Self::Error> {
         Self::new(
             peer,

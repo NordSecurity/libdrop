@@ -17,7 +17,7 @@
 //! `Start` in case the downloaded file is already there
 //! * server (receiver) ->   client (sender): `Done (file)`
 
-use std::{collections::HashMap, net::IpAddr};
+use std::{collections::HashMap, net::IpAddr, sync::Arc};
 
 use anyhow::Context;
 use drop_config::DropConfig;
@@ -212,11 +212,11 @@ impl TryFrom<&crate::File> for File {
     }
 }
 
-impl TryFrom<(TransferRequest, IpAddr, DropConfig)> for crate::Transfer {
+impl TryFrom<(TransferRequest, IpAddr, Arc<DropConfig>)> for crate::Transfer {
     type Error = crate::Error;
 
     fn try_from(
-        (TransferRequest { files, id }, peer, config): (TransferRequest, IpAddr, DropConfig),
+        (TransferRequest { files, id }, peer, config): (TransferRequest, IpAddr, Arc<DropConfig>),
     ) -> Result<Self, Self::Error> {
         Self::new_with_uuid(
             peer,

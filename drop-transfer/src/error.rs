@@ -42,6 +42,8 @@ pub enum Error {
     FilenameTooLong,
     #[error("Failed to authenticate to the peer")]
     AuthenticationFailed,
+    #[error("Storage error")]
+    StorageError,
 }
 
 impl From<&Error> for u32 {
@@ -67,6 +69,7 @@ impl From<&Error> for u32 {
             Error::FileModified => 28,
             Error::FilenameTooLong => 29,
             Error::AuthenticationFailed => 30,
+            Error::StorageError => 31,
         }
     }
 }
