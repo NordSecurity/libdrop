@@ -5,6 +5,8 @@ on:
     types: [labeled]
   push:
     branches: [dev, main]
+    tags:
+      - v*
 permissions: {}
 jobs:
   trigger-gitlab-pipeline:
