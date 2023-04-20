@@ -88,6 +88,7 @@ pub struct Config {
     pub transfer_idle_lifetime_ms: u64,
     pub moose_event_path: String,
     pub moose_prod: bool,
+    pub storage_path: String,
 }
 
 const fn default_connection_max_retry_interval_ms() -> u64 {
@@ -230,6 +231,7 @@ impl From<Config> for drop_config::Config {
             transfer_idle_lifetime_ms,
             moose_event_path,
             moose_prod,
+            storage_path,
         } = val;
 
         drop_config::Config {
@@ -241,6 +243,7 @@ impl From<Config> for drop_config::Config {
                     connection_max_retry_interval_ms,
                 ),
                 transfer_idle_lifetime: Duration::from_millis(transfer_idle_lifetime_ms),
+                storage_path,
             },
             moose: drop_config::MooseConfig {
                 event_path: moose_event_path,
@@ -264,7 +267,8 @@ mod tests {
           "req_connection_timeout_ms": 1000,
           "transfer_idle_lifetime_ms": 2000,
           "moose_event_path": "test/path",
-          "moose_prod": true
+          "moose_prod": true,
+          "storage_path": ":memory:"
         }
         "#;
 
@@ -279,7 +283,8 @@ mod tests {
           "transfer_idle_lifetime_ms": 2000,
           "connection_max_retry_interval_ms": 500,
           "moose_event_path": "test/path",
-          "moose_prod": true
+          "moose_prod": true,
+          "storage_path": ":memory:"
         }
         "#;
 
@@ -293,6 +298,7 @@ mod tests {
                     req_connection_timeout,
                     transfer_idle_lifetime,
                     connection_max_retry_interval,
+                    storage_path,
                 },
             moose: drop_config::MooseConfig { event_path, prod },
         } = cfg.into();
@@ -303,6 +309,7 @@ mod tests {
         assert_eq!(connection_max_retry_interval, Duration::from_millis(500));
         assert_eq!(transfer_idle_lifetime, Duration::from_millis(2000));
         assert_eq!(event_path, "test/path");
+        assert_eq!(storage_path, ":memory:");
         assert!(prod);
     }
 }

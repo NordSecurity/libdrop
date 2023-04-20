@@ -20,6 +20,7 @@ drop-transfer = { version = "1.0", path = "../drop-transfer" }
 drop-config = { version = "1.0", path = "../drop-config" }
 drop-analytics = { version = "1.0", path = "../drop-analytics" }
 drop-auth = { path = "../drop-auth" }
+drop-storage = { version = "1.0", path = "../drop-storage" }
 
 [build-dependencies]
 cc = "1.0.79"

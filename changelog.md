@@ -1,6 +1,7 @@
 ### UNRELEASED
 ### **ANGERY**
 ---
+* Accept `storage_path` through `norddrop_start` config for SQLite persistence
 
 ---
 <br>

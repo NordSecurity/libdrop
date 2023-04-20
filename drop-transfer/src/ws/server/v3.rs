@@ -63,7 +63,7 @@ impl<'a> HandlerInit<'a> {
 
 #[async_trait::async_trait]
 impl<'a> handler::HandlerInit for HandlerInit<'a> {
-    type Request = (v3::TransferRequest, IpAddr, DropConfig);
+    type Request = (v3::TransferRequest, IpAddr, Arc<DropConfig>);
     type Loop = HandlerLoop<'a>;
     type Pinger = tokio::time::Interval;
 
@@ -78,7 +78,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
 
         let req = serde_json::from_str(msg).context("Failed to deserialize transfer request")?;
 
-        Ok((req, self.peer, self.state.config))
+        Ok((req, self.peer, self.state.config.clone()))
     }
 
     async fn on_error(&mut self, ws: &mut WebSocket, err: anyhow::Error) -> anyhow::Result<()> {
@@ -593,7 +593,7 @@ impl FileTask {
     }
 }
 
-impl handler::Request for (v3::TransferRequest, IpAddr, DropConfig) {
+impl handler::Request for (v3::TransferRequest, IpAddr, Arc<DropConfig>) {
     fn parse(self) -> anyhow::Result<crate::Transfer> {
         self.try_into().context("Failed to parse transfer request")
     }

@@ -30,9 +30,10 @@ pub struct TransferState {
 
 /// Transfer manager is responsible for keeping track of all ongoing or pending
 /// transfers and their status
-#[derive(Default)]
 pub(crate) struct TransferManager {
     transfers: HashMap<Uuid, TransferState>,
+    #[allow(dead_code)]
+    storage: drop_storage::Storage,
 }
 
 impl TransferState {
@@ -46,6 +47,12 @@ impl TransferState {
 }
 
 impl TransferManager {
+    pub(crate) fn new(storage: drop_storage::Storage) -> TransferManager {
+        TransferManager {
+            transfers: HashMap::new(),
+            storage,
+        }
+    }
     /// Get ALL of the ongoing file transfers for a given transfer ID
     /// returns None if a transfer does not exist
     pub(crate) fn get_transfer_files(&self, transfer_id: Uuid) -> Option<Vec<FileId>> {

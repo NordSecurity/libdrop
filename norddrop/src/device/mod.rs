@@ -21,8 +21,8 @@ pub(super) struct NordDropFFI {
     pub logger: Logger,
     instance: Arc<Mutex<Option<drop_transfer::Service>>>,
     event_dispatcher: Arc<EventDispatcher>,
-    config: Config,
     keys: Arc<auth::Context>,
+    config: Config,
 }
 
 struct EventDispatcher {
@@ -85,6 +85,7 @@ impl NordDropFFI {
                 return Err(ffi::types::NORDDROP_RES_JSON_PARSE);
             }
         };
+
         self.config = config.into();
 
         if self.config.moose.event_path.is_empty() {
@@ -132,11 +133,20 @@ impl NordDropFFI {
         });
 
         self.rt.block_on(async {
+            let storage =
+                drop_storage::Storage::new(self.logger.clone(), &self.config.drop.storage_path)
+                    .await
+                    .map_err(|e| {
+                        error!(self.logger, "Failed to prepare storage: {}", e);
+                        ffi::types::NORDDROP_RES_DB_ERROR
+                    })?;
+
             let service = match Service::start(
                 addr,
+                storage,
                 tx,
                 self.logger.clone(),
-                self.config.drop,
+                Arc::new(self.config.drop.clone()),
                 moose,
                 self.keys.clone(),
             ) {
