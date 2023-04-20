@@ -36,8 +36,8 @@ public class NordDrop {
     }
   }
 
-  public NordDrop(INordDropEventCb events, NorddropLogLevel level, INordDropLoggerCb logger) {
-    this(libnorddropJNI.new_NordDrop(events, level.swigValue(), logger), true);
+  public NordDrop(INordDropEventCb events, NorddropLogLevel level, INordDropLoggerCb logger, INordDropPubkeyCb pubkeyCb, byte[] privkey) {
+    this(libnorddropJNI.new_NordDrop(events, level.swigValue(), logger, pubkeyCb, privkey), true);
   }
 
   public NorddropResult start(String listenAddr, String configJson) {

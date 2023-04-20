@@ -42,23 +42,18 @@ struct norddrop {};
 
 %extend norddrop {
 
-#if defined(__ANDROID__)
-    norddrop(norddrop_event_cb events, enum norddrop_log_level level, norddrop_logger_cb logger) {
+    norddrop(norddrop_event_cb events,
+        enum norddrop_log_level level,
+        norddrop_logger_cb logger,
+        norddrop_pubkey_cb pubkey_cb,
+        const char* privkey) {
+
         norddrop *t = NULL;
-        if (NORDDROP_RES_OK != norddrop_new(&t, events, level, logger)) {
+        if (NORDDROP_RES_OK != norddrop_new(&t, events, level, logger, pubkey_cb, privkey)) {
             return NULL;
         }
         return t;
     }
-#else
-    norddrop(norddrop_event_cb events, enum norddrop_log_level level, norddrop_logger_cb logger) {
-        norddrop *t = NULL;
-        if (NORDDROP_RES_OK != norddrop_new(&t, events, level, logger)) {
-            return NULL;
-        }
-        return t;
-    }
-#endif
 
     ~norddrop() {
         norddrop_destroy($self);

@@ -7,9 +7,15 @@ from enum import IntEnum
 
 from . import event
 from .logger import logger
+from .config import RUNNERS
 
 
 DEBUG_PRINT_EVENT = True
+
+# fmt: off
+PRIV_KEY = bytes([164, 70, 230, 247, 55, 28, 255, 147, 128, 74, 83, 50, 181, 222, 212, 18, 178, 162, 242, 102, 220, 203, 153, 161, 142, 206, 123, 188, 87, 77, 126, 183])
+PUB_KEY = bytes([68, 103, 21, 143, 132, 253, 95, 17, 203, 20, 154, 169, 66, 197, 210, 103, 56, 18, 143, 142, 142, 47, 53, 103, 186, 66, 91, 201, 181, 186, 12, 136])
+# fmt: on
 
 
 class LibResult(IntEnum):
@@ -147,8 +153,37 @@ class EventQueue:
         )
 
 
+class KeysCtx:
+    def __init__(self, runner: str):
+        self.this = RUNNERS[runner]
+
+    def callback(self, ctx, ip, pubkey):
+        ip = ip[:4]
+
+        found = None
+        if ip == bytes([0, 0, 0, 0]):
+            found = self.this.pubkey
+        else:
+            peer = None
+            for pr in RUNNERS.values():
+                if pr.ip == ip:
+                    peer = pr
+                    break
+
+            if peer is None:
+                return 1
+
+            found = peer.pubkey
+
+        ctypes.memmove(pubkey, found, len(found))
+        return 0
+
+    def secret(self):
+        return self.this.privkey
+
+
 class Drop:
-    def __init__(self, path: str):
+    def __init__(self, path: str, keys: KeysCtx):
         norddrop_lib = ctypes.cdll.LoadLibrary(path)
 
         logger_cb_func = ctypes.CFUNCTYPE(
@@ -161,9 +196,21 @@ class Drop:
             ctypes.c_void_p, ctypes.POINTER(ctypes.c_char_p)
         )
 
+        pubkey_cb_func = ctypes.CFUNCTYPE(
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_char_p),
+            ctypes.POINTER(ctypes.c_char_p),
+        )
+
         ceventtype = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_char_p)
         clogtype = ctypes.CFUNCTYPE(
             None, ctypes.c_void_p, ctypes.c_int, ctypes.c_char_p
+        )
+        cpubkeytype = ctypes.CFUNCTYPE(
+            ctypes.c_int,
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_char),
+            ctypes.POINTER(ctypes.c_char_p),
         )
 
         norddrop_lib.norddrop_version.restype = ctypes.c_char_p
@@ -183,6 +230,7 @@ class Drop:
         events = EventQueue()
         event_callback_wrapped = ceventtype(events.callback)
         log_callback_wrapped = clogtype(log_callback)
+        pubkey_callback_wrapped = cpubkeytype(keys.callback)
 
         class event_cb(ctypes.Structure):
             _fields_ = [("ctx", ctypes.c_void_p), ("cb", event_cb_func)]
@@ -196,11 +244,19 @@ class Drop:
             def __str__(self):
                 return f"Python Logger callback: ctx={self.ctx}, cb={self.cb}"
 
+        class pubkey_cb(ctypes.Structure):
+            _fields_ = [("ctx", ctypes.c_void_p), ("cb", pubkey_cb_func)]
+
+            def __str__(self):
+                return f"Python Pubkey callback: ctx={self.ctx}, cb={self.cb}"
+
         logger_instance = logger_cb()
         eventer_instance = event_cb()
+        pubkey_instance = pubkey_cb()
 
         logger_instance.cb = ctypes.cast(log_callback_wrapped, logger_cb_func)
         eventer_instance.cb = ctypes.cast(event_callback_wrapped, event_cb_func)
+        pubkey_instance.cb = ctypes.cast(pubkey_callback_wrapped, pubkey_cb_func)
 
         fake_instance = ctypes.pointer(ctypes.c_void_p())
         norddrop_instance = ctypes.pointer(fake_instance)
@@ -210,6 +266,8 @@ class Drop:
             eventer_instance,
             LogLevel.Debug,
             logger_instance,
+            pubkey_instance,
+            ctypes.create_string_buffer(keys.secret()),
         )
 
         self._instance = norddrop_instance

@@ -1,3 +1,4 @@
+pub mod auth;
 mod error;
 pub mod event;
 pub mod file;

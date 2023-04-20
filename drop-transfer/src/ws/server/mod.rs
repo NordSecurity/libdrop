@@ -3,6 +3,7 @@ mod v2;
 mod v3;
 
 use std::{
+    collections::HashMap,
     fs,
     io::{self, Write},
     net::{IpAddr, SocketAddr},
@@ -12,11 +13,16 @@ use std::{
 };
 
 use anyhow::Context;
+use drop_auth::Nonce;
 use futures::{SinkExt, StreamExt};
 use handler::{Downloader, HandlerInit, HandlerLoop, Request};
+use hyper::StatusCode;
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
-    sync::mpsc::{self, UnboundedReceiver},
+    sync::{
+        mpsc::{self, UnboundedReceiver},
+        Mutex,
+    },
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
@@ -27,6 +33,7 @@ use warp::{
 
 use super::events::FileEventTx;
 use crate::{
+    auth,
     error::ResultExt,
     event::DownloadSuccess,
     file::{self, FileId},
@@ -65,11 +72,45 @@ pub(crate) fn start(
     addr: IpAddr,
     stop: CancellationToken,
     state: Arc<State>,
+    auth: Arc<auth::Context>,
     logger: Logger,
 ) -> crate::Result<JoinHandle<()>> {
+    let nonce_store = Arc::new(Mutex::new(HashMap::new()));
+
+    #[derive(Debug)]
+    struct MissingAuth(SocketAddr);
+    impl warp::reject::Reject for MissingAuth {}
+
+    #[derive(Debug)]
+    struct Unauthrorized;
+    impl warp::reject::Reject for Unauthrorized {}
+
+    async fn handle_rejection(
+        nonces: &Mutex<HashMap<SocketAddr, Nonce>>,
+        err: warp::Rejection,
+    ) -> Result<Box<dyn warp::Reply>, warp::Rejection> {
+        if let Some(MissingAuth(peer)) = err.find() {
+            let nonce = Nonce::generate();
+            let value = drop_auth::http::WWWAuthenticate::new(nonce);
+
+            nonces.lock().await.insert(*peer, nonce);
+
+            Ok(Box::new(warp::reply::with_header(
+                StatusCode::UNAUTHORIZED,
+                drop_auth::http::WWWAuthenticate::KEY,
+                value.to_string(),
+            )))
+        } else if let Some(Unauthrorized) = err.find() {
+            Ok(Box::new(StatusCode::UNAUTHORIZED))
+        } else {
+            Err(err)
+        }
+    }
+
     let service = {
         let stop = stop.clone();
         let logger = logger.clone();
+        let nonces = nonce_store.clone();
 
         warp::path("drop")
             .and(warp::path::param().and_then(|version: String| async move {
@@ -77,12 +118,45 @@ pub(crate) fn start(
                     .parse::<protocol::Version>()
                     .map_err(|_| warp::reject::not_found())
             }))
+            .and(
+                warp::filters::addr::remote().then(|peer: Option<SocketAddr>| async move {
+                    peer.expect("Transport should use IP addresses")
+                }),
+            )
+            .and(warp::filters::header::optional("authorization"))
+            .and_then(
+                move |version: protocol::Version, peer: SocketAddr, auth_header: Option<String>| {
+                    let nonces = nonces.clone();
+                    let auth = auth.clone();
+
+                    async move {
+                        // Uncache the peer nonce first
+                        let nonce = nonces.lock().await.remove(&peer);
+
+                        match version {
+                            protocol::Version::V1 | protocol::Version::V2 => (),
+                            protocol::Version::V3 => {
+                                let auth_header = auth_header
+                                    .ok_or_else(|| warp::reject::custom(MissingAuth(peer)))?;
+
+                                let nonce =
+                                    nonce.ok_or_else(|| warp::reject::custom(Unauthrorized))?;
+
+                                if !auth.authorize(peer.ip(), &auth_header, &nonce) {
+                                    return Err(warp::reject::custom(Unauthrorized));
+                                }
+                            }
+                        };
+
+                        Ok((version, peer))
+                    }
+                },
+            )
+            .untuple_one()
             .and(warp::ws())
-            .and(warp::filters::addr::remote())
             .map(
-                move |version: protocol::Version, ws: warp::ws::Ws, peer: Option<SocketAddr>| {
+                move |version: protocol::Version, peer: SocketAddr, ws: warp::ws::Ws| {
                     let state = Arc::clone(&state);
-                    let peer = peer.expect("Transport should use IP addresses");
                     let stop = stop.clone();
                     let logger = logger.clone();
 
@@ -113,6 +187,10 @@ pub(crate) fn start(
                     })
                 },
             )
+            .recover(move |err| {
+                let nonces = Arc::clone(&nonce_store);
+                async move { handle_rejection(&nonces, err).await }
+            })
     };
 
     let future = match warp::serve(service)
