@@ -343,7 +343,7 @@ class Drop:
             err_type = LibResult(err).name
             raise Exception(f"cancel_file has failed with code: {err}({err_type})")
 
-    def start(self, addr: str):
+    def start(self, addr: str, runner: str):
         cfg = {
             "dir_depth_limit": 5,
             "transfer_file_limit": 1000,
@@ -352,6 +352,7 @@ class Drop:
             "transfer_idle_lifetime_ms": 10000,
             "moose_event_path": "/tmp/moose-events",
             "moose_prod": False,
+            "storage_path": f"/src/libdrop_{runner}.sqlite",
         }
 
         err = self._lib.norddrop_start(

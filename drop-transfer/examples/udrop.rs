@@ -298,10 +298,10 @@ async fn main() -> anyhow::Result<()> {
         )
         .get_matches();
 
-    let config = DropConfig {
+    let config = Arc::new(DropConfig {
         req_connection_timeout: Duration::from_secs(10),
         ..Default::default()
-    };
+    });
 
     let xfer = if let Some(matches) = matches.subcommand_matches("transfer") {
         let addr = matches
@@ -344,8 +344,13 @@ async fn main() -> anyhow::Result<()> {
         )
     };
 
+    let storage = drop_storage::Storage::new(logger.clone(), ":memory:")
+        .await
+        .unwrap();
+
     let mut service = Service::start(
         addr,
+        storage,
         tx,
         logger,
         config,
