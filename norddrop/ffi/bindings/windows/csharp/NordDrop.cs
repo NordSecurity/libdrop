@@ -75,7 +75,7 @@ public class Norddrop : global::System.IDisposable {
 
   public delegate void EventDelegate(string message);
   public delegate void LoggerDelegate(NorddropLogLevel level, string message);
-  public delegate int PubkeyDelegate(byte[] ip, out byte[] pubkey);
+  public delegate int PubkeyDelegate(string ip, out byte[] pubkey);
 
   public Norddrop(EventDelegate events, NorddropLogLevel level, LoggerDelegate logger, PubkeyDelegate pubkeyCb, string privkey) : this(libnorddropPINVOKE.new_Norddrop(events, (int)level, logger, pubkeyCb, privkey), true) {
     if (libnorddropPINVOKE.SWIGPendingException.Pending) throw libnorddropPINVOKE.SWIGPendingException.Retrieve();

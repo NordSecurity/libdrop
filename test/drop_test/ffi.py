@@ -158,12 +158,12 @@ class KeysCtx:
         self.this = RUNNERS[runner]
 
     def callback(self, ctx, ip, pubkey):
-        ip = ip[:4]
-
         found = None
-        if ip == bytes([0, 0, 0, 0]):
+        if ip is None:
             found = self.this.pubkey
         else:
+            ip = ip.decode("utf-8")
+
             peer = None
             for pr in RUNNERS.values():
                 if pr.ip == ip:
@@ -209,7 +209,7 @@ class Drop:
         cpubkeytype = ctypes.CFUNCTYPE(
             ctypes.c_int,
             ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_char),
+            ctypes.c_char_p,
             ctypes.POINTER(ctypes.c_char_p),
         )
 

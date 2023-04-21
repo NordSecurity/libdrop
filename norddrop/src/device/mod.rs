@@ -1,7 +1,7 @@
 pub mod types;
 
 use std::{
-    net::{IpAddr, Ipv4Addr, ToSocketAddrs},
+    net::{IpAddr, ToSocketAddrs},
     sync::Arc,
 };
 
@@ -377,12 +377,22 @@ fn crate_key_context(
     pubkey_cb: ffi_types::norddrop_pubkey_cb,
 ) -> auth::Context {
     let pubkey_cb = std::sync::Mutex::new(pubkey_cb);
-    let pubkey_cb = move |ip: Ipv4Addr| {
+    let public = move |ip: Option<IpAddr>| {
         let mut buf = [0u8; PUBLIC_KEY_LENGTH];
-        let ip = ip.octets();
+
+        let ip = ip.map(|ip| {
+            // Insert the trailing null byte
+            format!("{ip}\0").into_bytes()
+        });
 
         let guard = pubkey_cb.lock().expect("Failed to lock pubkey callback");
-        let res = unsafe { (guard.cb)(guard.ctx, ip.as_ptr() as _, buf.as_mut_ptr() as _) };
+        let res = unsafe {
+            (guard.cb)(
+                guard.ctx,
+                ip.as_ref().map(|v| v.as_ptr()).unwrap_or(std::ptr::null()) as *const _,
+                buf.as_mut_ptr() as _,
+            )
+        };
         drop(guard);
 
         if res == 0 {
@@ -390,12 +400,6 @@ fn crate_key_context(
         } else {
             None
         }
-    };
-
-    let public = move |ip| match ip {
-        Some(IpAddr::V4(ip)) => pubkey_cb(ip),
-        None => pubkey_cb(Ipv4Addr::UNSPECIFIED),
-        _ => None,
     };
 
     auth::Context::new(privkey, public)
