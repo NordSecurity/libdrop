@@ -4,7 +4,7 @@
 %insert(go_wrapper) %{
 var eventCallbacks = map[uintptr]func(string){}
 var loggerCallbacks = map[uintptr]func(int, string){}
-var pubkeyCallbacks = map[uintptr]func(byte[]) *byte[]{}
+var pubkeyCallbacks = map[uintptr]func(string) *byte[]{}
 // Note: This can only ensure enough place for 8 callbacks
 // Application can crash when creating more if these the last
 // items on stack
@@ -100,7 +100,7 @@ func call_norddrop_logger_cb(ctx uintptr, level C.int, str *C.char) {
 }
 
 
-%typemap(gotype) norddrop_pubkey_cb "func(byte[], *byte) int";
+%typemap(gotype) norddrop_pubkey_cb "func(string, *byte) int";
 %typemap(imtype) norddrop_pubkey_cb "C.norddrop_pubkey_cb";
 %typemap(goin) norddrop_pubkey_cb {
         index := maxPubkeyCbIndex() + 1
@@ -119,8 +119,7 @@ func call_norddrop_logger_cb(ctx uintptr, level C.int, str *C.char) {
 //export call_norddrop_pubkey_cb
 func call_norddrop_pubkey_cb(ctx uintptr, ip *C.char, pubkey *C.char) C.int {
         if callback, ok := pubkeyCallbacks[ctx]; ok {
-                goip := C.GoBytes(ip, 4)
-                gokey := callback(go_ip)
+                gokey := callback(C.GoString(ip))
 
                 if gokey != nil {
                         ckey := C.CBytes(gokey)
