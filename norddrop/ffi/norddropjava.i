@@ -224,7 +224,6 @@ static int norddrop_jni_call_pubkey_cb(void *ctx, const char* ip, char *pubkey) 
     }
 
     JNIEnv *env = NULL;
-    int res = 1;
 
     jint res = (*jvm)->GetEnv(jvm, (void**)&env, JNI_VERSION_1_6);
     int attached = 0;
@@ -236,24 +235,24 @@ static int norddrop_jni_call_pubkey_cb(void *ctx, const char* ip, char *pubkey) 
         };
 
         if ((*jvm)->AttachCurrentThread(jvm, &env, (void*)&args)) {
-            return res;
+            return 1;
         }
         attached = 1;
     } else if (JNI_OK != res) {
-        return res;
+        return 1;
     }
 
     jmethodID handle = GET_CACHED_METHOD_ID(env, iNordDropPubkeyCbPubkeyHandleID);
-    RETURN_AND_THROW_IF_NULL(env, handle, "pubkeyHandle not found.");
+    RETURN_VAL_AND_THROW_IF_NULL(env, handle, "pubkeyHandle not found.", 1);
 
     jstring jip = (*env)->NewByteArray(env, 4);
-    RETURN_AND_THROW_IF_NULL(env, jip, "Cannot crate IP array.");
+    RETURN_VAL_AND_THROW_IF_NULL(env, jip, "Cannot crate IP array.", 1);
     SetByteArrayRegion(env, jip, 0, 4, ip);
 
     jstring jpubkey = (*env)->NewByteArray(env, 32);
-    RETURN_AND_THROW_IF_NULL(env, jpubkey, "Cannot crate pubkey array.");
+    RETURN_VAL_AND_THROW_IF_NULL(env, jpubkey, "Cannot crate pubkey array.", 1);
 
-    res = (*env)->CallIntMethod(env, (jobject)ctx, handle, jip, jpubkey);
+    int cb_res = (*env)->CallIntMethod(env, (jobject)ctx, handle, jip, jpubkey);
     GetByteArrayRegion(env, jpubkey, 0, 32, pubkey);
 
     (*env)->DeleteLocalRef(env, jip);
@@ -262,7 +261,7 @@ static int norddrop_jni_call_pubkey_cb(void *ctx, const char* ip, char *pubkey) 
         (*jvm)->DetachCurrentThread(jvm);
     }
 
-    return res;
+    return cb_res;
 }
 %}
 
