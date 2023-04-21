@@ -30,7 +30,7 @@ int call_norddrop_pubkey_cb(void *ctx, const char* ip, char* privkey) {
 %typemap(cscode) norddrop %{
   public delegate void EventDelegate(string message);
   public delegate void LoggerDelegate(NorddropLogLevel level, string message);
-  public delegate int PubkeyDelegate(byte[] ip, out byte[] pubkey);
+  public delegate int PubkeyDelegate(string ip, out byte[] pubkey);
 %}
 
 %typemap(cstype) norddrop_event_cb "EventDelegate";
