@@ -152,6 +152,16 @@
     }\
 }
 
+#define RETURN_VAL_AND_THROW_IF_NULL(env, p, mesg, val) {\
+    if ((*(env))->ExceptionCheck(env)) {\
+        return val;\
+    }\
+    if (0==p) {\
+        throw_null_pointer_exception(env, mesg);\
+        return val;\
+    }\
+}
+
 #define RETURN_AND_THROW_IF_NOT_ZERO(env, p, mesg) {\
     if ((*(env))->ExceptionCheck(env)) {\
         return;\

@@ -107,9 +107,10 @@ pub struct norddrop_logger_cb {
 
 #[allow(non_camel_case_types)]
 /// Writes the peer's public key into the buffer of length 32.
-/// The peer is identifed by IPv4 address passed as octets (4 bytes), the
-/// special one 0.0.0.0 means the caller itself. Returns 0 on success and 1 on
-/// failure or missing key
+/// The peer is identifed by IP address passed as string,
+/// If IP is null that means we're requesting the public key
+/// of the caller itself.
+/// Returns 0 on success and 1 on failure or missing key
 pub type norddrop_pubkey_fn =
     unsafe extern "C" fn(*mut c_void, *const c_char, *mut c_char) -> c_int;
 
