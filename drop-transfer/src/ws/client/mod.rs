@@ -326,7 +326,7 @@ impl RunContext<'_> {
     }
 }
 
-fn start_upload(
+async fn start_upload(
     state: Arc<State>,
     logger: slog::Logger,
     events: Arc<FileEventTx>,
@@ -336,22 +336,22 @@ fn start_upload(
 ) -> anyhow::Result<JoinHandle<()>> {
     let xfile = xfer.file(&file_id).context("File not found")?.clone();
 
-    let transfer_time = Instant::now();
-
-    state.moose.service_quality_transfer_file(
-        Ok(()),
-        drop_analytics::Phase::Start,
-        xfer.id().to_string(),
-        0,
-        xfile.info(),
-    );
+    events
+        .start(Event::FileUploadStarted(xfer.clone(), file_id.clone()))
+        .await;
 
     let upload_job = async move {
-        let send_file = async {
-            events
-                .start(Event::FileUploadStarted(xfer.clone(), file_id.clone()))
-                .await;
+        let transfer_time = Instant::now();
 
+        state.moose.service_quality_transfer_file(
+            Ok(()),
+            drop_analytics::Phase::Start,
+            xfer.id().to_string(),
+            0,
+            xfile.info(),
+        );
+
+        let send_file = async {
             let mut iofile = match xfile.open(uploader.offset()) {
                 Ok(f) => f,
                 Err(err) => {

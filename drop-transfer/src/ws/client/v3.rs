@@ -184,7 +184,7 @@ impl HandlerLoop<'_> {
         file_id: FileId,
         offset: u64,
     ) -> anyhow::Result<()> {
-        let mut f = || {
+        let start = async {
             match self.tasks.entry(file_id.clone()) {
                 Entry::Occupied(o) => {
                     let task = o.into_mut();
@@ -197,7 +197,8 @@ impl HandlerLoop<'_> {
                             self.xfer.clone(),
                             file_id.clone(),
                             offset,
-                        )?;
+                        )
+                        .await?;
                     } else {
                         anyhow::bail!("Transfer already in progress");
                     }
@@ -210,7 +211,8 @@ impl HandlerLoop<'_> {
                         self.xfer.clone(),
                         file_id.clone(),
                         offset,
-                    )?;
+                    )
+                    .await?;
 
                     v.insert(task);
                 }
@@ -220,7 +222,7 @@ impl HandlerLoop<'_> {
             anyhow::Ok(())
         };
 
-        if let Err(err) = f() {
+        if let Err(err) = start.await {
             error!(self.logger, "Failed to start upload: {:?}", err);
 
             let msg = v3::Error {
@@ -309,6 +311,8 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
         match msg {
             Message::Text(json) => {
+                debug!(self.logger, "Received:\n\t{json}");
+
                 let msg: v3::ServerMsg =
                     serde_json::from_str(&json).context("Failed to deserialize server message")?;
 
@@ -428,7 +432,7 @@ impl handler::Uploader for Uploader {
 }
 
 impl FileTask {
-    fn start(
+    async fn start(
         state: Arc<State>,
         logger: &slog::Logger,
         sink: Sender<Message>,
@@ -451,7 +455,8 @@ impl FileTask {
             uploader,
             xfer,
             file_id,
-        )?;
+        )
+        .await?;
 
         Ok(Self { job, events })
     }
