@@ -216,7 +216,7 @@ static void norddrop_jni_call_logger_cb(void *ctx, enum norddrop_log_level level
 %{
 
 DECLARE_CACHED_CLASS(iNordDropPubkeyCb, PKG "INordDropPubkeyCb");
-DECLARE_CACHED_METHOD_ID(iNordDropPubkeyCb, iNordDropPubkeyCbPubkeyHandleID, "pubkeyHandle", "(Ljava/lang/String;Ljava/lang/byte[];)Ljava/lang/int");
+DECLARE_CACHED_METHOD_ID(iNordDropPubkeyCb, iNordDropPubkeyCbPubkeyHandleID, "pubkeyHandle", "(Ljava/lang/String;[B)I");
 
 static int norddrop_jni_call_pubkey_cb(void *ctx, const char* ip, char *pubkey) {
     if (!jvm) {
