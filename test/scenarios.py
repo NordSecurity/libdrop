@@ -3351,4 +3351,69 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario22",
+        "Send one zero sized file to a peer, expect it to be transferred",
+        {
+            "ren": ActionList(
+                [
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/zero-sized-file"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File("zero-sized-file", 0),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, "zero-sized-file")),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            "zero-sized-file",
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File("zero-sized-file", 0),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        "zero-sized-file",
+                        "/tmp/received/22",
+                    ),
+                    action.Wait(event.Start(0, "zero-sized-file")),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            "zero-sized-file",
+                            "/tmp/received/22/zero-sized-file",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            event.File("/tmp/received/22/zero-sized-file", 0),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]
