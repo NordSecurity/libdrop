@@ -1,3 +1,11 @@
+### UNRELEASED
+### **UNRELEASED**
+---
+* Fix not receiving `FileUploadStarted` and `FileUploadSuccess` events before the transfer is canceled
+
+---
+<br>
+
 ### v2.0.0
 ### **Brzęczyszczykiewicz**
 ---

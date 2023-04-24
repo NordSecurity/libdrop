@@ -295,6 +295,8 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         self.last_recv = Instant::now();
 
         if let Ok(json) = msg.to_str() {
+            debug!(self.logger, "Received:\n\t{json}");
+
             let msg: v3::ClientMsg =
                 serde_json::from_str(json).context("Failed to deserialize json")?;
 
