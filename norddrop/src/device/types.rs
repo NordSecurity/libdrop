@@ -138,20 +138,24 @@ impl From<drop_transfer::Event> for Event {
                     final_path: info.final_path.0.to_string_lossy().to_string(),
                 },
             },
-            drop_transfer::Event::FileUploadCancelled(tx, fid) => Event::TransferFinished {
-                transfer: tx.id().to_string(),
-                data: FinishEvent::FileCanceled {
-                    file: fid.to_string(),
-                    by_peer: true,
-                },
-            },
-            drop_transfer::Event::FileDownloadCancelled(tx, fid) => Event::TransferFinished {
-                transfer: tx.id().to_string(),
-                data: FinishEvent::FileCanceled {
-                    file: fid.to_string(),
-                    by_peer: false,
-                },
-            },
+            drop_transfer::Event::FileUploadCancelled(tx, fid, by_peer) => {
+                Event::TransferFinished {
+                    transfer: tx.id().to_string(),
+                    data: FinishEvent::FileCanceled {
+                        file: fid.to_string(),
+                        by_peer,
+                    },
+                }
+            }
+            drop_transfer::Event::FileDownloadCancelled(tx, fid, by_peer) => {
+                Event::TransferFinished {
+                    transfer: tx.id().to_string(),
+                    data: FinishEvent::FileCanceled {
+                        file: fid.to_string(),
+                        by_peer,
+                    },
+                }
+            }
             drop_transfer::Event::FileUploadFailed(tx, fid, status) => Event::TransferFinished {
                 transfer: tx.id().to_string(),
                 data: FinishEvent::FileFailed {
