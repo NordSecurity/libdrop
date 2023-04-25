@@ -607,6 +607,64 @@ scenarios = [
     ),
     Scenario(
         "scenario4-7",
+        "Send one file, cancel the file from the sender once the download has started",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File("testfile-big", 10485760),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, "testfile-big")),
+                    action.CancelTransferFile(0, "testfile-big"),
+                    action.Wait(event.FinishFileCanceled(0, "testfile-big", False)),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File("testfile-big", 10485760),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        "testfile-big",
+                        "/tmp/received",
+                    ),
+                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(
+                        event.FinishFileCanceled(
+                            0,
+                            "testfile-big",
+                            True,
+                        ),
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario4-8",
         "Send one file, the receiver downloads it fully, both sides receive TransferDownloaded/TransferUploaded, then receiver issues cancel_file() - expect nothing to happen",
         {
             "ren": ActionList(
@@ -675,7 +733,7 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario4-8",
+        "scenario4-9",
         "Send one file, the receiver downloads it fully, both sides receive TransferDownloaded/TransferUploaded, then sender issues cancel_file() - expect nothing to happen",
         {
             "ren": ActionList(
@@ -742,7 +800,7 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario4-9",
+        "scenario4-10",
         "Start transfer with multiple files, cancel the transfer from the receiver once the download has started",
         {
             "ren": ActionList(
