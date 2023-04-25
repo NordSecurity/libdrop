@@ -153,7 +153,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         let msg = v2::ServerMsg::Cancel(v2::Download { file: file.clone() });
         socket.send(Message::from(&msg)).await?;
 
-        self.on_cancel(file).await;
+        self.on_cancel(file, false).await;
 
         Ok(())
     }
@@ -180,7 +180,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: FileId) {
+    async fn on_cancel(&mut self, file: FileId, by_peer: bool) {
         if let Some(FileTask {
             job: task,
             events,
@@ -202,7 +202,11 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                 );
 
                 events
-                    .stop(crate::Event::FileDownloadCancelled(self.xfer.clone(), file))
+                    .stop(crate::Event::FileDownloadCancelled(
+                        self.xfer.clone(),
+                        file,
+                        by_peer,
+                    ))
                     .await;
             }
         }
@@ -291,7 +295,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 
             match msg {
                 v2::ClientMsg::Error(v2::Error { file, msg }) => self.on_error(file, msg).await,
-                v2::ClientMsg::Cancel(v2::Download { file }) => self.on_cancel(file).await,
+                v2::ClientMsg::Cancel(v2::Download { file }) => self.on_cancel(file, true).await,
             }
         } else if msg.is_binary() {
             let v2::Chunk { file, data } =
