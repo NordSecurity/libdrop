@@ -2,7 +2,7 @@
 ### **UNRELEASED**
 ---
 * Fix not receiving `FileUploadStarted` and `FileUploadSuccess` events before the transfer is canceled
-* Fix java method not found exception on public key callback
+* Fix java public key callback related errors
 
 ---
 <br>
