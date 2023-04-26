@@ -57,16 +57,19 @@ impl NordDropFFI {
     ) -> Result<Self> {
         trace!(logger, "norddrop_new()");
 
+        // It's a debug print. Not visible in the production build
+        debug!(logger, "Private key: {:02X?}", privkey.as_bytes());
+
         Ok(NordDropFFI {
             instance: Arc::default(),
             logger: logger.clone(),
             rt: tokio::runtime::Runtime::new().map_err(|_| ffi::types::NORDDROP_RES_ERROR)?,
             event_dispatcher: Arc::new(EventDispatcher {
                 cb: event_cb,
-                logger,
+                logger: logger.clone(),
             }),
             config: Config::default(),
-            keys: Arc::new(crate_key_context(privkey, pubkey_cb)),
+            keys: Arc::new(crate_key_context(logger, privkey, pubkey_cb)),
         })
     }
 
@@ -373,6 +376,7 @@ impl NordDropFFI {
 }
 
 fn crate_key_context(
+    logger: slog::Logger,
     privkey: SecretKey,
     pubkey_cb: ffi_types::norddrop_pubkey_cb,
 ) -> auth::Context {
@@ -380,7 +384,7 @@ fn crate_key_context(
     let public = move |ip: Option<IpAddr>| {
         let mut buf = [0u8; PUBLIC_KEY_LENGTH];
 
-        let ip = ip.map(|ip| {
+        let cstr_ip = ip.map(|ip| {
             // Insert the trailing null byte
             format!("{ip}\0").into_bytes()
         });
@@ -389,13 +393,17 @@ fn crate_key_context(
         let res = unsafe {
             (guard.cb)(
                 guard.ctx,
-                ip.as_ref().map(|v| v.as_ptr()).unwrap_or(std::ptr::null()) as *const _,
+                cstr_ip
+                    .as_ref()
+                    .map(|v| v.as_ptr())
+                    .unwrap_or(std::ptr::null()) as *const _,
                 buf.as_mut_ptr() as _,
             )
         };
         drop(guard);
 
         if res == 0 {
+            debug!(logger, "Public key for {ip:?}: {buf:02X?}");
             PublicKey::from_bytes(&buf).ok()
         } else {
             None
