@@ -147,13 +147,20 @@ async fn listen(
                     progress
                 );
             }
-            Event::FileUploadCancelled(xfer, file) => {
-                info!("[EVENT] FileUploadCancelled {}: {:?}", xfer.id(), file,);
+            Event::FileUploadCancelled(xfer, file, by_peer) => {
+                info!(
+                    "[EVENT] FileUploadCancelled {}: {:?}, by_peer: {by_peer}",
+                    xfer.id(),
+                    file,
+                );
             }
-            Event::FileDownloadCancelled(xfer, file) => {
+            Event::FileDownloadCancelled(xfer, file, by_peer) => {
                 let xfid = xfer.id();
 
-                info!("[EVENT] FileDownloadCancelled {}: {:?}", xfid, file);
+                info!(
+                    "[EVENT] FileDownloadCancelled {}: {:?}, by_peer: {by_peer}",
+                    xfid, file
+                );
 
                 if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
                     occ.get_mut().remove(&file);

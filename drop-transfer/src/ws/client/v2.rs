@@ -78,12 +78,12 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         let msg = v2::ClientMsg::Cancel(v2::Download { file: file.clone() });
         socket.send(Message::from(&msg)).await?;
 
-        self.on_cancel(file).await;
+        self.on_cancel(file, false).await;
 
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: FileId) {
+    async fn on_cancel(&mut self, file: FileId, by_peer: bool) {
         if let Some(task) = self.tasks.remove(&file) {
             if !task.job.is_finished() {
                 task.job.abort();
@@ -100,7 +100,11 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                 );
 
                 task.events
-                    .stop(crate::Event::FileUploadCancelled(self.xfer.clone(), file))
+                    .stop(crate::Event::FileUploadCancelled(
+                        self.xfer.clone(),
+                        file,
+                        by_peer,
+                    ))
                     .await;
             }
         }
@@ -260,7 +264,9 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
                     }) => self.on_done(file).await,
                     v2::ServerMsg::Error(v2::Error { file, msg }) => self.on_error(file, msg).await,
                     v2::ServerMsg::Start(v2::Download { file }) => self.on_download(file).await,
-                    v2::ServerMsg::Cancel(v2::Download { file }) => self.on_cancel(file).await,
+                    v2::ServerMsg::Cancel(v2::Download { file }) => {
+                        self.on_cancel(file, true).await
+                    }
                 }
             }
             Message::Close(_) => {

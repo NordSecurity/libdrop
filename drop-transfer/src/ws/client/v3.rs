@@ -81,12 +81,12 @@ impl HandlerLoop<'_> {
         let msg = v3::ClientMsg::Cancel(v3::Cancel { file: file.clone() });
         socket.send(Message::from(&msg)).await?;
 
-        self.on_cancel(file).await;
+        self.on_cancel(file, false).await;
 
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: FileId) {
+    async fn on_cancel(&mut self, file: FileId, by_peer: bool) {
         if let Some(task) = self.tasks.remove(&file) {
             if !task.job.is_finished() {
                 task.job.abort();
@@ -103,7 +103,11 @@ impl HandlerLoop<'_> {
                 );
 
                 task.events
-                    .stop(crate::Event::FileUploadCancelled(self.xfer.clone(), file))
+                    .stop(crate::Event::FileUploadCancelled(
+                        self.xfer.clone(),
+                        file,
+                        by_peer,
+                    ))
                     .await;
             }
         }
@@ -332,7 +336,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
                     v3::ServerMsg::Start(v3::Start { file, offset }) => {
                         self.on_start(socket, file, offset).await?
                     }
-                    v3::ServerMsg::Cancel(v3::Cancel { file }) => self.on_cancel(file).await,
+                    v3::ServerMsg::Cancel(v3::Cancel { file }) => self.on_cancel(file, true).await,
                 }
             }
             Message::Close(_) => {
