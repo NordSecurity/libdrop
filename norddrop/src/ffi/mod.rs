@@ -304,11 +304,13 @@ pub extern "C" fn norddrop_new(
         if privkey.is_null() {
             return norddrop_result::NORDDROP_RES_INVALID_PRIVKEY;
         }
-        let privkey = unsafe {
-            std::slice::from_raw_parts(privkey as *const u8, drop_auth::SECRET_KEY_LENGTH)
-        };
-        let privkey = ffi_try!(drop_auth::SecretKey::from_bytes(privkey)
-            .map_err(|_| norddrop_result::NORDDROP_RES_INVALID_PRIVKEY));
+        let mut privkey_bytes = [0u8; drop_auth::SECRET_KEY_LENGTH];
+        unsafe {
+            privkey_bytes
+                .as_mut_ptr()
+                .copy_from_nonoverlapping(privkey as *const _, drop_auth::SECRET_KEY_LENGTH);
+        }
+        let privkey = drop_auth::SecretKey::from(privkey_bytes);
 
         let drive = ffi_try!(NordDropFFI::new(event_cb, pubkey_cb, privkey, logger));
         unsafe { *dev = Box::into_raw(Box::new(norddrop(Mutex::new(drive)))) };
