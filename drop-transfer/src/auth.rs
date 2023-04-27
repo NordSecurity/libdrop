@@ -27,7 +27,7 @@ impl Context {
         tokio::task::block_in_place(|| {
             let auth_req = drop_auth::http::Authorization::parse(auth_header_value)?;
             let pubkey = (self.public)(Some(peer_ip))?;
-            drop_auth::authorize(nonce, &pubkey, &auth_req)
+            drop_auth::authorize(nonce, &self.secret, &pubkey, &auth_req)
         })
         .is_some()
     }

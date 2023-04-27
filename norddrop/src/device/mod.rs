@@ -410,13 +410,7 @@ fn crate_key_context(
 
         if res == 0 {
             debug!(logger, "Public key for {ip:?}: {buf:02X?}");
-            match PublicKey::from_bytes(&buf) {
-                Ok(pubkey) => Some(pubkey),
-                Err(err) => {
-                    warn!(logger, "Invalid public key provided: {err}");
-                    None
-                }
-            }
+            Some(PublicKey::from(buf))
         } else {
             None
         }
