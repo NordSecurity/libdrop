@@ -104,7 +104,12 @@ impl NordDropFFI {
             Ok(moose) => moose,
             Err(err) => {
                 error!(logger, "Failed to init moose: {:?}", err);
-                return Err(ffi::types::NORDDROP_RES_ERROR);
+
+                if self.config.moose.prod == false {
+                    return Err(ffi::types::NORDDROP_RES_ERROR);
+                }
+
+                drop_analytics::moose_mock()
             }
         };
 
