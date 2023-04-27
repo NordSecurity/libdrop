@@ -4,6 +4,7 @@
 * Fix not receiving `FileUploadStarted` and `FileUploadSuccess` events before the transfer is canceled
 * Fix java public key callback related errors
 * Fix the wrong `by_peer` field in `FileCanceled` event when the sender cancels the file upload
+* Return moose init error only on non-prod
 
 ---
 <br>
