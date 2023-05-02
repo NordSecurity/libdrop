@@ -1,18 +1,9 @@
-### UNRELEASED
-### **UNRELEASED**
----
-* Fix not receiving `FileUploadStarted` and `FileUploadSuccess` events before the transfer is canceled
-* Fix java public key callback related errors
-* Fix the wrong `by_peer` field in `FileCanceled` event when the sender cancels the file upload
-* Return moose init error only on non-prod
-* Fix the authentication mechanism to work with x25519 keys. Disallow `null` IP address in the public key callback
-
----
-<br>
-
 ### v2.0.0
 ### **Brzęczyszczykiewicz**
 ---
+* Fix not receiving `FileUploadStarted` and `FileUploadSuccess` events before the transfer is canceled
+* Fix the wrong `by_peer` field in `FileCanceled` event when the sender cancels the file upload
+* Return moose init error only on non-prod
 * When requesting the file, perform the check if the file is already downloaded. If yes, report successful file transfer
 * Do not remove temporary files in case of transfer failure, resume transfer when the temporaries are available
 * Return more status codes from the ffi layer methods
