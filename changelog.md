@@ -5,6 +5,7 @@
 * Fix java public key callback related errors
 * Fix the wrong `by_peer` field in `FileCanceled` event when the sender cancels the file upload
 * Return moose init error only on non-prod
+* Fix the authentication mechanism to work with x25519 keys. Disallow `null` IP address in the public key callback
 
 ---
 <br>
