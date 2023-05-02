@@ -109,6 +109,7 @@ async def main():
         "with-illegal-char-\x0A-": 1 * 1024,
         "duplicate/testfile-small": 1 * 1024,
         "duplicate/testfile.small.with.complicated.extension": 1 * 1024,
+        "zero-sized-file": 0,
     }
 
     symlinks = {

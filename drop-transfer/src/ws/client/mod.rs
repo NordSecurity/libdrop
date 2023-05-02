@@ -111,9 +111,7 @@ async fn establish_ws_conn(
             ))
         })?;
 
-        let url = format!("ws://{}:{}/drop/{ver}", ip, drop_config::PORT);
-
-        match make_request(&mut socket, &url, state.auth.as_ref(), logger).await {
+        match make_request(&mut socket, ip, ver, state.auth.as_ref(), logger).await {
             Ok(_) => break ver,
             Err(tungstenite::Error::Http(resp)) if resp.status().is_client_error() => {
                 if resp.status() == StatusCode::UNAUTHORIZED {
@@ -135,11 +133,14 @@ async fn establish_ws_conn(
 
 async fn make_request(
     socket: &mut TcpStream,
-    url: &str,
+    ip: IpAddr,
+    version: protocol::Version,
     auth: &auth::Context,
     logger: &slog::Logger,
 ) -> Result<(), tungstenite::Error> {
-    let err = match tokio_tungstenite::client_async(url, &mut *socket).await {
+    let url = format!("ws://{ip}:{}/drop/{version}", drop_config::PORT);
+
+    let err = match tokio_tungstenite::client_async(&url, &mut *socket).await {
         Ok(_) => {
             debug!(logger, "Connected to {url} without authorization");
             return Ok(());
@@ -158,7 +159,7 @@ async fn make_request(
                     .context("Missing 'www-authenticate' header")?
                     .to_str()?;
 
-                auth.create_ticket_header_val(val)
+                auth.create_ticket_header_val(ip, val)
             };
 
             match extract_www_auth() {
@@ -326,7 +327,7 @@ impl RunContext<'_> {
     }
 }
 
-fn start_upload(
+async fn start_upload(
     state: Arc<State>,
     logger: slog::Logger,
     events: Arc<FileEventTx>,
@@ -336,22 +337,22 @@ fn start_upload(
 ) -> anyhow::Result<JoinHandle<()>> {
     let xfile = xfer.file(&file_id).context("File not found")?.clone();
 
-    let transfer_time = Instant::now();
-
-    state.moose.service_quality_transfer_file(
-        Ok(()),
-        drop_analytics::Phase::Start,
-        xfer.id().to_string(),
-        0,
-        xfile.info(),
-    );
+    events
+        .start(Event::FileUploadStarted(xfer.clone(), file_id.clone()))
+        .await;
 
     let upload_job = async move {
-        let send_file = async {
-            events
-                .start(Event::FileUploadStarted(xfer.clone(), file_id.clone()))
-                .await;
+        let transfer_time = Instant::now();
 
+        state.moose.service_quality_transfer_file(
+            Ok(()),
+            drop_analytics::Phase::Start,
+            xfer.id().to_string(),
+            0,
+            xfile.info(),
+        );
+
+        let send_file = async {
             let mut iofile = match xfile.open(uploader.offset()) {
                 Ok(f) => f,
                 Err(err) => {

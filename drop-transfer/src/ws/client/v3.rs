@@ -81,12 +81,12 @@ impl HandlerLoop<'_> {
         let msg = v3::ClientMsg::Cancel(v3::Cancel { file: file.clone() });
         socket.send(Message::from(&msg)).await?;
 
-        self.on_cancel(file).await;
+        self.on_cancel(file, false).await;
 
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: FileId) {
+    async fn on_cancel(&mut self, file: FileId, by_peer: bool) {
         if let Some(task) = self.tasks.remove(&file) {
             if !task.job.is_finished() {
                 task.job.abort();
@@ -103,7 +103,11 @@ impl HandlerLoop<'_> {
                 );
 
                 task.events
-                    .stop(crate::Event::FileUploadCancelled(self.xfer.clone(), file))
+                    .stop(crate::Event::FileUploadCancelled(
+                        self.xfer.clone(),
+                        file,
+                        by_peer,
+                    ))
                     .await;
             }
         }
@@ -184,7 +188,7 @@ impl HandlerLoop<'_> {
         file_id: FileId,
         offset: u64,
     ) -> anyhow::Result<()> {
-        let mut f = || {
+        let start = async {
             match self.tasks.entry(file_id.clone()) {
                 Entry::Occupied(o) => {
                     let task = o.into_mut();
@@ -197,7 +201,8 @@ impl HandlerLoop<'_> {
                             self.xfer.clone(),
                             file_id.clone(),
                             offset,
-                        )?;
+                        )
+                        .await?;
                     } else {
                         anyhow::bail!("Transfer already in progress");
                     }
@@ -210,7 +215,8 @@ impl HandlerLoop<'_> {
                         self.xfer.clone(),
                         file_id.clone(),
                         offset,
-                    )?;
+                    )
+                    .await?;
 
                     v.insert(task);
                 }
@@ -220,7 +226,7 @@ impl HandlerLoop<'_> {
             anyhow::Ok(())
         };
 
-        if let Err(err) = f() {
+        if let Err(err) = start.await {
             error!(self.logger, "Failed to start upload: {:?}", err);
 
             let msg = v3::Error {
@@ -309,6 +315,8 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
         match msg {
             Message::Text(json) => {
+                debug!(self.logger, "Received:\n\t{json}");
+
                 let msg: v3::ServerMsg =
                     serde_json::from_str(&json).context("Failed to deserialize server message")?;
 
@@ -328,7 +336,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
                     v3::ServerMsg::Start(v3::Start { file, offset }) => {
                         self.on_start(socket, file, offset).await?
                     }
-                    v3::ServerMsg::Cancel(v3::Cancel { file }) => self.on_cancel(file).await,
+                    v3::ServerMsg::Cancel(v3::Cancel { file }) => self.on_cancel(file, true).await,
                 }
             }
             Message::Close(_) => {
@@ -428,7 +436,7 @@ impl handler::Uploader for Uploader {
 }
 
 impl FileTask {
-    fn start(
+    async fn start(
         state: Arc<State>,
         logger: &slog::Logger,
         sink: Sender<Message>,
@@ -451,7 +459,8 @@ impl FileTask {
             uploader,
             xfer,
             file_id,
-        )?;
+        )
+        .await?;
 
         Ok(Self { job, events })
     }

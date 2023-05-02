@@ -330,7 +330,7 @@ static void norddrop_jni_call_logger_cb(void *ctx, enum norddrop_log_level level
 
 
 DECLARE_CACHED_CLASS(iNordDropPubkeyCb, PKG "INordDropPubkeyCb");
-DECLARE_CACHED_METHOD_ID(iNordDropPubkeyCb, iNordDropPubkeyCbPubkeyHandleID, "pubkeyHandle", "(Ljava/lang/String;Ljava/lang/byte[];)Ljava/lang/int");
+DECLARE_CACHED_METHOD_ID(iNordDropPubkeyCb, iNordDropPubkeyCbPubkeyHandleID, "pubkeyHandle", "(Ljava/lang/String;[B)I");
 
 static int norddrop_jni_call_pubkey_cb(void *ctx, const char* ip, char *pubkey) {
     if (!jvm) {
@@ -359,8 +359,11 @@ static int norddrop_jni_call_pubkey_cb(void *ctx, const char* ip, char *pubkey) 
     jmethodID handle = GET_CACHED_METHOD_ID(env, iNordDropPubkeyCbPubkeyHandleID);
     RETURN_VAL_AND_THROW_IF_NULL(env, handle, "pubkeyHandle not found.", 1);
 
-    jstring jip = (*env)->NewStringUTF(env, ip);
-    RETURN_VAL_AND_THROW_IF_NULL(env, jip, "IP string is null.", 1);
+    jstring jip = NULL;
+    if (ip != NULL) {
+        jip = (*env)->NewStringUTF(env, ip);
+        RETURN_VAL_AND_THROW_IF_NULL(env, jip, "IP string is null.", 1);
+    }
 
     jstring jpubkey = (*env)->NewByteArray(env, 32);
     RETURN_VAL_AND_THROW_IF_NULL(env, jpubkey, "Cannot crate pubkey array.", 1);
@@ -368,8 +371,11 @@ static int norddrop_jni_call_pubkey_cb(void *ctx, const char* ip, char *pubkey) 
     int cb_res = (*env)->CallIntMethod(env, (jobject)ctx, handle, jip, jpubkey);
     (*env)->GetByteArrayRegion(env, jpubkey, 0, 32, (jbyte*)pubkey);
 
-    (*env)->DeleteLocalRef(env, jip);
+    if (jip != NULL) {
+        (*env)->DeleteLocalRef(env, jip);
+    }
     (*env)->DeleteLocalRef(env, jpubkey);
+
     if (attached) {
         (*jvm)->DetachCurrentThread(jvm);
     }
