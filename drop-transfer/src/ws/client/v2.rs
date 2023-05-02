@@ -78,12 +78,12 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         let msg = v2::ClientMsg::Cancel(v2::Download { file: file.clone() });
         socket.send(Message::from(&msg)).await?;
 
-        self.on_cancel(file).await;
+        self.on_cancel(file, false).await;
 
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: FileId) {
+    async fn on_cancel(&mut self, file: FileId, by_peer: bool) {
         if let Some(task) = self.tasks.remove(&file) {
             if !task.job.is_finished() {
                 task.job.abort();
@@ -100,7 +100,11 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                 );
 
                 task.events
-                    .stop(crate::Event::FileUploadCancelled(self.xfer.clone(), file))
+                    .stop(crate::Event::FileUploadCancelled(
+                        self.xfer.clone(),
+                        file,
+                        by_peer,
+                    ))
                     .await;
             }
         }
@@ -126,8 +130,8 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         }
     }
 
-    fn on_download(&mut self, file_id: FileId) {
-        let f = || {
+    async fn on_download(&mut self, file_id: FileId) {
+        let start = async {
             match self.tasks.entry(file_id.clone()) {
                 Entry::Occupied(o) => {
                     let task = o.into_mut();
@@ -142,7 +146,8 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                             self.xfer.clone(),
                             file_id,
                             self.logger,
-                        )?;
+                        )
+                        .await?;
                     } else {
                         anyhow::bail!("Transfer already in progress");
                     }
@@ -157,7 +162,8 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                         self.xfer.clone(),
                         file_id,
                         self.logger,
-                    )?;
+                    )
+                    .await?;
 
                     v.insert(task);
                 }
@@ -166,7 +172,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
             anyhow::Ok(())
         };
 
-        if let Err(err) = f() {
+        if let Err(err) = start.await {
             error!(self.logger, "Failed to start upload: {:?}", err);
         }
     }
@@ -257,8 +263,10 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
                         bytes_transfered: _,
                     }) => self.on_done(file).await,
                     v2::ServerMsg::Error(v2::Error { file, msg }) => self.on_error(file, msg).await,
-                    v2::ServerMsg::Start(v2::Download { file }) => self.on_download(file),
-                    v2::ServerMsg::Cancel(v2::Download { file }) => self.on_cancel(file).await,
+                    v2::ServerMsg::Start(v2::Download { file }) => self.on_download(file).await,
+                    v2::ServerMsg::Cancel(v2::Download { file }) => {
+                        self.on_cancel(file, true).await
+                    }
                 }
             }
             Message::Close(_) => {
@@ -362,7 +370,7 @@ impl handler::Uploader for Uploader {
 }
 
 impl FileTask {
-    fn new(
+    async fn new(
         state: &Arc<State>,
         uploader: Uploader,
         xfer: crate::Transfer,
@@ -377,7 +385,8 @@ impl FileTask {
             uploader,
             xfer,
             file,
-        )?;
+        )
+        .await?;
 
         Ok(Self { job, events })
     }

@@ -19,12 +19,12 @@ use tokio::sync::{mpsc, watch, Mutex};
 use uuid::Uuid;
 
 const PRIV_KEY: [u8; SECRET_KEY_LENGTH] = [
-    164, 70, 230, 247, 55, 28, 255, 147, 128, 74, 83, 50, 181, 222, 212, 18, 178, 162, 242, 102,
-    220, 203, 153, 161, 142, 206, 123, 188, 87, 77, 126, 183,
+    0x15, 0xc6, 0xe3, 0x45, 0x08, 0xf8, 0x3e, 0x4d, 0x3a, 0x28, 0x9d, 0xd4, 0xa4, 0x05, 0x95, 0x8d,
+    0x8a, 0xa4, 0x68, 0x2d, 0x4a, 0xba, 0x4f, 0xf3, 0x2d, 0x8f, 0x72, 0x60, 0x4b, 0x69, 0x46, 0xc7,
 ];
 const PUB_KEY: [u8; PUBLIC_KEY_LENGTH] = [
-    68, 103, 21, 143, 132, 253, 95, 17, 203, 20, 154, 169, 66, 197, 210, 103, 56, 18, 143, 142,
-    142, 47, 53, 103, 186, 66, 91, 201, 181, 186, 12, 136,
+    0x24, 0x0f, 0xcc, 0x7b, 0xbc, 0x11, 0x0c, 0x12, 0x7a, 0xed, 0xf9, 0x26, 0x8e, 0x9a, 0x24, 0xa4,
+    0x5a, 0x1b, 0x4c, 0xb1, 0x87, 0x4e, 0xff, 0x46, 0x5e, 0x56, 0x31, 0xb2, 0x33, 0x6b, 0xca, 0x6d,
 ];
 
 async fn listen(
@@ -147,13 +147,20 @@ async fn listen(
                     progress
                 );
             }
-            Event::FileUploadCancelled(xfer, file) => {
-                info!("[EVENT] FileUploadCancelled {}: {:?}", xfer.id(), file,);
+            Event::FileUploadCancelled(xfer, file, by_peer) => {
+                info!(
+                    "[EVENT] FileUploadCancelled {}: {:?}, by_peer: {by_peer}",
+                    xfer.id(),
+                    file,
+                );
             }
-            Event::FileDownloadCancelled(xfer, file) => {
+            Event::FileDownloadCancelled(xfer, file, by_peer) => {
                 let xfid = xfer.id();
 
-                info!("[EVENT] FileDownloadCancelled {}: {:?}", xfid, file);
+                info!(
+                    "[EVENT] FileDownloadCancelled {}: {:?}, by_peer: {by_peer}",
+                    xfid, file
+                );
 
                 if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
                     occ.get_mut().remove(&file);
@@ -336,12 +343,10 @@ async fn main() -> anyhow::Result<()> {
         .expect("Missing `output` flag");
 
     let auth = {
-        let pubkey = drop_auth::PublicKey::from_bytes(&PUB_KEY).unwrap();
-
-        auth::Context::new(
-            drop_auth::SecretKey::from_bytes(&PRIV_KEY).unwrap(),
-            move |_| Some(pubkey),
-        )
+        let pubkey = drop_auth::PublicKey::from(PUB_KEY);
+        auth::Context::new(drop_auth::SecretKey::from(PRIV_KEY), move |_| {
+            Some(pubkey.clone())
+        })
     };
 
     let storage = drop_storage::Storage::new(logger.clone(), ":memory:")

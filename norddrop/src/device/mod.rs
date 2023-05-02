@@ -57,16 +57,19 @@ impl NordDropFFI {
     ) -> Result<Self> {
         trace!(logger, "norddrop_new()");
 
+        // It's a debug print. Not visible in the production build
+        debug!(logger, "Private key: {:02X?}", privkey.as_bytes());
+
         Ok(NordDropFFI {
             instance: Arc::default(),
             logger: logger.clone(),
             rt: tokio::runtime::Runtime::new().map_err(|_| ffi::types::NORDDROP_RES_ERROR)?,
             event_dispatcher: Arc::new(EventDispatcher {
                 cb: event_cb,
-                logger,
+                logger: logger.clone(),
             }),
             config: Config::default(),
-            keys: Arc::new(crate_key_context(privkey, pubkey_cb)),
+            keys: Arc::new(crate_key_context(logger, privkey, pubkey_cb)),
         })
     }
 
@@ -102,7 +105,13 @@ impl NordDropFFI {
             Ok(moose) => moose,
             Err(err) => {
                 error!(logger, "Failed to init moose: {:?}", err);
-                return Err(ffi::types::NORDDROP_RES_ERROR);
+
+                if !self.config.moose.prod {
+                    return Err(ffi::types::NORDDROP_RES_ERROR);
+                }
+
+                warn!(logger, "Falling back to mock moose implementation");
+                drop_analytics::moose_mock()
             }
         };
 
@@ -383,30 +392,24 @@ impl NordDropFFI {
 }
 
 fn crate_key_context(
+    logger: slog::Logger,
     privkey: SecretKey,
     pubkey_cb: ffi_types::norddrop_pubkey_cb,
 ) -> auth::Context {
     let pubkey_cb = std::sync::Mutex::new(pubkey_cb);
-    let public = move |ip: Option<IpAddr>| {
+    let public = move |ip: IpAddr| {
         let mut buf = [0u8; PUBLIC_KEY_LENGTH];
 
-        let ip = ip.map(|ip| {
-            // Insert the trailing null byte
-            format!("{ip}\0").into_bytes()
-        });
+        // Insert the trailing null byte
+        let cstr_ip = format!("{ip}\0").into_bytes();
 
         let guard = pubkey_cb.lock().expect("Failed to lock pubkey callback");
-        let res = unsafe {
-            (guard.cb)(
-                guard.ctx,
-                ip.as_ref().map(|v| v.as_ptr()).unwrap_or(std::ptr::null()) as *const _,
-                buf.as_mut_ptr() as _,
-            )
-        };
+        let res = unsafe { (guard.cb)(guard.ctx, cstr_ip.as_ptr() as _, buf.as_mut_ptr() as _) };
         drop(guard);
 
         if res == 0 {
-            PublicKey::from_bytes(&buf).ok()
+            debug!(logger, "Public key for {ip:?}: {buf:02X?}");
+            Some(PublicKey::from(buf))
         } else {
             None
         }

@@ -149,7 +149,7 @@ impl HandlerLoop<'_> {
         let msg = v3::ServerMsg::Cancel(v3::Cancel { file: file.clone() });
         socket.send(Message::from(&msg)).await?;
 
-        self.on_cancel(file).await;
+        self.on_cancel(file, false).await;
 
         Ok(())
     }
@@ -176,7 +176,7 @@ impl HandlerLoop<'_> {
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: FileId) {
+    async fn on_cancel(&mut self, file: FileId, by_peer: bool) {
         if let Some(FileTask {
             job: task,
             events,
@@ -199,7 +199,11 @@ impl HandlerLoop<'_> {
                 );
 
                 events
-                    .stop(crate::Event::FileDownloadCancelled(self.xfer.clone(), file))
+                    .stop(crate::Event::FileDownloadCancelled(
+                        self.xfer.clone(),
+                        file,
+                        by_peer,
+                    ))
                     .await;
             }
         }
@@ -295,12 +299,14 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         self.last_recv = Instant::now();
 
         if let Ok(json) = msg.to_str() {
+            debug!(self.logger, "Received:\n\t{json}");
+
             let msg: v3::ClientMsg =
                 serde_json::from_str(json).context("Failed to deserialize json")?;
 
             match msg {
                 v3::ClientMsg::Error(v3::Error { file, msg }) => self.on_error(file, msg).await,
-                v3::ClientMsg::Cancel(v3::Cancel { file }) => self.on_cancel(file).await,
+                v3::ClientMsg::Cancel(v3::Cancel { file }) => self.on_cancel(file, true).await,
                 v3::ClientMsg::ReportChsum(report) => self.on_checksum(report).await,
             }
         } else if msg.is_binary() {

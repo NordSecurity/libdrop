@@ -158,22 +158,18 @@ class KeysCtx:
         self.this = RUNNERS[runner]
 
     def callback(self, ctx, ip, pubkey):
-        found = None
-        if ip is None:
-            found = self.this.pubkey
-        else:
-            ip = ip.decode("utf-8")
+        ip = ip.decode("utf-8")
 
-            peer = None
-            for pr in RUNNERS.values():
-                if pr.ip == ip:
-                    peer = pr
-                    break
+        peer = None
+        for pr in RUNNERS.values():
+            if pr.ip == ip:
+                peer = pr
+                break
 
-            if peer is None:
-                return 1
+        if peer is None:
+            return 1
 
-            found = peer.pubkey
+        found = peer.pubkey
 
         ctypes.memmove(pubkey, found, len(found))
         return 0

@@ -7,5 +7,5 @@ edition = "2021"
 
 [dependencies]
 base64 = "0.21.0"
-ed25519-dalek = "1.0.1"
+crypto_box = { version = "0.8.2", features = ["std"] }
 rand = "0.8.5"
