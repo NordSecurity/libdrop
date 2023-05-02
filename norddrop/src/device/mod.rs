@@ -387,25 +387,14 @@ fn crate_key_context(
     pubkey_cb: ffi_types::norddrop_pubkey_cb,
 ) -> auth::Context {
     let pubkey_cb = std::sync::Mutex::new(pubkey_cb);
-    let public = move |ip: Option<IpAddr>| {
+    let public = move |ip: IpAddr| {
         let mut buf = [0u8; PUBLIC_KEY_LENGTH];
 
-        let cstr_ip = ip.map(|ip| {
-            // Insert the trailing null byte
-            format!("{ip}\0").into_bytes()
-        });
+        // Insert the trailing null byte
+        let cstr_ip = format!("{ip}\0").into_bytes();
 
         let guard = pubkey_cb.lock().expect("Failed to lock pubkey callback");
-        let res = unsafe {
-            (guard.cb)(
-                guard.ctx,
-                cstr_ip
-                    .as_ref()
-                    .map(|v| v.as_ptr())
-                    .unwrap_or(std::ptr::null()) as *const _,
-                buf.as_mut_ptr() as _,
-            )
-        };
+        let res = unsafe { (guard.cb)(guard.ctx, cstr_ip.as_ptr() as _, buf.as_mut_ptr() as _) };
         drop(guard);
 
         if res == 0 {
