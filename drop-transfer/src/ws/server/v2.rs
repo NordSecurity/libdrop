@@ -25,7 +25,7 @@ use crate::{
     service::State,
     utils::Hidden,
     ws::{self, events::FileEventTx},
-    FileId,
+    FileSubPath,
 };
 
 pub struct HandlerInit<'a, const PING: bool = true> {
@@ -40,11 +40,11 @@ pub struct HandlerLoop<'a, const PING: bool> {
     msg_tx: Sender<Message>,
     xfer: crate::Transfer,
     last_recv: Instant,
-    jobs: HashMap<FileId, FileTask>,
+    jobs: HashMap<FileSubPath, FileTask>,
 }
 
 struct Downloader {
-    file_id: crate::FileId,
+    file_id: crate::FileSubPath,
     msg_tx: Sender<Message>,
     tmp_loc: Option<Hidden<PathBuf>>,
 }
@@ -147,7 +147,11 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         Ok(())
     }
 
-    async fn issue_cancel(&mut self, socket: &mut WebSocket, file: FileId) -> anyhow::Result<()> {
+    async fn issue_cancel(
+        &mut self,
+        socket: &mut WebSocket,
+        file: FileSubPath,
+    ) -> anyhow::Result<()> {
         debug!(self.logger, "ServerHandler::issue_cancel");
 
         let msg = v2::ServerMsg::Cancel(v2::Download { file: file.clone() });
@@ -161,7 +165,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
     async fn on_chunk(
         &mut self,
         socket: &mut WebSocket,
-        file: FileId,
+        file: FileSubPath,
         chunk: Vec<u8>,
     ) -> anyhow::Result<()> {
         if let Some(task) = self.jobs.get(&file) {
@@ -180,7 +184,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: FileId, by_peer: bool) {
+    async fn on_cancel(&mut self, file: FileSubPath, by_peer: bool) {
         if let Some(FileTask {
             job: task,
             events,
@@ -212,7 +216,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         }
     }
 
-    async fn on_error(&mut self, file: Option<FileId>, msg: String) {
+    async fn on_error(&mut self, file: Option<FileSubPath>, msg: String) {
         error!(
             self.logger,
             "Client reported and error: file: {:?}, message: {}", file, msg

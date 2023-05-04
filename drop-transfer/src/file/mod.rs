@@ -15,7 +15,7 @@ use std::{
 
 use drop_analytics::FileInfo;
 use drop_config::DropConfig;
-pub use id::FileId;
+pub use id::FileSubPath;
 pub use reader::FileReader;
 use sha2::Digest;
 

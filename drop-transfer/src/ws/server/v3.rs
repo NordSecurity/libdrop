@@ -19,7 +19,9 @@ use tokio::{
 use warp::ws::{Message, WebSocket};
 
 use super::{handler, ServerReq};
-use crate::{file, protocol::v3, service::State, utils::Hidden, ws::events::FileEventTx, FileId};
+use crate::{
+    file, protocol::v3, service::State, utils::Hidden, ws::events::FileEventTx, FileSubPath,
+};
 
 pub struct HandlerInit<'a> {
     peer: IpAddr,
@@ -33,12 +35,12 @@ pub struct HandlerLoop<'a> {
     msg_tx: Sender<Message>,
     xfer: crate::Transfer,
     last_recv: Instant,
-    jobs: HashMap<FileId, FileTask>,
+    jobs: HashMap<FileSubPath, FileTask>,
 }
 
 struct Downloader {
     logger: slog::Logger,
-    file_id: crate::FileId,
+    file_id: crate::FileSubPath,
     msg_tx: Sender<Message>,
     csum_rx: mpsc::Receiver<v3::ReportChsum>,
     offset: u64,
@@ -143,7 +145,11 @@ impl HandlerLoop<'_> {
         Ok(())
     }
 
-    async fn issue_cancel(&mut self, socket: &mut WebSocket, file: FileId) -> anyhow::Result<()> {
+    async fn issue_cancel(
+        &mut self,
+        socket: &mut WebSocket,
+        file: FileSubPath,
+    ) -> anyhow::Result<()> {
         debug!(self.logger, "ServerHandler::issue_cancel");
 
         let msg = v3::ServerMsg::Cancel(v3::Cancel { file: file.clone() });
@@ -157,7 +163,7 @@ impl HandlerLoop<'_> {
     async fn on_chunk(
         &mut self,
         socket: &mut WebSocket,
-        file: FileId,
+        file: FileSubPath,
         chunk: Vec<u8>,
     ) -> anyhow::Result<()> {
         if let Some(task) = self.jobs.get(&file) {
@@ -176,7 +182,7 @@ impl HandlerLoop<'_> {
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: FileId, by_peer: bool) {
+    async fn on_cancel(&mut self, file: FileSubPath, by_peer: bool) {
         if let Some(FileTask {
             job: task,
             events,
@@ -209,7 +215,7 @@ impl HandlerLoop<'_> {
         }
     }
 
-    async fn on_error(&mut self, file: Option<FileId>, msg: String) {
+    async fn on_error(&mut self, file: Option<FileSubPath>, msg: String) {
         error!(
             self.logger,
             "Client reported and error: file: {:?}, message: {}", file, msg

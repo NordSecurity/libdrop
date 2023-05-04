@@ -12,7 +12,7 @@ use tokio::{sync::mpsc::Sender, task::JoinHandle};
 use tokio_tungstenite::tungstenite::{self, Message};
 
 use super::{handler, ClientReq, WebSocket};
-use crate::{protocol::v2, service::State, utils::Hidden, ws, FileId};
+use crate::{protocol::v2, service::State, utils::Hidden, ws, FileSubPath};
 
 pub struct HandlerInit<'a, const PING: bool = true> {
     state: &'a Arc<State>,
@@ -23,14 +23,14 @@ pub struct HandlerLoop<'a, const PING: bool> {
     state: &'a Arc<State>,
     logger: &'a slog::Logger,
     upload_tx: Sender<Message>,
-    tasks: HashMap<FileId, FileTask>,
+    tasks: HashMap<FileSubPath, FileTask>,
     last_recv: Instant,
     xfer: crate::Transfer,
 }
 
 struct Uploader {
     sink: Sender<Message>,
-    file_id: FileId,
+    file_id: FileSubPath,
 }
 
 struct FileTask {
@@ -74,7 +74,11 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
 }
 
 impl<const PING: bool> HandlerLoop<'_, PING> {
-    async fn issue_cancel(&mut self, socket: &mut WebSocket, file: FileId) -> anyhow::Result<()> {
+    async fn issue_cancel(
+        &mut self,
+        socket: &mut WebSocket,
+        file: FileSubPath,
+    ) -> anyhow::Result<()> {
         let msg = v2::ClientMsg::Cancel(v2::Download { file: file.clone() });
         socket.send(Message::from(&msg)).await?;
 
@@ -83,7 +87,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: FileId, by_peer: bool) {
+    async fn on_cancel(&mut self, file: FileSubPath, by_peer: bool) {
         if let Some(task) = self.tasks.remove(&file) {
             if !task.job.is_finished() {
                 task.job.abort();
@@ -110,7 +114,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         }
     }
 
-    async fn on_progress(&self, file: FileId, transfered: u64) {
+    async fn on_progress(&self, file: FileSubPath, transfered: u64) {
         if let Some(task) = self.tasks.get(&file) {
             task.events
                 .emit(crate::Event::FileUploadProgress(
@@ -122,7 +126,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         }
     }
 
-    async fn on_done(&mut self, file: FileId) {
+    async fn on_done(&mut self, file: FileSubPath) {
         if let Some(task) = self.tasks.remove(&file) {
             task.events
                 .stop(crate::Event::FileUploadSuccess(self.xfer.clone(), file))
@@ -130,7 +134,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         }
     }
 
-    async fn on_download(&mut self, file_id: FileId) {
+    async fn on_download(&mut self, file_id: FileSubPath) {
         let start = async {
             match self.tasks.entry(file_id.clone()) {
                 Entry::Occupied(o) => {
@@ -177,7 +181,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         }
     }
 
-    async fn on_error(&mut self, file: Option<FileId>, msg: String) {
+    async fn on_error(&mut self, file: Option<FileSubPath>, msg: String) {
         error!(
             self.logger,
             "Server reported and error: file: {:?}, message: {}",
@@ -374,7 +378,7 @@ impl FileTask {
         state: &Arc<State>,
         uploader: Uploader,
         xfer: crate::Transfer,
-        file: FileId,
+        file: FileSubPath,
         logger: &slog::Logger,
     ) -> anyhow::Result<Self> {
         let events = Arc::new(ws::events::FileEventTx::new(state));

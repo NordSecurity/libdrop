@@ -14,7 +14,7 @@ use drop_config::DropConfig;
 use serde::{Deserialize, Serialize};
 
 pub use super::v3::{Chunk, Error, File, Progress};
-use crate::FileId;
+use crate::FileSubPath;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TransferRequest {
@@ -23,7 +23,7 @@ pub struct TransferRequest {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Download {
-    pub file: FileId,
+    pub file: FileSubPath,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

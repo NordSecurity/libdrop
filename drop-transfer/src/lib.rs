@@ -14,7 +14,7 @@ pub(crate) use crate::manager::TransferManager;
 pub use crate::{
     error::Error,
     event::Event,
-    file::{File, FileId},
+    file::{File, FileSubPath},
     service::Service,
     transfer::Transfer,
 };

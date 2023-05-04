@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::{
     auth,
     error::ResultExt,
-    file::FileId,
+    file::FileSubPath,
     manager::TransferConnection,
     ws::{
         self,
@@ -157,7 +157,7 @@ impl Service {
     pub async fn download(
         &mut self,
         uuid: Uuid,
-        file_id: FileId,
+        file_id: FileSubPath,
         parent_dir: &Path,
     ) -> crate::Result<()> {
         debug!(
@@ -244,7 +244,7 @@ impl Service {
     }
 
     /// Cancel a single file in a transfer
-    pub async fn cancel(&mut self, xfer_uuid: Uuid, file: FileId) -> crate::Result<()> {
+    pub async fn cancel(&mut self, xfer_uuid: Uuid, file: FileSubPath) -> crate::Result<()> {
         let lock = self.state.transfer_manager.lock().await;
 
         let conn = lock.connection(xfer_uuid).ok_or(Error::BadTransfer)?;

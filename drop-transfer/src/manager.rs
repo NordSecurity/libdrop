@@ -9,7 +9,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 
 use crate::{
-    file::FileId,
+    file::FileSubPath,
     service::State,
     ws::{client::ClientReq, server::ServerReq},
     Error, Transfer,
@@ -55,7 +55,7 @@ impl TransferManager {
     }
     /// Get ALL of the ongoing file transfers for a given transfer ID
     /// returns None if a transfer does not exist
-    pub(crate) fn get_transfer_files(&self, transfer_id: Uuid) -> Option<Vec<FileId>> {
+    pub(crate) fn get_transfer_files(&self, transfer_id: Uuid) -> Option<Vec<FileSubPath>> {
         let state = self.transfers.get(&transfer_id)?;
 
         let ids = state
@@ -103,7 +103,7 @@ impl TransferManager {
         &mut self,
         id: Uuid,
         dest_dir: &Path,
-        file_id: &FileId,
+        file_id: &FileSubPath,
     ) -> crate::Result<PathBuf> {
         let state = self
             .transfers
