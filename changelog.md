@@ -10,7 +10,7 @@
 * The `FileDownloaded` event reports the full file path
 * Improve moose error handling
 * Configure Android SONAME
-* Introduce authentication with ed25519 keys, accept private key and peer public key callback in `norddrop_new()`
+* Introduce authentication with X25519 keys, accept private key and peer public key callback in `norddrop_new()`
 
 ---
 <br>
