@@ -12,7 +12,7 @@ use tokio::{sync::mpsc::Sender, task::JoinHandle};
 use tokio_tungstenite::tungstenite::{self, Message};
 
 use super::{handler, ClientReq, WebSocket};
-use crate::{protocol::v3, service::State, utils::Hidden, ws, FileId};
+use crate::{protocol::v3, service::State, utils::Hidden, ws, FileSubPath};
 
 pub struct HandlerInit<'a> {
     state: Arc<State>,
@@ -23,8 +23,8 @@ pub struct HandlerLoop<'a> {
     state: Arc<State>,
     logger: &'a slog::Logger,
     upload_tx: Sender<Message>,
-    tasks: HashMap<FileId, FileTask>,
-    done: HashSet<FileId>,
+    tasks: HashMap<FileSubPath, FileTask>,
+    done: HashSet<FileSubPath>,
     last_recv: Instant,
     xfer: crate::Transfer,
 }
@@ -36,7 +36,7 @@ struct FileTask {
 
 struct Uploader {
     sink: Sender<Message>,
-    file_id: FileId,
+    file_id: FileSubPath,
     offset: u64,
 }
 
@@ -77,7 +77,11 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
 }
 
 impl HandlerLoop<'_> {
-    async fn issue_cancel(&mut self, socket: &mut WebSocket, file: FileId) -> anyhow::Result<()> {
+    async fn issue_cancel(
+        &mut self,
+        socket: &mut WebSocket,
+        file: FileSubPath,
+    ) -> anyhow::Result<()> {
         let msg = v3::ClientMsg::Cancel(v3::Cancel { file: file.clone() });
         socket.send(Message::from(&msg)).await?;
 
@@ -86,7 +90,7 @@ impl HandlerLoop<'_> {
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: FileId, by_peer: bool) {
+    async fn on_cancel(&mut self, file: FileSubPath, by_peer: bool) {
         if let Some(task) = self.tasks.remove(&file) {
             if !task.job.is_finished() {
                 task.job.abort();
@@ -113,7 +117,7 @@ impl HandlerLoop<'_> {
         }
     }
 
-    async fn on_progress(&self, file: FileId, transfered: u64) {
+    async fn on_progress(&self, file: FileSubPath, transfered: u64) {
         if let Some(task) = self.tasks.get(&file) {
             task.events
                 .emit(crate::Event::FileUploadProgress(
@@ -125,7 +129,7 @@ impl HandlerLoop<'_> {
         }
     }
 
-    async fn on_done(&mut self, file: FileId) {
+    async fn on_done(&mut self, file: FileSubPath) {
         let event = crate::Event::FileUploadSuccess(self.xfer.clone(), file.clone());
 
         if let Some(task) = self.tasks.remove(&file) {
@@ -144,7 +148,7 @@ impl HandlerLoop<'_> {
     async fn on_checksum(
         &mut self,
         socket: &mut WebSocket,
-        file_id: FileId,
+        file_id: FileSubPath,
         limit: u64,
     ) -> anyhow::Result<()> {
         let f = || {
@@ -185,7 +189,7 @@ impl HandlerLoop<'_> {
     async fn on_start(
         &mut self,
         socket: &mut WebSocket,
-        file_id: FileId,
+        file_id: FileSubPath,
         offset: u64,
     ) -> anyhow::Result<()> {
         let start = async {
@@ -242,7 +246,7 @@ impl HandlerLoop<'_> {
         Ok(())
     }
 
-    async fn on_error(&mut self, file: Option<FileId>, msg: String) {
+    async fn on_error(&mut self, file: Option<FileSubPath>, msg: String) {
         error!(
             self.logger,
             "Server reported and error: file: {:?}, message: {}",
@@ -441,7 +445,7 @@ impl FileTask {
         logger: &slog::Logger,
         sink: Sender<Message>,
         xfer: crate::Transfer,
-        file_id: FileId,
+        file_id: FileSubPath,
         offset: u64,
     ) -> anyhow::Result<Self> {
         let events = Arc::new(ws::events::FileEventTx::new(&state));

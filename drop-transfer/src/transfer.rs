@@ -4,7 +4,7 @@ use drop_analytics::TransferInfo;
 use drop_config::DropConfig;
 use uuid::Uuid;
 
-use crate::{file::FileId, utils::Hidden, Error, File};
+use crate::{file::FileSubPath, utils::Hidden, Error, File};
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -38,7 +38,7 @@ impl Transfer {
         Ok(Self { peer, uuid, files })
     }
 
-    pub(crate) fn file(&self, file_id: &FileId) -> Option<&File> {
+    pub(crate) fn file(&self, file_id: &FileSubPath) -> Option<&File> {
         let mut components = file_id.iter();
 
         let first = components.next()?;
@@ -56,8 +56,12 @@ impl Transfer {
     }
 
     // Gathers all files into a flat list
-    pub fn flat_file_list(&self) -> Vec<(FileId, &File)> {
-        fn push_children<'a>(file: &'a File, file_id: &FileId, out: &mut Vec<(FileId, &'a File)>) {
+    pub fn flat_file_list(&self) -> Vec<(FileSubPath, &File)> {
+        fn push_children<'a>(
+            file: &'a File,
+            file_id: &FileSubPath,
+            out: &mut Vec<(FileSubPath, &'a File)>,
+        ) {
             if file.is_dir() {
                 for file in file.children() {
                     let mut file_id = file_id.clone();
@@ -72,7 +76,7 @@ impl Transfer {
         let mut out = Vec::new();
 
         for file in self.files().values() {
-            let file_id = FileId::from_name(file.name().to_string());
+            let file_id = FileSubPath::from_name(file.name().to_string());
             push_children(file, &file_id, &mut out);
         }
 

@@ -36,7 +36,7 @@ use crate::{
     auth,
     error::ResultExt,
     event::DownloadSuccess,
-    file::{self, FileId},
+    file::{self, FileSubPath},
     manager::{TransferConnection, TransferGuard},
     protocol,
     quarantine::PathExt,
@@ -51,12 +51,12 @@ const REPORT_PROGRESS_THRESHOLD: u64 = 1024 * 64;
 
 pub enum ServerReq {
     Download { task: Box<FileXferTask> },
-    Cancel { file: FileId },
+    Cancel { file: FileSubPath },
 }
 
 pub struct FileXferTask {
     pub file: crate::File,
-    pub file_id: crate::FileId,
+    pub file_id: crate::FileSubPath,
     pub location: Hidden<PathBuf>,
     pub filename: String,
     pub size: u64,
@@ -408,7 +408,7 @@ async fn handle_client(
 impl FileXferTask {
     pub fn new(
         file: crate::File,
-        file_id: crate::FileId,
+        file_id: crate::FileSubPath,
         xfer: crate::Transfer,
         location: PathBuf,
     ) -> crate::Result<Self> {

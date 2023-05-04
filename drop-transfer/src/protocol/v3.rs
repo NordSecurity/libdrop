@@ -24,7 +24,7 @@ use drop_config::DropConfig;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    file::{FileId, FileKind},
+    file::{FileKind, FileSubPath},
     utils::Hidden,
 };
 
@@ -43,14 +43,14 @@ pub struct TransferRequest {
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct ReqChsum {
-    pub file: FileId,
+    pub file: FileSubPath,
     // Up to which point calculate checksum
     pub limit: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct ReportChsum {
-    pub file: FileId,
+    pub file: FileSubPath,
     pub limit: u64,
     #[serde(serialize_with = "hex::serialize")]
     #[serde(deserialize_with = "hex::deserialize")]
@@ -59,31 +59,31 @@ pub struct ReportChsum {
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Progress {
-    pub file: FileId,
+    pub file: FileSubPath,
     pub bytes_transfered: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Done {
-    pub file: FileId,
+    pub file: FileSubPath,
     pub bytes_transfered: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Error {
-    pub file: Option<FileId>,
+    pub file: Option<FileSubPath>,
     pub msg: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Start {
-    pub file: FileId,
+    pub file: FileSubPath,
     pub offset: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Cancel {
-    pub file: FileId,
+    pub file: FileSubPath,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -121,7 +121,7 @@ impl From<&ClientMsg> for tokio_tungstenite::tungstenite::Message {
 
 #[derive(Clone)]
 pub struct Chunk {
-    pub file: FileId,
+    pub file: FileSubPath,
     pub data: Vec<u8>,
 }
 
@@ -272,7 +272,7 @@ mod tests {
         const CHUNK_MSG: &[u8] = b"\x0D\x00\x00\x00test/file.exttest file content";
 
         let msg = Chunk {
-            file: FileId::from(FILE_ID),
+            file: FileSubPath::from(FILE_ID),
             data: FILE_CONTNET.to_vec(),
         }
         .encode();
@@ -282,7 +282,7 @@ mod tests {
         let Chunk { file, data } =
             Chunk::decode(CHUNK_MSG.to_vec()).expect("Failed to decode chunk");
 
-        assert_eq!(file, FileId::from(FILE_ID));
+        assert_eq!(file, FileSubPath::from(FILE_ID));
         assert_eq!(data, FILE_CONTNET);
     }
 
@@ -344,7 +344,7 @@ mod tests {
 
         test_json(
             ClientMsg::ReportChsum(ReportChsum {
-                file: FileId::from("test/file.ext"),
+                file: FileSubPath::from("test/file.ext"),
                 limit: 41,
                 checksum: [
                     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
@@ -363,7 +363,7 @@ mod tests {
 
         test_json(
             ClientMsg::Error(Error {
-                file: Some(FileId::from("test/file.ext")),
+                file: Some(FileSubPath::from("test/file.ext")),
                 msg: "test message".to_string(),
             }),
             r#"
@@ -391,7 +391,7 @@ mod tests {
 
         test_json(
             ClientMsg::Cancel(Cancel {
-                file: FileId::from("test/file.ext"),
+                file: FileSubPath::from("test/file.ext"),
             }),
             r#"
             {
@@ -406,7 +406,7 @@ mod tests {
     fn server_json_messages() {
         test_json(
             ServerMsg::Progress(Progress {
-                file: FileId::from("test/file.ext"),
+                file: FileSubPath::from("test/file.ext"),
                 bytes_transfered: 41,
             }),
             r#"
@@ -419,7 +419,7 @@ mod tests {
 
         test_json(
             ServerMsg::Done(Done {
-                file: FileId::from("test/file.ext"),
+                file: FileSubPath::from("test/file.ext"),
                 bytes_transfered: 41,
             }),
             r#"
@@ -432,7 +432,7 @@ mod tests {
 
         test_json(
             ServerMsg::Error(Error {
-                file: Some(FileId::from("test/file.ext")),
+                file: Some(FileSubPath::from("test/file.ext")),
                 msg: "test message".to_string(),
             }),
             r#"
@@ -458,7 +458,7 @@ mod tests {
 
         test_json(
             ServerMsg::ReqChsum(ReqChsum {
-                file: FileId::from("test/file.ext"),
+                file: FileSubPath::from("test/file.ext"),
                 limit: 41,
             }),
             r#"
@@ -471,7 +471,7 @@ mod tests {
 
         test_json(
             ServerMsg::Start(Start {
-                file: FileId::from("test/file.ext"),
+                file: FileSubPath::from("test/file.ext"),
                 offset: 41,
             }),
             r#"
@@ -484,7 +484,7 @@ mod tests {
 
         test_json(
             ServerMsg::Cancel(Cancel {
-                file: FileId::from("test/file.ext"),
+                file: FileSubPath::from("test/file.ext"),
             }),
             r#"
             {

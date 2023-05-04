@@ -6,11 +6,11 @@ use std::{
 use crate::utils::Hidden;
 
 #[derive(Hash, Clone, PartialEq, Eq)]
-pub struct FileId(Vec<String>);
+pub struct FileSubPath(Vec<String>);
 
 const SEPARATOR: &str = "/";
 
-impl FileId {
+impl FileSubPath {
     pub fn from_name(name: String) -> Self {
         Self(vec![name])
     }
@@ -24,7 +24,7 @@ impl FileId {
     }
 }
 
-impl<T> From<T> for FileId
+impl<T> From<T> for FileSubPath
 where
     T: AsRef<str>,
 {
@@ -38,37 +38,37 @@ where
     }
 }
 
-impl From<FileId> for PathBuf {
-    fn from(FileId(value): FileId) -> Self {
+impl From<FileSubPath> for PathBuf {
+    fn from(FileSubPath(value): FileSubPath) -> Self {
         value.into_iter().collect()
     }
 }
 
-impl From<&FileId> for PathBuf {
-    fn from(value: &FileId) -> Self {
+impl From<&FileSubPath> for PathBuf {
+    fn from(value: &FileSubPath) -> Self {
         value.0.iter().collect()
     }
 }
 
-impl From<FileId> for Box<Path> {
-    fn from(value: FileId) -> Self {
+impl From<FileSubPath> for Box<Path> {
+    fn from(value: FileSubPath) -> Self {
         PathBuf::from(value).into_boxed_path()
     }
 }
 
-impl From<&FileId> for Box<Path> {
-    fn from(value: &FileId) -> Self {
+impl From<&FileSubPath> for Box<Path> {
+    fn from(value: &FileSubPath) -> Self {
         PathBuf::from(value).into_boxed_path()
     }
 }
 
-impl ToString for FileId {
+impl ToString for FileSubPath {
     fn to_string(&self) -> String {
         self.0.join(SEPARATOR)
     }
 }
 
-impl fmt::Debug for FileId {
+impl fmt::Debug for FileSubPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("FileId")
             .field(&Hidden(self.to_string()))
@@ -76,7 +76,7 @@ impl fmt::Debug for FileId {
     }
 }
 
-impl serde::Serialize for FileId {
+impl serde::Serialize for FileSubPath {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -85,7 +85,7 @@ impl serde::Serialize for FileId {
     }
 }
 
-impl<'de> serde::Deserialize<'de> for FileId {
+impl<'de> serde::Deserialize<'de> for FileSubPath {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,

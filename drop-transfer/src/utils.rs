@@ -136,6 +136,18 @@ pub fn normalize_filename(filename: impl AsRef<str>) -> String {
     check_illegal_filename(name)
 }
 
+pub fn make_path_absolute(path: impl AsRef<Path>) -> crate::Result<PathBuf> {
+    let path = path.as_ref();
+
+    let abs = if path.is_absolute() {
+        path.canonicalize()?
+    } else {
+        std::env::current_dir()?.join(path).canonicalize()?
+    };
+
+    Ok(abs)
+}
+
 #[cfg(test)]
 mod tests {
 

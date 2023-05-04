@@ -28,7 +28,7 @@ use super::events::FileEventTx;
 use crate::{
     auth,
     error::ResultExt,
-    file::FileId,
+    file::FileSubPath,
     manager::{TransferConnection, TransferGuard},
     protocol,
     service::State,
@@ -39,7 +39,7 @@ use crate::{
 pub type WebSocket = WebSocketStream<TcpStream>;
 
 pub enum ClientReq {
-    Cancel { file: FileId },
+    Cancel { file: FileSubPath },
 }
 
 struct RunContext<'a> {
@@ -333,7 +333,7 @@ async fn start_upload(
     events: Arc<FileEventTx>,
     mut uploader: impl Uploader,
     xfer: crate::Transfer,
-    file_id: FileId,
+    file_id: FileSubPath,
 ) -> anyhow::Result<JoinHandle<()>> {
     let xfile = xfer.file(&file_id).context("File not found")?.clone();
 

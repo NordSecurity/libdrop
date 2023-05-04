@@ -1,10 +1,10 @@
 use std::path::Path;
 
-use crate::{file::FileId, utils::Hidden, Error, Transfer};
+use crate::{file::FileSubPath, utils::Hidden, Error, Transfer};
 
 #[derive(Debug)]
 pub struct DownloadSuccess {
-    pub id: FileId,
+    pub id: FileSubPath,
     pub final_path: Hidden<Box<Path>>,
 }
 
@@ -13,20 +13,20 @@ pub enum Event {
     RequestReceived(Transfer),
     RequestQueued(Transfer),
 
-    FileUploadStarted(Transfer, FileId),
-    FileDownloadStarted(Transfer, FileId),
+    FileUploadStarted(Transfer, FileSubPath),
+    FileDownloadStarted(Transfer, FileSubPath),
 
-    FileUploadProgress(Transfer, FileId, u64),
-    FileDownloadProgress(Transfer, FileId, u64),
+    FileUploadProgress(Transfer, FileSubPath, u64),
+    FileDownloadProgress(Transfer, FileSubPath, u64),
 
-    FileUploadSuccess(Transfer, FileId),
+    FileUploadSuccess(Transfer, FileSubPath),
     FileDownloadSuccess(Transfer, DownloadSuccess),
 
-    FileUploadCancelled(Transfer, FileId, bool),
-    FileDownloadCancelled(Transfer, FileId, bool),
+    FileUploadCancelled(Transfer, FileSubPath, bool),
+    FileDownloadCancelled(Transfer, FileSubPath, bool),
 
-    FileUploadFailed(Transfer, FileId, Error),
-    FileDownloadFailed(Transfer, FileId, Error),
+    FileUploadFailed(Transfer, FileSubPath, Error),
+    FileDownloadFailed(Transfer, FileSubPath, Error),
 
     TransferCanceled(Transfer, bool),
 
