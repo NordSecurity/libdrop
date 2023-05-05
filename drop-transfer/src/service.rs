@@ -190,7 +190,7 @@ impl Service {
 
         let file = moose_try_file!(
             self.state.moose,
-            xfer.file(&file_id).ok_or(Error::BadFileId),
+            xfer.file_by_subpath(&file_id).ok_or(Error::BadFileId),
             uuid,
             None
         )
@@ -267,25 +267,20 @@ impl Service {
     pub async fn cancel_all(&mut self, transfer_id: Uuid) -> crate::Result<()> {
         let mut lock = self.state.transfer_manager.lock().await;
 
-        let fids = lock.get_transfer_files(transfer_id);
-
         {
             let xfer = lock.transfer(&transfer_id).ok_or(Error::BadTransfer)?;
 
-            if let Some(fids) = fids {
-                fids.iter().for_each(|id| {
-                    let file = xfer.file(id).expect("Bad file");
-                    let status: u32 = From::from(&Error::Canceled);
+            xfer.files().values().for_each(|file| {
+                let status: u32 = From::from(&Error::Canceled);
 
-                    self.state.moose.service_quality_transfer_file(
-                        Err(status as _),
-                        drop_analytics::Phase::End,
-                        xfer.id().to_string(),
-                        0,
-                        file.info(),
-                    )
-                });
-            }
+                self.state.moose.service_quality_transfer_file(
+                    Err(status as _),
+                    drop_analytics::Phase::End,
+                    xfer.id().to_string(),
+                    0,
+                    file.info(),
+                )
+            });
         }
 
         if let Err(e) = lock.cancel_transfer(transfer_id) {

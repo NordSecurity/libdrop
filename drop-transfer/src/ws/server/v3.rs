@@ -77,6 +77,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             .context("Failed to receive transfer request")?;
 
         let msg = msg.to_str().ok().context("Expected JOSN message")?;
+        debug!(self.logger, "Request received:\n\t{msg}");
 
         let req = serde_json::from_str(msg).context("Failed to deserialize transfer request")?;
 
@@ -199,7 +200,7 @@ impl HandlerLoop<'_> {
                     self.xfer.id().to_string(),
                     0,
                     self.xfer
-                        .file(&file)
+                        .file_by_subpath(&file)
                         .expect("File should exists since we have a transfer task running")
                         .info(),
                 );
@@ -271,14 +272,14 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         debug!(self.logger, "ServerHandler::on_close(by_peer: {})", by_peer);
 
         self.xfer
-            .flat_file_list()
-            .iter()
-            .filter(|(file_id, _)| {
+            .files()
+            .values()
+            .filter(|file| {
                 self.jobs
-                    .get(file_id)
+                    .get(&file.subpath)
                     .map_or(false, |state| !state.job.is_finished())
             })
-            .for_each(|(_, file)| {
+            .for_each(|file| {
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
                     drop_analytics::Phase::End,

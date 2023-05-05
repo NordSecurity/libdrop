@@ -101,7 +101,7 @@ impl HandlerLoop<'_> {
                     self.xfer.id().to_string(),
                     0,
                     self.xfer
-                        .file(&file)
+                        .file_by_subpath(&file)
                         .expect("File should exists since we have a transfer task running")
                         .info(),
                 );
@@ -152,7 +152,10 @@ impl HandlerLoop<'_> {
         limit: u64,
     ) -> anyhow::Result<()> {
         let f = || {
-            let xfile = self.xfer.file(&file_id).context("File not found")?;
+            let xfile = self
+                .xfer
+                .file_by_subpath(&file_id)
+                .context("File not found")?;
             let checksum = tokio::task::block_in_place(|| xfile.checksum(limit))?;
 
             anyhow::Ok(v3::ReportChsum {
@@ -284,14 +287,14 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         debug!(self.logger, "ClientHandler::on_close(by_peer: {})", by_peer);
 
         self.xfer
-            .flat_file_list()
-            .iter()
-            .filter(|(file_id, _)| {
+            .files()
+            .values()
+            .filter(|file| {
                 self.tasks
-                    .get(file_id)
+                    .get(&file.subpath)
                     .map_or(false, |task| !task.job.is_finished())
             })
-            .for_each(|(_, file)| {
+            .for_each(|file| {
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
                     drop_analytics::Phase::End,

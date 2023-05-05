@@ -17,16 +17,13 @@
 //! `Start` in case the downloaded file is already there
 //! * server (receiver) ->   client (sender): `Done (file)`
 
-use std::{collections::HashMap, net::IpAddr, sync::Arc};
+use std::{net::IpAddr, sync::Arc};
 
 use anyhow::Context;
 use drop_config::DropConfig;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    file::{FileKind, FileSubPath},
-    utils::Hidden,
-};
+use crate::file::{FileId, FileKind, FileSubPath};
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct File {
@@ -162,71 +159,49 @@ impl Chunk {
     }
 }
 
-impl TryFrom<File> for crate::File {
-    type Error = crate::Error;
-
-    fn try_from(
-        File {
-            name,
-            size,
-            children,
-        }: File,
-    ) -> Result<Self, Self::Error> {
-        let children: HashMap<_, _> = children
-            .into_iter()
-            .map(|c| {
-                let name = Hidden(c.name.clone());
-                let file = crate::File::try_from(c)?;
-
-                Ok((name, file))
-            })
-            .collect::<Result<_, Self::Error>>()?;
-
-        Ok(Self {
-            name: Hidden(name),
-            kind: if children.is_empty() {
-                FileKind::FileToRecv {
-                    size: size.ok_or(crate::Error::BadFile)?,
-                }
-            } else {
-                FileKind::Dir { children }
-            },
-        })
-    }
-}
-
-impl TryFrom<&crate::File> for File {
-    type Error = crate::Error;
-
-    fn try_from(value: &crate::File) -> Result<Self, Self::Error> {
-        let name = value.name().to_string();
-
-        Ok(Self {
-            name,
-            size: value.size(),
-            children: value
-                .children()
-                .map(TryFrom::try_from)
-                .collect::<Result<_, crate::Error>>()?,
-        })
-    }
-}
-
 impl TryFrom<(TransferRequest, IpAddr, Arc<DropConfig>)> for crate::Transfer {
     type Error = crate::Error;
 
     fn try_from(
         (TransferRequest { files, id }, peer, config): (TransferRequest, IpAddr, Arc<DropConfig>),
     ) -> Result<Self, Self::Error> {
-        Self::new_with_uuid(
-            peer,
-            files
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, crate::Error>>()?,
-            id,
-            &config,
-        )
+        fn process_file(
+            in_files: &mut Vec<crate::File>,
+            subpath: FileSubPath,
+            File { size, children, .. }: File,
+        ) -> crate::Result<()> {
+            match size {
+                Some(size) => {
+                    in_files.push(crate::File {
+                        file_id: FileId::from(&subpath),
+                        subpath,
+                        kind: FileKind::FileToRecv { size },
+                    });
+                }
+                None => {
+                    for file in children {
+                        process_file(
+                            in_files,
+                            subpath.clone().append_file_name(&file.name)?,
+                            file,
+                        )?;
+                    }
+                }
+            }
+
+            Ok(())
+        }
+
+        let mut in_files = Vec::new();
+        for file in files {
+            process_file(
+                &mut in_files,
+                FileSubPath::from_file_name(&file.name)?,
+                file,
+            )?;
+        }
+
+        Self::new_with_uuid(peer, in_files, id, &config)
     }
 }
 
@@ -234,12 +209,42 @@ impl TryFrom<&crate::Transfer> for TransferRequest {
     type Error = crate::Error;
 
     fn try_from(value: &crate::Transfer) -> Result<Self, Self::Error> {
+        let mut files: Vec<File> = Vec::new();
+
+        for file in value.files().values() {
+            let mut parents = file.subpath.iter();
+            let mut files = &mut files;
+            let name = if let Some(name) = parents.next_back() {
+                name.clone()
+            } else {
+                continue;
+            };
+
+            for parent_name in parents {
+                if files.iter().all(|file| file.name != *parent_name) {
+                    files.push(File {
+                        name: parent_name.clone(),
+                        size: None,
+                        children: Vec::new(),
+                    });
+                }
+
+                files = &mut files
+                    .iter_mut()
+                    .find(|file| file.name == *parent_name)
+                    .expect("The parent was just inserted")
+                    .children;
+            }
+
+            files.push(File {
+                name,
+                size: Some(file.size()),
+                children: Vec::new(),
+            });
+        }
+
         Ok(Self {
-            files: value
-                .files()
-                .values()
-                .map(TryFrom::try_from)
-                .collect::<Result<_, crate::Error>>()?,
+            files,
             id: value.id(),
         })
     }

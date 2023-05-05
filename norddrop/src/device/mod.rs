@@ -223,21 +223,21 @@ impl NordDropFFI {
             .ok_or(ffi::types::NORDDROP_RES_BAD_INPUT)?;
 
         let xfer = {
-            let files = descriptors
-                .iter()
-                .map(|desc| {
-                    #[cfg(target_os = "windows")]
-                    {
-                        if desc.fd.is_some() {
-                            error!(
-                                self.logger,
-                                "Specifying file descriptors in transfers is not supported under \
+            let mut files = Vec::new();
+            for desc in descriptors.iter() {
+                #[cfg(target_os = "windows")]
+                {
+                    if desc.fd.is_some() {
+                        error!(
+                            self.logger,
+                            "Specifying file descriptors in transfers is not supported under \
                                  Windows"
-                            );
-                            return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
-                        }
+                        );
+                        return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
                     }
+                }
 
+                let batch =
                     File::from_path(&desc.path.0, desc.fd, &self.config.drop).map_err(|e| {
                         error!(
                             self.logger,
@@ -247,9 +247,10 @@ impl NordDropFFI {
                             e
                         );
                         ffi::types::NORDDROP_RES_TRANSFER_CREATE
-                    })
-                })
-                .collect::<Result<Vec<File>>>()?;
+                    })?;
+
+                files.extend(batch);
+            }
 
             Transfer::new(peer.ip(), files, &self.config.drop).map_err(|e| {
                 error!(

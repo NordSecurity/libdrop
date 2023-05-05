@@ -198,20 +198,7 @@ impl From<drop_transfer::Transfer> for EventTransferRequest {
         EventTransferRequest {
             peer: t.peer().to_string(),
             transfer: t.id().to_string(),
-            files: t.files().iter().map(|(_, v)| v.into()).collect(),
-        }
-    }
-}
-
-impl From<&drop_transfer::File> for File {
-    fn from(f: &drop_transfer::File) -> Self {
-        Self {
-            id: f.name().to_string(),
-            size: f.size().unwrap_or_default(),
-            children: f
-                .children()
-                .map(|c| (c.name().to_string(), c.into()))
-                .collect(),
+            files: extract_transfer_files(&t).into_values().collect(),
         }
     }
 }
@@ -220,9 +207,45 @@ impl From<drop_transfer::Transfer> for EventRequestQueued {
     fn from(t: drop_transfer::Transfer) -> EventRequestQueued {
         EventRequestQueued {
             transfer: t.id().to_string(),
-            files: t.files().iter().map(|(_, v)| v.into()).collect(),
+            files: extract_transfer_files(&t).into_values().collect(),
         }
     }
+}
+
+fn extract_transfer_files(t: &drop_transfer::Transfer) -> HashMap<String, File> {
+    let mut files: HashMap<String, File> = HashMap::new();
+
+    for tr_file in t.files().values() {
+        let mut iter = tr_file.subpath().iter();
+        let name = if let Some(name) = iter.next_back() {
+            name.clone()
+        } else {
+            continue;
+        };
+
+        let mut files = &mut files;
+
+        for name in iter {
+            let parent = files.entry(name.clone()).or_insert_with(|| File {
+                id: String::new(),
+                size: 0,
+                children: HashMap::new(),
+            });
+
+            files = &mut parent.children;
+        }
+
+        files.insert(
+            name,
+            File {
+                id: tr_file.id().to_string(),
+                size: tr_file.size(),
+                children: HashMap::new(),
+            },
+        );
+    }
+
+    files
 }
 
 impl From<Config> for drop_config::Config {

@@ -14,3 +14,4 @@ members = [
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "macros"] }
 slog = { version = "2.7.0", features = ["release_max_level_info"] }
 async-trait = "0.1.68"
+base64 = "0.21.0"

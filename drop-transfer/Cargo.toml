@@ -18,6 +18,7 @@ tempfile = "3.5.0"
 [dependencies]
 anyhow = "1.0.70"
 async-trait = { workspace = true }
+base64 = { workspace = true }
 drop-analytics = { version = "1.0.0", path = "../drop-analytics" }
 drop-config = { version = "1.0.0", path = "../drop-config" }
 drop-auth = { path = "../drop-auth" }
