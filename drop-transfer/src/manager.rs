@@ -53,20 +53,6 @@ impl TransferManager {
             storage,
         }
     }
-    /// Get ALL of the ongoing file transfers for a given transfer ID
-    /// returns None if a transfer does not exist
-    pub(crate) fn get_transfer_files(&self, transfer_id: Uuid) -> Option<Vec<FileSubPath>> {
-        let state = self.transfers.get(&transfer_id)?;
-
-        let ids = state
-            .xfer
-            .flat_file_list()
-            .into_iter()
-            .map(|(id, _)| id)
-            .collect();
-
-        Some(ids)
-    }
 
     /// Cancel ALL of the ongoing file transfers for a given transfer ID    
     pub(crate) fn cancel_transfer(&mut self, transfer_id: Uuid) -> Result<(), Error> {

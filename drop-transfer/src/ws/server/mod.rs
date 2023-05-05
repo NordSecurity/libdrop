@@ -418,7 +418,7 @@ impl FileXferTask {
             .to_string_lossy()
             .to_string();
 
-        let size = file.size().ok_or(crate::Error::DirectoryNotExpected)?;
+        let size = file.size();
 
         Ok(Self {
             file,

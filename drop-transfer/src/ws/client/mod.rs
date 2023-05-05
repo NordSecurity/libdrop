@@ -335,7 +335,10 @@ async fn start_upload(
     xfer: crate::Transfer,
     file_id: FileSubPath,
 ) -> anyhow::Result<JoinHandle<()>> {
-    let xfile = xfer.file(&file_id).context("File not found")?.clone();
+    let xfile = xfer
+        .file_by_subpath(&file_id)
+        .context("File not found")?
+        .clone();
 
     events
         .start(Event::FileUploadStarted(xfer.clone(), file_id.clone()))

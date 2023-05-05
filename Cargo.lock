@@ -467,6 +467,7 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.21.0",
  "clap",
  "core-foundation",
  "drop-analytics",

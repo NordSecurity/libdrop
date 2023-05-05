@@ -4,7 +4,10 @@ use drop_analytics::TransferInfo;
 use drop_config::DropConfig;
 use uuid::Uuid;
 
-use crate::{file::FileSubPath, utils::Hidden, Error, File};
+use crate::{
+    file::{FileId, FileSubPath},
+    Error, File,
+};
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -12,7 +15,9 @@ type Result<T> = std::result::Result<T, Error>;
 pub struct Transfer {
     peer: IpAddr,
     uuid: Uuid,
-    files: HashMap<Hidden<String>, File>,
+
+    // all the files
+    files: HashMap<FileId, File>,
 }
 
 impl Transfer {
@@ -32,62 +37,27 @@ impl Transfer {
 
         let files = files
             .into_iter()
-            .map(|file| (Hidden(file.name().to_string()), file))
+            .map(|file| (file.file_id.clone(), file))
             .collect();
 
         Ok(Self { peer, uuid, files })
     }
 
-    pub(crate) fn file(&self, file_id: &FileSubPath) -> Option<&File> {
-        let mut components = file_id.iter();
-
-        let first = components.next()?;
-        let mut file = self.files.get(first)?;
-
-        for name in components {
-            file = file.child(name)?;
-        }
-
-        Some(file)
+    pub(crate) fn file_by_subpath(&self, file_subpath: &FileSubPath) -> Option<&File> {
+        self.files
+            .values()
+            .find(|file| file.subpath == *file_subpath)
     }
 
-    pub fn files(&self) -> &HashMap<Hidden<String>, File> {
+    pub fn files(&self) -> &HashMap<FileId, File> {
         &self.files
-    }
-
-    // Gathers all files into a flat list
-    pub fn flat_file_list(&self) -> Vec<(FileSubPath, &File)> {
-        fn push_children<'a>(
-            file: &'a File,
-            file_id: &FileSubPath,
-            out: &mut Vec<(FileSubPath, &'a File)>,
-        ) {
-            if file.is_dir() {
-                for file in file.children() {
-                    let mut file_id = file_id.clone();
-                    file_id.append(file.name().to_string());
-                    push_children(file, &file_id, out);
-                }
-            } else {
-                out.push((file_id.clone(), file));
-            }
-        }
-
-        let mut out = Vec::new();
-
-        for file in self.files().values() {
-            let file_id = FileSubPath::from_name(file.name().to_string());
-            push_children(file, &file_id, &mut out);
-        }
-
-        out
     }
 
     pub fn info(&self) -> TransferInfo {
         let info_list = self
-            .flat_file_list()
-            .iter()
-            .map(|(_, f)| f.info().unwrap_or_default())
+            .files
+            .values()
+            .map(|f| f.info().unwrap_or_default())
             .collect::<Vec<_>>();
 
         let size_list = info_list
