@@ -18,6 +18,12 @@ pub struct DropConfig {
     pub storage_path: String,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct MooseConfig {
+    pub event_path: String,
+    pub prod: bool,
+}
+
 impl Default for DropConfig {
     fn default() -> Self {
         Self {
@@ -29,12 +35,6 @@ impl Default for DropConfig {
             storage_path: "libdrop.sqlite".to_string(),
         }
     }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct MooseConfig {
-    pub event_path: String,
-    pub prod: bool,
 }
 
 impl DropConfig {

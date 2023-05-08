@@ -78,7 +78,7 @@ impl NordDropFFI {
 
         trace!(logger, "norddrop_start() listen address: {:?}", listen_addr,);
 
-        let config: types::Config = match serde_json::from_str(config_json) {
+        let config: drop_types::ffi::Config = match serde_json::from_str(config_json) {
             Ok(cfg) => {
                 debug!(logger, "start() called with config:\n{:#?}", cfg,);
                 cfg

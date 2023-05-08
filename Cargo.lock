@@ -554,6 +554,10 @@ dependencies = [
 [[package]]
 name = "drop-types"
 version = "1.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "either"
