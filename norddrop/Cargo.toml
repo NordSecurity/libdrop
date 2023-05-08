@@ -17,7 +17,7 @@ tokio = { workspace = true }
 async-trait = { workspace = true }
 
 drop-transfer = { version = "1.0", path = "../drop-transfer" }
-drop-config = { version = "1.0", path = "../drop-config" }
+drop-types = { version = "1.0", path = "../drop-types" }
 drop-analytics = { version = "1.0", path = "../drop-analytics" }
 drop-auth = { path = "../drop-auth" }
 drop-storage = { version = "1.0", path = "../drop-storage" }

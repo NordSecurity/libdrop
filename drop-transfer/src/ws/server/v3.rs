@@ -9,7 +9,7 @@ use std::{
 };
 
 use anyhow::Context;
-use drop_config::DropConfig;
+use drop_types::config::DropConfig;
 use futures::{SinkExt, StreamExt};
 use slog::{debug, error, info, warn};
 use tokio::{

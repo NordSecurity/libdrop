@@ -507,10 +507,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "drop-config"
-version = "1.0.0"
-
-[[package]]
 name = "drop-storage"
 version = "1.0.0"
 dependencies = [
@@ -529,8 +525,8 @@ dependencies = [
  "core-foundation",
  "drop-analytics",
  "drop-auth",
- "drop-config",
  "drop-storage",
+ "drop-types",
  "futures",
  "futures-util",
  "hex",
@@ -554,6 +550,10 @@ dependencies = [
  "uuid",
  "warp",
 ]
+
+[[package]]
+name = "drop-types"
+version = "1.0.0"
 
 [[package]]
 name = "either"
@@ -1140,9 +1140,9 @@ dependencies = [
  "cc",
  "drop-analytics",
  "drop-auth",
- "drop-config",
  "drop-storage",
  "drop-transfer",
+ "drop-types",
  "libc",
  "serde",
  "serde_json",

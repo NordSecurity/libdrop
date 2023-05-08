@@ -6,7 +6,7 @@ use std::{
 };
 
 use drop_analytics::Moose;
-use drop_config::DropConfig;
+use drop_types::config::DropConfig;
 use slog::{debug, error, warn, Logger};
 use tokio::{
     sync::{mpsc, Mutex},

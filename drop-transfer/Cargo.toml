@@ -19,7 +19,7 @@ tempfile = "3.5.0"
 anyhow = "1.0.70"
 async-trait = { workspace = true }
 drop-analytics = { version = "1.0.0", path = "../drop-analytics" }
-drop-config = { version = "1.0.0", path = "../drop-config" }
+drop-types = { version = "1.0.0", path = "../drop-types" }
 drop-auth = { path = "../drop-auth" }
 drop-storage = { version = "1.0.0", path = "../drop-storage" }
 futures = "0.3"

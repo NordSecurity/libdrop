@@ -194,7 +194,7 @@ pub(crate) fn start(
     };
 
     let future = match warp::serve(service)
-        .try_bind_with_graceful_shutdown((addr, drop_config::PORT), async move {
+        .try_bind_with_graceful_shutdown((addr, drop_types::config::PORT), async move {
             stop.cancelled().await
         }) {
         Ok((_, future)) => future,
@@ -211,7 +211,7 @@ pub(crate) fn start(
                         "Found that the address {}:{} is already used, while trying to bind the \
                          WS server: {}",
                         addr,
-                        drop_config::PORT,
+                        drop_types::config::PORT,
                         ioerr
                     );
                     return Err(Error::AddrInUse);

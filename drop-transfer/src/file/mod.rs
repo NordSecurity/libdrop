@@ -14,7 +14,7 @@ use std::{
 };
 
 use drop_analytics::FileInfo;
-use drop_config::DropConfig;
+use drop_types::config::DropConfig;
 pub use id::FileId;
 pub use reader::FileReader;
 use sha2::Digest;
@@ -311,7 +311,7 @@ mod tests {
     fn file_checksum() {
         use std::io::Write;
 
-        use drop_config::DropConfig;
+        use drop_types::config::DropConfig;
 
         let csum = {
             let mut tmp = tempfile::NamedTempFile::new().expect("Failed to create tmp file");

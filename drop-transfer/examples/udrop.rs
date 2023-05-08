@@ -11,8 +11,8 @@ use std::{
 use anyhow::Context;
 use clap::{arg, command, value_parser, ArgAction, Command};
 use drop_auth::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
-use drop_config::DropConfig;
 use drop_transfer::{auth, Event, File, Service, Transfer};
+use drop_types::config::DropConfig;
 use slog::{o, Drain, Logger};
 use slog_scope::{info, warn};
 use tokio::sync::{mpsc, watch, Mutex};

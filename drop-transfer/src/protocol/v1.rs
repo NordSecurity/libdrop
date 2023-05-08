@@ -10,7 +10,7 @@
 
 use std::{net::IpAddr, sync::Arc};
 
-use drop_config::DropConfig;
+use drop_types::config::DropConfig;
 use serde::{Deserialize, Serialize};
 
 pub use super::v3::{Chunk, Error, File, Progress};

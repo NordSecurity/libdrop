@@ -6,8 +6,8 @@ use std::{
 };
 
 use drop_auth::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH};
-use drop_config::Config;
 use drop_transfer::{auth, utils::Hidden, File, Service, Transfer};
+use drop_types::config::Config;
 use slog::{debug, error, trace, warn, Logger};
 use tokio::sync::{mpsc, Mutex};
 
@@ -213,7 +213,7 @@ impl NordDropFFI {
             }
         };
 
-        let peer = (peer, drop_config::PORT)
+        let peer = (peer, drop_types::config::PORT)
             .to_socket_addrs()
             .map_err(|err| {
                 error!(self.logger, "Failed to perform lookup of address: {err}");

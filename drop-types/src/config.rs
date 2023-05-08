@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+pub const PORT: u16 = 49111;
+
 #[derive(Debug, Clone, Default)]
 pub struct Config {
     pub drop: DropConfig,
@@ -34,8 +36,6 @@ pub struct MooseConfig {
     pub event_path: String,
     pub prod: bool,
 }
-
-pub const PORT: u16 = 49111;
 
 impl DropConfig {
     pub fn ping_interval(&self) -> Duration {

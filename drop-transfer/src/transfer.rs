@@ -1,7 +1,7 @@
 use std::{collections::HashMap, net::IpAddr};
 
 use drop_analytics::TransferInfo;
-use drop_config::DropConfig;
+use drop_types::config::DropConfig;
 use uuid::Uuid;
 
 use crate::{file::FileId, utils::Hidden, Error, File};

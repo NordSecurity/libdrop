@@ -5,8 +5,8 @@ members = [
     "drop-analytics",
     "drop-transfer",
     "drop-auth",
-    "drop-config",
     "drop-storage",
+    "drop-types",
     "norddrop",
 ]
 

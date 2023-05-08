@@ -138,7 +138,7 @@ async fn make_request(
     auth: &auth::Context,
     logger: &slog::Logger,
 ) -> Result<(), tungstenite::Error> {
-    let url = format!("ws://{ip}:{}/drop/{version}", drop_config::PORT);
+    let url = format!("ws://{ip}:{}/drop/{version}", drop_types::config::PORT);
 
     let err = match tokio_tungstenite::client_async(&url, &mut *socket).await {
         Ok(_) => {
@@ -191,7 +191,7 @@ async fn tcp_connect(state: &State, ip: IpAddr, logger: &Logger) -> TcpStream {
     let mut sleep_time = Duration::from_millis(200);
 
     loop {
-        match TcpStream::connect((ip, drop_config::PORT)).await {
+        match TcpStream::connect((ip, drop_types::config::PORT)).await {
             Ok(sock) => break sock,
             Err(err) => {
                 debug!(

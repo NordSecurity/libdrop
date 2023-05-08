@@ -225,7 +225,7 @@ impl From<drop_transfer::Transfer> for EventRequestQueued {
     }
 }
 
-impl From<Config> for drop_config::Config {
+impl From<Config> for drop_types::config::Config {
     fn from(val: Config) -> Self {
         let Config {
             dir_depth_limit,
@@ -238,8 +238,8 @@ impl From<Config> for drop_config::Config {
             storage_path,
         } = val;
 
-        drop_config::Config {
-            drop: drop_config::DropConfig {
+        drop_types::config::Config {
+            drop: drop_types::config::DropConfig {
                 dir_depth_limit,
                 transfer_file_limit,
                 req_connection_timeout: Duration::from_millis(req_connection_timeout_ms),
@@ -249,7 +249,7 @@ impl From<Config> for drop_config::Config {
                 transfer_idle_lifetime: Duration::from_millis(transfer_idle_lifetime_ms),
                 storage_path,
             },
-            moose: drop_config::MooseConfig {
+            moose: drop_types::config::MooseConfig {
                 event_path: moose_event_path,
                 prod: moose_prod,
             },
@@ -294,9 +294,9 @@ mod tests {
 
         let cfg: Config = serde_json::from_str(json).expect("Failed to deserialize config");
 
-        let drop_config::Config {
+        let drop_types::config::Config {
             drop:
-                drop_config::DropConfig {
+                drop_types::config::DropConfig {
                     dir_depth_limit,
                     transfer_file_limit,
                     req_connection_timeout,
@@ -304,7 +304,7 @@ mod tests {
                     connection_max_retry_interval,
                     storage_path,
                 },
-            moose: drop_config::MooseConfig { event_path, prod },
+            moose: drop_types::config::MooseConfig { event_path, prod },
         } = cfg.into();
 
         assert_eq!(dir_depth_limit, 10);

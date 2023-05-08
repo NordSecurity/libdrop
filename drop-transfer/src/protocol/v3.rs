@@ -20,7 +20,7 @@
 use std::{collections::HashMap, net::IpAddr, sync::Arc};
 
 use anyhow::Context;
-use drop_config::DropConfig;
+use drop_types::config::DropConfig;
 use serde::{Deserialize, Serialize};
 
 use crate::{
