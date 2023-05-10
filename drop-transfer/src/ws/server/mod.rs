@@ -56,7 +56,6 @@ pub enum ServerReq {
 
 pub struct FileXferTask {
     pub file: crate::File,
-    pub file_id: crate::FileSubPath,
     pub location: Hidden<PathBuf>,
     pub filename: String,
     pub size: u64,
@@ -406,12 +405,7 @@ async fn handle_client(
 }
 
 impl FileXferTask {
-    pub fn new(
-        file: crate::File,
-        file_id: crate::FileSubPath,
-        xfer: crate::Transfer,
-        location: PathBuf,
-    ) -> crate::Result<Self> {
+    pub fn new(file: crate::File, xfer: crate::Transfer, location: PathBuf) -> crate::Result<Self> {
         let filename = location
             .file_stem()
             .ok_or(crate::Error::BadFile)?
@@ -422,7 +416,6 @@ impl FileXferTask {
 
         Ok(Self {
             file,
-            file_id,
             xfer,
             location: Hidden(location),
             filename,
@@ -476,7 +469,7 @@ impl FileXferTask {
             events
                 .emit(crate::Event::FileDownloadProgress(
                     self.xfer.clone(),
-                    self.file_id.clone(),
+                    self.file.id().clone(),
                     bytes_received,
                 ))
                 .await;
@@ -499,7 +492,7 @@ impl FileXferTask {
                     events
                         .emit(crate::Event::FileDownloadProgress(
                             self.xfer.clone(),
-                            self.file_id.clone(),
+                            self.file.id().clone(),
                             bytes_received,
                         ))
                         .await;
@@ -563,7 +556,7 @@ impl FileXferTask {
                 events
                     .emit_force(crate::Event::FileDownloadFailed(
                         self.xfer.clone(),
-                        self.file_id,
+                        self.file.id().clone(),
                         err,
                     ))
                     .await;
@@ -589,7 +582,7 @@ impl FileXferTask {
                 events
                     .start(crate::Event::FileDownloadStarted(
                         self.xfer.clone(),
-                        self.file_id.clone(),
+                        self.file.id().clone(),
                     ))
                     .await;
 
@@ -616,7 +609,7 @@ impl FileXferTask {
                     Ok(dst_location) => Some(Event::FileDownloadSuccess(
                         self.xfer.clone(),
                         DownloadSuccess {
-                            id: self.file_id,
+                            id: self.file.id().clone(),
                             final_path: Hidden(dst_location.into_boxed_path()),
                         },
                     )),
@@ -625,7 +618,7 @@ impl FileXferTask {
                         let _ = downloader.error(err.to_string()).await;
                         Some(Event::FileDownloadFailed(
                             self.xfer.clone(),
-                            self.file_id,
+                            self.file.id().clone(),
                             err,
                         ))
                     }
@@ -640,7 +633,7 @@ impl FileXferTask {
                     .emit_force(crate::Event::FileDownloadSuccess(
                         self.xfer.clone(),
                         DownloadSuccess {
-                            id: self.file_id,
+                            id: self.file.id().clone(),
                             final_path: Hidden(destination.0.into_boxed_path()),
                         },
                     ))

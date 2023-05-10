@@ -73,11 +73,11 @@ async fn listen(
                     service
                         .lock()
                         .await
-                        .download(xfid, file.subpath().clone(), out_dir)
+                        .download(xfid, file.id(), out_dir)
                         .await
                         .context("Cannot issue download call")?;
 
-                    file_set.insert(file.subpath().clone());
+                    file_set.insert(file.id().clone());
                 }
 
                 if file_set.is_empty() {

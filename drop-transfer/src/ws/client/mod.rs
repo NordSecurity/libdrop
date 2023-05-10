@@ -28,7 +28,7 @@ use super::events::FileEventTx;
 use crate::{
     auth,
     error::ResultExt,
-    file::FileSubPath,
+    file::{FileId, FileSubPath},
     manager::{TransferConnection, TransferGuard},
     protocol,
     service::State,
@@ -333,15 +333,16 @@ async fn start_upload(
     events: Arc<FileEventTx>,
     mut uploader: impl Uploader,
     xfer: crate::Transfer,
-    file_id: FileSubPath,
+    file_id: FileId,
 ) -> anyhow::Result<JoinHandle<()>> {
     let xfile = xfer
-        .file_by_subpath(&file_id)
+        .files()
+        .get(&file_id)
         .context("File not found")?
         .clone();
 
     events
-        .start(Event::FileUploadStarted(xfer.clone(), file_id.clone()))
+        .start(Event::FileUploadStarted(xfer.clone(), xfile.id().clone()))
         .await;
 
     let upload_job = async move {

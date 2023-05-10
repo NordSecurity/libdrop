@@ -21,11 +21,11 @@ use warp::ws::{Message, WebSocket};
 
 use super::{handler, ServerReq};
 use crate::{
+    file::FileSubPath,
     protocol::v2,
     service::State,
     utils::Hidden,
     ws::{self, events::FileEventTx},
-    FileSubPath,
 };
 
 pub struct HandlerInit<'a, const PING: bool = true> {
@@ -44,7 +44,7 @@ pub struct HandlerLoop<'a, const PING: bool> {
 }
 
 struct Downloader {
-    file_id: crate::FileSubPath,
+    file_id: FileSubPath,
     msg_tx: Sender<Message>,
     tmp_loc: Option<Hidden<PathBuf>>,
 }
@@ -127,14 +127,14 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
     ) -> anyhow::Result<()> {
         let is_running = self
             .jobs
-            .get(&task.file_id)
+            .get(task.file.subpath())
             .map_or(false, |state| !state.job.is_finished());
 
         if is_running {
             return Ok(());
         }
 
-        let file_id = task.file_id.clone();
+        let subpath = task.file.subpath().clone();
         let state = FileTask::start(
             self.msg_tx.clone(),
             self.state.clone(),
@@ -142,7 +142,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
             self.logger.clone(),
         );
 
-        self.jobs.insert(file_id, state);
+        self.jobs.insert(subpath, state);
 
         Ok(())
     }
@@ -193,22 +193,23 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         {
             if !task.is_finished() {
                 task.abort();
+                let file = self
+                    .xfer
+                    .file_by_subpath(&file)
+                    .expect("File should exists since we have a transfer task running");
 
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
-                    self.xfer
-                        .file_by_subpath(&file)
-                        .expect("File should exists since we have a transfer task running")
-                        .info(),
+                    file.info(),
                 );
 
                 events
                     .stop(crate::Event::FileDownloadCancelled(
                         self.xfer.clone(),
-                        file,
+                        file.id().clone(),
                         by_peer,
                     ))
                     .await;
@@ -232,10 +233,15 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                 if !task.is_finished() {
                     task.abort();
 
+                    let file = self
+                        .xfer
+                        .file_by_subpath(&file)
+                        .expect("File should exists since we have a transfer task running");
+
                     events
                         .stop(crate::Event::FileDownloadFailed(
                             self.xfer.clone(),
-                            file,
+                            file.id().clone(),
                             crate::Error::BadTransfer,
                         ))
                         .await;
@@ -471,7 +477,7 @@ impl FileTask {
         let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
 
         let downloader = Downloader {
-            file_id: task.file_id.clone(),
+            file_id: task.file.subpath().clone(),
             msg_tx,
             tmp_loc: None,
         };

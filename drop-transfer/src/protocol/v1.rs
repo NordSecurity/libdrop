@@ -14,10 +14,7 @@ use drop_config::DropConfig;
 use serde::{Deserialize, Serialize};
 
 pub use super::v3::{Chunk, Error, File, Progress};
-use crate::{
-    file::{FileId, FileKind},
-    FileSubPath,
-};
+use crate::file::{FileId, FileKind, FileSubPath};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TransferRequest {

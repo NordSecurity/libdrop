@@ -31,6 +31,12 @@ impl TryFrom<&Path> for FileId {
     }
 }
 
+impl From<String> for FileId {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
 impl From<&FileSubPath> for FileId {
     fn from(value: &FileSubPath) -> Self {
         Self(value.to_string())

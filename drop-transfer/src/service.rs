@@ -25,7 +25,7 @@ use crate::{
         client::ClientReq,
         server::{FileXferTask, ServerReq},
     },
-    Error, Event, TransferManager,
+    Error, Event, FileId, TransferManager,
 };
 
 pub(super) struct State {
@@ -157,7 +157,7 @@ impl Service {
     pub async fn download(
         &mut self,
         uuid: Uuid,
-        file_id: FileSubPath,
+        file_id: &FileId,
         parent_dir: &Path,
     ) -> crate::Result<()> {
         debug!(
@@ -178,7 +178,7 @@ impl Service {
             };
 
             let mapped_file_path =
-                parent_dir.join(lock.apply_dir_mapping(uuid, parent_dir, &file_id)?);
+                parent_dir.join(lock.apply_dir_mapping(uuid, parent_dir, file_id)?);
 
             let xfer = lock.transfer(&uuid).ok_or(Error::BadTransfer)?.clone();
 
@@ -190,7 +190,7 @@ impl Service {
 
         let file = moose_try_file!(
             self.state.moose,
-            xfer.file_by_subpath(&file_id).ok_or(Error::BadFileId),
+            xfer.files().get(file_id).ok_or(Error::BadFileId),
             uuid,
             None
         )
@@ -229,7 +229,7 @@ impl Service {
 
         let task = moose_try_file!(
             self.state.moose,
-            FileXferTask::new(file, file_id, xfer, location),
+            FileXferTask::new(file, xfer, location),
             uuid,
             file_info
         );

@@ -9,10 +9,9 @@ use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 
 use crate::{
-    file::FileSubPath,
     service::State,
     ws::{client::ClientReq, server::ServerReq},
-    Error, Transfer,
+    Error, FileId, Transfer,
 };
 
 #[derive(Clone)]
@@ -89,14 +88,20 @@ impl TransferManager {
         &mut self,
         id: Uuid,
         dest_dir: &Path,
-        file_id: &FileSubPath,
+        file_id: &FileId,
     ) -> crate::Result<PathBuf> {
         let state = self
             .transfers
             .get_mut(&id)
             .ok_or(crate::Error::BadTransfer)?;
 
-        let mut iter = file_id.iter().map(crate::utils::normalize_filename);
+        let file = state
+            .xfer
+            .files()
+            .get(file_id)
+            .ok_or(crate::Error::BadFileId)?;
+
+        let mut iter = file.subpath().iter().map(crate::utils::normalize_filename);
 
         let probe = iter.next().ok_or(crate::Error::BadPath)?;
         let next = iter.next();
