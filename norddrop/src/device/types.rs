@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::time::Duration;
 
 use drop_transfer::utils::Hidden;
 use serde::{Deserialize, Serialize};
@@ -30,8 +30,8 @@ pub struct EventTransfer {
 #[derive(Serialize)]
 struct File {
     id: String,
+    path: String,
     size: u64,
-    children: HashMap<String, File>,
 }
 
 #[derive(Serialize)]
@@ -198,7 +198,7 @@ impl From<drop_transfer::Transfer> for EventTransferRequest {
         EventTransferRequest {
             peer: t.peer().to_string(),
             transfer: t.id().to_string(),
-            files: extract_transfer_files(&t).into_values().collect(),
+            files: extract_transfer_files(&t),
         }
     }
 }
@@ -207,45 +207,20 @@ impl From<drop_transfer::Transfer> for EventRequestQueued {
     fn from(t: drop_transfer::Transfer) -> EventRequestQueued {
         EventRequestQueued {
             transfer: t.id().to_string(),
-            files: extract_transfer_files(&t).into_values().collect(),
+            files: extract_transfer_files(&t),
         }
     }
 }
 
-fn extract_transfer_files(t: &drop_transfer::Transfer) -> HashMap<String, File> {
-    let mut files: HashMap<String, File> = HashMap::new();
-
-    for tr_file in t.files().values() {
-        let mut iter = tr_file.subpath().iter();
-        let name = if let Some(name) = iter.next_back() {
-            name.clone()
-        } else {
-            continue;
-        };
-
-        let mut files = &mut files;
-
-        for name in iter {
-            let parent = files.entry(name.clone()).or_insert_with(|| File {
-                id: String::new(),
-                size: 0,
-                children: HashMap::new(),
-            });
-
-            files = &mut parent.children;
-        }
-
-        files.insert(
-            name,
-            File {
-                id: tr_file.id().to_string(),
-                size: tr_file.size(),
-                children: HashMap::new(),
-            },
-        );
-    }
-
-    files
+fn extract_transfer_files(t: &drop_transfer::Transfer) -> Vec<File> {
+    t.files()
+        .values()
+        .map(|f| File {
+            id: f.id().to_string(),
+            path: f.subpath().to_string(),
+            size: f.size(),
+        })
+        .collect()
 }
 
 impl From<Config> for drop_config::Config {

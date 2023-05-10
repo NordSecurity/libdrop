@@ -12,7 +12,7 @@ use tokio::{sync::mpsc::Sender, task::JoinHandle};
 use tokio_tungstenite::tungstenite::{self, Message};
 
 use super::{handler, ClientReq, WebSocket};
-use crate::{protocol::v3, service::State, utils::Hidden, ws, FileSubPath};
+use crate::{file::FileSubPath, protocol::v3, service::State, utils::Hidden, ws};
 
 pub struct HandlerInit<'a> {
     state: Arc<State>,
@@ -95,21 +95,23 @@ impl HandlerLoop<'_> {
             if !task.job.is_finished() {
                 task.job.abort();
 
+                let file = self
+                    .xfer
+                    .file_by_subpath(&file)
+                    .expect("File should exists since we have a transfer task running");
+
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
-                    self.xfer
-                        .file_by_subpath(&file)
-                        .expect("File should exists since we have a transfer task running")
-                        .info(),
+                    file.info(),
                 );
 
                 task.events
                     .stop(crate::Event::FileUploadCancelled(
                         self.xfer.clone(),
-                        file,
+                        file.id().clone(),
                         by_peer,
                     ))
                     .await;
@@ -119,10 +121,15 @@ impl HandlerLoop<'_> {
 
     async fn on_progress(&self, file: FileSubPath, transfered: u64) {
         if let Some(task) = self.tasks.get(&file) {
+            let file = self
+                .xfer
+                .file_by_subpath(&file)
+                .expect("File should exists since we have a transfer task running");
+
             task.events
                 .emit(crate::Event::FileUploadProgress(
                     self.xfer.clone(),
-                    file,
+                    file.id().clone(),
                     transfered,
                 ))
                 .await;
@@ -130,16 +137,23 @@ impl HandlerLoop<'_> {
     }
 
     async fn on_done(&mut self, file: FileSubPath) {
-        let event = crate::Event::FileUploadSuccess(self.xfer.clone(), file.clone());
+        let event = self
+            .xfer
+            .file_by_subpath(&file)
+            .map(|file| crate::Event::FileUploadSuccess(self.xfer.clone(), file.id().clone()));
 
         if let Some(task) = self.tasks.remove(&file) {
-            task.events.stop(event).await;
+            task.events
+                .stop(event.expect("File should exists since we have a transfer task running"))
+                .await;
         } else if !self.done.contains(&file) {
-            self.state
-                .event_tx
-                .send(event)
-                .await
-                .expect("Failed to emit event");
+            if let Some(event) = event {
+                self.state
+                    .event_tx
+                    .send(event)
+                    .await
+                    .expect("Failed to emit event");
+            }
         }
 
         self.done.insert(file);
@@ -262,10 +276,15 @@ impl HandlerLoop<'_> {
                 if !task.job.is_finished() {
                     task.job.abort();
 
+                    let file = self
+                        .xfer
+                        .file_by_subpath(&file)
+                        .expect("File should exists since we have a transfer task running");
+
                     task.events
                         .stop(crate::Event::FileUploadFailed(
                             self.xfer.clone(),
-                            file,
+                            file.id().clone(),
                             crate::Error::BadTransfer,
                         ))
                         .await;
@@ -458,6 +477,12 @@ impl FileTask {
             file_id: file_id.clone(),
             offset,
         };
+
+        let file_id = xfer
+            .file_by_subpath(&file_id)
+            .context("File not found")?
+            .id()
+            .clone();
 
         let job = super::start_upload(
             state,

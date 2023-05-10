@@ -12,7 +12,7 @@ use tokio::{sync::mpsc::Sender, task::JoinHandle};
 use tokio_tungstenite::tungstenite::{self, Message};
 
 use super::{handler, ClientReq, WebSocket};
-use crate::{protocol::v2, service::State, utils::Hidden, ws, FileSubPath};
+use crate::{file::FileSubPath, protocol::v2, service::State, utils::Hidden, ws};
 
 pub struct HandlerInit<'a, const PING: bool = true> {
     state: &'a Arc<State>,
@@ -92,21 +92,23 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
             if !task.job.is_finished() {
                 task.job.abort();
 
+                let file = self
+                    .xfer
+                    .file_by_subpath(&file)
+                    .expect("File should exist since we have a transfer task running");
+
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
-                    self.xfer
-                        .file_by_subpath(&file)
-                        .expect("File should exist since we have a transfer task running")
-                        .info(),
+                    file.info(),
                 );
 
                 task.events
                     .stop(crate::Event::FileUploadCancelled(
                         self.xfer.clone(),
-                        file,
+                        file.id().clone(),
                         by_peer,
                     ))
                     .await;
@@ -116,10 +118,15 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
 
     async fn on_progress(&self, file: FileSubPath, transfered: u64) {
         if let Some(task) = self.tasks.get(&file) {
+            let file = self
+                .xfer
+                .file_by_subpath(&file)
+                .expect("File should exist since we have a transfer task running");
+
             task.events
                 .emit(crate::Event::FileUploadProgress(
                     self.xfer.clone(),
-                    file,
+                    file.id().clone(),
                     transfered,
                 ))
                 .await;
@@ -128,8 +135,16 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
 
     async fn on_done(&mut self, file: FileSubPath) {
         if let Some(task) = self.tasks.remove(&file) {
+            let file = self
+                .xfer
+                .file_by_subpath(&file)
+                .expect("File should exist since we have a transfer task running");
+
             task.events
-                .stop(crate::Event::FileUploadSuccess(self.xfer.clone(), file))
+                .stop(crate::Event::FileUploadSuccess(
+                    self.xfer.clone(),
+                    file.id().clone(),
+                ))
                 .await;
         }
     }
@@ -194,10 +209,15 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                 if !task.job.is_finished() {
                     task.job.abort();
 
+                    let file = self
+                        .xfer
+                        .file_by_subpath(&file)
+                        .expect("File should exist since we have a transfer task running");
+
                     task.events
                         .stop(crate::Event::FileUploadFailed(
                             self.xfer.clone(),
-                            file,
+                            file.id().clone(),
                             crate::Error::BadTransfer,
                         ))
                         .await;
@@ -382,13 +402,20 @@ impl FileTask {
         logger: &slog::Logger,
     ) -> anyhow::Result<Self> {
         let events = Arc::new(ws::events::FileEventTx::new(state));
+
+        let file_id = xfer
+            .file_by_subpath(&file)
+            .context("File not found")?
+            .id()
+            .clone();
+
         let job = super::start_upload(
             state.clone(),
             logger.clone(),
             Arc::clone(&events),
             uploader,
             xfer,
-            file,
+            file_id,
         )
         .await?;
 

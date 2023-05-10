@@ -284,7 +284,12 @@ impl NordDropFFI {
         Ok(xfid)
     }
 
-    pub(super) fn download(&mut self, xfid: uuid::Uuid, file: String, dst: String) -> Result<()> {
+    pub(super) fn download(
+        &mut self,
+        xfid: uuid::Uuid,
+        file_id: String,
+        dst: String,
+    ) -> Result<()> {
         let instance = self.instance.clone();
         let logger = self.logger.clone();
         let ed = self.event_dispatcher.clone();
@@ -293,7 +298,7 @@ impl NordDropFFI {
             logger,
             "norddrop_download() for transfer {:?}, file {:?}, to {:?}",
             xfid,
-            file,
+            file_id,
             dst
         );
 
@@ -301,12 +306,15 @@ impl NordDropFFI {
             let mut locked_inst = instance.lock().await;
             let inst = locked_inst.as_mut().expect("Instance not initialized");
 
-            if let Err(e) = inst.download(xfid, (&file).into(), dst.as_ref()).await {
+            if let Err(e) = inst
+                .download(xfid, &file_id.clone().into(), dst.as_ref())
+                .await
+            {
                 error!(
                     logger,
                     "Failed to download a file with xfid: {}, file: {:?}, dst: {:?}, error: {:?}",
                     xfid,
-                    Hidden(&file),
+                    Hidden(&file_id),
                     Hidden(&dst),
                     e
                 );
@@ -314,7 +322,7 @@ impl NordDropFFI {
                 ed.dispatch(types::Event::TransferFinished {
                     transfer: xfid.to_string(),
                     data: FinishEvent::FileFailed {
-                        file,
+                        file: file_id,
                         status: From::from(&e),
                     },
                 });
