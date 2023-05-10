@@ -17,6 +17,7 @@ use sha2::Digest;
 
 pub use id::{FileId, FileSubPath};
 pub use reader::FileReader;
+use walkdir::WalkDir;
 
 use crate::{utils::Hidden, Error};
 
@@ -51,63 +52,39 @@ pub struct File {
 
 impl File {
     fn walk(path: &Path, config: &DropConfig) -> Result<Vec<Self>, Error> {
-        fn walk(
-            path: &Path,
-            depth: &mut usize,
-            breadth: &mut usize,
-            files: &mut Vec<File>,
-            subpath: FileSubPath,
-            config: &DropConfig,
-        ) -> Result<(), Error> {
-            for entry in fs::read_dir(path)? {
-                let entry = entry?;
-                let ft = entry.file_type()?;
-
-                if ft.is_dir() {
-                    *depth += 1;
-                    if *depth > config.dir_depth_limit {
-                        return Err(Error::TransferLimitsExceeded);
-                    }
-
-                    let path = entry.path();
-                    walk(
-                        &path,
-                        depth,
-                        breadth,
-                        files,
-                        subpath.clone().append_file_name(&path)?,
-                        config,
-                    )?;
-                    *depth -= 1;
-                } else if ft.is_file() {
-                    let path = entry.path();
-                    let subpath = subpath.clone().append_file_name(&path)?;
-                    let file = File::new(subpath, path, entry.metadata()?)?;
-                    files.push(file);
-                } else {
-                    continue;
-                };
-
-                *breadth += 1;
-                if *breadth > config.transfer_file_limit {
-                    return Err(Error::TransferLimitsExceeded);
-                }
-            }
-
-            Ok(())
-        }
+        let parent = path.parent().ok_or(crate::Error::BadPath)?;
 
         let mut files = Vec::new();
-        let mut depth = 1;
         let mut breadth = 0;
-        walk(
-            path,
-            &mut depth,
-            &mut breadth,
-            &mut files,
-            FileSubPath::from_file_name(path)?,
-            config,
-        )?;
+
+        for entry in WalkDir::new(path).min_depth(1).into_iter() {
+            let entry = entry?;
+            let meta = entry.metadata()?;
+
+            if !meta.is_file() {
+                continue;
+            }
+
+            if entry.depth() > config.dir_depth_limit {
+                return Err(Error::TransferLimitsExceeded);
+            }
+
+            breadth += 1;
+
+            if breadth > config.transfer_file_limit {
+                return Err(Error::TransferLimitsExceeded);
+            }
+
+            let subpath = entry
+                .path()
+                .strip_prefix(parent)
+                .map_err(|_| crate::Error::BadPath)?
+                .to_str()
+                .ok_or(crate::Error::BadPath)?;
+
+            let file = File::new(subpath.into(), entry.into_path(), meta)?;
+            files.push(file);
+        }
 
         Ok(files)
     }
