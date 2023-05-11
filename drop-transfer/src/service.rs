@@ -132,7 +132,7 @@ impl Service {
 
                 state
                     .event_tx
-                    .send(Event::TransferFailed(xfer, crate::Error::Canceled))
+                    .send(Event::TransferFailed(xfer, crate::Error::Canceled, true))
                     .await
                     .expect("Failed to send TransferFailed event");
             }

@@ -346,7 +346,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 
         self.state
             .event_tx
-            .send(crate::Event::TransferFailed(self.xfer.clone(), err))
+            .send(crate::Event::TransferFailed(self.xfer.clone(), err, false))
             .await
             .expect("Event channel should always be open");
     }

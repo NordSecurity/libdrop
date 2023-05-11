@@ -206,8 +206,13 @@ async fn listen(
                     xfers.remove(&xfer.id());
                 });
             }
-            Event::TransferFailed(xfer, err) => {
-                info!("[EVENT] TransferFailed {}, status: {}", xfer.id(), err);
+            Event::TransferFailed(xfer, err, by_peer) => {
+                info!(
+                    "[EVENT] TransferFailed {}, status: {}, by peer? {}",
+                    xfer.id(),
+                    err,
+                    by_peer
+                );
 
                 active_file_downloads.remove(&xfer.id());
                 xfers.send_modify(|xfers| {

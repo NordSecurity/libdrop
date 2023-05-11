@@ -281,7 +281,7 @@ impl RunContext<'_> {
 
             self.state
                 .event_tx
-                .send(Event::TransferFailed(xfer.clone(), Error::Canceled))
+                .send(Event::TransferFailed(xfer.clone(), Error::Canceled, true))
                 .await
                 .expect("Failed to send TransferFailed event");
         };

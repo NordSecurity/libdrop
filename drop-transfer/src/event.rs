@@ -30,5 +30,5 @@ pub enum Event {
 
     TransferCanceled(Transfer, bool),
 
-    TransferFailed(Transfer, Error),
+    TransferFailed(Transfer, Error, bool),
 }
