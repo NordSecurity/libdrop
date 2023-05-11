@@ -264,8 +264,8 @@ impl NordDropFFI {
 
         debug!(
             self.logger,
-            "Created transfer with files: {:?}",
-            xfer.files()
+            "Created transfer with files:\n{:#?}",
+            xfer.files().values()
         );
 
         let xfid = xfer.id();
