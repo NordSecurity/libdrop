@@ -36,14 +36,14 @@ use crate::{
     auth,
     error::ResultExt,
     event::DownloadSuccess,
-    file::{self, FileSubPath},
+    file::{self},
     manager::{TransferConnection, TransferGuard},
     protocol,
     quarantine::PathExt,
     service::State,
     utils::Hidden,
     ws::Pinger,
-    Error, Event,
+    Error, Event, FileId,
 };
 
 const MAX_FILENAME_LENGTH: usize = 255;
@@ -51,7 +51,7 @@ const REPORT_PROGRESS_THRESHOLD: u64 = 1024 * 64;
 
 pub enum ServerReq {
     Download { task: Box<FileXferTask> },
-    Cancel { file: FileSubPath },
+    Cancel { file: FileId },
 }
 
 pub struct FileXferTask {

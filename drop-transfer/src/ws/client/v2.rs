@@ -12,7 +12,7 @@ use tokio::{sync::mpsc::Sender, task::JoinHandle};
 use tokio_tungstenite::tungstenite::{self, Message};
 
 use super::{handler, ClientReq, WebSocket};
-use crate::{file::FileSubPath, protocol::v2, service::State, utils::Hidden, ws};
+use crate::{file::FileSubPath, protocol::v2, service::State, utils::Hidden, ws, FileId};
 
 pub struct HandlerInit<'a, const PING: bool = true> {
     state: &'a Arc<State>,
@@ -77,12 +77,21 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
     async fn issue_cancel(
         &mut self,
         socket: &mut WebSocket,
-        file: FileSubPath,
+        file_id: FileId,
     ) -> anyhow::Result<()> {
-        let msg = v2::ClientMsg::Cancel(v2::Download { file: file.clone() });
+        let file_subpath = if let Some(file) = self.xfer.files().get(&file_id) {
+            file.subpath().clone()
+        } else {
+            warn!(self.logger, "Missing file with ID: {file_id:?}");
+            return Ok(());
+        };
+
+        let msg = v2::ClientMsg::Cancel(v2::Download {
+            file: file_subpath.clone(),
+        });
         socket.send(Message::from(&msg)).await?;
 
-        self.on_cancel(file, false).await;
+        self.on_cancel(file_subpath, false).await;
 
         Ok(())
     }

@@ -231,7 +231,7 @@ impl NordDropFFI {
                         error!(
                             self.logger,
                             "Specifying file descriptors in transfers is not supported under \
-                                 Windows"
+                             Windows"
                         );
                         return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
                     }
@@ -377,7 +377,7 @@ impl NordDropFFI {
             let mut locked_inst = instance.lock().await;
             let inst = locked_inst.as_mut().expect("Instance not initialized");
 
-            if let Err(e) = inst.cancel(xfid, (&file).into()).await {
+            if let Err(e) = inst.cancel(xfid, file.clone().into()).await {
                 error!(
                     logger,
                     "Failed to cancel a file with xfid: {}, file: {:?}, error: {:?}",
