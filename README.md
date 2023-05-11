@@ -36,6 +36,11 @@ cargo run --example udrop -- -l 0.0.0.0 transfer $DROP_SERVER <path>
 
 You can verify the transfer by checking the file system in the server container under `/root/<path>`
 
+## Generating file ids from shell
+```bash
+echo -n "<absolute file path>" | sha256sum  | cut -d " " -f1 | xxd -ps -r | basenc --base64url | tr -d '='
+```
+
 # Contributing
 [CONTRIBUTING.md](CONTRIBUTING.md)
 
