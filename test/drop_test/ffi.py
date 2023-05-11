@@ -397,14 +397,6 @@ class IncomingRequest:
         return f"IncomingRequest(txid={self._txid}, peer={self._peer}, sender={self._sender}, data={repr(self._data)})"
 
 
-def _get_children(f: typing.Dict[str, typing.Any]) -> typing.Iterable[event.File]:
-    if not f["children"]:
-        return {}
-
-    for k, v in f["children"].items():
-        yield event.File(k, v["size"], set(_get_children(v)))
-
-
 def new_event(event_str: str) -> event.Event:
     deserialized = json.loads(event_str)
 
@@ -425,10 +417,7 @@ def new_event(event_str: str) -> event.Event:
         return event.Receive(
             transfer_slot,
             event_data["peer"],
-            {
-                event.File(f["id"], f["size"], set(_get_children(f)))
-                for f in event_data["files"]
-            },
+            {event.File(f["id"], f["path"], f["size"]) for f in event_data["files"]},
         )
 
     elif event_type == "TransferStarted":
@@ -493,10 +482,7 @@ def new_event(event_str: str) -> event.Event:
 
         return event.Queued(
             transfer_slot,
-            {
-                event.File(f["id"], f["size"], set(_get_children(f)))
-                for f in event_data["files"]
-            },
+            {event.File(f["id"], f["path"], f["size"]) for f in event_data["files"]},
         )
 
     raise ValueError(f"Unhandled event received: {event_type}")

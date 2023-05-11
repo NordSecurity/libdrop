@@ -9,9 +9,27 @@ import typing
 
 from . import event, ffi
 from .logger import logger
-from .event import Event, File, print_uuid, UUIDS, UUIDS_LOCK
+from .event import Event, print_uuid, UUIDS, UUIDS_LOCK
 
 import sys
+
+
+class File:
+    def __init__(self, path: str, size: int):
+        self._path = path
+        self._size = size
+
+    def __eq__(lhs, rhs):
+        if not isinstance(rhs, File):
+            return NotImplemented
+
+        return lhs._path == rhs._path and lhs._size == rhs._size
+
+    def __hash__(self):
+        return hash(str(self._path))
+
+    def __repr__(self):
+        return f"File(path={self._path}, size={self._size})"
 
 
 class Action:
@@ -151,8 +169,8 @@ class CancelTransferFile(Action):
 
 
 class CheckDownloadedFiles(Action):
-    def __init__(self, files: typing.List[event.File]):
-        self._files: typing.List[event.File] = files
+    def __init__(self, files: typing.List[File]):
+        self._files: typing.List[File] = files
 
     async def run(self, drop: ffi.Drop):
         for f in self._files:
@@ -328,14 +346,10 @@ class CompareTrees(Action):
         self._tree = tree
 
     async def run(self, drop: ffi.Drop):
-        build_tree = lambda parent, f: reduce(
-            lambda x, y: File(y, 0, {x}),
-            parent[::-1],
-            (File(f.name, f.stat().st_size, set())),
-        )
         tree = [
-            build_tree(child.relative_to(self._out_dir).parent.parts, child)
-            for child in self._out_dir.iterdir()
+            File(str(child.relative_to(self._out_dir)), child.stat().st_size)
+            for child in self._out_dir.rglob("*")
+            if child.is_file()
         ]
 
         if Counter(self._tree) != Counter(tree):
