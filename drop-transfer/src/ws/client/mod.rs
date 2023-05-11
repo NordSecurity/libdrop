@@ -57,7 +57,7 @@ pub(crate) async fn run(state: Arc<State>, xfer: crate::Transfer, logger: Logger
 
             state
                 .event_tx
-                .send(Event::TransferFailed(xfer, err))
+                .send(Event::TransferFailed(xfer, err, false))
                 .await
                 .expect("Failed to send TransferFailed event");
 
@@ -250,7 +250,7 @@ impl RunContext<'_> {
 
                 self.state
                     .event_tx
-                    .send(Event::TransferFailed(self.xfer.clone(), err))
+                    .send(Event::TransferFailed(self.xfer.clone(), err, false))
                     .await
                     .expect("Failed to send TransferFailed event");
 
