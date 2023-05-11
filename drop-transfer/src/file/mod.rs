@@ -13,10 +13,9 @@ use std::{
 
 use drop_analytics::FileInfo;
 use drop_config::DropConfig;
-use sha2::Digest;
-
 pub use id::{FileId, FileSubPath};
 pub use reader::FileReader;
+use sha2::Digest;
 use walkdir::WalkDir;
 
 use crate::{utils::Hidden, Error};

@@ -28,7 +28,7 @@ use super::events::FileEventTx;
 use crate::{
     auth,
     error::ResultExt,
-    file::{FileId, FileSubPath},
+    file::FileId,
     manager::{TransferConnection, TransferGuard},
     protocol,
     service::State,
@@ -39,7 +39,7 @@ use crate::{
 pub type WebSocket = WebSocketStream<TcpStream>;
 
 pub enum ClientReq {
-    Cancel { file: FileSubPath },
+    Cancel { file: FileId },
 }
 
 struct RunContext<'a> {

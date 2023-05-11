@@ -26,6 +26,7 @@ use crate::{
     service::State,
     utils::Hidden,
     ws::{self, events::FileEventTx},
+    FileId,
 };
 
 pub struct HandlerInit<'a, const PING: bool = true> {
@@ -150,14 +151,23 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
     async fn issue_cancel(
         &mut self,
         socket: &mut WebSocket,
-        file: FileSubPath,
+        file_id: FileId,
     ) -> anyhow::Result<()> {
         debug!(self.logger, "ServerHandler::issue_cancel");
 
-        let msg = v2::ServerMsg::Cancel(v2::Download { file: file.clone() });
+        let file_subpath = if let Some(file) = self.xfer.files().get(&file_id) {
+            file.subpath().clone()
+        } else {
+            warn!(self.logger, "Missing file with ID: {file_id:?}");
+            return Ok(());
+        };
+
+        let msg = v2::ServerMsg::Cancel(v2::Download {
+            file: file_subpath.clone(),
+        });
         socket.send(Message::from(&msg)).await?;
 
-        self.on_cancel(file, false).await;
+        self.on_cancel(file_subpath, false).await;
 
         Ok(())
     }
