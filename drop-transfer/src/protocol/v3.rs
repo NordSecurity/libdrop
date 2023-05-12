@@ -95,10 +95,8 @@ impl TryFrom<(TransferRequest, IpAddr, Arc<DropConfig>)> for crate::Transfer {
     }
 }
 
-impl TryFrom<&crate::Transfer> for TransferRequest {
-    type Error = crate::Error;
-
-    fn try_from(value: &crate::Transfer) -> Result<Self, Self::Error> {
+impl From<&crate::Transfer> for TransferRequest {
+    fn from(value: &crate::Transfer) -> Self {
         let mut files: Vec<File> = Vec::new();
 
         for file in value.files().values() {
@@ -133,10 +131,10 @@ impl TryFrom<&crate::Transfer> for TransferRequest {
             });
         }
 
-        Ok(Self {
+        Self {
             files,
             id: value.id(),
-        })
+        }
     }
 }
 

@@ -12,7 +12,7 @@ use tokio::{sync::mpsc::Sender, task::JoinHandle};
 use tokio_tungstenite::tungstenite::{self, Message};
 
 use super::{handler, ClientReq, WebSocket};
-use crate::{file::FileSubPath, protocol::v3, service::State, utils::Hidden, ws, FileId};
+use crate::{protocol::v4, service::State, ws, FileId};
 
 pub struct HandlerInit<'a> {
     state: Arc<State>,
@@ -23,8 +23,8 @@ pub struct HandlerLoop<'a> {
     state: Arc<State>,
     logger: &'a slog::Logger,
     upload_tx: Sender<Message>,
-    tasks: HashMap<FileSubPath, FileTask>,
-    done: HashSet<FileSubPath>,
+    tasks: HashMap<FileId, FileTask>,
+    done: HashSet<FileId>,
     last_recv: Instant,
     xfer: crate::Transfer,
 }
@@ -36,7 +36,7 @@ struct FileTask {
 
 struct Uploader {
     sink: Sender<Message>,
-    file_id: FileSubPath,
+    file_id: FileId,
     offset: u64,
 }
 
@@ -52,7 +52,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
     type Loop = HandlerLoop<'a>;
 
     async fn start(&mut self, socket: &mut WebSocket, xfer: &crate::Transfer) -> crate::Result<()> {
-        let req = v3::TransferRequest::from(xfer);
+        let req = v4::TransferRequest::from(xfer);
         socket.send(Message::from(&req)).await?;
         Ok(())
     }
@@ -82,31 +82,25 @@ impl HandlerLoop<'_> {
         socket: &mut WebSocket,
         file_id: FileId,
     ) -> anyhow::Result<()> {
-        let file_subpath = if let Some(file) = self.xfer.files().get(&file_id) {
-            file.subpath().clone()
-        } else {
-            warn!(self.logger, "Missing file with ID: {file_id:?}");
-            return Ok(());
-        };
-
-        let msg = v3::ClientMsg::Cancel(v3::Cancel {
-            file: file_subpath.clone(),
+        let msg = v4::ClientMsg::Cancel(v4::Cancel {
+            file: file_id.clone(),
         });
         socket.send(Message::from(&msg)).await?;
 
-        self.on_cancel(file_subpath, false).await;
+        self.on_cancel(file_id, false).await;
 
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: FileSubPath, by_peer: bool) {
-        if let Some(task) = self.tasks.remove(&file) {
+    async fn on_cancel(&mut self, file_id: FileId, by_peer: bool) {
+        if let Some(task) = self.tasks.remove(&file_id) {
             if !task.job.is_finished() {
                 task.job.abort();
 
                 let file = self
                     .xfer
-                    .file_by_subpath(&file)
+                    .files()
+                    .get(&file_id)
                     .expect("File should exists since we have a transfer task running");
 
                 self.state.moose.service_quality_transfer_file(
@@ -128,60 +122,45 @@ impl HandlerLoop<'_> {
         }
     }
 
-    async fn on_progress(&self, file: FileSubPath, transfered: u64) {
-        if let Some(task) = self.tasks.get(&file) {
-            let file = self
-                .xfer
-                .file_by_subpath(&file)
-                .expect("File should exists since we have a transfer task running");
-
+    async fn on_progress(&self, file_id: FileId, transfered: u64) {
+        if let Some(task) = self.tasks.get(&file_id) {
             task.events
                 .emit(crate::Event::FileUploadProgress(
                     self.xfer.clone(),
-                    file.id().clone(),
+                    file_id,
                     transfered,
                 ))
                 .await;
         }
     }
 
-    async fn on_done(&mut self, file: FileSubPath) {
-        let event = self
-            .xfer
-            .file_by_subpath(&file)
-            .map(|file| crate::Event::FileUploadSuccess(self.xfer.clone(), file.id().clone()));
+    async fn on_done(&mut self, file_id: FileId) {
+        let event = crate::Event::FileUploadSuccess(self.xfer.clone(), file_id.clone());
 
-        if let Some(task) = self.tasks.remove(&file) {
-            task.events
-                .stop(event.expect("File should exists since we have a transfer task running"))
-                .await;
-        } else if !self.done.contains(&file) {
-            if let Some(event) = event {
-                self.state
-                    .event_tx
-                    .send(event)
-                    .await
-                    .expect("Failed to emit event");
-            }
+        if let Some(task) = self.tasks.remove(&file_id) {
+            task.events.stop(event).await;
+        } else if !self.done.contains(&file_id) {
+            self.state
+                .event_tx
+                .send(event)
+                .await
+                .expect("Failed to emit event");
         }
 
-        self.done.insert(file);
+        self.done.insert(file_id);
     }
 
     async fn on_checksum(
         &mut self,
         socket: &mut WebSocket,
-        file_id: FileSubPath,
+        file_id: FileId,
         limit: u64,
     ) -> anyhow::Result<()> {
         let f = || {
-            let xfile = self
-                .xfer
-                .file_by_subpath(&file_id)
-                .context("File not found")?;
+            let xfile = self.xfer.files().get(&file_id).context("File not found")?;
             let checksum = tokio::task::block_in_place(|| xfile.checksum(limit))?;
 
-            anyhow::Ok(v3::ReportChsum {
+            anyhow::Ok(v4::ReportChsum {
                 file: file_id.clone(),
                 limit,
                 checksum,
@@ -191,19 +170,19 @@ impl HandlerLoop<'_> {
         match f() {
             Ok(report) => {
                 socket
-                    .send(Message::from(&v3::ClientMsg::ReportChsum(report)))
+                    .send(Message::from(&v4::ClientMsg::ReportChsum(report)))
                     .await
                     .context("Failed to send checksum report")?;
             }
             Err(err) => {
                 error!(self.logger, "Failed to report checksum: {:?}", err);
 
-                let msg = v3::Error {
+                let msg = v4::Error {
                     file: Some(file_id),
                     msg: err.to_string(),
                 };
                 socket
-                    .send(Message::from(&v3::ClientMsg::Error(msg)))
+                    .send(Message::from(&v4::ClientMsg::Error(msg)))
                     .await
                     .context("Failed to report error")?;
             }
@@ -215,7 +194,7 @@ impl HandlerLoop<'_> {
     async fn on_start(
         &mut self,
         socket: &mut WebSocket,
-        file_id: FileSubPath,
+        file_id: FileId,
         offset: u64,
     ) -> anyhow::Result<()> {
         let start = async {
@@ -259,12 +238,12 @@ impl HandlerLoop<'_> {
         if let Err(err) = start.await {
             error!(self.logger, "Failed to start upload: {:?}", err);
 
-            let msg = v3::Error {
+            let msg = v4::Error {
                 file: Some(file_id),
                 msg: err.to_string(),
             };
             socket
-                .send(Message::from(&v3::ClientMsg::Error(msg)))
+                .send(Message::from(&v4::ClientMsg::Error(msg)))
                 .await
                 .context("Failed to report error")?;
         }
@@ -272,22 +251,21 @@ impl HandlerLoop<'_> {
         Ok(())
     }
 
-    async fn on_error(&mut self, file: Option<FileSubPath>, msg: String) {
+    async fn on_error(&mut self, file_id: Option<FileId>, msg: String) {
         error!(
             self.logger,
-            "Server reported and error: file: {:?}, message: {}",
-            Hidden(&file),
-            msg
+            "Server reported and error: file: {file_id:?}, message: {msg}",
         );
 
-        if let Some(file) = file {
-            if let Some(task) = self.tasks.remove(&file) {
+        if let Some(file_id) = file_id {
+            if let Some(task) = self.tasks.remove(&file_id) {
                 if !task.job.is_finished() {
                     task.job.abort();
 
                     let file = self
                         .xfer
-                        .file_by_subpath(&file)
+                        .files()
+                        .get(&file_id)
                         .expect("File should exists since we have a transfer task running");
 
                     task.events
@@ -319,7 +297,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             .values()
             .filter(|file| {
                 self.tasks
-                    .get(&file.subpath)
+                    .get(file.id())
                     .map_or(false, |task| !task.job.is_finished())
             })
             .for_each(|file| {
@@ -352,26 +330,26 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             Message::Text(json) => {
                 debug!(self.logger, "Received:\n\t{json}");
 
-                let msg: v3::ServerMsg =
+                let msg: v4::ServerMsg =
                     serde_json::from_str(&json).context("Failed to deserialize server message")?;
 
                 match msg {
-                    v3::ServerMsg::Progress(v3::Progress {
+                    v4::ServerMsg::Progress(v4::Progress {
                         file,
                         bytes_transfered,
                     }) => self.on_progress(file, bytes_transfered).await,
-                    v3::ServerMsg::Done(v3::Done {
+                    v4::ServerMsg::Done(v4::Done {
                         file,
                         bytes_transfered: _,
                     }) => self.on_done(file).await,
-                    v3::ServerMsg::Error(v3::Error { file, msg }) => self.on_error(file, msg).await,
-                    v3::ServerMsg::ReqChsum(v3::ReqChsum { file, limit }) => {
+                    v4::ServerMsg::Error(v4::Error { file, msg }) => self.on_error(file, msg).await,
+                    v4::ServerMsg::ReqChsum(v4::ReqChsum { file, limit }) => {
                         self.on_checksum(socket, file, limit).await?
                     }
-                    v3::ServerMsg::Start(v3::Start { file, offset }) => {
+                    v4::ServerMsg::Start(v4::Start { file, offset }) => {
                         self.on_start(socket, file, offset).await?
                     }
-                    v3::ServerMsg::Cancel(v3::Cancel { file }) => self.on_cancel(file, true).await,
+                    v4::ServerMsg::Cancel(v4::Cancel { file }) => self.on_cancel(file, true).await,
                 }
             }
             Message::Close(_) => {
@@ -406,7 +384,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
     }
 
     async fn finalize_failure(self, err: anyhow::Error) {
-        error!(self.logger, "Client failed on WS loop: {:?}", err);
+        error!(self.logger, "Client failed on WS loop: {err:?}");
 
         let err = match err.downcast::<crate::Error>() {
             Ok(err) => err,
@@ -432,7 +410,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         )
     }
 }
-
 impl Drop for HandlerLoop<'_> {
     fn drop(&mut self) {
         debug!(self.logger, "Stopping client handler");
@@ -443,7 +420,7 @@ impl Drop for HandlerLoop<'_> {
 #[async_trait::async_trait]
 impl handler::Uploader for Uploader {
     async fn chunk(&mut self, chunk: &[u8]) -> Result<(), crate::Error> {
-        let msg = v3::Chunk {
+        let msg = v4::Chunk {
             file: self.file_id.clone(),
             data: chunk.to_vec(),
         };
@@ -457,7 +434,7 @@ impl handler::Uploader for Uploader {
     }
 
     async fn error(&mut self, msg: String) {
-        let msg = v3::ClientMsg::Error(v3::Error {
+        let msg = v4::ClientMsg::Error(v4::Error {
             file: Some(self.file_id.clone()),
             msg,
         });
@@ -476,7 +453,7 @@ impl FileTask {
         logger: &slog::Logger,
         sink: Sender<Message>,
         xfer: crate::Transfer,
-        file_id: FileSubPath,
+        file_id: FileId,
         offset: u64,
     ) -> anyhow::Result<Self> {
         let events = Arc::new(ws::events::FileEventTx::new(&state));
@@ -486,12 +463,6 @@ impl FileTask {
             file_id: file_id.clone(),
             offset,
         };
-
-        let file_id = xfer
-            .file_by_subpath(&file_id)
-            .context("File not found")?
-            .id()
-            .clone();
 
         let job = super::start_upload(
             state,
