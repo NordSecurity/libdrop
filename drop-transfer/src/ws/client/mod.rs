@@ -1,6 +1,7 @@
 mod handler;
 mod v2;
 mod v3;
+mod v4;
 
 use std::{
     io,
@@ -81,6 +82,7 @@ pub(crate) async fn run(state: Arc<State>, xfer: crate::Transfer, logger: Logger
         }
         protocol::Version::V2 => ctx.run(v2::HandlerInit::<true>::new(&state, &logger)).await,
         protocol::Version::V3 => ctx.run(v3::HandlerInit::new(state, &logger)).await,
+        protocol::Version::V4 => ctx.run(v4::HandlerInit::new(state, &logger)).await,
     }
 }
 
@@ -97,6 +99,7 @@ async fn establish_ws_conn(
     .map_err(|err| io::Error::new(io::ErrorKind::TimedOut, err))?;
 
     let mut versions_to_try = [
+        protocol::Version::V4,
         protocol::Version::V3,
         protocol::Version::V2,
         protocol::Version::V1,

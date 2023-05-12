@@ -174,6 +174,30 @@ where
     }
 }
 
+impl From<&crate::Transfer> for TransferRequest {
+    fn from(value: &crate::Transfer) -> Self {
+        Self {
+            files: value
+                .files()
+                .values()
+                .map(|f| File {
+                    path: f.subpath().clone(),
+                    id: f.id().clone(),
+                    size: f.size(),
+                })
+                .collect(),
+            id: value.id(),
+        }
+    }
+}
+
+impl From<&TransferRequest> for tokio_tungstenite::tungstenite::Message {
+    fn from(value: &TransferRequest) -> Self {
+        let msg = serde_json::to_string(value).expect("Failed to serialize client message");
+        Self::Text(msg)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use serde::de::DeserializeOwned;
