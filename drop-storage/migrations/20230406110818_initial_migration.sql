@@ -38,13 +38,13 @@ CREATE TABLE IF NOT EXISTS incoming_paths (
 -- states for outgoing paths(uploads)
 CREATE TABLE IF NOT EXISTS outgoing_path_pending_states (
   id INTEGER PRIMARY KEY AUTOINCREMENT, 
-  path_id TEXT NOT NULL,
+  path_id INTEGER NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, 
   FOREIGN KEY(path_id) REFERENCES outgoing_paths(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS outgoing_path_started_states (
   id INTEGER PRIMARY KEY AUTOINCREMENT, 
-  path_id TEXT NOT NULL, 
+  path_id INTEGER NOT NULL, 
   bytes_sent INTEGER NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, 
   FOREIGN KEY(path_id) REFERENCES outgoing_paths(id) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS outgoing_path_started_states (
 );
 CREATE TABLE IF NOT EXISTS outgoing_path_cancel_states (
   id INTEGER PRIMARY KEY AUTOINCREMENT, 
-  path_id TEXT NOT NULL, 
+  path_id INTEGER NOT NULL, 
   by_peer INTEGER NOT NULL,
   bytes_sent INTEGER NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, 
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS outgoing_path_cancel_states (
 );
 CREATE TABLE IF NOT EXISTS outgoing_path_failed_states (
   id INTEGER PRIMARY KEY AUTOINCREMENT, 
-  path_id TEXT NOT NULL, 
+  path_id INTEGER NOT NULL, 
   status_code INTEGER NOT NULL,
   bytes_sent INTEGER NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, 
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS outgoing_path_failed_states (
 );
 CREATE TABLE IF NOT EXISTS outgoing_path_completed_states (
   id INTEGER PRIMARY KEY AUTOINCREMENT, 
-  path_id TEXT NOT NULL,   
+  path_id INTEGER NOT NULL,   
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, 
   FOREIGN KEY(path_id) REFERENCES outgoing_paths(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -78,13 +78,13 @@ CREATE TABLE IF NOT EXISTS outgoing_path_completed_states (
 -- states for incoming paths(downloads)
 CREATE TABLE IF NOT EXISTS incoming_path_pending_states (
   id INTEGER PRIMARY KEY AUTOINCREMENT, 
-  path_id TEXT NOT NULL, 
+  path_id INTEGER NOT NULL, 
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, 
   FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS incoming_path_started_states (
   id INTEGER PRIMARY KEY AUTOINCREMENT, 
-  path_id TEXT NOT NULL, 
+  path_id INTEGER NOT NULL, 
   bytes_received INTEGER NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, 
   FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS incoming_path_started_states (
 );
 CREATE TABLE IF NOT EXISTS incoming_path_cancel_states (
   id INTEGER PRIMARY KEY AUTOINCREMENT, 
-  path_id TEXT NOT NULL,
+  path_id INTEGER NOT NULL,
   by_peer INTEGER NOT NULL,
   bytes_received INTEGER NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, 
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS incoming_path_cancel_states (
 );
 CREATE TABLE IF NOT EXISTS incoming_path_failed_states (
   id INTEGER PRIMARY KEY AUTOINCREMENT, 
-  path_id TEXT NOT NULL, 
+  path_id INTEGER NOT NULL, 
   status_code INTEGER NOT NULL,
   bytes_received INTEGER NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, 
@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS incoming_path_failed_states (
 );
 CREATE TABLE IF NOT EXISTS incoming_path_completed_states (
   id INTEGER PRIMARY KEY AUTOINCREMENT, 
-  path_id TEXT NOT NULL,   
+  path_id INTEGER NOT NULL,   
   final_path TEXT NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, 
   FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON DELETE CASCADE ON UPDATE CASCADE
