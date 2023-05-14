@@ -62,14 +62,20 @@ impl TransferManager {
         Ok(())
     }
 
-    pub(crate) fn insert_transfer(
+    pub(crate) async fn insert_transfer(
         &mut self,
         xfer: Transfer,
         connection: TransferConnection,
+        transfer_type: drop_storage::TransferType,
     ) -> crate::Result<()> {
         match self.transfers.entry(xfer.id()) {
             Entry::Occupied(_) => Err(Error::BadTransferState),
             Entry::Vacant(entry) => {
+                let _ = self
+                    .storage
+                    .insert_transfer(xfer.storage_info(), transfer_type)
+                    .await;
+
                 entry.insert(TransferState::new(xfer, connection));
                 Ok(())
             }
