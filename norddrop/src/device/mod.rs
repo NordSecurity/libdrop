@@ -125,6 +125,15 @@ impl NordDropFFI {
 
         let (tx, mut rx) = mpsc::channel::<drop_transfer::Event>(16);
 
+        let storage = Arc::new(self.rt.block_on(async {
+            drop_storage::Storage::new(self.logger.clone(), &self.config.drop.storage_path)
+                .await
+                .map_err(|e| {
+                    error!(self.logger, "Failed to prepare storage: {}", e);
+                    ffi::types::NORDDROP_RES_DB_ERROR
+                })
+        })?);
+
         // Spawn a task grabbing events from the inner service and dispatch them
         // to the host app
         let ed = self.event_dispatcher.clone();
@@ -142,14 +151,6 @@ impl NordDropFFI {
         });
 
         self.rt.block_on(async {
-            let storage =
-                drop_storage::Storage::new(self.logger.clone(), &self.config.drop.storage_path)
-                    .await
-                    .map_err(|e| {
-                        error!(self.logger, "Failed to prepare storage: {}", e);
-                        ffi::types::NORDDROP_RES_DB_ERROR
-                    })?;
-
             let service = match Service::start(
                 addr,
                 storage,

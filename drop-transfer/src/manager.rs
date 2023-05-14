@@ -32,7 +32,7 @@ pub struct TransferState {
 pub(crate) struct TransferManager {
     transfers: HashMap<Uuid, TransferState>,
     #[allow(dead_code)]
-    storage: drop_storage::Storage,
+    storage: Arc<drop_storage::Storage>,
 }
 
 impl TransferState {
@@ -46,7 +46,7 @@ impl TransferState {
 }
 
 impl TransferManager {
-    pub(crate) fn new(storage: drop_storage::Storage) -> TransferManager {
+    pub(crate) fn new(storage: Arc<drop_storage::Storage>) -> TransferManager {
         TransferManager {
             transfers: HashMap::new(),
             storage,
