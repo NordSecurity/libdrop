@@ -194,7 +194,7 @@ async fn listen(
                     }
                 }
             }
-            Event::TransferCanceled(xfer, by_peer) => {
+            Event::TransferCanceled(xfer, _, by_peer) => {
                 info!(
                     "[EVENT] TransferCanceled {}, by peer? {}",
                     xfer.id(),
