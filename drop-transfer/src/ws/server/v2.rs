@@ -297,7 +297,11 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 
         self.state
             .event_tx
-            .send(crate::Event::TransferCanceled(self.xfer.clone(), by_peer))
+            .send(crate::Event::TransferCanceled(
+                self.xfer.clone(),
+                false,
+                by_peer,
+            ))
             .await
             .expect("Could not send a file cancelled event, channel closed");
     }
