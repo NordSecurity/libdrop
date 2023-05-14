@@ -7,9 +7,9 @@ pub enum TransferType {
     Outgoing = 1,
 }
 
-impl Into<i32> for &TransferType {
-    fn into(self) -> i32 {
-        match self {
+impl From<&TransferType> for i32 {
+    fn from(transfer_type: &TransferType) -> Self {
+        match transfer_type {
             TransferType::Incoming => 0,
             TransferType::Outgoing => 1,
         }

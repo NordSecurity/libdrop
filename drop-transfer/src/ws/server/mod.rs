@@ -314,7 +314,12 @@ async fn handle_client(
             .transfer_manager
             .lock()
             .await
-            .insert_transfer(xfer.clone(), TransferConnection::Server(req_send))
+            .insert_transfer(
+                xfer.clone(),
+                TransferConnection::Server(req_send),
+                drop_storage::TransferType::Incoming,
+            )
+            .await
         {
             error!(logger, "Failed to insert a new trasfer: {}", err);
 

@@ -12,7 +12,8 @@ use anyhow::Context;
 use clap::{arg, command, value_parser, ArgAction, Command};
 use drop_auth::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
 use drop_config::DropConfig;
-use drop_transfer::{auth, Event, File, Service, Transfer};
+use drop_storage::Storage;
+use drop_transfer::{auth, storage_dispatch, Event, File, Service, Transfer};
 use slog::{o, Drain, Logger};
 use slog_scope::{info, warn};
 use tokio::sync::{mpsc, watch, Mutex};
@@ -29,6 +30,7 @@ const PUB_KEY: [u8; PUBLIC_KEY_LENGTH] = [
 
 async fn listen(
     service: &Mutex<Service>,
+    storage: Arc<Storage>,
     xfers: watch::Sender<BTreeSet<Uuid>>,
     rx: &mut mpsc::Receiver<Event>,
     out_dir: &Path,
@@ -54,6 +56,7 @@ async fn listen(
     };
 
     while let Some(ev) = rx.recv().await {
+        storage_dispatch::handle_event(storage.clone(), &ev).await?;
         match ev {
             Event::RequestReceived(xfer) => {
                 let xfid = xfer.id();
@@ -299,6 +302,12 @@ async fn main() -> anyhow::Result<()> {
                 .required(true)
                 .value_parser(value_parser!(PathBuf)),
         )
+        .arg(
+            arg!(-s --storage <FILE> "Storage file name")
+                .required(false)
+                .default_value(":memory:")
+                .value_parser(value_parser!(String)),
+        )
         .subcommand(
             Command::new("transfer")
                 .arg(
@@ -352,13 +361,16 @@ async fn main() -> anyhow::Result<()> {
         auth::Context::new(drop_auth::SecretKey::from(PRIV_KEY), move |_| Some(pubkey))
     };
 
-    let storage = drop_storage::Storage::new(logger.clone(), ":memory:")
-        .await
-        .unwrap();
+    let storage_file = matches.get_one::<String>("storage").unwrap();
+    let storage = Arc::new(
+        drop_storage::Storage::new(logger.clone(), storage_file)
+            .await
+            .unwrap(),
+    );
 
     let mut service = Service::start(
         addr,
-        storage,
+        storage.clone(),
         tx,
         logger,
         config,
@@ -379,7 +391,7 @@ async fn main() -> anyhow::Result<()> {
 
     let task_result = tokio::select! {
         r = handle_stop(&service, xfers_rx) => r,
-        r = listen(&service, xfers_tx, &mut rx, out_dir) => r,
+        r = listen(&service, storage, xfers_tx, &mut rx, out_dir) => r,
     };
 
     info!("Stopping the service");

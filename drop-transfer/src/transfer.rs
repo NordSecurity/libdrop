@@ -2,6 +2,7 @@ use std::{collections::HashMap, net::IpAddr};
 
 use drop_analytics::TransferInfo;
 use drop_config::DropConfig;
+use drop_storage::{TransferInfo as StorageInfo, TransferPath};
 use uuid::Uuid;
 
 use crate::{
@@ -83,6 +84,22 @@ impl Transfer {
                 .join(","),
             transfer_size_kb: size_list.iter().sum(),
             file_count: info_list.len() as i32,
+        }
+    }
+
+    pub fn storage_info(&self) -> StorageInfo {
+        StorageInfo {
+            id: self.id().to_string(),
+            peer: self.peer().to_string(),
+            files: self
+                .flat_file_list()
+                .into_iter()
+                .filter(|(_, file)| file.size().is_some())
+                .map(|(_, file)| TransferPath {
+                    path: file.name().to_string(),
+                    size: file.size().expect("Failed to get file size") as i64,
+                })
+                .collect(),
         }
     }
 

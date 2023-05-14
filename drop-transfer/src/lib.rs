@@ -6,6 +6,7 @@ mod manager;
 mod protocol;
 mod quarantine;
 pub mod service;
+pub mod storage_dispatch;
 pub mod transfer;
 pub mod utils;
 mod ws;

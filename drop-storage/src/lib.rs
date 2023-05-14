@@ -1,17 +1,16 @@
 use std::str::FromStr;
 pub mod error;
 pub mod types;
-pub use crate::types::{TransferInfo, TransferPath, TransferType};
 use slog::Logger;
 use sqlx::{pool::PoolConnection, sqlite::SqliteConnectOptions, Sqlite, SqlitePool};
 
 use crate::error::Error;
+pub use crate::types::{TransferInfo, TransferPath, TransferType};
 
 type Result<T> = std::result::Result<T, Error>;
 // SQLite storage wrapper
 pub struct Storage {
     _logger: Logger,
-    #[allow(dead_code)]
     conn: SqlitePool,
 }
 
@@ -30,7 +29,6 @@ impl Storage {
         })
     }
 
-    #[allow(dead_code)]
     pub async fn insert_transfer(
         &self,
         transfer: TransferInfo,
@@ -64,7 +62,6 @@ impl Storage {
         Ok(())
     }
 
-    #[allow(dead_code)]
     async fn insert_path(
         &self,
         transfer_type: TransferType,
@@ -96,16 +93,16 @@ impl Storage {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn insert_outgoing_path_pending_state(
         &self,
         transfer_id: String,
         file_path: String,
     ) -> Result<()> {
-        let mut conn = self.conn.acquire().await.unwrap();
+        let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
-            "INSERT INTO outgoing_path_pending_states (path_id) VALUES ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path = ?2))",
+            "INSERT INTO outgoing_path_pending_states (path_id) VALUES ((SELECT id FROM \
+             outgoing_paths WHERE transfer_id = ?1 AND path = ?2))",
             transfer_id,
             file_path
         )
@@ -116,16 +113,16 @@ impl Storage {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn insert_incoming_path_pending_state(
         &self,
         transfer_id: String,
         file_path: String,
     ) -> Result<()> {
-        let mut conn = self.conn.acquire().await.unwrap();
+        let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
-            "INSERT INTO incoming_path_pending_states (path_id) VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path = ?2))",
+            "INSERT INTO incoming_path_pending_states (path_id) VALUES ((SELECT id FROM \
+             incoming_paths WHERE transfer_id = ?1 AND path = ?2))",
             transfer_id,
             file_path
         )
@@ -136,16 +133,16 @@ impl Storage {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn insert_outgoing_path_started_state(
         &self,
         transfer_id: String,
         file_path: String,
     ) -> Result<()> {
-        let mut conn = self.conn.acquire().await.unwrap();
+        let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
-            "INSERT INTO outgoing_path_started_states (path_id, bytes_sent) VALUES ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path = ?2), ?3)",
+            "INSERT INTO outgoing_path_started_states (path_id, bytes_sent) VALUES ((SELECT id \
+             FROM outgoing_paths WHERE transfer_id = ?1 AND path = ?2), ?3)",
             transfer_id,
             file_path,
             0
@@ -157,16 +154,16 @@ impl Storage {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn insert_incoming_path_started_state(
         &self,
         transfer_id: String,
         file_path: String,
     ) -> Result<()> {
-        let mut conn = self.conn.acquire().await.unwrap();
+        let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
-            "INSERT INTO incoming_path_started_states (path_id, bytes_received) VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path = ?2), ?3)",
+            "INSERT INTO incoming_path_started_states (path_id, bytes_received) VALUES ((SELECT \
+             id FROM incoming_paths WHERE transfer_id = ?1 AND path = ?2), ?3)",
             transfer_id,
             file_path,
             0
@@ -178,7 +175,6 @@ impl Storage {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn insert_outgoing_path_cancel_state(
         &self,
         transfer_id: String,
@@ -186,10 +182,11 @@ impl Storage {
         by_peer: bool,
         bytes_sent: i64,
     ) -> Result<()> {
-        let mut conn = self.conn.acquire().await.unwrap();
+        let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
-            "INSERT INTO outgoing_path_cancel_states (path_id, by_peer, bytes_sent) VALUES ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path = ?2), ?3, ?4)",
+            "INSERT INTO outgoing_path_cancel_states (path_id, by_peer, bytes_sent) VALUES \
+             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path = ?2), ?3, ?4)",
             transfer_id,
             file_path,
             by_peer,
@@ -202,7 +199,6 @@ impl Storage {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn insert_incoming_path_cancel_state(
         &self,
         transfer_id: String,
@@ -210,10 +206,11 @@ impl Storage {
         by_peer: bool,
         bytes_received: i64,
     ) -> Result<()> {
-        let mut conn = self.conn.acquire().await.unwrap();
+        let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
-            "INSERT INTO incoming_path_cancel_states (path_id, by_peer, bytes_received) VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path = ?2), ?3, ?4)",
+            "INSERT INTO incoming_path_cancel_states (path_id, by_peer, bytes_received) VALUES \
+             ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path = ?2), ?3, ?4)",
             transfer_id,
             file_path,
             by_peer,
@@ -226,7 +223,6 @@ impl Storage {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn insert_incoming_path_failed_state(
         &self,
         transfer_id: String,
@@ -234,10 +230,11 @@ impl Storage {
         error: u32,
         bytes_received: i64,
     ) -> Result<()> {
-        let mut conn = self.conn.acquire().await.unwrap();
+        let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
-            "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?2 AND path = ?2), ?3, ?4)",
+            "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) \
+             VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?2 AND path = ?2), ?3, ?4)",
             transfer_id,
             file_path,
             error,
@@ -250,7 +247,6 @@ impl Storage {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn insert_outgoing_path_failed_state(
         &self,
         transfer_id: String,
@@ -258,10 +254,11 @@ impl Storage {
         error: u32,
         bytes_sent: i64,
     ) -> Result<()> {
-        let mut conn = self.conn.acquire().await.unwrap();
+        let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
-            "INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent) VALUES ((SELECT id FROM outgoing_paths WHERE transfer_id = ?2 AND path = ?2), ?3, ?4)",
+            "INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent) VALUES \
+             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?2 AND path = ?2), ?3, ?4)",
             transfer_id,
             file_path,
             error,
@@ -274,16 +271,16 @@ impl Storage {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn insert_outgoing_path_completed_state(
         &self,
         transfer_id: String,
         file_path: String,
     ) -> Result<()> {
-        let mut conn = self.conn.acquire().await.unwrap();
+        let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
-            "INSERT INTO outgoing_path_completed_states (path_id) VALUES ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path = ?2))",
+            "INSERT INTO outgoing_path_completed_states (path_id) VALUES ((SELECT id FROM \
+             outgoing_paths WHERE transfer_id = ?1 AND path = ?2))",
             transfer_id,
             file_path,
         )
@@ -294,17 +291,17 @@ impl Storage {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn insert_incoming_path_completed_state(
         &self,
         transfer_id: String,
         file_path: String,
         final_path: String,
     ) -> Result<()> {
-        let mut conn = self.conn.acquire().await.unwrap();
+        let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
-            "INSERT INTO incoming_path_completed_states (path_id, final_path) VALUES ((SELECT id from incoming_paths WHERE transfer_id = ?1 AND path = ?2), ?3)",
+            "INSERT INTO incoming_path_completed_states (path_id, final_path) VALUES ((SELECT id \
+             from incoming_paths WHERE transfer_id = ?1 AND path = ?2), ?3)",
             transfer_id,
             file_path,
             final_path
