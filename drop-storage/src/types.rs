@@ -34,15 +34,14 @@ pub enum Event {
     Pending(TransferType, TransferInfo),
     Started(TransferType, TransferId, FilePath),
 
-    FileCanceled(TransferType, TransferId, FilePath),
+    FileCanceled(TransferType, TransferId, FilePath, bool),
     TransferCanceled(TransferType, TransferInfo, bool),
 
-    FileFailed(TransferType, TransferId, FilePath, u32, i64),
+    FileFailed(TransferType, TransferId, FilePath, u32),
     TransferFailed(TransferType, TransferInfo, u32),
 
     FileUploadComplete(TransferId, FilePath),
     FileDownloadComplete(TransferId, FilePath, String),
 
-    // Unused
-    Progress,
+    Progress(TransferId, FilePath, i64),
 }

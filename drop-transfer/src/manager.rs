@@ -6,11 +6,12 @@ use std::{
 };
 
 use slog::Logger;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{mpsc::UnboundedSender, Mutex};
 use uuid::Uuid;
 
 use crate::{
     service::State,
+    storage_dispatch,
     ws::{client::ClientReq, server::ServerReq},
     Error, FileId, Transfer,
 };
@@ -32,7 +33,7 @@ pub struct TransferState {
 /// transfers and their status
 pub(crate) struct TransferManager {
     transfers: HashMap<Uuid, TransferState>,
-    storage: Arc<drop_storage::Storage>,
+    storage: Arc<Mutex<storage_dispatch::StorageDispatch>>,
     logger: Logger,
 }
 
@@ -47,7 +48,10 @@ impl TransferState {
 }
 
 impl TransferManager {
-    pub(crate) fn new(logger: Logger, storage: Arc<drop_storage::Storage>) -> TransferManager {
+    pub(crate) fn new(
+        logger: Logger,
+        storage: Arc<Mutex<storage_dispatch::StorageDispatch>>,
+    ) -> TransferManager {
         TransferManager {
             transfers: HashMap::new(),
             storage,
@@ -75,7 +79,9 @@ impl TransferManager {
             Entry::Vacant(entry) => {
                 if let Err(err) = self
                     .storage
-                    .insert_transfer(xfer.storage_info(), transfer_type)
+                    .lock()
+                    .await
+                    .insert_transfer(transfer_type, &xfer)
                     .await
                 {
                     slog::error!(

@@ -1,159 +1,221 @@
-pub async fn handle_event(
-    storage: std::sync::Arc<drop_storage::Storage>,
-    event: &crate::Event,
-) -> Result<(), drop_storage::error::Error> {
-    let event = Into::<drop_storage::types::Event>::into(event);
-    match event {
-        drop_storage::types::Event::Pending(transfer_type, transfer_info) => match transfer_type {
-            drop_storage::types::TransferType::Incoming => {
-                for file in transfer_info.files {
-                    storage
-                        .insert_incoming_path_pending_state(transfer_info.id.clone(), file.path)
-                        .await?
-                }
-            }
-            drop_storage::types::TransferType::Outgoing => {
-                for file in transfer_info.files {
-                    storage
-                        .insert_outgoing_path_pending_state(transfer_info.id.clone(), file.path)
-                        .await?
-                }
-            }
-        },
+use std::collections::HashMap;
 
-        drop_storage::types::Event::Started(transfer_type, transfer_id, file_id) => {
-            match transfer_type {
-                drop_storage::types::TransferType::Incoming => {
-                    storage
-                        .insert_incoming_path_started_state(transfer_id, file_id)
-                        .await?
-                }
-                drop_storage::types::TransferType::Outgoing => {
-                    storage
-                        .insert_outgoing_path_started_state(transfer_id, file_id)
-                        .await?
-                }
-            }
-        }
+pub struct StorageDispatch {
+    storage: drop_storage::Storage,
+    file_progress: HashMap<(String, String), i64>,
+}
 
-        drop_storage::types::Event::FileCanceled(transfer_type, transfer_id, file_id) => {
-            match transfer_type {
-                drop_storage::types::TransferType::Incoming => {
-                    storage
-                        .insert_incoming_path_cancel_state(transfer_id, file_id, false, 0)
-                        .await?
-                }
-                drop_storage::types::TransferType::Outgoing => {
-                    storage
-                        .insert_outgoing_path_cancel_state(transfer_id, file_id, false, 0)
-                        .await?
-                }
-            }
-        }
+impl StorageDispatch {
+    pub async fn new(
+        logger: slog::Logger,
+        storage_path: &str,
+    ) -> Result<Self, drop_storage::error::Error> {
+        Ok(Self {
+            storage: drop_storage::Storage::new(logger, storage_path).await?,
+            file_progress: HashMap::new(),
+        })
+    }
 
-        drop_storage::types::Event::FileDownloadComplete(transfer_id, file_id, final_path) => {
-            storage
-                .insert_incoming_path_completed_state(transfer_id, file_id, final_path)
-                .await?
-        }
+    pub async fn insert_transfer(
+        &self,
+        transfer_type: drop_storage::TransferType,
+        transfer: &crate::Transfer,
+    ) -> Result<(), drop_storage::error::Error> {
+        self.storage
+            .insert_transfer(transfer.storage_info(), transfer_type)
+            .await?;
+        Ok(())
+    }
 
-        drop_storage::types::Event::FileUploadComplete(transfer_id, file_id) => {
-            storage
-                .insert_outgoing_path_completed_state(transfer_id, file_id)
-                .await?
-        }
-
-        drop_storage::types::Event::TransferCanceled(transfer_type, transfer_info, by_peer) => {
-            match transfer_type {
-                drop_storage::types::TransferType::Incoming => {
-                    for file in transfer_info.files {
-                        storage
-                            .insert_incoming_path_cancel_state(
-                                transfer_info.id.clone(),
-                                file.path,
-                                by_peer,
-                                0,
-                            )
-                            .await?
+    pub async fn handle_event(
+        &mut self,
+        event: &crate::Event,
+    ) -> Result<(), drop_storage::error::Error> {
+        let event = Into::<drop_storage::types::Event>::into(event);
+        match event {
+            drop_storage::types::Event::Pending(transfer_type, transfer_info) => {
+                match transfer_type {
+                    drop_storage::types::TransferType::Incoming => {
+                        for file in transfer_info.files {
+                            self.storage
+                                .insert_incoming_path_pending_state(
+                                    transfer_info.id.clone(),
+                                    file.path,
+                                )
+                                .await?
+                        }
+                    }
+                    drop_storage::types::TransferType::Outgoing => {
+                        for file in transfer_info.files {
+                            self.storage
+                                .insert_outgoing_path_pending_state(
+                                    transfer_info.id.clone(),
+                                    file.path,
+                                )
+                                .await?
+                        }
                     }
                 }
-                drop_storage::types::TransferType::Outgoing => {
-                    for file in transfer_info.files {
-                        storage
-                            .insert_outgoing_path_cancel_state(
-                                transfer_info.id.clone(),
-                                file.path,
-                                by_peer,
-                                0,
-                            )
+            }
+
+            drop_storage::types::Event::Started(transfer_type, transfer_id, file_id) => {
+                match transfer_type {
+                    drop_storage::types::TransferType::Incoming => {
+                        self.storage
+                            .insert_incoming_path_started_state(transfer_id, file_id)
+                            .await?
+                    }
+                    drop_storage::types::TransferType::Outgoing => {
+                        self.storage
+                            .insert_outgoing_path_started_state(transfer_id, file_id)
                             .await?
                     }
                 }
             }
-        }
 
-        drop_storage::types::Event::TransferFailed(transfer_type, transfer_info, error_code) => {
-            match transfer_type {
+            drop_storage::types::Event::FileCanceled(
+                transfer_type,
+                transfer_id,
+                file_id,
+                by_peer,
+            ) => match transfer_type {
+                drop_storage::types::TransferType::Incoming => {
+                    let progress = self.get_file_progress(&transfer_id, &file_id);
+                    self.storage
+                        .insert_incoming_path_cancel_state(transfer_id, file_id, by_peer, progress)
+                        .await?
+                }
+                drop_storage::types::TransferType::Outgoing => {
+                    let progress = self.get_file_progress(&transfer_id, &file_id);
+                    self.storage
+                        .insert_outgoing_path_cancel_state(transfer_id, file_id, by_peer, progress)
+                        .await?
+                }
+            },
+
+            drop_storage::types::Event::FileDownloadComplete(transfer_id, file_id, final_path) => {
+                self.storage
+                    .insert_incoming_path_completed_state(transfer_id, file_id, final_path)
+                    .await?
+            }
+
+            drop_storage::types::Event::FileUploadComplete(transfer_id, file_id) => {
+                self.storage
+                    .insert_outgoing_path_completed_state(transfer_id, file_id)
+                    .await?
+            }
+
+            drop_storage::types::Event::TransferCanceled(transfer_type, transfer_info, by_peer) => {
+                match transfer_type {
+                    drop_storage::types::TransferType::Incoming => {
+                        for file in transfer_info.files {
+                            let progress = self.get_file_progress(&transfer_info.id, &file.path);
+                            self.storage
+                                .insert_incoming_path_cancel_state(
+                                    transfer_info.id.clone(),
+                                    file.path,
+                                    by_peer,
+                                    progress,
+                                )
+                                .await?
+                        }
+                    }
+                    drop_storage::types::TransferType::Outgoing => {
+                        for file in transfer_info.files {
+                            let progress = self.get_file_progress(&transfer_info.id, &file.path);
+                            self.storage
+                                .insert_outgoing_path_cancel_state(
+                                    transfer_info.id.clone(),
+                                    file.path,
+                                    by_peer,
+                                    progress,
+                                )
+                                .await?
+                        }
+                    }
+                }
+            }
+
+            drop_storage::types::Event::TransferFailed(
+                transfer_type,
+                transfer_info,
+                error_code,
+            ) => match transfer_type {
                 drop_storage::types::TransferType::Incoming => {
                     for file in transfer_info.files {
-                        storage
+                        let progress = self.get_file_progress(&transfer_info.id, &file.path);
+                        self.storage
                             .insert_incoming_path_failed_state(
                                 transfer_info.id.clone(),
                                 file.path,
                                 error_code,
-                                0,
+                                progress,
                             )
                             .await?
                     }
                 }
                 drop_storage::types::TransferType::Outgoing => {
                     for file in transfer_info.files {
-                        storage
+                        let progress = self.get_file_progress(&transfer_info.id, &file.path);
+                        self.storage
                             .insert_outgoing_path_failed_state(
                                 transfer_info.id.clone(),
                                 file.path,
                                 error_code,
-                                0,
+                                progress,
+                            )
+                            .await?
+                    }
+                }
+            },
+
+            drop_storage::types::Event::FileFailed(
+                transfer_type,
+                transfer_id,
+                file_id,
+                error_code,
+            ) => {
+                let progress = self.get_file_progress(&transfer_id, &file_id);
+                match transfer_type {
+                    drop_storage::types::TransferType::Incoming => {
+                        self.storage
+                            .insert_incoming_path_failed_state(
+                                transfer_id,
+                                file_id,
+                                error_code,
+                                progress,
+                            )
+                            .await?
+                    }
+                    drop_storage::types::TransferType::Outgoing => {
+                        self.storage
+                            .insert_outgoing_path_failed_state(
+                                transfer_id,
+                                file_id,
+                                error_code,
+                                progress,
                             )
                             .await?
                     }
                 }
             }
+
+            drop_storage::types::Event::Progress(transfer_id, file_id, progress) => {
+                *self
+                    .file_progress
+                    .entry((transfer_id, file_id))
+                    .or_default() = progress;
+            }
         }
 
-        drop_storage::types::Event::FileFailed(
-            transfer_type,
-            transfer_id,
-            file_id,
-            error_code,
-            bytes_transferred,
-        ) => match transfer_type {
-            drop_storage::types::TransferType::Incoming => {
-                storage
-                    .insert_incoming_path_failed_state(
-                        transfer_id,
-                        file_id,
-                        error_code,
-                        bytes_transferred,
-                    )
-                    .await?
-            }
-            drop_storage::types::TransferType::Outgoing => {
-                storage
-                    .insert_outgoing_path_failed_state(
-                        transfer_id,
-                        file_id,
-                        error_code,
-                        bytes_transferred,
-                    )
-                    .await?
-            }
-        },
-
-        drop_storage::types::Event::Progress => {}
+        Ok(())
     }
 
-    Ok(())
+    fn get_file_progress(&mut self, transfer_id: &String, file_id: &String) -> i64 {
+        self.file_progress
+            .remove(&(transfer_id.to_string(), file_id.to_string()))
+            .unwrap_or(0)
+    }
 }
 
 impl From<&crate::Event> for drop_storage::types::Event {
@@ -179,18 +241,20 @@ impl From<&crate::Event> for drop_storage::types::Event {
                 transfer.id().to_string(),
                 file.to_string(),
             ),
-            crate::Event::FileDownloadCancelled(transfer, file, _) => {
+            crate::Event::FileDownloadCancelled(transfer, file, by_peer) => {
                 drop_storage::types::Event::FileCanceled(
                     drop_storage::types::TransferType::Incoming,
                     transfer.id().to_string(),
                     file.to_string(),
+                    *by_peer,
                 )
             }
-            crate::Event::FileUploadCancelled(transfer, file, _) => {
+            crate::Event::FileUploadCancelled(transfer, file, by_peer) => {
                 drop_storage::types::Event::FileCanceled(
                     drop_storage::types::TransferType::Outgoing,
                     transfer.id().to_string(),
                     file.to_string(),
+                    *by_peer,
                 )
             }
             crate::Event::FileDownloadSuccess(transfer, file) => {
@@ -212,7 +276,6 @@ impl From<&crate::Event> for drop_storage::types::Event {
                     transfer.id().to_string(),
                     file.to_string(),
                     error.into(),
-                    0,
                 )
             }
             crate::Event::FileUploadFailed(transfer, file, error) => {
@@ -221,7 +284,6 @@ impl From<&crate::Event> for drop_storage::types::Event {
                     transfer.id().to_string(),
                     file.to_string(),
                     error.into(),
-                    0,
                 )
             }
             crate::Event::TransferCanceled(transfer, is_sender, by_peer) => {
@@ -248,8 +310,20 @@ impl From<&crate::Event> for drop_storage::types::Event {
                     error.into(),
                 )
             }
-
-            _ => drop_storage::types::Event::Progress,
+            crate::Event::FileDownloadProgress(transfer, file, progress) => {
+                drop_storage::types::Event::Progress(
+                    transfer.id().to_string(),
+                    file.to_string(),
+                    *progress as i64,
+                )
+            }
+            crate::Event::FileUploadProgress(transfer, file, progress) => {
+                drop_storage::types::Event::Progress(
+                    transfer.id().to_string(),
+                    file.to_string(),
+                    *progress as i64,
+                )
+            }
         }
     }
 }
