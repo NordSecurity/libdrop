@@ -5,6 +5,7 @@ use std::{
     sync::Arc,
 };
 
+use slog::Logger;
 use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 
@@ -31,8 +32,8 @@ pub struct TransferState {
 /// transfers and their status
 pub(crate) struct TransferManager {
     transfers: HashMap<Uuid, TransferState>,
-    #[allow(dead_code)]
     storage: Arc<drop_storage::Storage>,
+    logger: Logger,
 }
 
 impl TransferState {
@@ -46,10 +47,11 @@ impl TransferState {
 }
 
 impl TransferManager {
-    pub(crate) fn new(storage: Arc<drop_storage::Storage>) -> TransferManager {
+    pub(crate) fn new(logger: Logger, storage: Arc<drop_storage::Storage>) -> TransferManager {
         TransferManager {
             transfers: HashMap::new(),
             storage,
+            logger,
         }
     }
 
@@ -71,10 +73,17 @@ impl TransferManager {
         match self.transfers.entry(xfer.id()) {
             Entry::Occupied(_) => Err(Error::BadTransferState),
             Entry::Vacant(entry) => {
-                let _ = self
+                if let Err(err) = self
                     .storage
                     .insert_transfer(xfer.storage_info(), transfer_type)
-                    .await;
+                    .await
+                {
+                    slog::error!(
+                        self.logger,
+                        "Failed to insert transfer into storage: {}",
+                        err
+                    );
+                }
 
                 entry.insert(TransferState::new(xfer, connection));
                 Ok(())

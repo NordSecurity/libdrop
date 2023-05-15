@@ -75,7 +75,7 @@ impl Service {
         let task = || {
             let state = Arc::new(State {
                 event_tx,
-                transfer_manager: Mutex::new(TransferManager::new(storage)),
+                transfer_manager: Mutex::new(TransferManager::new(logger.clone(), storage)),
                 moose: moose.clone(),
                 config,
                 auth: auth.clone(),
