@@ -65,9 +65,7 @@ pub fn filepath_variants(location: &'_ Path) -> crate::Result<impl Iterator<Item
             filename.extend([".", &extension.to_string_lossy()]);
         };
 
-        let mut dst_loc = location.to_path_buf();
-        dst_loc.set_file_name(filename);
-        dst_loc
+        location.with_file_name(filename)
     }));
 
     Ok(iter)

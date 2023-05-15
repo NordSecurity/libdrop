@@ -441,10 +441,11 @@ impl Downloader {
                 continue;
             }
 
-            if meta.len() != task.size {
+            if meta.len() != task.file.size() {
                 info!(
                     self.logger,
-                    "Fould file {variant:?} but size does not match {}", task.size
+                    "Fould file {variant:?} but size does not match {}",
+                    task.file.size()
                 );
                 continue;
             }
@@ -453,8 +454,8 @@ impl Downloader {
             let target_csum = if let Some(csum) = &csum {
                 csum
             } else {
-                let report = self.request_csum(task.size).await?;
-                if report.limit != task.size {
+                let report = self.request_csum(task.file.size()).await?;
+                if report.limit != task.file.size() {
                     error!(
                         self.logger,
                         "Checksum report missmatch. Most likely protocol error"
@@ -508,7 +509,7 @@ impl handler::Downloader for Downloader {
 
                 let msg = v3::ServerMsg::Done(v3::Done {
                     file: self.file_id.clone(),
-                    bytes_transfered: task.size,
+                    bytes_transfered: task.file.size(),
                 });
                 self.send(Message::from(&msg)).await?;
 

@@ -508,7 +508,7 @@ impl handler::Downloader for Downloader {
 
                 let msg = v4::ServerMsg::Done(v4::Done {
                     file: self.file_id.clone(),
-                    bytes_transfered: task.size,
+                    bytes_transfered: task.file.size(),
                 });
                 self.send(Message::from(&msg)).await?;
 
