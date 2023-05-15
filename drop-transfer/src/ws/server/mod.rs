@@ -60,7 +60,6 @@ pub enum ServerReq {
 pub struct FileXferTask {
     pub file: crate::File,
     pub location: Hidden<PathBuf>,
-    pub size: u64,
     pub xfer: crate::Transfer,
 }
 
@@ -412,13 +411,10 @@ async fn handle_client(
 
 impl FileXferTask {
     pub fn new(file: crate::File, xfer: crate::Transfer, location: PathBuf) -> crate::Result<Self> {
-        let size = file.size();
-
         Ok(Self {
             file,
             xfer,
             location: Hidden(location),
-            size,
         })
     }
 
@@ -493,11 +489,11 @@ impl FileXferTask {
                 ))
                 .await;
 
-            while bytes_received < self.size {
+            while bytes_received < self.file.size() {
                 let chunk = stream.recv().await.ok_or(crate::Error::Canceled)?;
 
                 let chunk_size = chunk.len();
-                if chunk_size as u64 + bytes_received > self.size {
+                if chunk_size as u64 + bytes_received > self.file.size() {
                     return Err(crate::Error::MismatchedSize);
                 }
 
@@ -520,7 +516,7 @@ impl FileXferTask {
                 }
             }
 
-            if bytes_received > self.size {
+            if bytes_received > self.file.size() {
                 Err(crate::Error::UnexpectedData)
             } else {
                 Ok(bytes_received)
