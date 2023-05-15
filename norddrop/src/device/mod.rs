@@ -138,9 +138,14 @@ impl NordDropFFI {
         // to the host app
         let ed = self.event_dispatcher.clone();
         let event_logger = self.logger.clone();
+        let event_storage = storage.clone();
         self.rt.spawn(async move {
             while let Some(e) = rx.recv().await {
                 debug!(event_logger, "emitting event: {:#?}", e);
+
+                if let Err(err) = storage_dispatch::handle_event(event_storage.clone(), &e).await {
+                    error!(event_logger, "Failed to handle database event: {}", err);
+                }
 
                 // Android team reported problems with the event ordering.
                 // The events where dispatched in different order than where emitted.
