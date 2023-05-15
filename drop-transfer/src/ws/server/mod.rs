@@ -37,7 +37,7 @@ use crate::{
     auth,
     error::ResultExt,
     event::DownloadSuccess,
-    file::{self},
+    file,
     manager::{TransferConnection, TransferGuard},
     protocol,
     quarantine::PathExt,
@@ -48,6 +48,8 @@ use crate::{
 };
 
 const MAX_FILENAME_LENGTH: usize = 255;
+const MAX_FILE_SUFFIX_LEN: usize = 5; // Assume that the suffix will fit into 5 characters e.g.
+                                      // `<filename>(999).<ext>`
 const REPORT_PROGRESS_THRESHOLD: u64 = 1024 * 64;
 
 pub enum ServerReq {
@@ -58,7 +60,6 @@ pub enum ServerReq {
 pub struct FileXferTask {
     pub file: crate::File,
     pub location: Hidden<PathBuf>,
-    pub filename: String,
     pub size: u64,
     pub xfer: crate::Transfer,
 }
@@ -411,19 +412,12 @@ async fn handle_client(
 
 impl FileXferTask {
     pub fn new(file: crate::File, xfer: crate::Transfer, location: PathBuf) -> crate::Result<Self> {
-        let filename = location
-            .file_stem()
-            .ok_or(crate::Error::BadFile)?
-            .to_string_lossy()
-            .to_string();
-
         let size = file.size();
 
         Ok(Self {
             file,
             xfer,
             location: Hidden(location),
-            filename,
             size,
         })
     }
@@ -433,7 +427,27 @@ impl FileXferTask {
         tmp_location: &Hidden<PathBuf>,
         logger: &Logger,
     ) -> crate::Result<PathBuf> {
-        let dst_location = crate::utils::map_path_if_exists(&self.location.0)?;
+        let mut opts = fs::OpenOptions::new();
+        opts.write(true).create_new(true);
+
+        let mut iter = crate::utils::filepath_variants(&self.location.0)?;
+        let dst_location = loop {
+            let path = iter.next().expect("File paths iterator should never end");
+
+            match opts.open(&path) {
+                Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+                    continue;
+                }
+                Err(err) => {
+                    error!(logger, "Failed to crate destination file: {err}");
+                    return Err(err.into());
+                }
+                Ok(file) => {
+                    drop(file); // Close the file
+                    break path;
+                }
+            }
+        };
 
         fs::rename(&tmp_location.0, &dst_location)?;
 
