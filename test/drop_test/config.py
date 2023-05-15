@@ -106,4 +106,7 @@ FILES = {
     "zero-sized-file": TestFile(
         size=0, id="d5d4ohM4nRb8b6-Ob19WnSAr_uTtGoUXjT-L575CCMY"
     ),
+    "duplicate/testfile-big": TestFile(
+        size=20 * 1024, id="Jr2sHMHPjPP5Y19bGJMf17GeT3B4Jrs1ozB1UnFcRzo"
+    ),
 }
