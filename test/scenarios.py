@@ -3608,7 +3608,7 @@ scenarios = [
                     action.WaitForResume(
                         1,
                         FILES["testfile-big"].id,
-                        "/tmp/received/21-1/testfile-big.dropdl-part",
+                        f"/tmp/received/21-1/{FILES['testfile-big'].id}.dropdl-part",
                     ),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -3702,7 +3702,9 @@ scenarios = [
                     action.CancelTransferRequest(0),
                     action.Wait(event.FinishTransferCanceled(0, False)),
                     # new transfer
-                    action.ModifyFile("/tmp/received/21-2/testfile-big.dropdl-part"),
+                    action.ModifyFile(
+                        f"/tmp/received/21-2/{FILES['testfile-big'].id}.dropdl-part"
+                    ),
                     action.Wait(
                         event.Receive(
                             1,
