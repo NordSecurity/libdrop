@@ -430,10 +430,11 @@ impl Downloader {
                 continue;
             }
 
-            if meta.len() != task.size {
+            if meta.len() != task.file.size() {
                 info!(
                     self.logger,
-                    "Fould file {variant:?} but size does not match {}", task.size
+                    "Fould file {variant:?} but size does not match {}",
+                    task.file.size(),
                 );
                 continue;
             }
@@ -442,8 +443,8 @@ impl Downloader {
             let target_csum = if let Some(csum) = &csum {
                 csum
             } else {
-                let report = self.request_csum(task.size).await?;
-                if report.limit != task.size {
+                let report = self.request_csum(task.file.size()).await?;
+                if report.limit != task.file.size() {
                     error!(
                         self.logger,
                         "Checksum report missmatch. Most likely protocol error"
@@ -487,6 +488,16 @@ impl Downloader {
 #[async_trait::async_trait]
 impl handler::Downloader for Downloader {
     async fn init(&mut self, task: &super::FileXferTask) -> crate::Result<handler::DownloadInit> {
+        let filename_len = task
+            .location
+            .file_name()
+            .expect("Cannot extract file name")
+            .len();
+
+        if filename_len + super::MAX_FILE_SUFFIX_LEN > super::MAX_FILENAME_LENGTH {
+            return Err(crate::Error::FilenameTooLong);
+        }
+
         // Check if the file is already there
         match self.check_candidate_file(task).await? {
             Some(destination) => {
@@ -506,9 +517,11 @@ impl handler::Downloader for Downloader {
             None => debug!(self.logger, "Did not find any candidate files"),
         };
 
-        let tmp_location: Hidden<PathBuf> =
-            Hidden(format!("{}.dropdl-part", task.location.display(),).into());
-        super::validate_tmp_location_path(&tmp_location)?;
+        let tmp_location: Hidden<PathBuf> = Hidden(
+            task.location
+                .0
+                .with_file_name(format!("{}.dropdl-part", task.file.id().to_string())),
+        );
 
         // Check if we can resume the temporary file
         match tokio::task::block_in_place(|| super::TmpFileState::load(&tmp_location.0)) {
