@@ -19,6 +19,7 @@ use crate::{
     auth,
     error::ResultExt,
     manager::TransferConnection,
+    storage_dispatch,
     ws::{
         self,
         client::ClientReq,
@@ -65,7 +66,7 @@ macro_rules! moose_try_file {
 impl Service {
     pub fn start(
         addr: IpAddr,
-        storage: Arc<drop_storage::Storage>,
+        storage: Arc<Mutex<storage_dispatch::StorageDispatch>>,
         event_tx: mpsc::Sender<Event>,
         logger: Logger,
         config: Arc<DropConfig>,

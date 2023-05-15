@@ -12,7 +12,6 @@ use anyhow::Context;
 use clap::{arg, command, value_parser, ArgAction, Command};
 use drop_auth::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
 use drop_config::DropConfig;
-use drop_storage::Storage;
 use drop_transfer::{auth, storage_dispatch, Event, File, Service, Transfer};
 use slog::{o, Drain, Logger};
 use slog_scope::{info, warn};
@@ -30,7 +29,7 @@ const PUB_KEY: [u8; PUBLIC_KEY_LENGTH] = [
 
 async fn listen(
     service: &Mutex<Service>,
-    storage: Arc<Storage>,
+    storage: Arc<Mutex<storage_dispatch::StorageDispatch>>,
     xfers: watch::Sender<BTreeSet<Uuid>>,
     rx: &mut mpsc::Receiver<Event>,
     out_dir: &Path,
@@ -56,7 +55,7 @@ async fn listen(
     };
 
     while let Some(ev) = rx.recv().await {
-        storage_dispatch::handle_event(storage.clone(), &ev).await?;
+        storage.lock().await.handle_event(&ev).await?;
         match ev {
             Event::RequestReceived(xfer) => {
                 let xfid = xfer.id();
@@ -362,11 +361,11 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let storage_file = matches.get_one::<String>("storage").unwrap();
-    let storage = Arc::new(
-        drop_storage::Storage::new(logger.clone(), storage_file)
+    let storage = Arc::new(Mutex::new(
+        storage_dispatch::StorageDispatch::new(logger.clone(), storage_file)
             .await
             .unwrap(),
-    );
+    ));
 
     let mut service = Service::start(
         addr,
