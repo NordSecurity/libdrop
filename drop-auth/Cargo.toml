@@ -7,8 +7,7 @@ edition = "2021"
 
 [dependencies]
 base64 = "0.21.0"
-crypto_box = { version = "0.8.2", features = ["std"] }
 rand = "0.8.5"
 hmac = "0.12.1"
-x25519-dalek = "*"
-sha2 = "*"
+x25519-dalek = "1.2.0"
+sha2 = "0.10.6"
