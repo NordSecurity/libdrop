@@ -4030,4 +4030,72 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario24",
+        "Download file into a readonly directory",
+        {
+            "ren": ActionList(
+                [
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0, FILES["testfile-small"].id, Error.BAD_TRANSFER
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.DropPrivileges(),
+                    action.Download(
+                        0,
+                        FILES["testfile-small"].id,
+                        "/tmp/no-permissions",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0,
+                            FILES["testfile-small"].id,
+                            Error.IO,
+                        )
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]
