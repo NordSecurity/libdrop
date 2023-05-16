@@ -1,7 +1,7 @@
 pub mod http;
 
 use base64::{engine::general_purpose::STANDARD_NO_PAD as BASE64, Engine};
-use crypto_box::{aead::AeadInPlace, ChaChaBox};
+
 pub use crypto_box::{PublicKey, SecretKey};
 use rand::RngCore;
 
@@ -71,16 +71,20 @@ pub fn create_ticket(
 }
 
 fn create_tag(secret: &SecretKey, pubkey: &PublicKey, nonce: Nonce) -> Option<Vec<u8>> {
-    let shared_secret = ChaChaBox::new(pubkey, secret);
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
 
-    let mut tag = Vec::new();
-    shared_secret
-        .encrypt_in_place(
-            nonce.0.as_slice().into(),
-            DOMAIN_STRING.as_bytes(),
-            &mut tag,
-        )
-        .ok()?;
+    type HmacSha256 = Hmac<Sha256>;
+
+    let secret = x25519_dalek::StaticSecret::from(secret.as_bytes().clone());
+    let pubkey = x25519_dalek::PublicKey::from(pubkey.as_bytes().clone());
+
+    let shared_secret = secret.diffie_hellman(&pubkey);
+
+    let mut hmac = HmacSha256::new_from_slice(shared_secret.as_bytes()).ok()?;
+    hmac.update(DOMAIN_STRING.as_bytes());
+    hmac.update(nonce.0.as_slice());
+    let tag = hmac.finalize().into_bytes().to_vec();
 
     Some(tag)
 }

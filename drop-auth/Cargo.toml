@@ -9,3 +9,6 @@ edition = "2021"
 base64 = "0.21.0"
 crypto_box = { version = "0.8.2", features = ["std"] }
 rand = "0.8.5"
+hmac = "0.12.1"
+x25519-dalek = "*"
+sha2 = "*"
