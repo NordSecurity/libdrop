@@ -17,6 +17,9 @@ from drop_test import ffi, config
 def prepare_files(files: typing.Dict, symlinks: typing.Dict):
     os.mkdir("/tmp/received")
 
+    os.mkdir("/tmp/no-permissions")
+    os.chmod("/tmp/no-permissions", 0)
+
     for name in files:
         size: int = files[name].size
 

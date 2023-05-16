@@ -1,4 +1,4 @@
-import typing
+import typing, os
 
 from . import action, ffi
 from .logger import logger
@@ -30,6 +30,7 @@ class Scenario:
 
         try:
             await self._action_list[runner].run(drop)
+            os.seteuid(0)  # restore privileges, they might have been changed
         except Exception as e:
             logger.debug(f"Action threw an exception: {e}")
             raise
