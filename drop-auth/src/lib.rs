@@ -1,8 +1,6 @@
 pub mod http;
 
 use base64::{engine::general_purpose::STANDARD_NO_PAD as BASE64, Engine};
-
-pub use crypto_box::{PublicKey, SecretKey};
 use rand::RngCore;
 
 pub const AUTH_SCHEME: &str = "drop";
@@ -13,6 +11,8 @@ pub const SECRET_KEY_LENGTH: usize = 32;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Nonce(pub [u8; NONCE_LEN]);
+
+pub use x25519_dalek::{PublicKey, StaticSecret as SecretKey};
 
 const DOMAIN_STRING: &str = "libdrop-auth";
 
@@ -76,10 +76,7 @@ fn create_tag(secret: &SecretKey, pubkey: &PublicKey, nonce: Nonce) -> Option<Ve
 
     type HmacSha256 = Hmac<Sha256>;
 
-    let secret = x25519_dalek::StaticSecret::from(secret.as_bytes().clone());
-    let pubkey = x25519_dalek::PublicKey::from(pubkey.as_bytes().clone());
-
-    let shared_secret = secret.diffie_hellman(&pubkey);
+    let shared_secret = secret.diffie_hellman(pubkey);
 
     let mut hmac = HmacSha256::new_from_slice(shared_secret.as_bytes()).ok()?;
     hmac.update(DOMAIN_STRING.as_bytes());
@@ -91,8 +88,6 @@ fn create_tag(secret: &SecretKey, pubkey: &PublicKey, nonce: Nonce) -> Option<Ve
 
 #[cfg(test)]
 mod tests {
-    use crypto_box::{PublicKey, SecretKey};
-
     use super::*;
 
     const ALICE_PRIV_KEY: [u8; SECRET_KEY_LENGTH] = [

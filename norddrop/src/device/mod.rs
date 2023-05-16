@@ -58,7 +58,7 @@ impl NordDropFFI {
         trace!(logger, "norddrop_new()");
 
         // It's a debug print. Not visible in the production build
-        debug!(logger, "Private key: {:02X?}", privkey.as_bytes());
+        debug!(logger, "Private key: {:02X?}", privkey.to_bytes());
 
         Ok(NordDropFFI {
             instance: Arc::default(),
