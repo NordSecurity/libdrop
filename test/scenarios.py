@@ -1764,10 +1764,7 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
-                        event.FinishFailedTransfer(
-                            0,
-                            Error.WS_CLIENT,
-                        )
+                        event.FinishFailedTransfer(0, Error.WS_CLIENT, ignore_os=True)
                     ),
                     action.NoEvent(),
                     action.Stop(),
@@ -4088,6 +4085,7 @@ scenarios = [
                             0,
                             FILES["testfile-small"].id,
                             Error.IO,
+                            13,
                         )
                     ),
                     action.CancelTransferRequest(0),
