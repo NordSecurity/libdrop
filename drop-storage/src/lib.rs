@@ -37,7 +37,6 @@ impl Storage {
     ) -> Result<()> {
         let mut conn = self.conn.acquire().await?;
         let transfer_type_int: i32 = transfer_type.into();
-        let transfer_state: i32 = TransferState::Active.into();
 
         sqlx::query!(
             "INSERT OR IGNORE INTO peers (id) VALUES (?1)",
@@ -47,11 +46,10 @@ impl Storage {
         .await?;
 
         sqlx::query!(
-            "INSERT OR IGNORE INTO transfers (id, peer_id, is_outgoing, state) VALUES (?1, ?2, ?3, ?4)",
+            "INSERT OR IGNORE INTO transfers (id, peer_id, is_outgoing) VALUES (?1, ?2, ?3)",
             transfer.id,
             transfer.peer,
             transfer_type_int,
-            transfer_state,
         )
         .execute(&mut conn)
         .await?;
@@ -91,6 +89,58 @@ impl Storage {
             .await
             .map_err(error::Error::DBError)?,
         };
+
+        Ok(())
+    }
+
+    pub async fn insert_transfer_active_state(&self, transfer_id: String) -> Result<()> {
+        let mut conn = self.conn.acquire().await?;
+
+        sqlx::query!(
+            "INSERT INTO transfer_active_states (transfer_id) VALUES (?1)",
+            transfer_id,
+        )
+        .execute(&mut conn)
+        .await
+        .map_err(error::Error::DBError)?;
+
+        Ok(())
+    }
+
+    pub async fn insert_transfer_failed_state(
+        &self,
+        transfer_id: String,
+        error: u32,
+    ) -> Result<()> {
+        let mut conn = self.conn.acquire().await?;
+
+        sqlx::query!(
+            "INSERT INTO transfer_failed_states (transfer_id, status_code) VALUES (?1, ?2)",
+            transfer_id,
+            error,
+        )
+        .execute(&mut conn)
+        .await
+        .map_err(error::Error::DBError)?;
+
+        Ok(())
+    }
+
+    pub async fn insert_transfer_cancel_state(
+        &self,
+        transfer_id: String,
+        by_peer: bool,
+    ) -> Result<()> {
+        let mut conn = self.conn.acquire().await?;
+
+        sqlx::query!(
+            "INSERT INTO transfer_cancel_states (transfer_id, by_peer) VALUES (?1, ?2)",
+            transfer_id,
+            by_peer,
+        )
+        .execute(&mut conn)
+        .await
+        .map_err(error::Error::DBError)?;
 
         Ok(())
     }
@@ -315,26 +365,6 @@ impl Storage {
         Ok(())
     }
 
-    pub async fn update_transfer_state(
-        &self,
-        transfer_id: String,
-        state: TransferState,
-    ) -> Result<()> {
-        let mut conn = self.conn.acquire().await?;
-        let state: i32 = state.into();
-
-        sqlx::query!(
-            "UPDATE transfers SET state = ?1 WHERE id = ?2",
-            state,
-            transfer_id
-        )
-        .execute(&mut conn)
-        .await
-        .map_err(error::Error::DBError)?;
-
-        Ok(())
-    }
-
     pub async fn get_transfers(&self) -> Result<Vec<Transfer>> {
         let mut conn = self.conn.acquire().await?;
 
@@ -350,19 +380,14 @@ impl Storage {
                     _ => unreachable!(),
                 };
 
-                let state = match t.state {
-                    0 => TransferState::Active,
-                    1 => TransferState::Canceled,
-                    2 => TransferState::Failed,
-                    _ => unreachable!(),
-                };
-
                 Transfer {
                     id: t.id.clone(),
                     peer_id: t.peer_id.clone(),
-                    state,
                     transfer_type,
                     created_at: t.created_at,
+                    active_states: vec![],
+                    cancel_states: vec![],
+                    failed_states: vec![],
                 }
             })
             .collect::<Vec<_>>();
@@ -380,6 +405,50 @@ impl Storage {
                     )
                 }
             }
+
+            transfer.active_states = sqlx::query!(
+                "SELECT * FROM transfer_active_states WHERE transfer_id = ?1",
+                transfer.id
+            )
+            .fetch_all(&mut conn)
+            .await
+            .map_err(error::Error::DBError)?
+            .iter()
+            .map(|s| TransferActiveState {
+                transfer_id: s.transfer_id.clone(),
+                created_at: s.created_at,
+            })
+            .collect();
+
+            transfer.cancel_states = sqlx::query!(
+                "SELECT * FROM transfer_cancel_states WHERE transfer_id = ?1",
+                transfer.id
+            )
+            .fetch_all(&mut conn)
+            .await
+            .map_err(error::Error::DBError)?
+            .iter()
+            .map(|s| TransferCancelState {
+                transfer_id: s.transfer_id.clone(),
+                by_peer: s.by_peer,
+                created_at: s.created_at,
+            })
+            .collect();
+
+            transfer.failed_states = sqlx::query!(
+                "SELECT * FROM transfer_failed_states WHERE transfer_id = ?1",
+                transfer.id
+            )
+            .fetch_all(&mut conn)
+            .await
+            .map_err(error::Error::DBError)?
+            .iter()
+            .map(|s| TransferFailedState {
+                transfer_id: s.transfer_id.clone(),
+                status_code: s.status_code,
+                created_at: s.created_at,
+            })
+            .collect();
         }
 
         Ok(transfers)

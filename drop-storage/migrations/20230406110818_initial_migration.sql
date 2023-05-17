@@ -8,11 +8,33 @@ CREATE TABLE IF NOT EXISTS transfers (
   id TEXT PRIMARY KEY UNIQUE NOT NULL, 
   peer_id TEXT NOT NULL, 
   is_outgoing INTEGER NOT NULL,
-  state INTEGER NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(peer_id) REFERENCES peers(id) ON DELETE CASCADE ON UPDATE CASCADE,
   CHECK(is_outgoing = 0 OR is_outgoing = 1)
-  CHECK(state = 0 OR state = 1 OR state = 2)
+);
+
+-- transfer states
+CREATE TABLE IF NOT EXISTS transfer_active_states (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transfer_id TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS transfer_cancel_states (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transfer_id TEXT NOT NULL,
+  by_peer INTEGER NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS transfer_failed_states (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transfer_id TEXT NOT NULL,
+  status_code INTEGER NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- traversed paths for outgoing transfer at the time of the transfer creation
