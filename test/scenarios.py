@@ -3608,7 +3608,7 @@ scenarios = [
                     action.WaitForResume(
                         1,
                         FILES["testfile-big"].id,
-                        "/tmp/received/21-1/testfile-big.dropdl-part",
+                        f"/tmp/received/21-1/{FILES['testfile-big'].id}.dropdl-part",
                     ),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -3702,7 +3702,9 @@ scenarios = [
                     action.CancelTransferRequest(0),
                     action.Wait(event.FinishTransferCanceled(0, False)),
                     # new transfer
-                    action.ModifyFile("/tmp/received/21-2/testfile-big.dropdl-part"),
+                    action.ModifyFile(
+                        f"/tmp/received/21-2/{FILES['testfile-big'].id}.dropdl-part"
+                    ),
                     action.Wait(
                         event.Receive(
                             1,
@@ -3800,6 +3802,224 @@ scenarios = [
                     action.CheckDownloadedFiles(
                         [
                             action.File("/tmp/received/22/zero-sized-file", 0),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario23-1",
+        "Send two files with the same name but different fs location, expect them to transfer sucesfully",
+        {
+            "ren": ActionList(
+                [
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        ["/tmp/testfile-small", "/tmp/duplicate/testfile-small"],
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["duplicate/testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-small"].id,
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["duplicate/testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["duplicate/testfile-small"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["duplicate/testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-small"].id,
+                        "/tmp/received/23-1",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-small"].id,
+                            "/tmp/received/23-1/testfile-small",
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["duplicate/testfile-small"].id,
+                        "/tmp/received/23-1",
+                    ),
+                    action.Wait(event.Start(0, FILES["duplicate/testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["duplicate/testfile-small"].id,
+                            "/tmp/received/23-1/testfile-small(1)",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/23-1/testfile-small", 1048576),
+                            action.File(
+                                "/tmp/received/23-1/testfile-small(1)", 1048576
+                            ),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario23-2",
+        "Send two files with the same name but different fs location simultaneously, expect them to transfer sucesfully",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        ["/tmp/testfile-big", "/tmp/duplicate/testfile-big"],
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["duplicate/testfile-big"].id,
+                                    "testfile-big",
+                                    20971520,
+                                ),
+                            },
+                        )
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(0, FILES["testfile-big"].id),
+                            event.FinishFileUploaded(
+                                0,
+                                FILES["testfile-big"].id,
+                            ),
+                            event.Start(0, FILES["duplicate/testfile-big"].id),
+                            event.FinishFileUploaded(
+                                0,
+                                FILES["duplicate/testfile-big"].id,
+                            ),
+                        ]
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["duplicate/testfile-big"].id,
+                                    "testfile-big",
+                                    20971520,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/23-2",
+                    ),
+                    action.Download(
+                        0,
+                        FILES["duplicate/testfile-big"].id,
+                        "/tmp/received/23-2",
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(0, FILES["testfile-big"].id),
+                            event.Start(0, FILES["duplicate/testfile-big"].id),
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["testfile-big"].id,
+                                "/tmp/received/23-2/testfile-big",
+                            ),
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["duplicate/testfile-big"].id,
+                                "/tmp/received/23-2/testfile-big(1)",
+                            ),
+                        ]
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/23-2/testfile-big", 10485760),
+                            action.File("/tmp/received/23-2/testfile-big(1)", 20971520),
                         ],
                     ),
                     action.CancelTransferRequest(0),

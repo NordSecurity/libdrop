@@ -3,6 +3,7 @@
 ---
 * Accept `storage_path` through `norddrop_start` config for SQLite persistence
 * File IDs are no longer valid paths. Changed the structure of `RequestQueued/Received` events to contain a flat file list
+* Fix duplicate filenames error
 
 ---
 <br>
