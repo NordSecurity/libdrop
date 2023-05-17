@@ -47,20 +47,22 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile-big",
+                            FILES["testfile-big"].id,
                             "/tmp/received/testfile-big",
                         )
                     ),
@@ -134,20 +136,24 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", "testfile-small", 1048576),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-small",
+                        FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                             "/tmp/received/testfile-small",
                         )
                     ),
@@ -156,20 +162,22 @@ scenarios = [
                             1,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         1,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(1, "testfile-big")),
+                    action.Wait(event.Start(1, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             1,
-                            "testfile-big",
+                            FILES["testfile-big"].id,
                             "/tmp/received/testfile-big",
                         )
                     ),
@@ -253,7 +261,9 @@ scenarios = [
                                 "172.20.0.5",
                                 {
                                     event.File(
-                                        "testfile-big", "testfile-big", 10485760
+                                        FILES["testfile-big"].id,
+                                        "testfile-big",
+                                        10485760,
                                     ),
                                 },
                             ),
@@ -262,7 +272,9 @@ scenarios = [
                                 "172.20.0.5",
                                 {
                                     event.File(
-                                        "testfile-small", "testfile-small", 1048576
+                                        FILES["testfile-small"].id,
+                                        "testfile-small",
+                                        1048576,
                                     ),
                                 },
                             ),
@@ -270,32 +282,32 @@ scenarios = [
                     ),
                     action.Download(
                         1,
-                        "testfile-small",
+                        FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
                     action.Download(
                         0,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
                     action.WaitRacy(
                         [
                             event.Start(
                                 0,
-                                "testfile-big",
+                                FILES["testfile-big"].id,
                             ),
                             event.FinishFileDownloaded(
                                 0,
-                                "testfile-big",
+                                FILES["testfile-big"].id,
                                 "/tmp/received/testfile-big",
                             ),
                             event.Start(
                                 1,
-                                "testfile-small",
+                                FILES["testfile-small"].id,
                             ),
                             event.FinishFileDownloaded(
                                 1,
-                                "testfile-small",
+                                FILES["testfile-small"].id,
                                 "/tmp/received/testfile-small",
                             ),
                         ],
@@ -350,16 +362,18 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.FinishTransferCanceled(0, True)),
                     action.NoEvent(),
                     action.Stop(),
@@ -401,7 +415,9 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
@@ -450,16 +466,18 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.CancelTransferRequest(0),
                     action.Wait(
                         event.FinishTransferCanceled(0, False),
@@ -503,7 +521,9 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
@@ -549,13 +569,15 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
                     action.CancelTransferFile(
                         0,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                     ),
                     action.NoEvent(),
                     action.CancelTransferRequest(0),
@@ -602,21 +624,23 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
-                    action.CancelTransferFile(0, "testfile-big"),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.CancelTransferFile(0, FILES["testfile-big"].id),
                     action.Wait(
                         event.FinishFileCanceled(
                             0,
-                            "testfile-big",
+                            FILES["testfile-big"].id,
                             False,
                         ),
                     ),
@@ -665,20 +689,22 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileCanceled(
                             0,
-                            "testfile-big",
+                            FILES["testfile-big"].id,
                             True,
                         ),
                     ),
@@ -732,21 +758,23 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "testfile-small", "testfile-small", 1024 * 1024
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1024 * 1024,
                                 ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-small",
+                        FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                             "/tmp/received/testfile-small",
                         )
                     ),
@@ -755,7 +783,7 @@ scenarios = [
                             action.File("/tmp/received/testfile-small", 1024 * 1024),
                         ],
                     ),
-                    action.CancelTransferFile(0, "testfile-small"),
+                    action.CancelTransferFile(0, FILES["testfile-small"].id),
                     action.NoEvent(),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
@@ -806,21 +834,23 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "testfile-small", "testfile-small", 1024 * 1024
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1024 * 1024,
                                 ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-small",
+                        FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                             "/tmp/received/testfile-small",
                         )
                     ),
@@ -892,33 +922,37 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "big/testfile-01", "big/testfile-01", 10485760
+                                    FILES["nested/big/testfile-01"].id,
+                                    "big/testfile-01",
+                                    10485760,
                                 ),
                                 event.File(
-                                    "big/testfile-02", "big/testfile-02", 10485760
+                                    FILES["nested/big/testfile-02"].id,
+                                    "big/testfile-02",
+                                    10485760,
                                 ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "big/testfile-01",
+                        FILES["nested/big/testfile-01"].id,
                         "/tmp/received",
                     ),
                     action.Download(
                         0,
-                        "big/testfile-02",
+                        FILES["nested/big/testfile-02"].id,
                         "/tmp/received",
                     ),
                     action.WaitRacy(
                         [
                             event.Start(
                                 0,
-                                "big/testfile-01",
+                                FILES["nested/big/testfile-01"].id,
                             ),
                             event.Start(
                                 0,
-                                "big/testfile-02",
+                                FILES["nested/big/testfile-02"].id,
                             ),
                         ]
                     ),
@@ -1057,22 +1091,22 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
+                                    FILES["deep/path/file1.ext1"].id,
                                     "deep/path/file1.ext1",
-                                    "deep/path/file1.ext1",
                                     1048576,
                                 ),
                                 event.File(
+                                    FILES["deep/path/file2.ext2"].id,
                                     "deep/path/file2.ext2",
-                                    "deep/path/file2.ext2",
                                     1048576,
                                 ),
                                 event.File(
-                                    "deep/another-path/file3.ext3",
+                                    FILES["deep/another-path/file3.ext3"].id,
                                     "deep/another-path/file3.ext3",
                                     1048576,
                                 ),
                                 event.File(
-                                    "deep/another-path/file4.ext4",
+                                    FILES["deep/another-path/file4.ext4"].id,
                                     "deep/another-path/file4.ext4",
                                     1048576,
                                 ),
@@ -1081,73 +1115,73 @@ scenarios = [
                     ),
                     action.Download(
                         0,
-                        "deep/path/file1.ext1",
+                        FILES["deep/path/file1.ext1"].id,
                         "/tmp/received",
                     ),
                     action.Wait(
                         event.Start(
                             0,
-                            "deep/path/file1.ext1",
+                            FILES["deep/path/file1.ext1"].id,
                         )
                     ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "deep/path/file1.ext1",
+                            FILES["deep/path/file1.ext1"].id,
                             "/tmp/received/deep/path/file1.ext1",
                         ),
                     ),
                     action.Download(
                         0,
-                        "deep/path/file2.ext2",
+                        FILES["deep/path/file2.ext2"].id,
                         "/tmp/received",
                     ),
                     action.Wait(
                         event.Start(
                             0,
-                            "deep/path/file2.ext2",
+                            FILES["deep/path/file2.ext2"].id,
                         )
                     ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "deep/path/file2.ext2",
+                            FILES["deep/path/file2.ext2"].id,
                             "/tmp/received/deep/path/file2.ext2",
                         ),
                     ),
                     action.Download(
                         0,
-                        "deep/another-path/file3.ext3",
+                        FILES["deep/another-path/file3.ext3"].id,
                         "/tmp/received",
                     ),
                     action.Wait(
                         event.Start(
                             0,
-                            "deep/another-path/file3.ext3",
+                            FILES["deep/another-path/file3.ext3"].id,
                         )
                     ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "deep/another-path/file3.ext3",
+                            FILES["deep/another-path/file3.ext3"].id,
                             "/tmp/received/deep/another-path/file3.ext3",
                         ),
                     ),
                     action.Download(
                         0,
-                        "deep/another-path/file4.ext4",
+                        FILES["deep/another-path/file4.ext4"].id,
                         "/tmp/received",
                     ),
                     action.Wait(
                         event.Start(
                             0,
-                            "deep/another-path/file4.ext4",
+                            FILES["deep/another-path/file4.ext4"].id,
                         )
                     ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "deep/another-path/file4.ext4",
+                            FILES["deep/another-path/file4.ext4"].id,
                             "/tmp/received/deep/another-path/file4.ext4",
                         ),
                     ),
@@ -1212,22 +1246,26 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", "testfile-small", 1048576),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
                             },
                         ),
                     ),
                     action.Download(
                         0,
-                        "testfile-small",
+                        FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
                     action.Wait(
-                        event.Start(0, "testfile-small"),
+                        event.Start(0, FILES["testfile-small"].id),
                     ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                             "/tmp/received/testfile-small",
                         ),
                     ),
@@ -1301,20 +1339,24 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", "testfile-small", 1048576),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-small",
+                        FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                             "/tmp/received/testfile-small",
                         )
                     ),
@@ -1323,20 +1365,24 @@ scenarios = [
                             1,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", "testfile-small", 1048576),
+                                event.File(
+                                    FILES["duplicate/testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         1,
-                        "testfile-small",
+                        FILES["duplicate/testfile-small"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(1, "testfile-small")),
+                    action.Wait(event.Start(1, FILES["duplicate/testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             1,
-                            "testfile-small",
+                            FILES["duplicate/testfile-small"].id,
                             "/tmp/received/testfile-small(1)",
                         )
                     ),
@@ -1439,7 +1485,9 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "testfile.small.with.complicated.extension",
+                                    FILES[
+                                        "testfile.small.with.complicated.extension"
+                                    ].id,
                                     "testfile.small.with.complicated.extension",
                                     1048576,
                                 ),
@@ -1448,16 +1496,18 @@ scenarios = [
                     ),
                     action.Download(
                         0,
-                        "testfile.small.with.complicated.extension",
+                        FILES["testfile.small.with.complicated.extension"].id,
                         "/tmp/received",
                     ),
                     action.Wait(
-                        event.Start(0, "testfile.small.with.complicated.extension")
+                        event.Start(
+                            0, FILES["testfile.small.with.complicated.extension"].id
+                        )
                     ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile.small.with.complicated.extension",
+                            FILES["testfile.small.with.complicated.extension"].id,
                             "/tmp/received/testfile.small.with.complicated.extension",
                         )
                     ),
@@ -1467,7 +1517,9 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "testfile.small.with.complicated.extension",
+                                    FILES[
+                                        "duplicate/testfile.small.with.complicated.extension"
+                                    ].id,
                                     "testfile.small.with.complicated.extension",
                                     1048576,
                                 ),
@@ -1476,16 +1528,23 @@ scenarios = [
                     ),
                     action.Download(
                         1,
-                        "testfile.small.with.complicated.extension",
+                        FILES["duplicate/testfile.small.with.complicated.extension"].id,
                         "/tmp/received",
                     ),
                     action.Wait(
-                        event.Start(1, "testfile.small.with.complicated.extension")
+                        event.Start(
+                            1,
+                            FILES[
+                                "duplicate/testfile.small.with.complicated.extension"
+                            ].id,
+                        )
                     ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             1,
-                            "testfile.small.with.complicated.extension",
+                            FILES[
+                                "duplicate/testfile.small.with.complicated.extension"
+                            ].id,
                             "/tmp/received/testfile.small.with.complicated(1).extension",
                         )
                     ),
@@ -1562,20 +1621,24 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("file1.ext1", "file1.ext1", 1048576),
+                                event.File(
+                                    FILES["deep/path/file1.ext1"].id,
+                                    "file1.ext1",
+                                    1048576,
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "file1.ext1",
+                        FILES["deep/path/file1.ext1"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "file1.ext1")),
+                    action.Wait(event.Start(0, FILES["deep/path/file1.ext1"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "file1.ext1",
+                            FILES["deep/path/file1.ext1"].id,
                             "/tmp/received/file1.ext1",
                         )
                     ),
@@ -1584,19 +1647,23 @@ scenarios = [
                             1,
                             "172.20.0.5",
                             {
-                                event.File("file1.ext1", "file1.ext1", 1048576),
+                                event.File(
+                                    FILES["deep/path/file1.ext1"].id,
+                                    "file1.ext1",
+                                    1048576,
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         1,
-                        "file1.ext1",
+                        FILES["deep/path/file1.ext1"].id,
                         "/tmp/received",
                     ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             1,
-                            "file1.ext1",
+                            FILES["deep/path/file1.ext1"].id,
                             "/tmp/received/file1.ext1",
                         )
                     ),
@@ -1652,16 +1719,18 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFailedTransfer(
                             0,
@@ -1712,16 +1781,18 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Stop(),
                     action.Wait(
                         event.FinishFailedTransfer(
@@ -1831,57 +1902,57 @@ scenarios = [
                     # fmt: off
                     action.WaitRacy(
                         [
-                            event.Receive(0, "172.20.0.5", { event.File("testfile-bulk-01", "testfile-bulk-01", 10485760), }),
-                            event.Receive(1, "172.20.0.5", { event.File("testfile-bulk-02", "testfile-bulk-02", 10485760), }),
-                            event.Receive(2, "172.20.0.5", { event.File("testfile-bulk-03", "testfile-bulk-03", 10485760), }),
-                            event.Receive(3, "172.20.0.5", { event.File("testfile-bulk-04", "testfile-bulk-04", 10485760), }),
-                            event.Receive(4, "172.20.0.5", { event.File("testfile-bulk-05", "testfile-bulk-05", 10485760), }),
-                            event.Receive(5, "172.20.0.5", { event.File("testfile-bulk-06", "testfile-bulk-06", 10485760), }),
-                            event.Receive(6, "172.20.0.5", { event.File("testfile-bulk-07", "testfile-bulk-07", 10485760), }),
-                            event.Receive(7, "172.20.0.5", { event.File("testfile-bulk-08", "testfile-bulk-08", 10485760), }),
-                            event.Receive(8, "172.20.0.5", { event.File("testfile-bulk-09", "testfile-bulk-09", 10485760), }),
-                            event.Receive(9, "172.20.0.5", { event.File("testfile-bulk-10", "testfile-bulk-10", 10485760), }),
+                            event.Receive(0, "172.20.0.5", { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), }),
+                            event.Receive(1, "172.20.0.5", { event.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760), }),
+                            event.Receive(2, "172.20.0.5", { event.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760), }),
+                            event.Receive(3, "172.20.0.5", { event.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760), }),
+                            event.Receive(4, "172.20.0.5", { event.File(FILES["testfile-bulk-05"].id, "testfile-bulk-05", 10485760), }),
+                            event.Receive(5, "172.20.0.5", { event.File(FILES["testfile-bulk-06"].id, "testfile-bulk-06", 10485760), }),
+                            event.Receive(6, "172.20.0.5", { event.File(FILES["testfile-bulk-07"].id, "testfile-bulk-07", 10485760), }),
+                            event.Receive(7, "172.20.0.5", { event.File(FILES["testfile-bulk-08"].id, "testfile-bulk-08", 10485760), }),
+                            event.Receive(8, "172.20.0.5", { event.File(FILES["testfile-bulk-09"].id, "testfile-bulk-09", 10485760), }),
+                            event.Receive(9, "172.20.0.5", { event.File(FILES["testfile-bulk-10"].id, "testfile-bulk-10", 10485760), }),
                         ]
                     ),
                     # fmt: on
 
                     # fmt: off
-                    action.Download(0, "testfile-bulk-01", "/tmp/received"),
-                    action.Download(1, "testfile-bulk-02", "/tmp/received"),
-                    action.Download(2, "testfile-bulk-03", "/tmp/received"),
-                    action.Download(3, "testfile-bulk-04", "/tmp/received"),
-                    action.Download(4, "testfile-bulk-05", "/tmp/received"),
-                    action.Download(5, "testfile-bulk-06", "/tmp/received"),
-                    action.Download(6, "testfile-bulk-07", "/tmp/received"),
-                    action.Download(7, "testfile-bulk-08", "/tmp/received"),
-                    action.Download(8, "testfile-bulk-09", "/tmp/received"),
-                    action.Download(9, "testfile-bulk-10", "/tmp/received"),
+                    action.Download(0, FILES["testfile-bulk-01"].id, "/tmp/received"),
+                    action.Download(1, FILES["testfile-bulk-02"].id, "/tmp/received"),
+                    action.Download(2, FILES["testfile-bulk-03"].id, "/tmp/received"),
+                    action.Download(3, FILES["testfile-bulk-04"].id, "/tmp/received"),
+                    action.Download(4, FILES["testfile-bulk-05"].id, "/tmp/received"),
+                    action.Download(5, FILES["testfile-bulk-06"].id, "/tmp/received"),
+                    action.Download(6, FILES["testfile-bulk-07"].id, "/tmp/received"),
+                    action.Download(7, FILES["testfile-bulk-08"].id, "/tmp/received"),
+                    action.Download(8, FILES["testfile-bulk-09"].id, "/tmp/received"),
+                    action.Download(9, FILES["testfile-bulk-10"].id, "/tmp/received"),
                     # fmt: on
 
                     # fmt: off
                     action.WaitRacy(
                         [
-                            event.Start(0, "testfile-bulk-01"),
-                            event.Start(1, "testfile-bulk-02"),
-                            event.Start(2, "testfile-bulk-03"),
-                            event.Start(3, "testfile-bulk-04"),
-                            event.Start(4, "testfile-bulk-05"),
-                            event.Start(5, "testfile-bulk-06"),
-                            event.Start(6, "testfile-bulk-07"),
-                            event.Start(7, "testfile-bulk-08"),
-                            event.Start(8, "testfile-bulk-09"),
-                            event.Start(9, "testfile-bulk-10"),
+                            event.Start(0, FILES["testfile-bulk-01"].id),
+                            event.Start(1, FILES["testfile-bulk-02"].id),
+                            event.Start(2, FILES["testfile-bulk-03"].id),
+                            event.Start(3, FILES["testfile-bulk-04"].id),
+                            event.Start(4, FILES["testfile-bulk-05"].id),
+                            event.Start(5, FILES["testfile-bulk-06"].id),
+                            event.Start(6, FILES["testfile-bulk-07"].id),
+                            event.Start(7, FILES["testfile-bulk-08"].id),
+                            event.Start(8, FILES["testfile-bulk-09"].id),
+                            event.Start(9, FILES["testfile-bulk-10"].id),
 
-                            event.FinishFileDownloaded(0, "testfile-bulk-01", "/tmp/received/testfile-bulk-01"),
-                            event.FinishFileDownloaded(1, "testfile-bulk-02", "/tmp/received/testfile-bulk-02"),
-                            event.FinishFileDownloaded(2, "testfile-bulk-03", "/tmp/received/testfile-bulk-03"),
-                            event.FinishFileDownloaded(3, "testfile-bulk-04", "/tmp/received/testfile-bulk-04"),
-                            event.FinishFileDownloaded(4, "testfile-bulk-05", "/tmp/received/testfile-bulk-05"),
-                            event.FinishFileDownloaded(5, "testfile-bulk-06", "/tmp/received/testfile-bulk-06"),
-                            event.FinishFileDownloaded(6, "testfile-bulk-07", "/tmp/received/testfile-bulk-07"),
-                            event.FinishFileDownloaded(7, "testfile-bulk-08", "/tmp/received/testfile-bulk-08"),
-                            event.FinishFileDownloaded(8, "testfile-bulk-09", "/tmp/received/testfile-bulk-09"),
-                            event.FinishFileDownloaded(9, "testfile-bulk-10", "/tmp/received/testfile-bulk-10"),
+                            event.FinishFileDownloaded(0, FILES["testfile-bulk-01"].id, "/tmp/received/testfile-bulk-01"),
+                            event.FinishFileDownloaded(1, FILES["testfile-bulk-02"].id, "/tmp/received/testfile-bulk-02"),
+                            event.FinishFileDownloaded(2, FILES["testfile-bulk-03"].id, "/tmp/received/testfile-bulk-03"),
+                            event.FinishFileDownloaded(3, FILES["testfile-bulk-04"].id, "/tmp/received/testfile-bulk-04"),
+                            event.FinishFileDownloaded(4, FILES["testfile-bulk-05"].id, "/tmp/received/testfile-bulk-05"),
+                            event.FinishFileDownloaded(5, FILES["testfile-bulk-06"].id, "/tmp/received/testfile-bulk-06"),
+                            event.FinishFileDownloaded(6, FILES["testfile-bulk-07"].id, "/tmp/received/testfile-bulk-07"),
+                            event.FinishFileDownloaded(7, FILES["testfile-bulk-08"].id, "/tmp/received/testfile-bulk-08"),
+                            event.FinishFileDownloaded(8, FILES["testfile-bulk-09"].id, "/tmp/received/testfile-bulk-09"),
+                            event.FinishFileDownloaded(9, FILES["testfile-bulk-10"].id, "/tmp/received/testfile-bulk-10"),
                         ]
                     ),
                     # fmt: on
@@ -1964,20 +2035,22 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                         "/tmp/received/stimpy",
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile-big",
+                            FILES["testfile-big"].id,
                             "/tmp/received/stimpy/testfile-big",
                         )
                     ),
@@ -1999,20 +2072,22 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                         "/tmp/received/george",
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile-big",
+                            FILES["testfile-big"].id,
                             "/tmp/received/george/testfile-big",
                         )
                     ),
@@ -2095,21 +2170,23 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "testfile-small", "testfile-small", 1024 * 1024
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1024 * 1024,
                                 ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-small",
+                        FILES["testfile-small"].id,
                         "/tmp/received/stimpy",
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                             "/tmp/received/stimpy/testfile-small",
                         )
                     ),
@@ -2134,21 +2211,23 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "testfile-small", "testfile-small", 1024 * 1024
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1024 * 1024,
                                 ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-small",
+                        FILES["testfile-small"].id,
                         "/tmp/received/george",
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                             "/tmp/received/george/testfile-small",
                         )
                     ),
@@ -2209,21 +2288,23 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "testfile-small", "testfile-small", 1 * 1024 * 1024
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1 * 1024 * 1024,
                                 ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-small",
+                        FILES["testfile-small"].id,
                         "/tmp/received/symtest-files",
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                             "/tmp/received/symtest-files/testfile-small(1)",
                         )
                     ),
@@ -2276,20 +2357,22 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "testfile-small", "testfile-small", 1 * 1024 * 1024
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1 * 1024 * 1024,
                                 ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-small",
+                        FILES["testfile-small"].id,
                         "/tmp/received/symtest-dir",
                     ),
                     action.Wait(
                         event.FinishFileFailed(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                             Error.BAD_PATH,
                         )
                     ),
@@ -2348,7 +2431,9 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "testfile-small", "testfile-small", 1 * 1024 * 1024
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1 * 1024 * 1024,
                                 ),
                             },
                         )
@@ -2367,14 +2452,14 @@ scenarios = [
                     ),
                     action.Download(
                         0,
-                        "testfile-small",
+                        FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                             "/tmp/received/testfile-small",
                         )
                     ),
@@ -2438,21 +2523,23 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "testfile-small", "testfile-small", 1 * 1024 * 1024
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1 * 1024 * 1024,
                                 ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-small",
+                        FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                             "/tmp/received/testfile-small",
                         )
                     ),
@@ -2511,32 +2598,36 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", "testfile-small", 1048576),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-small",
+                        FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                             "/tmp/received/testfile-small",
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-small",
+                        FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                             "/tmp/received/testfile-small",
                         )
                     ),
@@ -2649,42 +2740,46 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "path/file1.ext1", "path/file1.ext1", 1048576
+                                    FILES["deep/path/file1.ext1"].id,
+                                    "path/file1.ext1",
+                                    1048576,
                                 ),
                                 event.File(
-                                    "path/file2.ext2", "path/file2.ext2", 1048576
+                                    FILES["deep/path/file2.ext2"].id,
+                                    "path/file2.ext2",
+                                    1048576,
                                 ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "path/file1.ext1",
+                        FILES["deep/path/file1.ext1"].id,
                         "/tmp/received",
                     ),
                     action.Download(
                         0,
-                        "path/file2.ext2",
+                        FILES["deep/path/file2.ext2"].id,
                         "/tmp/received",
                     ),
                     action.WaitRacy(
                         [
                             event.Start(
                                 0,
-                                "path/file1.ext1",
+                                FILES["deep/path/file1.ext1"].id,
                             ),
                             event.Start(
                                 0,
-                                "path/file2.ext2",
+                                FILES["deep/path/file2.ext2"].id,
                             ),
                             event.FinishFileDownloaded(
                                 0,
-                                "path/file1.ext1",
+                                FILES["deep/path/file1.ext1"].id,
                                 "/tmp/received/path/file1.ext1",
                             ),
                             event.FinishFileDownloaded(
                                 0,
-                                "path/file2.ext2",
+                                FILES["deep/path/file2.ext2"].id,
                                 "/tmp/received/path/file2.ext2",
                             ),
                         ]
@@ -2695,42 +2790,46 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "path/file1.ext1", "path/file1.ext1", 1048576
+                                    FILES["deep/path/file1.ext1"].id,
+                                    "path/file1.ext1",
+                                    1048576,
                                 ),
                                 event.File(
-                                    "path/file2.ext2", "path/file2.ext2", 1048576
+                                    FILES["deep/path/file2.ext2"].id,
+                                    "path/file2.ext2",
+                                    1048576,
                                 ),
                             },
                         )
                     ),
                     action.Download(
                         1,
-                        "path/file1.ext1",
+                        FILES["deep/path/file1.ext1"].id,
                         "/tmp/received",
                     ),
                     action.Download(
                         1,
-                        "path/file2.ext2",
+                        FILES["deep/path/file2.ext2"].id,
                         "/tmp/received",
                     ),
                     action.WaitRacy(
                         [
                             event.Start(
                                 1,
-                                "path/file1.ext1",
+                                FILES["deep/path/file1.ext1"].id,
                             ),
                             event.Start(
                                 1,
-                                "path/file2.ext2",
+                                FILES["deep/path/file2.ext2"].id,
                             ),
                             event.FinishFileDownloaded(
                                 1,
-                                "path/file1.ext1",
+                                FILES["deep/path/file1.ext1"].id,
                                 "/tmp/received/path(1)/file1.ext1",
                             ),
                             event.FinishFileDownloaded(
                                 1,
-                                "path/file2.ext2",
+                                FILES["deep/path/file2.ext2"].id,
                                 "/tmp/received/path(1)/file2.ext2",
                             ),
                         ]
@@ -2813,20 +2912,22 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileFailed(
                             0,
-                            "testfile-big",
+                            FILES["testfile-big"].id,
                             Error.BAD_TRANSFER,
                         )
                     ),
@@ -2876,20 +2977,24 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", "testfile-small", 1048576),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-small",
+                        FILES["testfile-small"].id,
                         "/tmp/received/18",
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                             "/tmp/received/18/testfile-small",
                         )
                     ),
@@ -3005,7 +3110,9 @@ scenarios = [
                                 "172.20.0.5",
                                 {
                                     event.File(
-                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        FILES[
+                                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                        ].id,
                                         "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
                                         1048576,
                                     ),
@@ -3016,7 +3123,9 @@ scenarios = [
                                 "172.20.0.5",
                                 {
                                     event.File(
-                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        FILES[
+                                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                        ].id,
                                         "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
                                         1048576,
                                     ),
@@ -3026,24 +3135,32 @@ scenarios = [
                     ),
                     action.Download(
                         0,
-                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                        FILES[
+                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                        ].id,
                         "/tmp/received/19-3/stimpy/0",
                     ),
                     action.Download(
                         1,
-                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                        FILES[
+                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                        ].id,
                         "/tmp/received/19-3/stimpy/1",
                     ),
                     action.WaitRacy(
                         [
                             event.FinishFileFailed(
                                 0,
-                                "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                FILES[
+                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                ].id,
                                 Error.FILENAME_TOO_LONG,
                             ),
                             event.FinishFileFailed(
                                 1,
-                                "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                FILES[
+                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                ].id,
                                 Error.FILENAME_TOO_LONG,
                             ),
                         ]
@@ -3064,7 +3181,9 @@ scenarios = [
                                 "172.20.0.5",
                                 {
                                     event.File(
-                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        FILES[
+                                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                        ].id,
                                         "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
                                         1048576,
                                     ),
@@ -3075,7 +3194,9 @@ scenarios = [
                                 "172.20.0.5",
                                 {
                                     event.File(
-                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        FILES[
+                                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                        ].id,
                                         "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
                                         1048576,
                                     ),
@@ -3085,24 +3206,32 @@ scenarios = [
                     ),
                     action.Download(
                         0,
-                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                        FILES[
+                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                        ].id,
                         "/tmp/received/19-3/stimpy/0",
                     ),
                     action.Download(
                         1,
-                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                        FILES[
+                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                        ].id,
                         "/tmp/received/19-3/stimpy/1",
                     ),
                     action.WaitRacy(
                         [
                             event.FinishFileFailed(
                                 0,
-                                "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                FILES[
+                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                ].id,
                                 Error.FILENAME_TOO_LONG,
                             ),
                             event.FinishFileFailed(
                                 1,
-                                "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                FILES[
+                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                ].id,
                                 Error.FILENAME_TOO_LONG,
                             ),
                         ]
@@ -3158,7 +3287,7 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "with-illegal-char-\x0A-",
+                                    FILES["with-illegal-char-\x0A-"].id,
                                     "with-illegal-char-\x0A-",
                                     1048576,
                                 ),
@@ -3167,14 +3296,14 @@ scenarios = [
                     ),
                     action.Download(
                         0,
-                        "with-illegal-char-\x0A-",
+                        FILES["with-illegal-char-\x0A-"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, "with-illegal-char-\x0A-")),
+                    action.Wait(event.Start(0, FILES["with-illegal-char-\x0A-"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "with-illegal-char-\x0A-",
+                            FILES["with-illegal-char-\x0A-"].id,
                             "/tmp/received/with-illegal-char-_-",
                         )
                     ),
@@ -3277,73 +3406,87 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", "testfile-small", 1048576),
-                                event.File("testfile-big", "testfile-big", 10485760),
                                 event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                                event.File(
+                                    FILES["deep/path/file1.ext1"].id,
                                     "deep/path/file1.ext1",
-                                    "deep/path/file1.ext1",
                                     1048576,
                                 ),
                                 event.File(
+                                    FILES["deep/path/file2.ext2"].id,
                                     "deep/path/file2.ext2",
-                                    "deep/path/file2.ext2",
                                     1048576,
                                 ),
                                 event.File(
-                                    "deep/another-path/file3.ext3",
+                                    FILES["deep/another-path/file3.ext3"].id,
                                     "deep/another-path/file3.ext3",
                                     1048576,
                                 ),
                                 event.File(
-                                    "deep/another-path/file4.ext4",
+                                    FILES["deep/another-path/file4.ext4"].id,
                                     "deep/another-path/file4.ext4",
                                     1048576,
                                 ),
                             },
                         )
                     ),
-                    action.Download(0, "testfile-small", "/tmp/received/20"),
-                    action.Download(0, "testfile-big", "/tmp/received/20"),
-                    action.Download(0, "deep/path/file1.ext1", "/tmp/received/20"),
-                    action.Download(0, "deep/path/file2.ext2", "/tmp/received/20"),
+                    action.Download(0, FILES["testfile-small"].id, "/tmp/received/20"),
+                    action.Download(0, FILES["testfile-big"].id, "/tmp/received/20"),
                     action.Download(
-                        0, "deep/another-path/file3.ext3", "/tmp/received/20"
+                        0, FILES["deep/path/file1.ext1"].id, "/tmp/received/20"
                     ),
                     action.Download(
-                        0, "deep/another-path/file4.ext4", "/tmp/received/20"
+                        0, FILES["deep/path/file2.ext2"].id, "/tmp/received/20"
+                    ),
+                    action.Download(
+                        0, FILES["deep/another-path/file3.ext3"].id, "/tmp/received/20"
+                    ),
+                    action.Download(
+                        0, FILES["deep/another-path/file4.ext4"].id, "/tmp/received/20"
                     ),
                     action.WaitRacy(
                         [
-                            event.Start(0, "testfile-small"),
-                            event.Start(0, "testfile-big"),
-                            event.Start(0, "deep/path/file1.ext1"),
-                            event.Start(0, "deep/path/file2.ext2"),
-                            event.Start(0, "deep/another-path/file3.ext3"),
-                            event.Start(0, "deep/another-path/file4.ext4"),
+                            event.Start(0, FILES["testfile-small"].id),
+                            event.Start(0, FILES["testfile-big"].id),
+                            event.Start(0, FILES["deep/path/file1.ext1"].id),
+                            event.Start(0, FILES["deep/path/file2.ext2"].id),
+                            event.Start(0, FILES["deep/another-path/file3.ext3"].id),
+                            event.Start(0, FILES["deep/another-path/file4.ext4"].id),
                             event.FinishFileDownloaded(
-                                0, "testfile-small", "/tmp/received/20/testfile-small"
-                            ),
-                            event.FinishFileDownloaded(
-                                0, "testfile-big", "/tmp/received/20/testfile-big"
+                                0,
+                                FILES["testfile-small"].id,
+                                "/tmp/received/20/testfile-small",
                             ),
                             event.FinishFileDownloaded(
                                 0,
-                                "deep/path/file1.ext1",
+                                FILES["testfile-big"].id,
+                                "/tmp/received/20/testfile-big",
+                            ),
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["deep/path/file1.ext1"].id,
                                 "/tmp/received/20/deep/path/file1.ext1",
                             ),
                             event.FinishFileDownloaded(
                                 0,
-                                "deep/path/file2.ext2",
+                                FILES["deep/path/file2.ext2"].id,
                                 "/tmp/received/20/deep/path/file2.ext2",
                             ),
                             event.FinishFileDownloaded(
                                 0,
-                                "deep/another-path/file3.ext3",
+                                FILES["deep/another-path/file3.ext3"].id,
                                 "/tmp/received/20/deep/another-path/file3.ext3",
                             ),
                             event.FinishFileDownloaded(
                                 0,
-                                "deep/another-path/file4.ext4",
+                                FILES["deep/another-path/file4.ext4"].id,
                                 "/tmp/received/20/deep/another-path/file4.ext4",
                             ),
                         ]
@@ -3427,20 +3570,22 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                         "/tmp/received/21-1",
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     # wait for the initial progress indicating that we start from the beginning
-                    action.Wait(event.Progress(0, "testfile-big", 0)),
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
                     # make sure we have received something, so that we have non-empty tmp file
-                    action.Wait(event.Progress(0, "testfile-big")),
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.CancelTransferRequest(0),
                     action.Wait(event.FinishTransferCanceled(0, False)),
                     # new transfer
@@ -3449,22 +3594,26 @@ scenarios = [
                             1,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         1,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                         "/tmp/received/21-1",
                     ),
                     action.WaitForResume(
-                        1, "testfile-big", "/tmp/received/21-1/testfile-big.dropdl-part"
+                        1,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/21-1/testfile-big.dropdl-part",
                     ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             1,
-                            "testfile-big",
+                            FILES["testfile-big"].id,
                             "/tmp/received/21-1/testfile-big",
                         )
                     ),
@@ -3534,20 +3683,22 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                         "/tmp/received/21-2",
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     # wait for the initial progress indicating that we start from the beginning
-                    action.Wait(event.Progress(0, "testfile-big", 0)),
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
                     # make sure we have received something, so that we have non-empty tmp file
-                    action.Wait(event.Progress(0, "testfile-big")),
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.CancelTransferRequest(0),
                     action.Wait(event.FinishTransferCanceled(0, False)),
                     # new transfer
@@ -3557,21 +3708,23 @@ scenarios = [
                             1,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", "testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         1,
-                        "testfile-big",
+                        FILES["testfile-big"].id,
                         "/tmp/received/21-2",
                     ),
-                    action.Wait(event.Start(1, "testfile-big")),
-                    action.Wait(event.Progress(1, "testfile-big", 0)),
+                    action.Wait(event.Start(1, FILES["testfile-big"].id)),
+                    action.Wait(event.Progress(1, FILES["testfile-big"].id, 0)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             1,
-                            "testfile-big",
+                            FILES["testfile-big"].id,
                             "/tmp/received/21-2/testfile-big",
                         )
                     ),
@@ -3625,20 +3778,22 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("zero-sized-file", "zero-sized-file", 0),
+                                event.File(
+                                    FILES["zero-sized-file"].id, "zero-sized-file", 0
+                                ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        "zero-sized-file",
+                        FILES["zero-sized-file"].id,
                         "/tmp/received/22",
                     ),
-                    action.Wait(event.Start(0, "zero-sized-file")),
+                    action.Wait(event.Start(0, FILES["zero-sized-file"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            "zero-sized-file",
+                            FILES["zero-sized-file"].id,
                             "/tmp/received/22/zero-sized-file",
                         )
                     ),
