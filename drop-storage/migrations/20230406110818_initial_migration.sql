@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS peers (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY UNIQUE NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -8,17 +8,18 @@ CREATE TABLE IF NOT EXISTS transfers (
   id TEXT PRIMARY KEY UNIQUE NOT NULL, 
   peer_id TEXT NOT NULL, 
   is_outgoing INTEGER NOT NULL,
-
+  state INTEGER NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(peer_id) REFERENCES peers(id) ON DELETE CASCADE ON UPDATE CASCADE,
   CHECK(is_outgoing = 0 OR is_outgoing = 1)
+  CHECK(state = 0 OR state = 1 OR state = 2)
 );
 
 -- traversed paths for outgoing transfer at the time of the transfer creation
 -- this is used to "freeze" the state of the files so we could choose to either traverse again or use the traversed paths as origin for the transfer
 CREATE TABLE IF NOT EXISTS outgoing_paths (
   id INTEGER PRIMARY KEY AUTOINCREMENT, 
-  transfer_id INTEGER NOT NULL,
+  transfer_id TEXT NOT NULL,
   path TEXT NOT NULL,
   bytes INT NOT NULL, 
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, 
