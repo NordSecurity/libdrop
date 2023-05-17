@@ -11,14 +11,14 @@ import typing
 from drop_test.logger import logger
 from scenarios import scenarios
 
-from drop_test import ffi
+from drop_test import ffi, config
 
 
 def prepare_files(files: typing.Dict, symlinks: typing.Dict):
     os.mkdir("/tmp/received")
 
     for name in files:
-        size: int = files[name]
+        size: int = files[name].size
 
         fullpath = f"/tmp/{name}"
         os.makedirs(os.path.dirname(fullpath), exist_ok=True)
@@ -83,41 +83,12 @@ async def main():
     if script is None:
         raise Exception("unrecognized scenario", scenario)
 
-    # in kilobytes
-    test_files = {
-        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt": 1
-        * 1024,
-        "testfile-small": 1 * 1024,
-        "testfile-big": 10 * 1024,
-        "deep/path/file1.ext1": 1 * 1024,
-        "deep/path/file2.ext2": 1 * 1024,
-        "deep/another-path/file3.ext3": 1 * 1024,
-        "deep/another-path/file4.ext4": 1 * 1024,
-        "testfile-bulk-01": 10 * 1024,
-        "testfile-bulk-02": 10 * 1024,
-        "testfile-bulk-03": 10 * 1024,
-        "testfile-bulk-04": 10 * 1024,
-        "testfile-bulk-05": 10 * 1024,
-        "testfile-bulk-06": 10 * 1024,
-        "testfile-bulk-07": 10 * 1024,
-        "testfile-bulk-08": 10 * 1024,
-        "testfile-bulk-09": 10 * 1024,
-        "testfile-bulk-10": 10 * 1024,
-        "nested/big/testfile-01": 10 * 1024,
-        "nested/big/testfile-02": 10 * 1024,
-        "testfile.small.with.complicated.extension": 1 * 1024,
-        "with-illegal-char-\x0A-": 1 * 1024,
-        "duplicate/testfile-small": 1 * 1024,
-        "duplicate/testfile.small.with.complicated.extension": 1 * 1024,
-        "zero-sized-file": 0,
-    }
-
     symlinks = {
         "received/symtest-files/testfile-small": "this-file-does-not-exists.ext",
         "received/symtest-dir": "this-dir-does-not-exists",
     }
 
-    prepare_files(test_files, symlinks)
+    prepare_files(config.FILES, symlinks)
 
     drop = ffi.Drop(lib, ffi.KeysCtx(runner))
     logger.info(f"NordDrop version: {drop.version}")
@@ -126,11 +97,11 @@ async def main():
     try:
         await script.run(runner, drop)
         logger.info("Action completed properly")
-        cleanup_files(test_files)
+        cleanup_files(config.FILES)
         sys.exit(0)
     except Exception as e:
         logger.critical(f"Action didn't complete as expected: {e}")
-        cleanup_files(test_files)
+        cleanup_files(config.FILES)
         sys.exit(1)
 
 

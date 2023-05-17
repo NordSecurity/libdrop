@@ -223,21 +223,21 @@ impl NordDropFFI {
             .ok_or(ffi::types::NORDDROP_RES_BAD_INPUT)?;
 
         let xfer = {
-            let files = descriptors
-                .iter()
-                .map(|desc| {
-                    #[cfg(target_os = "windows")]
-                    {
-                        if desc.fd.is_some() {
-                            error!(
-                                self.logger,
-                                "Specifying file descriptors in transfers is not supported under \
-                                 Windows"
-                            );
-                            return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
-                        }
+            let mut files = Vec::new();
+            for desc in descriptors.iter() {
+                #[cfg(target_os = "windows")]
+                {
+                    if desc.fd.is_some() {
+                        error!(
+                            self.logger,
+                            "Specifying file descriptors in transfers is not supported under \
+                             Windows"
+                        );
+                        return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
                     }
+                }
 
+                let batch =
                     File::from_path(&desc.path.0, desc.fd, &self.config.drop).map_err(|e| {
                         error!(
                             self.logger,
@@ -247,9 +247,10 @@ impl NordDropFFI {
                             e
                         );
                         ffi::types::NORDDROP_RES_TRANSFER_CREATE
-                    })
-                })
-                .collect::<Result<Vec<File>>>()?;
+                    })?;
+
+                files.extend(batch);
+            }
 
             Transfer::new(peer.ip(), files, &self.config.drop).map_err(|e| {
                 error!(
@@ -263,8 +264,8 @@ impl NordDropFFI {
 
         debug!(
             self.logger,
-            "Created transfer with files: {:?}",
-            xfer.files()
+            "Created transfer with files:\n{:#?}",
+            xfer.files().values()
         );
 
         let xfid = xfer.id();
@@ -283,7 +284,12 @@ impl NordDropFFI {
         Ok(xfid)
     }
 
-    pub(super) fn download(&mut self, xfid: uuid::Uuid, file: String, dst: String) -> Result<()> {
+    pub(super) fn download(
+        &mut self,
+        xfid: uuid::Uuid,
+        file_id: String,
+        dst: String,
+    ) -> Result<()> {
         let instance = self.instance.clone();
         let logger = self.logger.clone();
         let ed = self.event_dispatcher.clone();
@@ -292,7 +298,7 @@ impl NordDropFFI {
             logger,
             "norddrop_download() for transfer {:?}, file {:?}, to {:?}",
             xfid,
-            file,
+            file_id,
             dst
         );
 
@@ -300,12 +306,15 @@ impl NordDropFFI {
             let mut locked_inst = instance.lock().await;
             let inst = locked_inst.as_mut().expect("Instance not initialized");
 
-            if let Err(e) = inst.download(xfid, (&file).into(), dst.as_ref()).await {
+            if let Err(e) = inst
+                .download(xfid, &file_id.clone().into(), dst.as_ref())
+                .await
+            {
                 error!(
                     logger,
                     "Failed to download a file with xfid: {}, file: {:?}, dst: {:?}, error: {:?}",
                     xfid,
-                    Hidden(&file),
+                    Hidden(&file_id),
                     Hidden(&dst),
                     e
                 );
@@ -313,7 +322,7 @@ impl NordDropFFI {
                 ed.dispatch(types::Event::TransferFinished {
                     transfer: xfid.to_string(),
                     data: FinishEvent::FileFailed {
-                        file,
+                        file: file_id,
                         status: From::from(&e),
                     },
                 });
@@ -368,7 +377,7 @@ impl NordDropFFI {
             let mut locked_inst = instance.lock().await;
             let inst = locked_inst.as_mut().expect("Instance not initialized");
 
-            if let Err(e) = inst.cancel(xfid, (&file).into()).await {
+            if let Err(e) = inst.cancel(xfid, file.clone().into()).await {
                 error!(
                     logger,
                     "Failed to cancel a file with xfid: {}, file: {:?}, error: {:?}",

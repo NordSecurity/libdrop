@@ -24,3 +24,86 @@ RUNNERS = {
     ),
 }
 # fmt: on
+
+
+class TestFile:
+    def __init__(self, size: int, id: str):
+        # in kilobytes
+        self.size = size
+        self.id = id
+
+
+FILES = {
+    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt": TestFile(
+        size=1 * 1024, id="p3cYEJWds51Uqb174hrbHxfE6ASz_ioErmh39jLsiWU"
+    ),
+    "testfile-small": TestFile(
+        size=1 * 1024, id="BzgNijPq2HAy4UH75K3kqXou9sTVT7AbSWRGUrU7oGI"
+    ),
+    "testfile-big": TestFile(
+        size=10 * 1024, id="ESDW8PFTBoD8UYaqxMSWp6FBCZN3SKnhyHFqlhrdMzU"
+    ),
+    "deep/path/file1.ext1": TestFile(
+        size=1 * 1024, id="CKVHseb1gM6DuUGwQU9D25GTTyehos44Si282V5Ut_E"
+    ),
+    "deep/path/file2.ext2": TestFile(
+        size=1 * 1024, id="AP62vXu2WAmIOwxYUs_oL7U_YjeOe8ixrhNKKuAwHNs"
+    ),
+    "deep/another-path/file3.ext3": TestFile(
+        size=1 * 1024, id="mTtUD_megD0_UiyhRmVjYefqycu1lkG9hH62e646Llw"
+    ),
+    "deep/another-path/file4.ext4": TestFile(
+        size=1 * 1024, id="FFiT0wxJnodvDGZNYAX_jUojoYLKLpeIccyWQBzapfE"
+    ),
+    "testfile-bulk-01": TestFile(
+        size=10 * 1024, id="cO4I0umdTfN9bZvQoYI-7z3XvJUcA4b2Atw8CFDOHjg"
+    ),
+    "testfile-bulk-02": TestFile(
+        size=10 * 1024, id="4-Dt2b89ubTwW8GF0-n1wJo5Iq-Zj74d4pBiKaD7t3s"
+    ),
+    "testfile-bulk-03": TestFile(
+        size=10 * 1024, id="DOmO7NCdwBNb5ES6KnLt_s4KuLW6tGDYDhIbTZEgaao"
+    ),
+    "testfile-bulk-04": TestFile(
+        size=10 * 1024, id="ZqICxNTPq3Mss9lE1KWARaP-2myx2-aNR7LtYmJmCD0"
+    ),
+    "testfile-bulk-05": TestFile(
+        size=10 * 1024, id="TZ8p7dXbUhvbB3oMQj_5rQes6Hn_kBBiSsD_v_y5cCg"
+    ),
+    "testfile-bulk-06": TestFile(
+        size=10 * 1024, id="TDcRO-4urGbJsmsCAdoAtTQQjvcXWKD8IDm9J_qg0i4"
+    ),
+    "testfile-bulk-07": TestFile(
+        size=10 * 1024, id="21vkb4qcrSRmN49QZuN_8A-Yzexfqtm7_m2RNEVkyMU"
+    ),
+    "testfile-bulk-08": TestFile(
+        size=10 * 1024, id="0wjysbL9CZu6qGJEddKozpCsVsK2f_W7xQLi4dUrCFg"
+    ),
+    "testfile-bulk-09": TestFile(
+        size=10 * 1024, id="yqHoVs1jXFdsJBfHOMdjR63NVt4tXvigLn7bMWXNKa0"
+    ),
+    "testfile-bulk-10": TestFile(
+        size=10 * 1024, id="0rHKOnFZFo6kNnwkDfaMDE8luAqfFWqUJjtdB7IIqVA"
+    ),
+    "nested/big/testfile-01": TestFile(
+        size=10 * 1024, id="KKzrrYLyKL54hNit9g748Q2TMi4hLA-pPeoqspNlBOA"
+    ),
+    "nested/big/testfile-02": TestFile(
+        size=10 * 1024, id="7uo62xhQBZK-6z-ndyFzRCPpzWPO2sJTgnu5D2t1Zbw"
+    ),
+    "testfile.small.with.complicated.extension": TestFile(
+        size=1 * 1024, id="tHK8wmpZjD1mtQeIzigO7qZfRemEk4oSQu0IocoiCmE"
+    ),
+    "with-illegal-char-\x0A-": TestFile(
+        size=1 * 1024, id="a8vdPYj-41hoFD2OCJqrf4x9SZuqibscR9XPUPijTuY"
+    ),
+    "duplicate/testfile-small": TestFile(
+        size=1 * 1024, id="IY3xuWiT4zBQ3tyxKvmBHoikxfRvyFPfHTNNPIMQoL4"
+    ),
+    "duplicate/testfile.small.with.complicated.extension": TestFile(
+        size=1 * 1024, id="9CvPHrjnPOQa_2Y-x2yUBESKcTmbj-RdYEs3VKww5Ys"
+    ),
+    "zero-sized-file": TestFile(
+        size=0, id="d5d4ohM4nRb8b6-Ob19WnSAr_uTtGoUXjT-L575CCMY"
+    ),
+}

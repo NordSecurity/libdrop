@@ -69,15 +69,15 @@ async fn listen(
                     .entry(xfid)
                     .or_insert_with(HashSet::new);
 
-                for (file_id, _) in xfer.flat_file_list() {
+                for file in xfer.files().values() {
                     service
                         .lock()
                         .await
-                        .download(xfid, file_id.clone(), out_dir)
+                        .download(xfid, file.id(), out_dir)
                         .await
                         .context("Cannot issue download call")?;
 
-                    file_set.insert(file_id);
+                    file_set.insert(file.id().clone());
                 }
 
                 if file_set.is_empty() {
@@ -317,18 +317,18 @@ async fn main() -> anyhow::Result<()> {
 
         info!("Sending transfer request to {}", addr);
 
-        let xfer = Transfer::new(
-            *addr,
-            matches
-                .get_many::<String>("FILE")
-                .expect("Missing transfer `FILE` field")
-                .map(|p| File::from_path(p, None, &config))
-                .collect::<Result<Vec<File>, _>>()
-                .context("Cannot build transfer from the files provided")?,
-            &config,
-        )?;
+        let mut files = Vec::new();
+        for path in matches
+            .get_many::<String>("FILE")
+            .context("Missing path list")?
+        {
+            files.extend(
+                File::from_path(path, None, &config)
+                    .context("Cannot build transfer from the files provided")?,
+            );
+        }
 
-        Some(xfer)
+        Some(Transfer::new(*addr, files, &config)?)
     } else {
         None
     };
@@ -365,6 +365,7 @@ async fn main() -> anyhow::Result<()> {
     .context("Failed to start service")?;
 
     if let Some(xfer) = xfer {
+        info!("Transfer:\n{xfer:#?}");
         service.send_request(xfer);
     }
 

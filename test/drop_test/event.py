@@ -29,33 +29,22 @@ class Event:
 
 
 class File:
-    def __init__(self, path: str, size: int, children: typing.Set[File] = set()):
+    def __init__(self, id: str, path: str, size: int):
+        self._id = id
         self._path = path
         self._size = size
-        self._children = children
 
     def __eq__(lhs, rhs):
         if not isinstance(rhs, File):
             return NotImplemented
 
-        return set(lhs.flatten()) == set(rhs.flatten())
-
-    def flatten(self, parent="", collection=None):
-        if collection is None:
-            collection = []
-
-        collection.append((parent, self._path, self._size))
-
-        for child in self._children:
-            child.flatten(self._path, collection)
-
-        return collection
+        return lhs._id == rhs._id and lhs._path == rhs._path and lhs._size == rhs._size
 
     def __hash__(self):
-        return hash(str(self._path))
+        return hash(str(self._id))
 
     def __repr__(self):
-        return f"File(path={self._path}, size={self._size}, children={self._children})"
+        return f"File(id={self._id}, path={self._path}, size={self._size})"
 
 
 class Queued(Event):

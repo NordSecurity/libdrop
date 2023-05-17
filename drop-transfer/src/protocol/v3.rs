@@ -17,16 +17,13 @@
 //! `Start` in case the downloaded file is already there
 //! * server (receiver) ->   client (sender): `Done (file)`
 
-use std::{collections::HashMap, net::IpAddr, sync::Arc};
+use std::{net::IpAddr, sync::Arc};
 
 use anyhow::Context;
 use drop_config::DropConfig;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    file::{FileId, FileKind},
-    utils::Hidden,
-};
+use crate::file::{FileId, FileKind, FileSubPath};
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct File {
@@ -43,14 +40,14 @@ pub struct TransferRequest {
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct ReqChsum {
-    pub file: FileId,
+    pub file: FileSubPath,
     // Up to which point calculate checksum
     pub limit: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct ReportChsum {
-    pub file: FileId,
+    pub file: FileSubPath,
     pub limit: u64,
     #[serde(serialize_with = "hex::serialize")]
     #[serde(deserialize_with = "hex::deserialize")]
@@ -59,31 +56,31 @@ pub struct ReportChsum {
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Progress {
-    pub file: FileId,
+    pub file: FileSubPath,
     pub bytes_transfered: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Done {
-    pub file: FileId,
+    pub file: FileSubPath,
     pub bytes_transfered: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Error {
-    pub file: Option<FileId>,
+    pub file: Option<FileSubPath>,
     pub msg: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Start {
-    pub file: FileId,
+    pub file: FileSubPath,
     pub offset: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Cancel {
-    pub file: FileId,
+    pub file: FileSubPath,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -121,7 +118,7 @@ impl From<&ClientMsg> for tokio_tungstenite::tungstenite::Message {
 
 #[derive(Clone)]
 pub struct Chunk {
-    pub file: FileId,
+    pub file: FileSubPath,
     pub data: Vec<u8>,
 }
 
@@ -162,71 +159,49 @@ impl Chunk {
     }
 }
 
-impl TryFrom<File> for crate::File {
-    type Error = crate::Error;
-
-    fn try_from(
-        File {
-            name,
-            size,
-            children,
-        }: File,
-    ) -> Result<Self, Self::Error> {
-        let children: HashMap<_, _> = children
-            .into_iter()
-            .map(|c| {
-                let name = Hidden(c.name.clone());
-                let file = crate::File::try_from(c)?;
-
-                Ok((name, file))
-            })
-            .collect::<Result<_, Self::Error>>()?;
-
-        Ok(Self {
-            name: Hidden(name),
-            kind: if children.is_empty() {
-                FileKind::FileToRecv {
-                    size: size.ok_or(crate::Error::BadFile)?,
-                }
-            } else {
-                FileKind::Dir { children }
-            },
-        })
-    }
-}
-
-impl TryFrom<&crate::File> for File {
-    type Error = crate::Error;
-
-    fn try_from(value: &crate::File) -> Result<Self, Self::Error> {
-        let name = value.name().to_string();
-
-        Ok(Self {
-            name,
-            size: value.size(),
-            children: value
-                .children()
-                .map(TryFrom::try_from)
-                .collect::<Result<_, crate::Error>>()?,
-        })
-    }
-}
-
 impl TryFrom<(TransferRequest, IpAddr, Arc<DropConfig>)> for crate::Transfer {
     type Error = crate::Error;
 
     fn try_from(
         (TransferRequest { files, id }, peer, config): (TransferRequest, IpAddr, Arc<DropConfig>),
     ) -> Result<Self, Self::Error> {
-        Self::new_with_uuid(
-            peer,
-            files
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, crate::Error>>()?,
-            id,
-            &config,
-        )
+        fn process_file(
+            in_files: &mut Vec<crate::File>,
+            subpath: FileSubPath,
+            File { size, children, .. }: File,
+        ) -> crate::Result<()> {
+            match size {
+                Some(size) => {
+                    in_files.push(crate::File {
+                        file_id: FileId::from(&subpath),
+                        subpath,
+                        kind: FileKind::FileToRecv { size },
+                    });
+                }
+                None => {
+                    for file in children {
+                        process_file(
+                            in_files,
+                            subpath.clone().append_file_name(&file.name)?,
+                            file,
+                        )?;
+                    }
+                }
+            }
+
+            Ok(())
+        }
+
+        let mut in_files = Vec::new();
+        for file in files {
+            process_file(
+                &mut in_files,
+                FileSubPath::from_file_name(&file.name)?,
+                file,
+            )?;
+        }
+
+        Self::new_with_uuid(peer, in_files, id, &config)
     }
 }
 
@@ -234,12 +209,42 @@ impl TryFrom<&crate::Transfer> for TransferRequest {
     type Error = crate::Error;
 
     fn try_from(value: &crate::Transfer) -> Result<Self, Self::Error> {
+        let mut files: Vec<File> = Vec::new();
+
+        for file in value.files().values() {
+            let mut parents = file.subpath.iter();
+            let mut files = &mut files;
+            let name = if let Some(name) = parents.next_back() {
+                name.clone()
+            } else {
+                continue;
+            };
+
+            for parent_name in parents {
+                if files.iter().all(|file| file.name != *parent_name) {
+                    files.push(File {
+                        name: parent_name.clone(),
+                        size: None,
+                        children: Vec::new(),
+                    });
+                }
+
+                files = &mut files
+                    .iter_mut()
+                    .find(|file| file.name == *parent_name)
+                    .expect("The parent was just inserted")
+                    .children;
+            }
+
+            files.push(File {
+                name,
+                size: Some(file.size()),
+                children: Vec::new(),
+            });
+        }
+
         Ok(Self {
-            files: value
-                .files()
-                .values()
-                .map(TryFrom::try_from)
-                .collect::<Result<_, crate::Error>>()?,
+            files,
             id: value.id(),
         })
     }
@@ -272,7 +277,7 @@ mod tests {
         const CHUNK_MSG: &[u8] = b"\x0D\x00\x00\x00test/file.exttest file content";
 
         let msg = Chunk {
-            file: FileId::from(FILE_ID),
+            file: FileSubPath::from(FILE_ID),
             data: FILE_CONTNET.to_vec(),
         }
         .encode();
@@ -282,7 +287,7 @@ mod tests {
         let Chunk { file, data } =
             Chunk::decode(CHUNK_MSG.to_vec()).expect("Failed to decode chunk");
 
-        assert_eq!(file, FileId::from(FILE_ID));
+        assert_eq!(file, FileSubPath::from(FILE_ID));
         assert_eq!(data, FILE_CONTNET);
     }
 
@@ -344,7 +349,7 @@ mod tests {
 
         test_json(
             ClientMsg::ReportChsum(ReportChsum {
-                file: FileId::from("test/file.ext"),
+                file: FileSubPath::from("test/file.ext"),
                 limit: 41,
                 checksum: [
                     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
@@ -363,7 +368,7 @@ mod tests {
 
         test_json(
             ClientMsg::Error(Error {
-                file: Some(FileId::from("test/file.ext")),
+                file: Some(FileSubPath::from("test/file.ext")),
                 msg: "test message".to_string(),
             }),
             r#"
@@ -391,7 +396,7 @@ mod tests {
 
         test_json(
             ClientMsg::Cancel(Cancel {
-                file: FileId::from("test/file.ext"),
+                file: FileSubPath::from("test/file.ext"),
             }),
             r#"
             {
@@ -406,7 +411,7 @@ mod tests {
     fn server_json_messages() {
         test_json(
             ServerMsg::Progress(Progress {
-                file: FileId::from("test/file.ext"),
+                file: FileSubPath::from("test/file.ext"),
                 bytes_transfered: 41,
             }),
             r#"
@@ -419,7 +424,7 @@ mod tests {
 
         test_json(
             ServerMsg::Done(Done {
-                file: FileId::from("test/file.ext"),
+                file: FileSubPath::from("test/file.ext"),
                 bytes_transfered: 41,
             }),
             r#"
@@ -432,7 +437,7 @@ mod tests {
 
         test_json(
             ServerMsg::Error(Error {
-                file: Some(FileId::from("test/file.ext")),
+                file: Some(FileSubPath::from("test/file.ext")),
                 msg: "test message".to_string(),
             }),
             r#"
@@ -458,7 +463,7 @@ mod tests {
 
         test_json(
             ServerMsg::ReqChsum(ReqChsum {
-                file: FileId::from("test/file.ext"),
+                file: FileSubPath::from("test/file.ext"),
                 limit: 41,
             }),
             r#"
@@ -471,7 +476,7 @@ mod tests {
 
         test_json(
             ServerMsg::Start(Start {
-                file: FileId::from("test/file.ext"),
+                file: FileSubPath::from("test/file.ext"),
                 offset: 41,
             }),
             r#"
@@ -484,7 +489,7 @@ mod tests {
 
         test_json(
             ServerMsg::Cancel(Cancel {
-                file: FileId::from("test/file.ext"),
+                file: FileSubPath::from("test/file.ext"),
             }),
             r#"
             {

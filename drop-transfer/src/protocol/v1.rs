@@ -14,7 +14,7 @@ use drop_config::DropConfig;
 use serde::{Deserialize, Serialize};
 
 pub use super::v3::{Chunk, Error, File, Progress};
-use crate::FileId;
+use crate::file::{FileId, FileKind, FileSubPath};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TransferRequest {
@@ -23,7 +23,7 @@ pub struct TransferRequest {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Download {
-    pub file: FileId,
+    pub file: FileSubPath,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -49,14 +49,43 @@ impl TryFrom<(TransferRequest, IpAddr, Arc<DropConfig>)> for crate::Transfer {
     fn try_from(
         (TransferRequest { files }, peer, config): (TransferRequest, IpAddr, Arc<DropConfig>),
     ) -> Result<Self, Self::Error> {
-        Self::new(
-            peer,
-            files
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, crate::Error>>()?,
-            &config,
-        )
+        fn process_file(
+            in_files: &mut Vec<crate::File>,
+            subpath: FileSubPath,
+            File { size, children, .. }: File,
+        ) -> crate::Result<()> {
+            match size {
+                Some(size) => {
+                    in_files.push(crate::File {
+                        file_id: FileId::from(&subpath),
+                        subpath,
+                        kind: FileKind::FileToRecv { size },
+                    });
+                }
+                None => {
+                    for file in children {
+                        process_file(
+                            in_files,
+                            subpath.clone().append_file_name(&file.name)?,
+                            file,
+                        )?;
+                    }
+                }
+            }
+
+            Ok(())
+        }
+
+        let mut in_files = Vec::new();
+        for file in files {
+            process_file(
+                &mut in_files,
+                FileSubPath::from_file_name(&file.name)?,
+                file,
+            )?;
+        }
+
+        Self::new(peer, in_files, &config)
     }
 }
 
@@ -64,13 +93,41 @@ impl TryFrom<&crate::Transfer> for TransferRequest {
     type Error = crate::Error;
 
     fn try_from(value: &crate::Transfer) -> Result<Self, Self::Error> {
-        Ok(Self {
-            files: value
-                .files()
-                .values()
-                .map(TryFrom::try_from)
-                .collect::<Result<_, crate::Error>>()?,
-        })
+        let mut files: Vec<File> = Vec::new();
+
+        for file in value.files().values() {
+            let mut parents = file.subpath.iter();
+            let mut files = &mut files;
+            let name = if let Some(name) = parents.next_back() {
+                name.clone()
+            } else {
+                continue;
+            };
+
+            for parent_name in parents {
+                if files.iter().all(|file| file.name != *parent_name) {
+                    files.push(File {
+                        name: parent_name.clone(),
+                        size: None,
+                        children: Vec::new(),
+                    });
+                }
+
+                files = &mut files
+                    .iter_mut()
+                    .find(|file| file.name == *parent_name)
+                    .expect("The parent was just inserted")
+                    .children;
+            }
+
+            files.push(File {
+                name,
+                size: Some(file.size()),
+                children: Vec::new(),
+            });
+        }
+
+        Ok(Self { files })
     }
 }
 
