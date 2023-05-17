@@ -1,5 +1,7 @@
 use std::io::Error as IoError;
 
+use tokio_tungstenite::tungstenite;
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Operation was canceled")]
@@ -33,7 +35,7 @@ pub enum Error {
     #[error("Server connection failure: {0}")]
     WsServer(#[from] warp::Error),
     #[error("Client connection failure: {0}")]
-    WsClient(#[from] tokio_tungstenite::tungstenite::Error),
+    WsClient(#[from] tungstenite::Error),
     #[error("Address already in use")]
     AddrInUse,
     #[error("File modified")]
@@ -44,6 +46,28 @@ pub enum Error {
     AuthenticationFailed,
     #[error("Storage error")]
     StorageError,
+}
+
+impl Error {
+    pub fn os_err_code(&self) -> Option<i32> {
+        match self {
+            Error::Io(ioerr) => ioerr.raw_os_error().map(|c| c as _),
+            Error::WsServer(_) => {
+                // TODO(msz): Theoretically it should be possible to extract OS error from WS
+                // server but warp does not make it easy. Maybe one
+                // day we will rewrite warp server with raw tungstenite
+                None
+            }
+            Error::WsClient(terr) => {
+                if let tungstenite::Error::Io(ioerr) = terr {
+                    ioerr.raw_os_error().map(|c| c as _)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
 }
 
 impl From<&Error> for u32 {
