@@ -105,69 +105,17 @@ impl StorageDispatch {
                     .await?
             }
 
-            drop_storage::types::Event::TransferCanceled(transfer_type, transfer_info, by_peer) => {
-                match transfer_type {
-                    drop_storage::types::TransferType::Incoming => {
-                        for file in transfer_info.files {
-                            let progress = self.get_file_progress(&transfer_info.id, &file.path);
-                            self.storage
-                                .insert_incoming_path_cancel_state(
-                                    transfer_info.id.clone(),
-                                    file.path,
-                                    by_peer,
-                                    progress,
-                                )
-                                .await?
-                        }
-                    }
-                    drop_storage::types::TransferType::Outgoing => {
-                        for file in transfer_info.files {
-                            let progress = self.get_file_progress(&transfer_info.id, &file.path);
-                            self.storage
-                                .insert_outgoing_path_cancel_state(
-                                    transfer_info.id.clone(),
-                                    file.path,
-                                    by_peer,
-                                    progress,
-                                )
-                                .await?
-                        }
-                    }
-                }
+            drop_storage::types::Event::TransferCanceled(_, transfer_info, by_peer) => {
+                self.storage
+                    .insert_transfer_cancel_state(transfer_info.id, by_peer)
+                    .await?
             }
 
-            drop_storage::types::Event::TransferFailed(
-                transfer_type,
-                transfer_info,
-                error_code,
-            ) => match transfer_type {
-                drop_storage::types::TransferType::Incoming => {
-                    for file in transfer_info.files {
-                        let progress = self.get_file_progress(&transfer_info.id, &file.path);
-                        self.storage
-                            .insert_incoming_path_failed_state(
-                                transfer_info.id.clone(),
-                                file.path,
-                                error_code,
-                                progress,
-                            )
-                            .await?
-                    }
-                }
-                drop_storage::types::TransferType::Outgoing => {
-                    for file in transfer_info.files {
-                        let progress = self.get_file_progress(&transfer_info.id, &file.path);
-                        self.storage
-                            .insert_outgoing_path_failed_state(
-                                transfer_info.id.clone(),
-                                file.path,
-                                error_code,
-                                progress,
-                            )
-                            .await?
-                    }
-                }
-            },
+            drop_storage::types::Event::TransferFailed(_, transfer_info, error_code) => {
+                self.storage
+                    .insert_transfer_failed_state(transfer_info.id, error_code)
+                    .await?
+            }
 
             drop_storage::types::Event::FileFailed(
                 transfer_type,
@@ -215,6 +163,10 @@ impl StorageDispatch {
         self.file_progress
             .remove(&(transfer_id.to_string(), file_id.to_string()))
             .unwrap_or(0)
+    }
+
+    pub async fn get_transfers(&self) -> Vec<drop_storage::types::Transfer> {
+        self.storage.get_transfers().await.unwrap()
     }
 }
 

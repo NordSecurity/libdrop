@@ -18,23 +18,6 @@ impl From<TransferType> for i32 {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-pub enum TransferState {
-    Active = 0,
-    Canceled = 1,
-    Failed = 2,
-}
-
-impl From<TransferState> for i32 {
-    fn from(transfer_state: TransferState) -> Self {
-        match transfer_state {
-            TransferState::Active => 0,
-            TransferState::Canceled => 1,
-            TransferState::Failed => 2,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct TransferPath {
     pub path: String,
@@ -81,8 +64,30 @@ pub struct Peer {
 pub struct Transfer {
     pub id: String,
     pub peer_id: String,
-    pub state: TransferState,
     pub transfer_type: DbTransferType,
+    pub created_at: NaiveDateTime,
+    pub active_states: Vec<TransferActiveState>,
+    pub cancel_states: Vec<TransferCancelState>,
+    pub failed_states: Vec<TransferFailedState>,
+}
+
+#[derive(Debug)]
+pub struct TransferActiveState {
+    pub transfer_id: String,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug)]
+pub struct TransferCancelState {
+    pub transfer_id: String,
+    pub by_peer: i64,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug)]
+pub struct TransferFailedState {
+    pub transfer_id: String,
+    pub status_code: i64,
     pub created_at: NaiveDateTime,
 }
 
