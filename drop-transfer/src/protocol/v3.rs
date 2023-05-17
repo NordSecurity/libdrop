@@ -1,4 +1,4 @@
-//! # File download flow
+//! # File download flow (same as for v4)
 //!
 //! * client (sender)   -> server (receiver): `TransferRequest`
 //!
@@ -19,10 +19,10 @@
 
 use std::{net::IpAddr, sync::Arc};
 
-use anyhow::Context;
 use drop_config::DropConfig;
 use serde::{Deserialize, Serialize};
 
+use super::v4;
 use crate::file::{FileId, FileKind, FileSubPath};
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -38,126 +38,16 @@ pub struct TransferRequest {
     pub id: uuid::Uuid,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct ReqChsum {
-    pub file: FileSubPath,
-    // Up to which point calculate checksum
-    pub limit: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct ReportChsum {
-    pub file: FileSubPath,
-    pub limit: u64,
-    #[serde(serialize_with = "hex::serialize")]
-    #[serde(deserialize_with = "hex::deserialize")]
-    pub checksum: [u8; 32],
-}
-
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct Progress {
-    pub file: FileSubPath,
-    pub bytes_transfered: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct Done {
-    pub file: FileSubPath,
-    pub bytes_transfered: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct Error {
-    pub file: Option<FileSubPath>,
-    pub msg: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct Start {
-    pub file: FileSubPath,
-    pub offset: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct Cancel {
-    pub file: FileSubPath,
-}
-
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
-#[serde(tag = "type")]
-pub enum ServerMsg {
-    Progress(Progress),
-    Done(Done),
-    Error(Error),
-    ReqChsum(ReqChsum),
-    Start(Start),
-    Cancel(Cancel),
-}
-
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
-#[serde(tag = "type")]
-pub enum ClientMsg {
-    ReportChsum(ReportChsum),
-    Error(Error),
-    Cancel(Cancel),
-}
-
-impl From<&ServerMsg> for warp::ws::Message {
-    fn from(value: &ServerMsg) -> Self {
-        let msg = serde_json::to_string(value).expect("Failed to serialize server message");
-        Self::text(msg)
-    }
-}
-
-impl From<&ClientMsg> for tokio_tungstenite::tungstenite::Message {
-    fn from(value: &ClientMsg) -> Self {
-        let msg = serde_json::to_string(value).expect("Failed to serialize client message");
-        Self::Text(msg)
-    }
-}
-
-#[derive(Clone)]
-pub struct Chunk {
-    pub file: FileSubPath,
-    pub data: Vec<u8>,
-}
-
-impl Chunk {
-    // Message structure:
-    // [u32 little endian file id length][file id][file chunk]
-
-    pub fn decode(mut msg: Vec<u8>) -> anyhow::Result<Self> {
-        const LEN_SIZE: usize = std::mem::size_of::<u32>();
-
-        anyhow::ensure!(msg.len() > LEN_SIZE, "Binary message too short");
-
-        let len =
-            u32::from_le_bytes(msg[..LEN_SIZE].try_into().expect("Invalid u32 size")) as usize;
-        let id_end = len + LEN_SIZE;
-
-        anyhow::ensure!(msg.len() > id_end, "Invalid file id length");
-
-        let drain = msg.drain(0..id_end).skip(LEN_SIZE);
-        let file = String::from_utf8(drain.collect())
-            .context("Invalid file id")?
-            .into();
-
-        Ok(Self { file, data: msg })
-    }
-
-    pub fn encode(self) -> Vec<u8> {
-        let Self { file, data } = self;
-
-        let file = file.to_string();
-
-        let len = file.len() as u32;
-        len.to_le_bytes()
-            .into_iter()
-            .chain(file.into_bytes())
-            .chain(data)
-            .collect()
-    }
-}
+pub type ReqChsum = v4::ReqChsum<FileSubPath>;
+pub type ReportChsum = v4::ReportChsum<FileSubPath>;
+pub type Progress = v4::Progress<FileSubPath>;
+pub type Done = v4::Done<FileSubPath>;
+pub type Error = v4::Error<FileSubPath>;
+pub type Start = v4::Start<FileSubPath>;
+pub type Cancel = v4::Cancel<FileSubPath>;
+pub type ServerMsg = v4::ServerMsg<FileSubPath>;
+pub type ClientMsg = v4::ClientMsg<FileSubPath>;
+pub type Chunk = v4::Chunk<FileSubPath>;
 
 impl TryFrom<(TransferRequest, IpAddr, Arc<DropConfig>)> for crate::Transfer {
     type Error = crate::Error;
@@ -205,10 +95,8 @@ impl TryFrom<(TransferRequest, IpAddr, Arc<DropConfig>)> for crate::Transfer {
     }
 }
 
-impl TryFrom<&crate::Transfer> for TransferRequest {
-    type Error = crate::Error;
-
-    fn try_from(value: &crate::Transfer) -> Result<Self, Self::Error> {
+impl From<&crate::Transfer> for TransferRequest {
+    fn from(value: &crate::Transfer) -> Self {
         let mut files: Vec<File> = Vec::new();
 
         for file in value.files().values() {
@@ -243,10 +131,10 @@ impl TryFrom<&crate::Transfer> for TransferRequest {
             });
         }
 
-        Ok(Self {
+        Self {
             files,
             id: value.id(),
-        })
+        }
     }
 }
 
@@ -257,39 +145,11 @@ impl From<&TransferRequest> for tokio_tungstenite::tungstenite::Message {
     }
 }
 
-impl From<Chunk> for tokio_tungstenite::tungstenite::Message {
-    fn from(value: Chunk) -> Self {
-        Self::Binary(value.encode())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use serde::de::DeserializeOwned;
 
     use super::*;
-
-    #[test]
-    fn binary_serialization() {
-        const FILE_CONTNET: &[u8] = b"test file content";
-        const FILE_ID: &str = "test/file.ext";
-
-        const CHUNK_MSG: &[u8] = b"\x0D\x00\x00\x00test/file.exttest file content";
-
-        let msg = Chunk {
-            file: FileSubPath::from(FILE_ID),
-            data: FILE_CONTNET.to_vec(),
-        }
-        .encode();
-
-        assert_eq!(msg, CHUNK_MSG);
-
-        let Chunk { file, data } =
-            Chunk::decode(CHUNK_MSG.to_vec()).expect("Failed to decode chunk");
-
-        assert_eq!(file, FileSubPath::from(FILE_ID));
-        assert_eq!(data, FILE_CONTNET);
-    }
 
     fn test_json<T: Serialize + DeserializeOwned + Eq>(message: T, expected: &str) {
         let json_msg = serde_json::to_value(&message).expect("Failed to serialize");
