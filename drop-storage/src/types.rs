@@ -1,3 +1,5 @@
+use sqlx::types::chrono::NaiveDateTime;
+
 type TransferId = String;
 type FilePath = String;
 
@@ -7,11 +9,28 @@ pub enum TransferType {
     Outgoing = 1,
 }
 
-impl From<&TransferType> for i32 {
-    fn from(transfer_type: &TransferType) -> Self {
+impl From<TransferType> for i32 {
+    fn from(transfer_type: TransferType) -> Self {
         match transfer_type {
             TransferType::Incoming => 0,
             TransferType::Outgoing => 1,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum TransferState {
+    Active = 0,
+    Canceled = 1,
+    Failed = 2,
+}
+
+impl From<TransferState> for i32 {
+    fn from(transfer_state: TransferState) -> Self {
+        match transfer_state {
+            TransferState::Active => 0,
+            TransferState::Canceled => 1,
+            TransferState::Failed => 2,
         }
     }
 }
@@ -44,4 +63,124 @@ pub enum Event {
     FileDownloadComplete(TransferId, FilePath, String),
 
     Progress(TransferId, FilePath, i64),
+}
+
+#[derive(Debug)]
+pub enum DbTransferType {
+    Incoming(Vec<IncomingPath>),
+    Outgoing(Vec<OutgoingPath>),
+}
+
+#[derive(Debug)]
+pub struct Peer {
+    pub id: Option<String>,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug)]
+pub struct Transfer {
+    pub id: String,
+    pub peer_id: String,
+    pub state: TransferState,
+    pub transfer_type: DbTransferType,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug)]
+pub struct OutgoingPath {
+    pub id: i64,
+    pub transfer_id: String,
+    pub path: String,
+    pub bytes: i64,
+    pub created_at: NaiveDateTime,
+    pub pending_states: Vec<OutgoingPathPendingState>,
+    pub started_states: Vec<OutgoingPathStartedState>,
+    pub cancel_states: Vec<OutgoingPathCancelState>,
+    pub failed_states: Vec<OutgoingPathFailedState>,
+    pub completed_states: Vec<OutgoingPathCompletedState>,
+}
+
+#[derive(Debug)]
+pub struct OutgoingPathPendingState {
+    pub path_id: i64,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug)]
+pub struct OutgoingPathStartedState {
+    pub path_id: i64,
+    pub bytes_sent: i64,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug)]
+pub struct OutgoingPathCancelState {
+    pub path_id: i64,
+    pub by_peer: i64,
+    pub bytes_sent: i64,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug)]
+pub struct OutgoingPathFailedState {
+    pub path_id: i64,
+    pub status_code: i64,
+    pub bytes_sent: i64,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug)]
+pub struct OutgoingPathCompletedState {
+    pub path_id: i64,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug)]
+pub struct IncomingPath {
+    pub id: i64,
+    pub transfer_id: String,
+    pub path: String,
+    pub bytes: i64,
+    pub created_at: NaiveDateTime,
+    pub pending_states: Vec<IncomingPathPendingState>,
+    pub started_states: Vec<IncomingPathStartedState>,
+    pub cancel_states: Vec<IncomingPathCancelState>,
+    pub failed_states: Vec<IncomingPathFailedState>,
+    pub completed_states: Vec<IncomingPathCompletedState>,
+}
+
+#[derive(Debug)]
+pub struct IncomingPathPendingState {
+    pub path_id: i64,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug)]
+pub struct IncomingPathStartedState {
+    pub path_id: i64,
+    pub bytes_received: i64,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug)]
+pub struct IncomingPathCancelState {
+    pub path_id: i64,
+    pub by_peer: i64,
+    pub bytes_received: i64,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug)]
+pub struct IncomingPathFailedState {
+    pub path_id: i64,
+    pub status_code: i64,
+    pub bytes_received: i64,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug)]
+pub struct IncomingPathCompletedState {
+    pub path_id: i64,
+    pub final_path: String,
+    pub created_at: NaiveDateTime,
 }

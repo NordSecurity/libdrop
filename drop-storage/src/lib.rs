@@ -3,6 +3,7 @@ pub mod error;
 pub mod types;
 use slog::Logger;
 use sqlx::{pool::PoolConnection, sqlite::SqliteConnectOptions, Sqlite, SqlitePool};
+use types::*;
 
 use crate::error::Error;
 pub use crate::types::{TransferInfo, TransferPath, TransferType};
@@ -34,9 +35,9 @@ impl Storage {
         transfer: TransferInfo,
         transfer_type: TransferType,
     ) -> Result<()> {
-        println!("insert_transfer");
         let mut conn = self.conn.acquire().await?;
-        let int_type: i32 = (&transfer_type).into();
+        let transfer_type_int: i32 = transfer_type.into();
+        let transfer_state: i32 = TransferState::Active.into();
 
         sqlx::query!(
             "INSERT OR IGNORE INTO peers (id) VALUES (?1)",
@@ -46,10 +47,11 @@ impl Storage {
         .await?;
 
         sqlx::query!(
-            "INSERT OR IGNORE INTO transfers (id, peer_id, is_outgoing) VALUES (?1, ?2, ?3)",
+            "INSERT OR IGNORE INTO transfers (id, peer_id, is_outgoing, state) VALUES (?1, ?2, ?3, ?4)",
             transfer.id,
             transfer.peer,
-            int_type
+            transfer_type_int,
+            transfer_state,
         )
         .execute(&mut conn)
         .await?;
@@ -311,5 +313,286 @@ impl Storage {
         .map_err(error::Error::DBError)?;
 
         Ok(())
+    }
+
+    pub async fn update_transfer_state(
+        &self,
+        transfer_id: String,
+        state: TransferState,
+    ) -> Result<()> {
+        let mut conn = self.conn.acquire().await?;
+        let state: i32 = state.into();
+
+        sqlx::query!(
+            "UPDATE transfers SET state = ?1 WHERE id = ?2",
+            state,
+            transfer_id
+        )
+        .execute(&mut conn)
+        .await
+        .map_err(error::Error::DBError)?;
+
+        Ok(())
+    }
+
+    pub async fn get_transfers(&self) -> Result<Vec<Transfer>> {
+        let mut conn = self.conn.acquire().await?;
+
+        let mut transfers = sqlx::query!("SELECT * FROM transfers")
+            .fetch_all(&mut conn)
+            .await
+            .map_err(error::Error::DBError)?
+            .iter()
+            .map(|t| {
+                let transfer_type = match t.is_outgoing {
+                    0 => DbTransferType::Incoming(vec![]),
+                    1 => DbTransferType::Outgoing(vec![]),
+                    _ => unreachable!(),
+                };
+
+                let state = match t.state {
+                    0 => TransferState::Active,
+                    1 => TransferState::Canceled,
+                    2 => TransferState::Failed,
+                    _ => unreachable!(),
+                };
+
+                Transfer {
+                    id: t.id.clone(),
+                    peer_id: t.peer_id.clone(),
+                    state,
+                    transfer_type,
+                    created_at: t.created_at,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        for transfer in &mut transfers {
+            match transfer.transfer_type {
+                DbTransferType::Incoming(_) => {
+                    transfer.transfer_type = DbTransferType::Incoming(
+                        self.get_incoming_paths(transfer.id.clone()).await?,
+                    )
+                }
+                DbTransferType::Outgoing(_) => {
+                    transfer.transfer_type = DbTransferType::Outgoing(
+                        self.get_outgoing_paths(transfer.id.clone()).await?,
+                    )
+                }
+            }
+        }
+
+        Ok(transfers)
+    }
+
+    async fn get_outgoing_paths(&self, transfer_id: String) -> Result<Vec<OutgoingPath>> {
+        let mut conn = self.conn.acquire().await?;
+
+        let mut paths = sqlx::query!(
+            "SELECT * FROM outgoing_paths WHERE transfer_id = ?1",
+            transfer_id
+        )
+        .fetch_all(&mut conn)
+        .await
+        .map_err(error::Error::DBError)?
+        .iter()
+        .map(|p| OutgoingPath {
+            id: p.id,
+            transfer_id: p.transfer_id.clone(),
+            path: p.path.clone(),
+            bytes: p.bytes,
+            created_at: p.created_at,
+            pending_states: vec![],
+            started_states: vec![],
+            cancel_states: vec![],
+            failed_states: vec![],
+            completed_states: vec![],
+        })
+        .collect::<Vec<_>>();
+
+        for path in &mut paths {
+            path.pending_states = sqlx::query!(
+                "SELECT * FROM outgoing_path_pending_states WHERE path_id = ?1",
+                path.id
+            )
+            .fetch_all(&mut conn)
+            .await
+            .map_err(error::Error::DBError)?
+            .iter()
+            .map(|s| OutgoingPathPendingState {
+                path_id: s.path_id,
+                created_at: s.created_at,
+            })
+            .collect();
+
+            path.started_states = sqlx::query!(
+                "SELECT * FROM outgoing_path_started_states WHERE path_id = ?1",
+                path.id
+            )
+            .fetch_all(&mut conn)
+            .await
+            .map_err(error::Error::DBError)?
+            .iter()
+            .map(|s| OutgoingPathStartedState {
+                path_id: s.path_id,
+                bytes_sent: s.bytes_sent,
+                created_at: s.created_at,
+            })
+            .collect();
+
+            path.cancel_states = sqlx::query!(
+                "SELECT * FROM outgoing_path_cancel_states WHERE path_id = ?1",
+                path.id
+            )
+            .fetch_all(&mut conn)
+            .await
+            .map_err(error::Error::DBError)?
+            .iter()
+            .map(|s| OutgoingPathCancelState {
+                path_id: s.path_id,
+                by_peer: s.by_peer,
+                bytes_sent: s.bytes_sent,
+                created_at: s.created_at,
+            })
+            .collect();
+
+            path.failed_states = sqlx::query!(
+                "SELECT * FROM outgoing_path_failed_states WHERE path_id = ?1",
+                path.id
+            )
+            .fetch_all(&mut conn)
+            .await
+            .map_err(error::Error::DBError)?
+            .iter()
+            .map(|s| OutgoingPathFailedState {
+                path_id: s.path_id,
+                status_code: s.status_code,
+                bytes_sent: s.bytes_sent,
+                created_at: s.created_at,
+            })
+            .collect();
+
+            path.completed_states = sqlx::query!(
+                "SELECT * FROM outgoing_path_completed_states WHERE path_id = ?1",
+                path.id
+            )
+            .fetch_all(&mut conn)
+            .await
+            .map_err(error::Error::DBError)?
+            .iter()
+            .map(|s| OutgoingPathCompletedState {
+                path_id: s.path_id,
+                created_at: s.created_at,
+            })
+            .collect();
+        }
+
+        Ok(paths)
+    }
+
+    async fn get_incoming_paths(&self, transfer_id: String) -> Result<Vec<IncomingPath>> {
+        let mut conn = self.conn.acquire().await?;
+
+        let mut paths = sqlx::query!(
+            "SELECT * FROM incoming_paths WHERE transfer_id = ?1",
+            transfer_id
+        )
+        .fetch_all(&mut conn)
+        .await
+        .map_err(error::Error::DBError)?
+        .iter()
+        .map(|p| IncomingPath {
+            id: p.id,
+            transfer_id: p.transfer_id.clone(),
+            path: p.path.clone(),
+            bytes: p.bytes,
+            created_at: p.created_at,
+            pending_states: vec![],
+            started_states: vec![],
+            cancel_states: vec![],
+            failed_states: vec![],
+            completed_states: vec![],
+        })
+        .collect::<Vec<_>>();
+
+        for path in &mut paths {
+            path.pending_states = sqlx::query!(
+                "SELECT * FROM incoming_path_pending_states WHERE path_id = ?1",
+                path.id
+            )
+            .fetch_all(&mut conn)
+            .await
+            .map_err(error::Error::DBError)?
+            .iter()
+            .map(|s| IncomingPathPendingState {
+                path_id: s.path_id,
+                created_at: s.created_at,
+            })
+            .collect();
+
+            path.started_states = sqlx::query!(
+                "SELECT * FROM incoming_path_started_states WHERE path_id = ?1",
+                path.id
+            )
+            .fetch_all(&mut conn)
+            .await
+            .map_err(error::Error::DBError)?
+            .iter()
+            .map(|s| IncomingPathStartedState {
+                path_id: s.path_id,
+                bytes_received: s.bytes_received,
+                created_at: s.created_at,
+            })
+            .collect();
+
+            path.cancel_states = sqlx::query!(
+                "SELECT * FROM incoming_path_cancel_states WHERE path_id = ?1",
+                path.id
+            )
+            .fetch_all(&mut conn)
+            .await
+            .map_err(error::Error::DBError)?
+            .iter()
+            .map(|s| IncomingPathCancelState {
+                path_id: s.path_id,
+                by_peer: s.by_peer,
+                bytes_received: s.bytes_received,
+                created_at: s.created_at,
+            })
+            .collect();
+
+            path.failed_states = sqlx::query!(
+                "SELECT * FROM incoming_path_failed_states WHERE path_id = ?1",
+                path.id
+            )
+            .fetch_all(&mut conn)
+            .await
+            .map_err(error::Error::DBError)?
+            .iter()
+            .map(|s| IncomingPathFailedState {
+                path_id: s.path_id,
+                status_code: s.status_code,
+                bytes_received: s.bytes_received,
+                created_at: s.created_at,
+            })
+            .collect();
+
+            path.completed_states = sqlx::query!(
+                "SELECT * FROM incoming_path_completed_states WHERE path_id = ?1",
+                path.id
+            )
+            .fetch_all(&mut conn)
+            .await
+            .map_err(error::Error::DBError)?
+            .iter()
+            .map(|s| IncomingPathCompletedState {
+                path_id: s.path_id,
+                final_path: s.final_path.clone(),
+                created_at: s.created_at,
+            })
+            .collect();
+        }
+
+        Ok(paths)
     }
 }
