@@ -463,13 +463,17 @@ def new_event(event_str: str) -> event.Event:
         elif reason == "TransferCanceled":
             return event.FinishTransferCanceled(transfer_slot, data["by_peer"])
         elif reason == "TransferFailed":
-            return event.FinishFailedTransfer(transfer_slot, data["status"])
+            return event.FinishFailedTransfer(
+                transfer_slot, data["status"], data.get("os_error_code")
+            )
         elif reason == "FileCanceled":
             return event.FinishFileCanceled(
                 transfer_slot, data["file"], data["by_peer"]
             )
         elif reason == "FileFailed":
-            return event.FinishFileFailed(transfer_slot, data["file"], data["status"])
+            return event.FinishFileFailed(
+                transfer_slot, data["file"], data["status"], data.get("os_error_code")
+            )
         else:
             raise ValueError(f"Unexpected reason of {reason} for TransferFinished")
 
