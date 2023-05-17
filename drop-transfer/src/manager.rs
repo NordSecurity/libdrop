@@ -9,10 +9,9 @@ use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 
 use crate::{
-    file::FileId,
     service::State,
     ws::{client::ClientReq, server::ServerReq},
-    Error, Transfer,
+    Error, FileId, Transfer,
 };
 
 #[derive(Clone)]
@@ -52,20 +51,6 @@ impl TransferManager {
             transfers: HashMap::new(),
             storage,
         }
-    }
-    /// Get ALL of the ongoing file transfers for a given transfer ID
-    /// returns None if a transfer does not exist
-    pub(crate) fn get_transfer_files(&self, transfer_id: Uuid) -> Option<Vec<FileId>> {
-        let state = self.transfers.get(&transfer_id)?;
-
-        let ids = state
-            .xfer
-            .flat_file_list()
-            .into_iter()
-            .map(|(id, _)| id)
-            .collect();
-
-        Some(ids)
     }
 
     /// Cancel ALL of the ongoing file transfers for a given transfer ID    
@@ -110,7 +95,13 @@ impl TransferManager {
             .get_mut(&id)
             .ok_or(crate::Error::BadTransfer)?;
 
-        let mut iter = file_id.iter().map(crate::utils::normalize_filename);
+        let file = state
+            .xfer
+            .files()
+            .get(file_id)
+            .ok_or(crate::Error::BadFileId)?;
+
+        let mut iter = file.subpath().iter().map(crate::utils::normalize_filename);
 
         let probe = iter.next().ok_or(crate::Error::BadPath)?;
         let next = iter.next();

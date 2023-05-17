@@ -12,7 +12,7 @@ use tokio::{sync::mpsc::Sender, task::JoinHandle};
 use tokio_tungstenite::tungstenite::{self, Message};
 
 use super::{handler, ClientReq, WebSocket};
-use crate::{protocol::v3, service::State, utils::Hidden, ws, FileId};
+use crate::{file::FileSubPath, protocol::v3, service::State, utils::Hidden, ws, FileId};
 
 pub struct HandlerInit<'a> {
     state: Arc<State>,
@@ -23,8 +23,8 @@ pub struct HandlerLoop<'a> {
     state: Arc<State>,
     logger: &'a slog::Logger,
     upload_tx: Sender<Message>,
-    tasks: HashMap<FileId, FileTask>,
-    done: HashSet<FileId>,
+    tasks: HashMap<FileSubPath, FileTask>,
+    done: HashSet<FileSubPath>,
     last_recv: Instant,
     xfer: crate::Transfer,
 }
@@ -36,7 +36,7 @@ struct FileTask {
 
 struct Uploader {
     sink: Sender<Message>,
-    file_id: FileId,
+    file_id: FileSubPath,
     offset: u64,
 }
 
@@ -77,35 +77,50 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
 }
 
 impl HandlerLoop<'_> {
-    async fn issue_cancel(&mut self, socket: &mut WebSocket, file: FileId) -> anyhow::Result<()> {
-        let msg = v3::ClientMsg::Cancel(v3::Cancel { file: file.clone() });
+    async fn issue_cancel(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+    ) -> anyhow::Result<()> {
+        let file_subpath = if let Some(file) = self.xfer.files().get(&file_id) {
+            file.subpath().clone()
+        } else {
+            warn!(self.logger, "Missing file with ID: {file_id:?}");
+            return Ok(());
+        };
+
+        let msg = v3::ClientMsg::Cancel(v3::Cancel {
+            file: file_subpath.clone(),
+        });
         socket.send(Message::from(&msg)).await?;
 
-        self.on_cancel(file, false).await;
+        self.on_cancel(file_subpath, false).await;
 
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: FileId, by_peer: bool) {
+    async fn on_cancel(&mut self, file: FileSubPath, by_peer: bool) {
         if let Some(task) = self.tasks.remove(&file) {
             if !task.job.is_finished() {
                 task.job.abort();
+
+                let file = self
+                    .xfer
+                    .file_by_subpath(&file)
+                    .expect("File should exists since we have a transfer task running");
 
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
-                    self.xfer
-                        .file(&file)
-                        .expect("File should exists since we have a transfer task running")
-                        .info(),
+                    file.info(),
                 );
 
                 task.events
                     .stop(crate::Event::FileUploadCancelled(
                         self.xfer.clone(),
-                        file,
+                        file.id().clone(),
                         by_peer,
                     ))
                     .await;
@@ -113,29 +128,41 @@ impl HandlerLoop<'_> {
         }
     }
 
-    async fn on_progress(&self, file: FileId, transfered: u64) {
+    async fn on_progress(&self, file: FileSubPath, transfered: u64) {
         if let Some(task) = self.tasks.get(&file) {
+            let file = self
+                .xfer
+                .file_by_subpath(&file)
+                .expect("File should exists since we have a transfer task running");
+
             task.events
                 .emit(crate::Event::FileUploadProgress(
                     self.xfer.clone(),
-                    file,
+                    file.id().clone(),
                     transfered,
                 ))
                 .await;
         }
     }
 
-    async fn on_done(&mut self, file: FileId) {
-        let event = crate::Event::FileUploadSuccess(self.xfer.clone(), file.clone());
+    async fn on_done(&mut self, file: FileSubPath) {
+        let event = self
+            .xfer
+            .file_by_subpath(&file)
+            .map(|file| crate::Event::FileUploadSuccess(self.xfer.clone(), file.id().clone()));
 
         if let Some(task) = self.tasks.remove(&file) {
-            task.events.stop(event).await;
+            task.events
+                .stop(event.expect("File should exists since we have a transfer task running"))
+                .await;
         } else if !self.done.contains(&file) {
-            self.state
-                .event_tx
-                .send(event)
-                .await
-                .expect("Failed to emit event");
+            if let Some(event) = event {
+                self.state
+                    .event_tx
+                    .send(event)
+                    .await
+                    .expect("Failed to emit event");
+            }
         }
 
         self.done.insert(file);
@@ -144,11 +171,14 @@ impl HandlerLoop<'_> {
     async fn on_checksum(
         &mut self,
         socket: &mut WebSocket,
-        file_id: FileId,
+        file_id: FileSubPath,
         limit: u64,
     ) -> anyhow::Result<()> {
         let f = || {
-            let xfile = self.xfer.file(&file_id).context("File not found")?;
+            let xfile = self
+                .xfer
+                .file_by_subpath(&file_id)
+                .context("File not found")?;
             let checksum = tokio::task::block_in_place(|| xfile.checksum(limit))?;
 
             anyhow::Ok(v3::ReportChsum {
@@ -185,7 +215,7 @@ impl HandlerLoop<'_> {
     async fn on_start(
         &mut self,
         socket: &mut WebSocket,
-        file_id: FileId,
+        file_id: FileSubPath,
         offset: u64,
     ) -> anyhow::Result<()> {
         let start = async {
@@ -242,7 +272,7 @@ impl HandlerLoop<'_> {
         Ok(())
     }
 
-    async fn on_error(&mut self, file: Option<FileId>, msg: String) {
+    async fn on_error(&mut self, file: Option<FileSubPath>, msg: String) {
         error!(
             self.logger,
             "Server reported and error: file: {:?}, message: {}",
@@ -255,10 +285,15 @@ impl HandlerLoop<'_> {
                 if !task.job.is_finished() {
                     task.job.abort();
 
+                    let file = self
+                        .xfer
+                        .file_by_subpath(&file)
+                        .expect("File should exists since we have a transfer task running");
+
                     task.events
                         .stop(crate::Event::FileUploadFailed(
                             self.xfer.clone(),
-                            file,
+                            file.id().clone(),
                             crate::Error::BadTransfer,
                         ))
                         .await;
@@ -280,14 +315,14 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         debug!(self.logger, "ClientHandler::on_close(by_peer: {})", by_peer);
 
         self.xfer
-            .flat_file_list()
-            .iter()
-            .filter(|(file_id, _)| {
+            .files()
+            .values()
+            .filter(|file| {
                 self.tasks
-                    .get(file_id)
+                    .get(&file.subpath)
                     .map_or(false, |task| !task.job.is_finished())
             })
-            .for_each(|(_, file)| {
+            .for_each(|file| {
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
                     drop_analytics::Phase::End,
@@ -441,7 +476,7 @@ impl FileTask {
         logger: &slog::Logger,
         sink: Sender<Message>,
         xfer: crate::Transfer,
-        file_id: FileId,
+        file_id: FileSubPath,
         offset: u64,
     ) -> anyhow::Result<Self> {
         let events = Arc::new(ws::events::FileEventTx::new(&state));
@@ -451,6 +486,12 @@ impl FileTask {
             file_id: file_id.clone(),
             offset,
         };
+
+        let file_id = xfer
+            .file_by_subpath(&file_id)
+            .context("File not found")?
+            .id()
+            .clone();
 
         let job = super::start_upload(
             state,

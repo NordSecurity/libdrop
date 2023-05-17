@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::time::Duration;
 
 use drop_transfer::utils::Hidden;
 use serde::{Deserialize, Serialize};
@@ -30,8 +30,8 @@ pub struct EventTransfer {
 #[derive(Serialize)]
 struct File {
     id: String,
+    path: String,
     size: u64,
-    children: HashMap<String, File>,
 }
 
 #[derive(Serialize)]
@@ -198,20 +198,7 @@ impl From<drop_transfer::Transfer> for EventTransferRequest {
         EventTransferRequest {
             peer: t.peer().to_string(),
             transfer: t.id().to_string(),
-            files: t.files().iter().map(|(_, v)| v.into()).collect(),
-        }
-    }
-}
-
-impl From<&drop_transfer::File> for File {
-    fn from(f: &drop_transfer::File) -> Self {
-        Self {
-            id: f.name().to_string(),
-            size: f.size().unwrap_or_default(),
-            children: f
-                .children()
-                .map(|c| (c.name().to_string(), c.into()))
-                .collect(),
+            files: extract_transfer_files(&t),
         }
     }
 }
@@ -220,9 +207,20 @@ impl From<drop_transfer::Transfer> for EventRequestQueued {
     fn from(t: drop_transfer::Transfer) -> EventRequestQueued {
         EventRequestQueued {
             transfer: t.id().to_string(),
-            files: t.files().iter().map(|(_, v)| v.into()).collect(),
+            files: extract_transfer_files(&t),
         }
     }
+}
+
+fn extract_transfer_files(t: &drop_transfer::Transfer) -> Vec<File> {
+    t.files()
+        .values()
+        .map(|f| File {
+            id: f.id().to_string(),
+            path: f.subpath().to_string(),
+            size: f.size(),
+        })
+        .collect()
 }
 
 impl From<Config> for drop_config::Config {

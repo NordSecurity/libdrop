@@ -19,7 +19,10 @@ use tokio::{
 use warp::ws::{Message, WebSocket};
 
 use super::{handler, ServerReq};
-use crate::{file, protocol::v3, service::State, utils::Hidden, ws::events::FileEventTx, FileId};
+use crate::{
+    file, file::FileSubPath, protocol::v3, service::State, utils::Hidden, ws::events::FileEventTx,
+    FileId,
+};
 
 pub struct HandlerInit<'a> {
     peer: IpAddr,
@@ -33,12 +36,12 @@ pub struct HandlerLoop<'a> {
     msg_tx: Sender<Message>,
     xfer: crate::Transfer,
     last_recv: Instant,
-    jobs: HashMap<FileId, FileTask>,
+    jobs: HashMap<FileSubPath, FileTask>,
 }
 
 struct Downloader {
     logger: slog::Logger,
-    file_id: crate::FileId,
+    file_id: FileSubPath,
     msg_tx: Sender<Message>,
     csum_rx: mpsc::Receiver<v3::ReportChsum>,
     offset: u64,
@@ -75,6 +78,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             .context("Failed to receive transfer request")?;
 
         let msg = msg.to_str().ok().context("Expected JOSN message")?;
+        debug!(self.logger, "Request received:\n\t{msg}");
 
         let req = serde_json::from_str(msg).context("Failed to deserialize transfer request")?;
 
@@ -123,14 +127,14 @@ impl HandlerLoop<'_> {
     ) -> anyhow::Result<()> {
         let is_running = self
             .jobs
-            .get(&task.file_id)
+            .get(task.file.subpath())
             .map_or(false, |state| !state.job.is_finished());
 
         if is_running {
             return Ok(());
         }
 
-        let file_id = task.file_id.clone();
+        let file_subpath = task.file.subpath().clone();
         let state = FileTask::start(
             self.msg_tx.clone(),
             self.state.clone(),
@@ -138,18 +142,31 @@ impl HandlerLoop<'_> {
             self.logger.clone(),
         );
 
-        self.jobs.insert(file_id, state);
+        self.jobs.insert(file_subpath, state);
 
         Ok(())
     }
 
-    async fn issue_cancel(&mut self, socket: &mut WebSocket, file: FileId) -> anyhow::Result<()> {
+    async fn issue_cancel(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+    ) -> anyhow::Result<()> {
         debug!(self.logger, "ServerHandler::issue_cancel");
 
-        let msg = v3::ServerMsg::Cancel(v3::Cancel { file: file.clone() });
+        let file_subpath = if let Some(file) = self.xfer.files().get(&file_id) {
+            file.subpath().clone()
+        } else {
+            warn!(self.logger, "Missing file with ID: {file_id:?}");
+            return Ok(());
+        };
+
+        let msg = v3::ServerMsg::Cancel(v3::Cancel {
+            file: file_subpath.clone(),
+        });
         socket.send(Message::from(&msg)).await?;
 
-        self.on_cancel(file, false).await;
+        self.on_cancel(file_subpath, false).await;
 
         Ok(())
     }
@@ -157,7 +174,7 @@ impl HandlerLoop<'_> {
     async fn on_chunk(
         &mut self,
         socket: &mut WebSocket,
-        file: FileId,
+        file: FileSubPath,
         chunk: Vec<u8>,
     ) -> anyhow::Result<()> {
         if let Some(task) = self.jobs.get(&file) {
@@ -176,7 +193,7 @@ impl HandlerLoop<'_> {
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: FileId, by_peer: bool) {
+    async fn on_cancel(&mut self, file: FileSubPath, by_peer: bool) {
         if let Some(FileTask {
             job: task,
             events,
@@ -187,21 +204,23 @@ impl HandlerLoop<'_> {
             if !task.is_finished() {
                 task.abort();
 
+                let file = self
+                    .xfer
+                    .file_by_subpath(&file)
+                    .expect("File should exists since we have a transfer task running");
+
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
-                    self.xfer
-                        .file(&file)
-                        .expect("File should exists since we have a transfer task running")
-                        .info(),
+                    file.info(),
                 );
 
                 events
                     .stop(crate::Event::FileDownloadCancelled(
                         self.xfer.clone(),
-                        file,
+                        file.id().clone(),
                         by_peer,
                     ))
                     .await;
@@ -209,7 +228,7 @@ impl HandlerLoop<'_> {
         }
     }
 
-    async fn on_error(&mut self, file: Option<FileId>, msg: String) {
+    async fn on_error(&mut self, file: Option<FileSubPath>, msg: String) {
         error!(
             self.logger,
             "Client reported and error: file: {:?}, message: {}", file, msg
@@ -226,10 +245,15 @@ impl HandlerLoop<'_> {
                 if !task.is_finished() {
                     task.abort();
 
+                    let file = self
+                        .xfer
+                        .file_by_subpath(&file)
+                        .expect("File should exists since we have a transfer task running");
+
                     events
                         .stop(crate::Event::FileDownloadFailed(
                             self.xfer.clone(),
-                            file,
+                            file.id().clone(),
                             crate::Error::BadTransfer,
                         ))
                         .await;
@@ -265,14 +289,14 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         debug!(self.logger, "ServerHandler::on_close(by_peer: {})", by_peer);
 
         self.xfer
-            .flat_file_list()
-            .iter()
-            .filter(|(file_id, _)| {
+            .files()
+            .values()
+            .filter(|file| {
                 self.jobs
-                    .get(file_id)
+                    .get(&file.subpath)
                     .map_or(false, |state| !state.job.is_finished())
             })
-            .for_each(|(_, file)| {
+            .for_each(|file| {
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
                     drop_analytics::Phase::End,
@@ -582,7 +606,7 @@ impl FileTask {
         let (csum_tx, csum_rx) = mpsc::channel(4);
 
         let downloader = Downloader {
-            file_id: task.file_id.clone(),
+            file_id: task.file.subpath().clone(),
             msg_tx,
             logger: logger.clone(),
             csum_rx,

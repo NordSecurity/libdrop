@@ -18,14 +18,13 @@ use uuid::Uuid;
 use crate::{
     auth,
     error::ResultExt,
-    file::FileId,
     manager::TransferConnection,
     ws::{
         self,
         client::ClientReq,
         server::{FileXferTask, ServerReq},
     },
-    Error, Event, TransferManager,
+    Error, Event, FileId, TransferManager,
 };
 
 pub(super) struct State {
@@ -157,7 +156,7 @@ impl Service {
     pub async fn download(
         &mut self,
         uuid: Uuid,
-        file_id: FileId,
+        file_id: &FileId,
         parent_dir: &Path,
     ) -> crate::Result<()> {
         debug!(
@@ -178,7 +177,7 @@ impl Service {
             };
 
             let mapped_file_path =
-                parent_dir.join(lock.apply_dir_mapping(uuid, parent_dir, &file_id)?);
+                parent_dir.join(lock.apply_dir_mapping(uuid, parent_dir, file_id)?);
 
             let xfer = lock.transfer(&uuid).ok_or(Error::BadTransfer)?.clone();
 
@@ -190,7 +189,7 @@ impl Service {
 
         let file = moose_try_file!(
             self.state.moose,
-            xfer.file(&file_id).ok_or(Error::BadFileId),
+            xfer.files().get(file_id).ok_or(Error::BadFileId),
             uuid,
             None
         )
@@ -229,7 +228,7 @@ impl Service {
 
         let task = moose_try_file!(
             self.state.moose,
-            FileXferTask::new(file, file_id, xfer, location),
+            FileXferTask::new(file, xfer, location),
             uuid,
             file_info
         );
@@ -267,25 +266,20 @@ impl Service {
     pub async fn cancel_all(&mut self, transfer_id: Uuid) -> crate::Result<()> {
         let mut lock = self.state.transfer_manager.lock().await;
 
-        let fids = lock.get_transfer_files(transfer_id);
-
         {
             let xfer = lock.transfer(&transfer_id).ok_or(Error::BadTransfer)?;
 
-            if let Some(fids) = fids {
-                fids.iter().for_each(|id| {
-                    let file = xfer.file(id).expect("Bad file");
-                    let status: u32 = From::from(&Error::Canceled);
+            xfer.files().values().for_each(|file| {
+                let status: u32 = From::from(&Error::Canceled);
 
-                    self.state.moose.service_quality_transfer_file(
-                        Err(status as _),
-                        drop_analytics::Phase::End,
-                        xfer.id().to_string(),
-                        0,
-                        file.info(),
-                    )
-                });
-            }
+                self.state.moose.service_quality_transfer_file(
+                    Err(status as _),
+                    drop_analytics::Phase::End,
+                    xfer.id().to_string(),
+                    0,
+                    file.info(),
+                )
+            });
         }
 
         if let Err(e) = lock.cancel_transfer(transfer_id) {

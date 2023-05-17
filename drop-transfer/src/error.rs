@@ -86,3 +86,12 @@ impl<T> ResultExt for super::Result<T> {
         }
     }
 }
+
+impl From<walkdir::Error> for Error {
+    fn from(value: walkdir::Error) -> Self {
+        value
+            .into_io_error()
+            .map(Into::into)
+            .unwrap_or(Error::BadPath)
+    }
+}

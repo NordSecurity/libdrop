@@ -1,6 +1,7 @@
 from drop_test import action, event
 from drop_test.scenario import Scenario, ActionList
 from drop_test.error import Error
+from drop_test.config import FILES
 
 from pathlib import Path
 from tempfile import gettempdir
@@ -21,15 +22,17 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
-                            "testfile-big",
+                            FILES["testfile-big"].id,
                         )
                     ),
                     action.ExpectCancel([0], True),
@@ -44,7 +47,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -63,7 +66,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/testfile-big", 10485760),
+                            action.File("/tmp/received/testfile-big", 10485760),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -86,15 +89,19 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-small", 1048576),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                         )
                     ),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
@@ -102,15 +109,17 @@ scenarios = [
                         event.Queued(
                             1,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(1, "testfile-big")),
+                    action.Wait(event.Start(1, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileUploaded(
                             1,
-                            "testfile-big",
+                            FILES["testfile-big"].id,
                         )
                     ),
                     action.ExpectCancel([0, 1], True),
@@ -125,7 +134,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", 1048576),
+                                event.File("testfile-small", "testfile-small", 1048576),
                             },
                         )
                     ),
@@ -147,7 +156,7 @@ scenarios = [
                             1,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -166,8 +175,8 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/testfile-small", 1048576),
-                            event.File("/tmp/received/testfile-big", 10485760),
+                            action.File("/tmp/received/testfile-small", 1048576),
+                            action.File("/tmp/received/testfile-big", 10485760),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -191,7 +200,9 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         ),
                     ),
@@ -200,34 +211,33 @@ scenarios = [
                         event.Queued(
                             1,
                             {
-                                event.File("testfile-small", 1048576),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
                             },
                         ),
                     ),
                     action.WaitRacy(
-                        sum(
-                            [
-                                [
-                                    event.Start(
-                                        0,
-                                        "testfile-big",
-                                    ),
-                                    event.Start(
-                                        1,
-                                        "testfile-small",
-                                    ),
-                                    event.FinishFileUploaded(
-                                        0,
-                                        "testfile-big",
-                                    ),
-                                    event.FinishFileUploaded(
-                                        1,
-                                        "testfile-small",
-                                    ),
-                                ],
-                            ],
-                            [],
-                        )
+                        [
+                            event.Start(
+                                0,
+                                FILES["testfile-big"].id,
+                            ),
+                            event.Start(
+                                1,
+                                FILES["testfile-small"].id,
+                            ),
+                            event.FinishFileUploaded(
+                                0,
+                                FILES["testfile-big"].id,
+                            ),
+                            event.FinishFileUploaded(
+                                1,
+                                FILES["testfile-small"].id,
+                            ),
+                        ],
                     ),
                     action.ExpectCancel([0, 1], True),
                     action.NoEvent(),
@@ -242,14 +252,18 @@ scenarios = [
                                 0,
                                 "172.20.0.5",
                                 {
-                                    event.File("testfile-big", 10485760),
+                                    event.File(
+                                        "testfile-big", "testfile-big", 10485760
+                                    ),
                                 },
                             ),
                             event.Receive(
                                 1,
                                 "172.20.0.5",
                                 {
-                                    event.File("testfile-small", 1048576),
+                                    event.File(
+                                        "testfile-small", "testfile-small", 1048576
+                                    ),
                                 },
                             ),
                         ]
@@ -265,36 +279,31 @@ scenarios = [
                         "/tmp/received",
                     ),
                     action.WaitRacy(
-                        sum(
-                            [
-                                [
-                                    event.Start(
-                                        0,
-                                        "testfile-big",
-                                    ),
-                                    event.FinishFileDownloaded(
-                                        0,
-                                        "testfile-big",
-                                        "/tmp/received/testfile-big",
-                                    ),
-                                    event.Start(
-                                        1,
-                                        "testfile-small",
-                                    ),
-                                    event.FinishFileDownloaded(
-                                        1,
-                                        "testfile-small",
-                                        "/tmp/received/testfile-small",
-                                    ),
-                                ],
-                            ],
-                            [],
-                        )
+                        [
+                            event.Start(
+                                0,
+                                "testfile-big",
+                            ),
+                            event.FinishFileDownloaded(
+                                0,
+                                "testfile-big",
+                                "/tmp/received/testfile-big",
+                            ),
+                            event.Start(
+                                1,
+                                "testfile-small",
+                            ),
+                            event.FinishFileDownloaded(
+                                1,
+                                "testfile-small",
+                                "/tmp/received/testfile-small",
+                            ),
+                        ],
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/testfile-small", 1048576),
-                            event.File("/tmp/received/testfile-big", 10485760),
+                            action.File("/tmp/received/testfile-small", 1048576),
+                            action.File("/tmp/received/testfile-big", 10485760),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -320,11 +329,13 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.CancelTransferRequest(0),
                     action.Wait(event.FinishTransferCanceled(0, False)),
                     action.NoEvent(),
@@ -339,7 +350,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -370,7 +381,9 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
@@ -388,7 +401,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -415,11 +428,13 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishTransferCanceled(0, True),
                     ),
@@ -435,7 +450,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -469,7 +484,9 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
@@ -486,7 +503,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -513,7 +530,9 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
@@ -530,7 +549,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -560,12 +579,16 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
-                    action.Wait(event.FinishFileCanceled(0, "testfile-big", True)),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileCanceled(0, FILES["testfile-big"].id, True)
+                    ),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
@@ -579,7 +602,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -618,13 +641,17 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
-                    action.CancelTransferFile(0, "testfile-big"),
-                    action.Wait(event.FinishFileCanceled(0, "testfile-big", False)),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.CancelTransferFile(0, FILES["testfile-big"].id),
+                    action.Wait(
+                        event.FinishFileCanceled(0, FILES["testfile-big"].id, False)
+                    ),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
@@ -638,7 +665,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -676,15 +703,19 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-small", 1024 * 1024),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1024 * 1024,
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                         )
                     ),
                     action.ExpectCancel([0], True),
@@ -700,7 +731,9 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", 1024 * 1024),
+                                event.File(
+                                    "testfile-small", "testfile-small", 1024 * 1024
+                                ),
                             },
                         )
                     ),
@@ -719,7 +752,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/testfile-small", 1024 * 1024),
+                            action.File("/tmp/received/testfile-small", 1024 * 1024),
                         ],
                     ),
                     action.CancelTransferFile(0, "testfile-small"),
@@ -744,18 +777,22 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-small", 1024 * 1024),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1024 * 1024,
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                         )
                     ),
-                    action.CancelTransferFile(0, "testfile-small"),
+                    action.CancelTransferFile(0, FILES["testfile-small"].id),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
@@ -768,7 +805,9 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", 1024 * 1024),
+                                event.File(
+                                    "testfile-small", "testfile-small", 1024 * 1024
+                                ),
                             },
                         )
                     ),
@@ -787,7 +826,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/testfile-small", 1024 * 1024),
+                            action.File("/tmp/received/testfile-small", 1024 * 1024),
                         ],
                     ),
                     action.NoEvent(),
@@ -813,13 +852,15 @@ scenarios = [
                             0,
                             {
                                 event.File(
-                                    "big",
-                                    0,
-                                    {
-                                        event.File("testfile-01", 10485760),
-                                        event.File("testfile-02", 10485760),
-                                    },
-                                )
+                                    FILES["nested/big/testfile-01"].id,
+                                    "big/testfile-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["nested/big/testfile-02"].id,
+                                    "big/testfile-02",
+                                    10485760,
+                                ),
                             },
                         )
                     ),
@@ -827,11 +868,11 @@ scenarios = [
                         [
                             event.Start(
                                 0,
-                                "big/testfile-01",
+                                FILES["nested/big/testfile-01"].id,
                             ),
                             event.Start(
                                 0,
-                                "big/testfile-02",
+                                FILES["nested/big/testfile-02"].id,
                             ),
                         ]
                     ),
@@ -851,13 +892,11 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "big",
-                                    0,
-                                    {
-                                        event.File("testfile-01", 10485760),
-                                        event.File("testfile-02", 10485760),
-                                    },
-                                )
+                                    "big/testfile-01", "big/testfile-01", 10485760
+                                ),
+                                event.File(
+                                    "big/testfile-02", "big/testfile-02", 10485760
+                                ),
                             },
                         )
                     ),
@@ -935,26 +974,24 @@ scenarios = [
                             0,
                             {
                                 event.File(
-                                    "deep",
-                                    0,
-                                    {
-                                        event.File(
-                                            "another-path",
-                                            0,
-                                            {
-                                                event.File("file3.ext3", 1048576),
-                                                event.File("file4.ext4", 1048576),
-                                            },
-                                        ),
-                                        event.File(
-                                            "path",
-                                            0,
-                                            {
-                                                event.File("file1.ext1", 1048576),
-                                                event.File("file2.ext2", 1048576),
-                                            },
-                                        ),
-                                    },
+                                    FILES["deep/path/file1.ext1"].id,
+                                    "deep/path/file1.ext1",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["deep/path/file2.ext2"].id,
+                                    "deep/path/file2.ext2",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["deep/another-path/file3.ext3"].id,
+                                    "deep/another-path/file3.ext3",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["deep/another-path/file4.ext4"].id,
+                                    "deep/another-path/file4.ext4",
+                                    1048576,
                                 ),
                             },
                         )
@@ -962,49 +999,49 @@ scenarios = [
                     action.Wait(
                         event.Start(
                             0,
-                            "deep/path/file1.ext1",
+                            FILES["deep/path/file1.ext1"].id,
                         )
                     ),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
-                            "deep/path/file1.ext1",
+                            FILES["deep/path/file1.ext1"].id,
                         ),
                     ),
                     action.Wait(
                         event.Start(
                             0,
-                            "deep/path/file2.ext2",
+                            FILES["deep/path/file2.ext2"].id,
                         )
                     ),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
-                            "deep/path/file2.ext2",
+                            FILES["deep/path/file2.ext2"].id,
                         ),
                     ),
                     action.Wait(
                         event.Start(
                             0,
-                            "deep/another-path/file3.ext3",
+                            FILES["deep/another-path/file3.ext3"].id,
                         )
                     ),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
-                            "deep/another-path/file3.ext3",
+                            FILES["deep/another-path/file3.ext3"].id,
                         ),
                     ),
                     action.Wait(
                         event.Start(
                             0,
-                            "deep/another-path/file4.ext4",
+                            FILES["deep/another-path/file4.ext4"].id,
                         )
                     ),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
-                            "deep/another-path/file4.ext4",
+                            FILES["deep/another-path/file4.ext4"].id,
                         ),
                     ),
                     action.ExpectCancel([0], True),
@@ -1020,26 +1057,24 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "deep",
-                                    0,
-                                    {
-                                        event.File(
-                                            "another-path",
-                                            0,
-                                            {
-                                                event.File("file3.ext3", 1048576),
-                                                event.File("file4.ext4", 1048576),
-                                            },
-                                        ),
-                                        event.File(
-                                            "path",
-                                            0,
-                                            {
-                                                event.File("file1.ext1", 1048576),
-                                                event.File("file2.ext2", 1048576),
-                                            },
-                                        ),
-                                    },
+                                    "deep/path/file1.ext1",
+                                    "deep/path/file1.ext1",
+                                    1048576,
+                                ),
+                                event.File(
+                                    "deep/path/file2.ext2",
+                                    "deep/path/file2.ext2",
+                                    1048576,
+                                ),
+                                event.File(
+                                    "deep/another-path/file3.ext3",
+                                    "deep/another-path/file3.ext3",
+                                    1048576,
+                                ),
+                                event.File(
+                                    "deep/another-path/file4.ext4",
+                                    "deep/another-path/file4.ext4",
+                                    1048576,
                                 ),
                             },
                         )
@@ -1118,12 +1153,12 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/deep/path/file1.ext1", 1048576),
-                            event.File("/tmp/received/deep/path/file2.ext2", 1048576),
-                            event.File(
+                            action.File("/tmp/received/deep/path/file1.ext1", 1048576),
+                            action.File("/tmp/received/deep/path/file2.ext2", 1048576),
+                            action.File(
                                 "/tmp/received/deep/another-path/file3.ext3", 1048576
                             ),
-                            event.File(
+                            action.File(
                                 "/tmp/received/deep/another-path/file4.ext4", 1048576
                             ),
                         ],
@@ -1151,15 +1186,19 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-small", 1048576),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
                             },
                         )
                     ),
                     action.Wait(
-                        event.Start(0, "testfile-small"),
+                        event.Start(0, FILES["testfile-small"].id),
                     ),
                     action.Wait(
-                        event.FinishFileUploaded(0, "testfile-small"),
+                        event.FinishFileUploaded(0, FILES["testfile-small"].id),
                     ),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
@@ -1173,7 +1212,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", 1048576),
+                                event.File("testfile-small", "testfile-small", 1048576),
                             },
                         ),
                     ),
@@ -1194,7 +1233,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/testfile-small", 1048576),
+                            action.File("/tmp/received/testfile-small", 1048576),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -1217,12 +1256,18 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-small", 1048576),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
-                    action.Wait(event.FinishFileUploaded(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(0, FILES["testfile-small"].id)
+                    ),
                     action.NewTransfer(
                         "172.20.0.15", ["/tmp/duplicate/testfile-small"]
                     ),
@@ -1230,12 +1275,20 @@ scenarios = [
                         event.Queued(
                             1,
                             {
-                                event.File("testfile-small", 1048576),
+                                event.File(
+                                    FILES["duplicate/testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(1, "testfile-small")),
-                    action.Wait(event.FinishFileUploaded(1, "testfile-small")),
+                    action.Wait(event.Start(1, FILES["duplicate/testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            1, FILES["duplicate/testfile-small"].id
+                        )
+                    ),
                     action.ExpectCancel([0, 1], True),
                     action.NoEvent(),
                     action.Stop(),
@@ -1248,7 +1301,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", 1048576),
+                                event.File("testfile-small", "testfile-small", 1048576),
                             },
                         )
                     ),
@@ -1270,7 +1323,7 @@ scenarios = [
                             1,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", 1048576),
+                                event.File("testfile-small", "testfile-small", 1048576),
                             },
                         )
                     ),
@@ -1289,8 +1342,8 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/testfile-small", 1048576),
-                            event.File("/tmp/received/testfile-small(1)", 1048576),
+                            action.File("/tmp/received/testfile-small", 1048576),
+                            action.File("/tmp/received/testfile-small(1)", 1048576),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -1318,7 +1371,11 @@ scenarios = [
                             0,
                             {
                                 event.File(
-                                    "testfile.small.with.complicated.extension", 1048576
+                                    FILES[
+                                        "testfile.small.with.complicated.extension"
+                                    ].id,
+                                    "testfile.small.with.complicated.extension",
+                                    1048576,
                                 ),
                             },
                         )
@@ -1326,13 +1383,13 @@ scenarios = [
                     action.Wait(
                         event.Start(
                             0,
-                            "testfile.small.with.complicated.extension",
+                            FILES["testfile.small.with.complicated.extension"].id,
                         )
                     ),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
-                            "testfile.small.with.complicated.extension",
+                            FILES["testfile.small.with.complicated.extension"].id,
                         )
                     ),
                     action.NewTransfer(
@@ -1344,17 +1401,29 @@ scenarios = [
                             1,
                             {
                                 event.File(
-                                    "testfile.small.with.complicated.extension", 1048576
+                                    FILES[
+                                        "duplicate/testfile.small.with.complicated.extension"
+                                    ].id,
+                                    "testfile.small.with.complicated.extension",
+                                    1048576,
                                 ),
                             },
                         )
                     ),
                     action.Wait(
-                        event.Start(1, "testfile.small.with.complicated.extension")
+                        event.Start(
+                            1,
+                            FILES[
+                                "duplicate/testfile.small.with.complicated.extension"
+                            ].id,
+                        )
                     ),
                     action.Wait(
                         event.FinishFileUploaded(
-                            1, "testfile.small.with.complicated.extension"
+                            1,
+                            FILES[
+                                "duplicate/testfile.small.with.complicated.extension"
+                            ].id,
                         )
                     ),
                     action.ExpectCancel([0, 1], True),
@@ -1370,7 +1439,9 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "testfile.small.with.complicated.extension", 1048576
+                                    "testfile.small.with.complicated.extension",
+                                    "testfile.small.with.complicated.extension",
+                                    1048576,
                                 ),
                             },
                         )
@@ -1396,7 +1467,9 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "testfile.small.with.complicated.extension", 1048576
+                                    "testfile.small.with.complicated.extension",
+                                    "testfile.small.with.complicated.extension",
+                                    1048576,
                                 ),
                             },
                         )
@@ -1418,11 +1491,11 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File(
+                            action.File(
                                 "/tmp/received/testfile.small.with.complicated.extension",
                                 1048576,
                             ),
-                            event.File(
+                            action.File(
                                 "/tmp/received/testfile.small.with.complicated(1).extension",
                                 1048576,
                             ),
@@ -1449,22 +1522,34 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("file1.ext1", 1048576),
+                                event.File(
+                                    FILES["deep/path/file1.ext1"].id,
+                                    "file1.ext1",
+                                    1048576,
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "file1.ext1")),
-                    action.Wait(event.FinishFileUploaded(0, "file1.ext1")),
+                    action.Wait(event.Start(0, FILES["deep/path/file1.ext1"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(0, FILES["deep/path/file1.ext1"].id)
+                    ),
                     action.NewTransfer("172.20.0.15", ["/tmp/deep/path/file1.ext1"]),
                     action.Wait(
                         event.Queued(
                             1,
                             {
-                                event.File("file1.ext1", 1048576),
+                                event.File(
+                                    FILES["deep/path/file1.ext1"].id,
+                                    "file1.ext1",
+                                    1048576,
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.FinishFileUploaded(1, "file1.ext1")),
+                    action.Wait(
+                        event.FinishFileUploaded(1, FILES["deep/path/file1.ext1"].id)
+                    ),
                     action.ExpectCancel([0, 1], True),
                     action.NoEvent(),
                     action.Stop(),
@@ -1477,7 +1562,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("file1.ext1", 1048576),
+                                event.File("file1.ext1", "file1.ext1", 1048576),
                             },
                         )
                     ),
@@ -1499,7 +1584,7 @@ scenarios = [
                             1,
                             "172.20.0.5",
                             {
-                                event.File("file1.ext1", 1048576),
+                                event.File("file1.ext1", "file1.ext1", 1048576),
                             },
                         )
                     ),
@@ -1517,7 +1602,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/file1.ext1", 1048576),
+                            action.File("/tmp/received/file1.ext1", 1048576),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -1542,11 +1627,13 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Stop(),
                     action.Wait(
                         event.FinishFailedTransfer(
@@ -1565,7 +1652,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -1600,11 +1687,13 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFailedTransfer(
                             0,
@@ -1623,7 +1712,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -1674,61 +1763,61 @@ scenarios = [
                     action.WaitForAnotherPeer(),
                     # fmt: off
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(0, { event.File("testfile-bulk-01", 10485760), })),
+                    action.Wait(event.Queued(0, { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
 
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-02"]),
-                    action.Wait(event.Queued(1, { event.File("testfile-bulk-02", 10485760), })),
+                    action.Wait(event.Queued(1, { event.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760), })),
 
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-03"]),
-                    action.Wait(event.Queued(2, { event.File("testfile-bulk-03", 10485760), })),
+                    action.Wait(event.Queued(2, { event.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760), })),
 
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-04"]),
-                    action.Wait(event.Queued(3, { event.File("testfile-bulk-04", 10485760), })),
+                    action.Wait(event.Queued(3, { event.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760), })),
 
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-05"]),
-                    action.Wait(event.Queued(4, { event.File("testfile-bulk-05", 10485760), })),
+                    action.Wait(event.Queued(4, { event.File(FILES["testfile-bulk-05"].id, "testfile-bulk-05", 10485760), })),
 
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-06"]),
-                    action.Wait(event.Queued(5, { event.File("testfile-bulk-06", 10485760), })),
+                    action.Wait(event.Queued(5, { event.File(FILES["testfile-bulk-06"].id, "testfile-bulk-06", 10485760), })),
 
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-07"]),
-                    action.Wait(event.Queued(6, { event.File("testfile-bulk-07", 10485760), })),
+                    action.Wait(event.Queued(6, { event.File(FILES["testfile-bulk-07"].id, "testfile-bulk-07", 10485760), })),
 
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-08"]),
-                    action.Wait(event.Queued(7, { event.File("testfile-bulk-08", 10485760), })),
+                    action.Wait(event.Queued(7, { event.File(FILES["testfile-bulk-08"].id, "testfile-bulk-08", 10485760), })),
 
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-09"]),
-                    action.Wait(event.Queued(8, { event.File("testfile-bulk-09", 10485760), })),
+                    action.Wait(event.Queued(8, { event.File(FILES["testfile-bulk-09"].id, "testfile-bulk-09", 10485760), })),
 
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-10"]),
-                    action.Wait(event.Queued(9, { event.File("testfile-bulk-10", 10485760), })),
+                    action.Wait(event.Queued(9, { event.File(FILES["testfile-bulk-10"].id, "testfile-bulk-10", 10485760), })),
 
                     # fmt: on
 
                     # fmt: off
                     action.WaitRacy(
                         [
-                            event.Start(0, "testfile-bulk-01"),
-                            event.Start(1, "testfile-bulk-02"),
-                            event.Start(2, "testfile-bulk-03"),
-                            event.Start(3, "testfile-bulk-04"),
-                            event.Start(4, "testfile-bulk-05"),
-                            event.Start(5, "testfile-bulk-06"),
-                            event.Start(6, "testfile-bulk-07"),
-                            event.Start(7, "testfile-bulk-08"),
-                            event.Start(8, "testfile-bulk-09"),
-                            event.Start(9, "testfile-bulk-10"),
+                            event.Start(0, FILES["testfile-bulk-01"].id),
+                            event.Start(1, FILES["testfile-bulk-02"].id),
+                            event.Start(2, FILES["testfile-bulk-03"].id),
+                            event.Start(3, FILES["testfile-bulk-04"].id),
+                            event.Start(4, FILES["testfile-bulk-05"].id),
+                            event.Start(5, FILES["testfile-bulk-06"].id),
+                            event.Start(6, FILES["testfile-bulk-07"].id),
+                            event.Start(7, FILES["testfile-bulk-08"].id),
+                            event.Start(8, FILES["testfile-bulk-09"].id),
+                            event.Start(9, FILES["testfile-bulk-10"].id),
 
-                            event.FinishFileUploaded(0, "testfile-bulk-01"),
-                            event.FinishFileUploaded(1, "testfile-bulk-02"),
-                            event.FinishFileUploaded(2, "testfile-bulk-03"),
-                            event.FinishFileUploaded(3, "testfile-bulk-04"),
-                            event.FinishFileUploaded(4, "testfile-bulk-05"),
-                            event.FinishFileUploaded(5, "testfile-bulk-06"),
-                            event.FinishFileUploaded(6, "testfile-bulk-07"),
-                            event.FinishFileUploaded(7, "testfile-bulk-08"),
-                            event.FinishFileUploaded(8, "testfile-bulk-09"),
-                            event.FinishFileUploaded(9, "testfile-bulk-10"),
+                            event.FinishFileUploaded(0, FILES["testfile-bulk-01"].id),
+                            event.FinishFileUploaded(1, FILES["testfile-bulk-02"].id),
+                            event.FinishFileUploaded(2, FILES["testfile-bulk-03"].id),
+                            event.FinishFileUploaded(3, FILES["testfile-bulk-04"].id),
+                            event.FinishFileUploaded(4, FILES["testfile-bulk-05"].id),
+                            event.FinishFileUploaded(5, FILES["testfile-bulk-06"].id),
+                            event.FinishFileUploaded(6, FILES["testfile-bulk-07"].id),
+                            event.FinishFileUploaded(7, FILES["testfile-bulk-08"].id),
+                            event.FinishFileUploaded(8, FILES["testfile-bulk-09"].id),
+                            event.FinishFileUploaded(9, FILES["testfile-bulk-10"].id),
                         ]
                     ),
                     # fmt: on
@@ -1742,16 +1831,16 @@ scenarios = [
                     # fmt: off
                     action.WaitRacy(
                         [
-                            event.Receive(0, "172.20.0.5", { event.File("testfile-bulk-01", 10485760), }),
-                            event.Receive(1, "172.20.0.5", { event.File("testfile-bulk-02", 10485760), }),
-                            event.Receive(2, "172.20.0.5", { event.File("testfile-bulk-03", 10485760), }),
-                            event.Receive(3, "172.20.0.5", { event.File("testfile-bulk-04", 10485760), }),
-                            event.Receive(4, "172.20.0.5", { event.File("testfile-bulk-05", 10485760), }),
-                            event.Receive(5, "172.20.0.5", { event.File("testfile-bulk-06", 10485760), }),
-                            event.Receive(6, "172.20.0.5", { event.File("testfile-bulk-07", 10485760), }),
-                            event.Receive(7, "172.20.0.5", { event.File("testfile-bulk-08", 10485760), }),
-                            event.Receive(8, "172.20.0.5", { event.File("testfile-bulk-09", 10485760), }),
-                            event.Receive(9, "172.20.0.5", { event.File("testfile-bulk-10", 10485760), }),
+                            event.Receive(0, "172.20.0.5", { event.File("testfile-bulk-01", "testfile-bulk-01", 10485760), }),
+                            event.Receive(1, "172.20.0.5", { event.File("testfile-bulk-02", "testfile-bulk-02", 10485760), }),
+                            event.Receive(2, "172.20.0.5", { event.File("testfile-bulk-03", "testfile-bulk-03", 10485760), }),
+                            event.Receive(3, "172.20.0.5", { event.File("testfile-bulk-04", "testfile-bulk-04", 10485760), }),
+                            event.Receive(4, "172.20.0.5", { event.File("testfile-bulk-05", "testfile-bulk-05", 10485760), }),
+                            event.Receive(5, "172.20.0.5", { event.File("testfile-bulk-06", "testfile-bulk-06", 10485760), }),
+                            event.Receive(6, "172.20.0.5", { event.File("testfile-bulk-07", "testfile-bulk-07", 10485760), }),
+                            event.Receive(7, "172.20.0.5", { event.File("testfile-bulk-08", "testfile-bulk-08", 10485760), }),
+                            event.Receive(8, "172.20.0.5", { event.File("testfile-bulk-09", "testfile-bulk-09", 10485760), }),
+                            event.Receive(9, "172.20.0.5", { event.File("testfile-bulk-10", "testfile-bulk-10", 10485760), }),
                         ]
                     ),
                     # fmt: on
@@ -1833,24 +1922,32 @@ scenarios = [
                             event.Queued(
                                 0,
                                 {
-                                    event.File("testfile-big", 10485760),
+                                    event.File(
+                                        FILES["testfile-big"].id,
+                                        "testfile-big",
+                                        10485760,
+                                    ),
                                 },
                             ),
                             event.Queued(
                                 1,
                                 {
-                                    event.File("testfile-big", 10485760),
+                                    event.File(
+                                        FILES["testfile-big"].id,
+                                        "testfile-big",
+                                        10485760,
+                                    ),
                                 },
                             ),
-                            event.Start(1, "testfile-big"),
-                            event.Start(0, "testfile-big"),
+                            event.Start(1, FILES["testfile-big"].id),
+                            event.Start(0, FILES["testfile-big"].id),
                             event.FinishFileUploaded(
                                 1,
-                                "testfile-big",
+                                FILES["testfile-big"].id,
                             ),
                             event.FinishFileUploaded(
                                 0,
-                                "testfile-big",
+                                FILES["testfile-big"].id,
                             ),
                             event.FinishTransferCanceled(0, True),
                             event.FinishTransferCanceled(1, True),
@@ -1867,7 +1964,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -1886,7 +1983,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/stimpy/testfile-big", 10485760),
+                            action.File("/tmp/received/stimpy/testfile-big", 10485760),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -1902,7 +1999,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -1921,7 +2018,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/george/testfile-big", 10485760),
+                            action.File("/tmp/received/george/testfile-big", 10485760),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -1951,28 +2048,36 @@ scenarios = [
                             event.Queued(
                                 0,
                                 {
-                                    event.File("testfile-small", 1024 * 1024),
+                                    event.File(
+                                        FILES["testfile-small"].id,
+                                        "testfile-small",
+                                        1024 * 1024,
+                                    ),
                                 },
                             ),
                             event.Queued(
                                 1,
                                 {
-                                    event.File("testfile-small", 1024 * 1024),
+                                    event.File(
+                                        FILES["testfile-small"].id,
+                                        "testfile-small",
+                                        1024 * 1024,
+                                    ),
                                 },
                             ),
                         ]
                     ),
                     action.WaitRacy(
                         [
-                            event.Start(0, "testfile-small"),
-                            event.Start(1, "testfile-small"),
+                            event.Start(0, FILES["testfile-small"].id),
+                            event.Start(1, FILES["testfile-small"].id),
                             event.FinishFileUploaded(
                                 0,
-                                "testfile-small",
+                                FILES["testfile-small"].id,
                             ),
                             event.FinishFileUploaded(
                                 1,
-                                "testfile-small",
+                                FILES["testfile-small"].id,
                             ),
                             event.FinishTransferCanceled(0, True),
                             event.FinishTransferCanceled(1, True),
@@ -1989,7 +2094,9 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", 1024 * 1024),
+                                event.File(
+                                    "testfile-small", "testfile-small", 1024 * 1024
+                                ),
                             },
                         )
                     ),
@@ -2008,7 +2115,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File(
+                            action.File(
                                 "/tmp/received/stimpy/testfile-small", 1024 * 1024
                             ),
                         ],
@@ -2026,7 +2133,9 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", 1024 * 1024),
+                                event.File(
+                                    "testfile-small", "testfile-small", 1024 * 1024
+                                ),
                             },
                         )
                     ),
@@ -2045,7 +2154,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File(
+                            action.File(
                                 "/tmp/received/george/testfile-small", 1024 * 1024
                             ),
                         ],
@@ -2070,17 +2179,21 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-small", 1 * 1024 * 1024),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1 * 1024 * 1024,
+                                ),
                             },
                         ),
                     ),
                     action.Wait(
-                        event.Start(0, "testfile-small"),
+                        event.Start(0, FILES["testfile-small"].id),
                     ),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                         ),
                     ),
                     action.ExpectCancel([0], True),
@@ -2095,7 +2208,9 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", 1 * 1024 * 1024),
+                                event.File(
+                                    "testfile-small", "testfile-small", 1 * 1024 * 1024
+                                ),
                             },
                         )
                     ),
@@ -2114,7 +2229,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File(
+                            action.File(
                                 "/tmp/received/symtest-files/testfile-small(1)",
                                 1 * 1024 * 1024,
                             ),
@@ -2140,7 +2255,11 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-small", 1 * 1024 * 1024),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1 * 1024 * 1024,
+                                ),
                             },
                         ),
                     ),
@@ -2156,7 +2275,9 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", 1 * 1024 * 1024),
+                                event.File(
+                                    "testfile-small", "testfile-small", 1 * 1024 * 1024
+                                ),
                             },
                         )
                     ),
@@ -2197,17 +2318,21 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-small", 1 * 1024 * 1024),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1 * 1024 * 1024,
+                                ),
                             },
                         ),
                     ),
                     action.Wait(
-                        event.Start(0, "testfile-small"),
+                        event.Start(0, FILES["testfile-small"].id),
                     ),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                         ),
                     ),
                     action.ExpectCancel([0], True),
@@ -2222,7 +2347,9 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", 1 * 1024 * 1024),
+                                event.File(
+                                    "testfile-small", "testfile-small", 1 * 1024 * 1024
+                                ),
                             },
                         )
                     ),
@@ -2253,7 +2380,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File(
+                            action.File(
                                 "/tmp/received/testfile-small",
                                 1 * 1024 * 1024,
                             ),
@@ -2281,17 +2408,21 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-small", 1 * 1024 * 1024),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1 * 1024 * 1024,
+                                ),
                             },
                         ),
                     ),
                     action.Wait(
-                        event.Start(0, "testfile-small"),
+                        event.Start(0, FILES["testfile-small"].id),
                     ),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                         ),
                     ),
                     action.ExpectCancel([0], True),
@@ -2306,7 +2437,9 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", 1 * 1024 * 1024),
+                                event.File(
+                                    "testfile-small", "testfile-small", 1 * 1024 * 1024
+                                ),
                             },
                         )
                     ),
@@ -2325,7 +2458,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File(
+                            action.File(
                                 "/tmp/received/testfile-small",
                                 1 * 1024 * 1024,
                             ),
@@ -2351,15 +2484,19 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-small", 1048576),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                         )
                     ),
                     action.ExpectCancel([0], True),
@@ -2374,7 +2511,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", 1048576),
+                                event.File("testfile-small", "testfile-small", 1048576),
                             },
                         )
                     ),
@@ -2405,7 +2542,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/testfile-small", 1048576),
+                            action.File("/tmp/received/testfile-small", 1048576),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -2429,12 +2566,14 @@ scenarios = [
                             0,
                             {
                                 event.File(
-                                    "path",
-                                    0,
-                                    {
-                                        event.File("file1.ext1", 1048576),
-                                        event.File("file2.ext2", 1048576),
-                                    },
+                                    FILES["deep/path/file1.ext1"].id,
+                                    "path/file1.ext1",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["deep/path/file2.ext2"].id,
+                                    "path/file2.ext2",
+                                    1048576,
                                 ),
                             },
                         )
@@ -2443,19 +2582,19 @@ scenarios = [
                         [
                             event.Start(
                                 0,
-                                "path/file1.ext1",
+                                FILES["deep/path/file1.ext1"].id,
                             ),
                             event.Start(
                                 0,
-                                "path/file2.ext2",
+                                FILES["deep/path/file2.ext2"].id,
                             ),
                             event.FinishFileUploaded(
                                 0,
-                                "path/file1.ext1",
+                                FILES["deep/path/file1.ext1"].id,
                             ),
                             event.FinishFileUploaded(
                                 0,
-                                "path/file2.ext2",
+                                FILES["deep/path/file2.ext2"].id,
                             ),
                         ]
                     ),
@@ -2465,12 +2604,14 @@ scenarios = [
                             1,
                             {
                                 event.File(
-                                    "path",
-                                    0,
-                                    {
-                                        event.File("file1.ext1", 1048576),
-                                        event.File("file2.ext2", 1048576),
-                                    },
+                                    FILES["deep/path/file1.ext1"].id,
+                                    "path/file1.ext1",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["deep/path/file2.ext2"].id,
+                                    "path/file2.ext2",
+                                    1048576,
                                 ),
                             },
                         )
@@ -2479,19 +2620,19 @@ scenarios = [
                         [
                             event.Start(
                                 1,
-                                "path/file1.ext1",
+                                FILES["deep/path/file1.ext1"].id,
                             ),
                             event.Start(
                                 1,
-                                "path/file2.ext2",
+                                FILES["deep/path/file2.ext2"].id,
                             ),
                             event.FinishFileUploaded(
                                 1,
-                                "path/file1.ext1",
+                                FILES["deep/path/file1.ext1"].id,
                             ),
                             event.FinishFileUploaded(
                                 1,
-                                "path/file2.ext2",
+                                FILES["deep/path/file2.ext2"].id,
                             ),
                         ]
                     ),
@@ -2508,12 +2649,10 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "path",
-                                    0,
-                                    {
-                                        event.File("file1.ext1", 1048576),
-                                        event.File("file2.ext2", 1048576),
-                                    },
+                                    "path/file1.ext1", "path/file1.ext1", 1048576
+                                ),
+                                event.File(
+                                    "path/file2.ext2", "path/file2.ext2", 1048576
                                 ),
                             },
                         )
@@ -2556,12 +2695,10 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    "path",
-                                    0,
-                                    {
-                                        event.File("file1.ext1", 1048576),
-                                        event.File("file2.ext2", 1048576),
-                                    },
+                                    "path/file1.ext1", "path/file1.ext1", 1048576
+                                ),
+                                event.File(
+                                    "path/file2.ext2", "path/file2.ext2", 1048576
                                 ),
                             },
                         )
@@ -2600,10 +2737,10 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/path/file1.ext1", 1048576),
-                            event.File("/tmp/received/path/file2.ext2", 1048576),
-                            event.File("/tmp/received/path(1)/file1.ext1", 1048576),
-                            event.File("/tmp/received/path(1)/file2.ext2", 1048576),
+                            action.File("/tmp/received/path/file1.ext1", 1048576),
+                            action.File("/tmp/received/path/file2.ext2", 1048576),
+                            action.File("/tmp/received/path(1)/file1.ext1", 1048576),
+                            action.File("/tmp/received/path(1)/file2.ext2", 1048576),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -2648,16 +2785,18 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.ModifyFile("/tmp/testfile-big"),
                     action.Wait(
                         event.FinishFileFailed(
                             0,
-                            "testfile-big",
+                            FILES["testfile-big"].id,
                             Error.FILE_MODIFIED,
                         )
                     ),
@@ -2674,7 +2813,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -2711,15 +2850,19 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-small", 1048576),
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "testfile-small")),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
-                            "testfile-small",
+                            FILES["testfile-small"].id,
                         )
                     ),
                     action.NoEvent(),
@@ -2733,7 +2876,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", 1048576),
+                                event.File("testfile-small", "testfile-small", 1048576),
                             },
                         )
                     ),
@@ -2752,7 +2895,7 @@ scenarios = [
                     ),
                     action.CompareTrees(
                         Path(gettempdir()) / "received" / "18",
-                        [event.File("testfile-small", 1048576)],
+                        [action.File("testfile-small", 1048576)],
                     ),
                     action.NoEvent(),
                     action.Stop(),
@@ -2799,6 +2942,9 @@ scenarios = [
                                 0,
                                 {
                                     event.File(
+                                        FILES[
+                                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                        ].id,
                                         "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
                                         1048576,
                                     ),
@@ -2808,6 +2954,9 @@ scenarios = [
                                 1,
                                 {
                                     event.File(
+                                        FILES[
+                                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                        ].id,
                                         "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
                                         1048576,
                                     ),
@@ -2817,6 +2966,9 @@ scenarios = [
                                 2,
                                 {
                                     event.File(
+                                        FILES[
+                                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                        ].id,
                                         "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
                                         1048576,
                                     ),
@@ -2826,6 +2978,9 @@ scenarios = [
                                 3,
                                 {
                                     event.File(
+                                        FILES[
+                                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                        ].id,
                                         "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
                                         1048576,
                                     ),
@@ -2851,6 +3006,7 @@ scenarios = [
                                 {
                                     event.File(
                                         "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
                                         1048576,
                                     ),
                                 },
@@ -2860,6 +3016,7 @@ scenarios = [
                                 "172.20.0.5",
                                 {
                                     event.File(
+                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
                                         "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
                                         1048576,
                                     ),
@@ -2908,6 +3065,7 @@ scenarios = [
                                 {
                                     event.File(
                                         "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
                                         1048576,
                                     ),
                                 },
@@ -2917,6 +3075,7 @@ scenarios = [
                                 "172.20.0.5",
                                 {
                                     event.File(
+                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
                                         "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
                                         1048576,
                                     ),
@@ -2972,17 +3131,18 @@ scenarios = [
                             0,
                             {
                                 event.File(
+                                    FILES["with-illegal-char-\x0A-"].id,
                                     "with-illegal-char-\x0A-",
                                     1048576,
                                 ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "with-illegal-char-\x0A-")),
+                    action.Wait(event.Start(0, FILES["with-illegal-char-\x0A-"].id)),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
-                            "with-illegal-char-\x0A-",
+                            FILES["with-illegal-char-\x0A-"].id,
                         )
                     ),
                     action.ExpectCancel([0], True),
@@ -2998,6 +3158,7 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
+                                    "with-illegal-char-\x0A-",
                                     "with-illegal-char-\x0A-",
                                     1048576,
                                 ),
@@ -3019,7 +3180,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/with-illegal-char-_-", 1048576),
+                            action.File("/tmp/received/with-illegal-char-_-", 1048576),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -3049,47 +3210,59 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-small", 1048576),
-                                event.File("testfile-big", 10485760),
                                 event.File(
-                                    "deep",
-                                    0,
-                                    {
-                                        event.File(
-                                            "path",
-                                            0,
-                                            {
-                                                event.File("file1.ext1", 1048576),
-                                                event.File("file2.ext2", 1048576),
-                                            },
-                                        ),
-                                        event.File(
-                                            "another-path",
-                                            0,
-                                            {
-                                                event.File("file3.ext3", 1048576),
-                                                event.File("file4.ext4", 1048576),
-                                            },
-                                        ),
-                                    },
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                                event.File(
+                                    FILES["deep/path/file1.ext1"].id,
+                                    "deep/path/file1.ext1",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["deep/path/file2.ext2"].id,
+                                    "deep/path/file2.ext2",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["deep/another-path/file3.ext3"].id,
+                                    "deep/another-path/file3.ext3",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["deep/another-path/file4.ext4"].id,
+                                    "deep/another-path/file4.ext4",
+                                    1048576,
                                 ),
                             },
                         )
                     ),
                     action.WaitRacy(
                         [
-                            event.Start(0, "testfile-small"),
-                            event.Start(0, "testfile-big"),
-                            event.Start(0, "deep/path/file1.ext1"),
-                            event.Start(0, "deep/path/file2.ext2"),
-                            event.Start(0, "deep/another-path/file3.ext3"),
-                            event.Start(0, "deep/another-path/file4.ext4"),
-                            event.FinishFileUploaded(0, "testfile-small"),
-                            event.FinishFileUploaded(0, "testfile-big"),
-                            event.FinishFileUploaded(0, "deep/path/file1.ext1"),
-                            event.FinishFileUploaded(0, "deep/path/file2.ext2"),
-                            event.FinishFileUploaded(0, "deep/another-path/file3.ext3"),
-                            event.FinishFileUploaded(0, "deep/another-path/file4.ext4"),
+                            event.Start(0, FILES["testfile-small"].id),
+                            event.Start(0, FILES["testfile-big"].id),
+                            event.Start(0, FILES["deep/path/file1.ext1"].id),
+                            event.Start(0, FILES["deep/path/file2.ext2"].id),
+                            event.Start(0, FILES["deep/another-path/file3.ext3"].id),
+                            event.Start(0, FILES["deep/another-path/file4.ext4"].id),
+                            event.FinishFileUploaded(0, FILES["testfile-small"].id),
+                            event.FinishFileUploaded(0, FILES["testfile-big"].id),
+                            event.FinishFileUploaded(
+                                0, FILES["deep/path/file1.ext1"].id
+                            ),
+                            event.FinishFileUploaded(
+                                0, FILES["deep/path/file2.ext2"].id
+                            ),
+                            event.FinishFileUploaded(
+                                0, FILES["deep/another-path/file3.ext3"].id
+                            ),
+                            event.FinishFileUploaded(
+                                0, FILES["deep/another-path/file4.ext4"].id
+                            ),
                         ]
                     ),
                     action.ExpectCancel([0], True),
@@ -3104,29 +3277,27 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-small", 1048576),
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-small", "testfile-small", 1048576),
+                                event.File("testfile-big", "testfile-big", 10485760),
                                 event.File(
-                                    "deep",
-                                    0,
-                                    {
-                                        event.File(
-                                            "path",
-                                            0,
-                                            {
-                                                event.File("file1.ext1", 1048576),
-                                                event.File("file2.ext2", 1048576),
-                                            },
-                                        ),
-                                        event.File(
-                                            "another-path",
-                                            0,
-                                            {
-                                                event.File("file3.ext3", 1048576),
-                                                event.File("file4.ext4", 1048576),
-                                            },
-                                        ),
-                                    },
+                                    "deep/path/file1.ext1",
+                                    "deep/path/file1.ext1",
+                                    1048576,
+                                ),
+                                event.File(
+                                    "deep/path/file2.ext2",
+                                    "deep/path/file2.ext2",
+                                    1048576,
+                                ),
+                                event.File(
+                                    "deep/another-path/file3.ext3",
+                                    "deep/another-path/file3.ext3",
+                                    1048576,
+                                ),
+                                event.File(
+                                    "deep/another-path/file4.ext4",
+                                    "deep/another-path/file4.ext4",
+                                    1048576,
                                 ),
                             },
                         )
@@ -3179,18 +3350,18 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/20/testfile-small", 1048576),
-                            event.File("/tmp/received/20/testfile-big", 10485760),
-                            event.File(
+                            action.File("/tmp/received/20/testfile-small", 1048576),
+                            action.File("/tmp/received/20/testfile-big", 10485760),
+                            action.File(
                                 "/tmp/received/20/deep/path/file1.ext1", 1048576
                             ),
-                            event.File(
+                            action.File(
                                 "/tmp/received/20/deep/path/file2.ext2", 1048576
                             ),
-                            event.File(
+                            action.File(
                                 "/tmp/received/20/deep/another-path/file3.ext3", 1048576
                             ),
-                            event.File(
+                            action.File(
                                 "/tmp/received/20/deep/another-path/file4.ext4", 1048576
                             ),
                         ],
@@ -3216,11 +3387,13 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.FinishTransferCanceled(0, True)),
                     action.WaitForAnotherPeer(),
                     # new transfer
@@ -3229,15 +3402,17 @@ scenarios = [
                         event.Queued(
                             1,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(1, "testfile-big")),
+                    action.Wait(event.Start(1, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileUploaded(
                             1,
-                            "testfile-big",
+                            FILES["testfile-big"].id,
                         )
                     ),
                     action.ExpectCancel([1], True),
@@ -3252,7 +3427,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -3274,7 +3449,7 @@ scenarios = [
                             1,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -3295,7 +3470,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/21-1/testfile-big", 10485760),
+                            action.File("/tmp/received/21-1/testfile-big", 10485760),
                         ],
                     ),
                     action.CancelTransferRequest(1),
@@ -3319,11 +3494,13 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "testfile-big")),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.FinishTransferCanceled(0, True)),
                     action.WaitForAnotherPeer(),
                     # new transfer
@@ -3332,15 +3509,17 @@ scenarios = [
                         event.Queued(
                             1,
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(1, "testfile-big")),
+                    action.Wait(event.Start(1, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileUploaded(
                             1,
-                            "testfile-big",
+                            FILES["testfile-big"].id,
                         )
                     ),
                     action.ExpectCancel([1], True),
@@ -3355,7 +3534,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -3378,7 +3557,7 @@ scenarios = [
                             1,
                             "172.20.0.5",
                             {
-                                event.File("testfile-big", 10485760),
+                                event.File("testfile-big", "testfile-big", 10485760),
                             },
                         )
                     ),
@@ -3398,7 +3577,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/21-2/testfile-big", 10485760),
+                            action.File("/tmp/received/21-2/testfile-big", 10485760),
                         ],
                     ),
                     action.CancelTransferRequest(1),
@@ -3421,15 +3600,17 @@ scenarios = [
                         event.Queued(
                             0,
                             {
-                                event.File("zero-sized-file", 0),
+                                event.File(
+                                    FILES["zero-sized-file"].id, "zero-sized-file", 0
+                                ),
                             },
                         )
                     ),
-                    action.Wait(event.Start(0, "zero-sized-file")),
+                    action.Wait(event.Start(0, FILES["zero-sized-file"].id)),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
-                            "zero-sized-file",
+                            FILES["zero-sized-file"].id,
                         )
                     ),
                     action.ExpectCancel([0], True),
@@ -3444,7 +3625,7 @@ scenarios = [
                             0,
                             "172.20.0.5",
                             {
-                                event.File("zero-sized-file", 0),
+                                event.File("zero-sized-file", "zero-sized-file", 0),
                             },
                         )
                     ),
@@ -3463,7 +3644,7 @@ scenarios = [
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            event.File("/tmp/received/22/zero-sized-file", 0),
+                            action.File("/tmp/received/22/zero-sized-file", 0),
                         ],
                     ),
                     action.CancelTransferRequest(0),
