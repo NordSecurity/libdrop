@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -49,6 +51,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
