@@ -16,17 +16,17 @@ use serde::{Deserialize, Serialize};
 pub use super::v3::{Chunk, Error, File, Progress};
 use crate::file::{FileId, FileKind, FileSubPath};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct TransferRequest {
     pub files: Vec<File>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Download {
     pub file: FileSubPath,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(tag = "type")]
 pub enum ServerMsg {
     Progress(Progress),
@@ -36,7 +36,7 @@ pub enum ServerMsg {
     Cancel(Download),
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(tag = "type")]
 pub enum ClientMsg {
     Error(Error),
@@ -149,5 +149,184 @@ impl From<&TransferRequest> for tokio_tungstenite::tungstenite::Message {
     fn from(value: &TransferRequest) -> Self {
         let msg = serde_json::to_string(value).expect("Failed to serialize client message");
         Self::Text(msg)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde::de::DeserializeOwned;
+
+    use super::*;
+
+    fn test_json<T: Serialize + DeserializeOwned + Eq>(message: T, expected: &str) {
+        let json_msg = serde_json::to_value(&message).expect("Failed to serialize");
+        let json_exp: serde_json::Value =
+            serde_json::from_str(expected).expect("Failed to convert expected josn to value");
+        assert_eq!(json_msg, json_exp);
+
+        let deserialized: T = serde_json::from_str(expected).expect("Failed to serialize");
+        assert!(deserialized == message);
+    }
+
+    #[test]
+    fn client_json_messages() {
+        test_json(
+            TransferRequest {
+                files: vec![File {
+                    name: "dir".into(),
+                    size: None,
+                    children: vec![
+                        File {
+                            name: "a.txt".into(),
+                            size: Some(41),
+                            children: vec![],
+                        },
+                        File {
+                            name: "b.txt".into(),
+                            size: Some(4141),
+                            children: vec![],
+                        },
+                    ],
+                }],
+            },
+            r#"
+            {
+              "files": [
+                {
+                  "name": "dir",
+                  "size": null,
+                  "children": [
+                    {
+                      "name": "a.txt",
+                      "size": 41,
+                      "children": []
+                    },
+                    {
+                      "name": "b.txt",
+                      "size": 4141,
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            }"#,
+        );
+
+        test_json(
+            ClientMsg::Error(Error {
+                file: Some(FileSubPath::from("test/file.ext")),
+                msg: "test message".to_string(),
+            }),
+            r#"
+            {
+              "type": "Error",
+              "file": "test/file.ext",
+              "msg": "test message"
+            }
+            "#,
+        );
+
+        test_json(
+            ClientMsg::Error(Error {
+                file: None,
+                msg: "test message".to_string(),
+            }),
+            r#"
+            {
+              "type": "Error",
+              "file": null,
+              "msg": "test message"
+            }
+            "#,
+        );
+
+        test_json(
+            ClientMsg::Cancel(Download {
+                file: FileSubPath::from("test/file.ext"),
+            }),
+            r#"
+            {
+              "type": "Cancel",
+              "file": "test/file.ext"
+            }
+            "#,
+        );
+    }
+
+    #[test]
+    fn server_json_messages() {
+        test_json(
+            ServerMsg::Progress(Progress {
+                file: FileSubPath::from("test/file.ext"),
+                bytes_transfered: 41,
+            }),
+            r#"
+            {
+              "type": "Progress",
+              "file": "test/file.ext",
+              "bytes_transfered": 41
+            }"#,
+        );
+
+        test_json(
+            ServerMsg::Done(Progress {
+                file: FileSubPath::from("test/file.ext"),
+                bytes_transfered: 41,
+            }),
+            r#"
+            {
+              "type": "Done",
+              "file": "test/file.ext",
+              "bytes_transfered": 41
+            }"#,
+        );
+
+        test_json(
+            ServerMsg::Error(Error {
+                file: Some(FileSubPath::from("test/file.ext")),
+                msg: "test message".to_string(),
+            }),
+            r#"
+            {
+              "type": "Error",
+              "file": "test/file.ext",
+              "msg": "test message"
+            }"#,
+        );
+
+        test_json(
+            ServerMsg::Error(Error {
+                file: None,
+                msg: "test message".to_string(),
+            }),
+            r#"
+            {
+              "type": "Error",
+              "file": null,
+              "msg": "test message"
+            }"#,
+        );
+
+        test_json(
+            ServerMsg::Start(Download {
+                file: FileSubPath::from("test/file.ext"),
+            }),
+            r#"
+            {
+              "type": "Start",
+              "file": "test/file.ext"
+            }"#,
+        );
+
+        test_json(
+            ServerMsg::Cancel(Download {
+                file: FileSubPath::from("test/file.ext"),
+            }),
+            r#"
+            {
+              "type": "Cancel",
+              "file": "test/file.ext"
+            }"#,
+        );
     }
 }
