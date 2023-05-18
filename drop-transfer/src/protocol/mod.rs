@@ -2,7 +2,6 @@ pub mod v1;
 pub mod v2 {
     pub use super::v1::*;
 }
-pub mod v3;
 pub mod v4;
 
 #[derive(Copy, Clone, strum::Display, strum::EnumString)]
@@ -11,8 +10,8 @@ pub enum Version {
     V1,
     #[strum(serialize = "v2")]
     V2,
-    #[strum(serialize = "v3")]
-    V3,
+    // There is no V3 for historical reasons. We yanked Version 3, because it was released with a
+    // security flaw. It should never be added back.
     #[strum(serialize = "v4")]
     V4,
 }
