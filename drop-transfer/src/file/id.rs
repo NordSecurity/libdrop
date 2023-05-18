@@ -1,7 +1,6 @@
 use std::{
     fmt,
     hash::Hash,
-    io,
     path::{Path, PathBuf},
 };
 
@@ -9,7 +8,7 @@ use base64::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
 
-use crate::utils::{self, Hidden};
+use crate::utils::Hidden;
 
 #[derive(Hash, Clone, PartialEq, Eq)]
 pub struct FileSubPath(Vec<String>);
@@ -20,14 +19,11 @@ pub struct FileId(String);
 
 const SEPARATOR: &str = "/";
 
-impl TryFrom<&Path> for FileId {
-    type Error = io::Error;
-
-    fn try_from(value: &Path) -> Result<Self, Self::Error> {
-        let abs = utils::make_path_absolute(value)?;
-        let out = sha2::Sha256::digest(abs.to_string_lossy().as_bytes());
+impl From<sha2::Sha256> for FileId {
+    fn from(hash: sha2::Sha256) -> Self {
+        let out = hash.finalize();
         let id = BASE64_URL_SAFE_NO_PAD.encode(out);
-        Ok(Self(id))
+        Self(id)
     }
 }
 

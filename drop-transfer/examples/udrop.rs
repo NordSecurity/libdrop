@@ -323,7 +323,7 @@ async fn main() -> anyhow::Result<()> {
             .context("Missing path list")?
         {
             files.extend(
-                File::from_path(path, None, &config)
+                File::from_path(path, &config)
                     .context("Cannot build transfer from the files provided")?,
             );
         }
@@ -344,9 +344,7 @@ async fn main() -> anyhow::Result<()> {
 
     let auth = {
         let pubkey = drop_auth::PublicKey::from(PUB_KEY);
-        auth::Context::new(drop_auth::SecretKey::from(PRIV_KEY), move |_| {
-            Some(pubkey.clone())
-        })
+        auth::Context::new(drop_auth::SecretKey::from(PRIV_KEY), move |_| Some(pubkey))
     };
 
     let storage = drop_storage::Storage::new(logger.clone(), ":memory:")
