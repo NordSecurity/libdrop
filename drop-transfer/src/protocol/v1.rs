@@ -13,8 +13,19 @@ use std::{net::IpAddr, sync::Arc};
 use drop_config::DropConfig;
 use serde::{Deserialize, Serialize};
 
-pub use super::v3::{Chunk, Error, File, Progress};
+use super::v4;
 use crate::file::{FileId, FileKind, FileSubPath};
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct File {
+    pub name: String,
+    pub size: Option<u64>,
+    pub children: Vec<File>,
+}
+
+pub type Chunk = v4::Chunk<FileSubPath>;
+pub type Progress = v4::Progress<FileSubPath>;
+pub type Error = v4::Error<FileSubPath>;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct TransferRequest {
