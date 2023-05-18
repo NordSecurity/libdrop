@@ -1221,7 +1221,7 @@ scenarios = [
                             0,
                             {
                                 event.File(
-                                    FILES["testfile-small"].id,
+                                    "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                                     "testfile-small",
                                     1048576,
                                 ),
@@ -1229,10 +1229,12 @@ scenarios = [
                         )
                     ),
                     action.Wait(
-                        event.Start(0, FILES["testfile-small"].id),
+                        event.Start(0, "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI"),
                     ),
                     action.Wait(
-                        event.FinishFileUploaded(0, FILES["testfile-small"].id),
+                        event.FinishFileUploaded(
+                            0, "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI"
+                        ),
                     ),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
@@ -1247,7 +1249,7 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    FILES["testfile-small"].id,
+                                    "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                                     "testfile-small",
                                     1048576,
                                 ),
@@ -1256,16 +1258,16 @@ scenarios = [
                     ),
                     action.Download(
                         0,
-                        FILES["testfile-small"].id,
+                        "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                         "/tmp/received",
                     ),
                     action.Wait(
-                        event.Start(0, FILES["testfile-small"].id),
+                        event.Start(0, "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI"),
                     ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            FILES["testfile-small"].id,
+                            "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                             "/tmp/received/testfile-small",
                         ),
                     ),
@@ -1991,7 +1993,7 @@ scenarios = [
                                 0,
                                 {
                                     event.File(
-                                        FILES["testfile-big"].id,
+                                        "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
                                         "testfile-big",
                                         10485760,
                                     ),
@@ -2001,21 +2003,25 @@ scenarios = [
                                 1,
                                 {
                                     event.File(
-                                        FILES["testfile-big"].id,
+                                        "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
                                         "testfile-big",
                                         10485760,
                                     ),
                                 },
                             ),
-                            event.Start(1, FILES["testfile-big"].id),
-                            event.Start(0, FILES["testfile-big"].id),
+                            event.Start(
+                                1, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw"
+                            ),
+                            event.Start(
+                                0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw"
+                            ),
                             event.FinishFileUploaded(
                                 1,
-                                FILES["testfile-big"].id,
+                                "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
                             ),
                             event.FinishFileUploaded(
                                 0,
-                                FILES["testfile-big"].id,
+                                "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
                             ),
                             event.FinishTransferCanceled(0, True),
                             event.FinishTransferCanceled(1, True),
@@ -2033,21 +2039,25 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                    "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
+                                    "testfile-big",
+                                    10485760,
                                 ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        FILES["testfile-big"].id,
+                        "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
                         "/tmp/received/stimpy",
                     ),
-                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.Start(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
+                    ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            FILES["testfile-big"].id,
+                            "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
                             "/tmp/received/stimpy/testfile-big",
                         )
                     ),
@@ -2070,21 +2080,25 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                    "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
+                                    "testfile-big",
+                                    10485760,
                                 ),
                             },
                         )
                     ),
                     action.Download(
                         0,
-                        FILES["testfile-big"].id,
+                        "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
                         "/tmp/received/george",
                     ),
-                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.Start(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
+                    ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            FILES["testfile-big"].id,
+                            "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
                             "/tmp/received/george/testfile-big",
                         )
                     ),
@@ -2121,7 +2135,7 @@ scenarios = [
                                 0,
                                 {
                                     event.File(
-                                        FILES["testfile-small"].id,
+                                        "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                                         "testfile-small",
                                         1024 * 1024,
                                     ),
@@ -2131,7 +2145,7 @@ scenarios = [
                                 1,
                                 {
                                     event.File(
-                                        FILES["testfile-small"].id,
+                                        "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                                         "testfile-small",
                                         1024 * 1024,
                                     ),
@@ -2141,15 +2155,19 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
-                            event.Start(0, FILES["testfile-small"].id),
-                            event.Start(1, FILES["testfile-small"].id),
+                            event.Start(
+                                0, "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI"
+                            ),
+                            event.Start(
+                                1, "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI"
+                            ),
                             event.FinishFileUploaded(
                                 0,
-                                FILES["testfile-small"].id,
+                                "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                             ),
                             event.FinishFileUploaded(
                                 1,
-                                FILES["testfile-small"].id,
+                                "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                             ),
                             event.FinishTransferCanceled(0, True),
                             event.FinishTransferCanceled(1, True),
@@ -2167,7 +2185,7 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    FILES["testfile-small"].id,
+                                    "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                                     "testfile-small",
                                     1024 * 1024,
                                 ),
@@ -2176,14 +2194,16 @@ scenarios = [
                     ),
                     action.Download(
                         0,
-                        FILES["testfile-small"].id,
+                        "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                         "/tmp/received/stimpy",
                     ),
-                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.Start(0, "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI")
+                    ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            FILES["testfile-small"].id,
+                            "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                             "/tmp/received/stimpy/testfile-small",
                         )
                     ),
@@ -2208,7 +2228,7 @@ scenarios = [
                             "172.20.0.5",
                             {
                                 event.File(
-                                    FILES["testfile-small"].id,
+                                    "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                                     "testfile-small",
                                     1024 * 1024,
                                 ),
@@ -2217,14 +2237,16 @@ scenarios = [
                     ),
                     action.Download(
                         0,
-                        FILES["testfile-small"].id,
+                        "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                         "/tmp/received/george",
                     ),
-                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.Start(0, "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI")
+                    ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
-                            FILES["testfile-small"].id,
+                            "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                             "/tmp/received/george/testfile-small",
                         )
                     ),
