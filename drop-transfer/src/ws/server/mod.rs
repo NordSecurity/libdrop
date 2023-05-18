@@ -1,6 +1,5 @@
 mod handler;
 mod v2;
-mod v3;
 mod v4;
 
 use std::{
@@ -135,7 +134,7 @@ pub(crate) fn start(
 
                         match version {
                             protocol::Version::V1 | protocol::Version::V2 => (),
-                            protocol::Version::V3 | protocol::Version::V4 => {
+                            protocol::Version::V4 => {
                                 let auth_header = auth_header
                                     .ok_or_else(|| warp::reject::custom(MissingAuth(peer)))?;
 
@@ -177,10 +176,6 @@ pub(crate) fn start(
                             }
                             protocol::Version::V2 => {
                                 ctx.run(v2::HandlerInit::<true>::new(peer.ip(), &state, &logger))
-                                    .await
-                            }
-                            protocol::Version::V3 => {
-                                ctx.run(v3::HandlerInit::new(peer.ip(), state, &logger))
                                     .await
                             }
                             protocol::Version::V4 => {
