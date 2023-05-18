@@ -6,7 +6,7 @@ use std::{
 };
 
 use drop_auth::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH};
-use drop_config::Config;
+use drop_config::{Config, DropConfig};
 use drop_transfer::{auth, utils::Hidden, File, Service, Transfer};
 use slog::{debug, error, trace, warn, Logger};
 use tokio::sync::{mpsc, Mutex};
@@ -223,35 +223,7 @@ impl NordDropFFI {
             .ok_or(ffi::types::NORDDROP_RES_BAD_INPUT)?;
 
         let xfer = {
-            let mut files = Vec::new();
-            for desc in descriptors.iter() {
-                #[cfg(target_os = "windows")]
-                {
-                    if desc.fd.is_some() {
-                        error!(
-                            self.logger,
-                            "Specifying file descriptors in transfers is not supported under \
-                             Windows"
-                        );
-                        return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
-                    }
-                }
-
-                let batch =
-                    File::from_path(&desc.path.0, desc.fd, &self.config.drop).map_err(|e| {
-                        error!(
-                            self.logger,
-                            "Could not open file {:?} for transfer ({:?}): {}",
-                            desc,
-                            descriptors,
-                            e
-                        );
-                        ffi::types::NORDDROP_RES_TRANSFER_CREATE
-                    })?;
-
-                files.extend(batch);
-            }
-
+            let files = prepare_transfer_files(&self.logger, &descriptors, &self.config.drop)?;
             Transfer::new(peer.ip(), files, &self.config.drop).map_err(|e| {
                 error!(
                     self.logger,
@@ -425,4 +397,48 @@ fn crate_key_context(
     };
 
     auth::Context::new(privkey, public)
+}
+
+fn prepare_transfer_files(
+    logger: &slog::Logger,
+    descriptors: &[TransferDescriptor],
+    config: &DropConfig,
+) -> Result<Vec<File>> {
+    let mut files = Vec::new();
+
+    for (i, desc) in descriptors.iter().enumerate() {
+        #[allow(unused_variables)]
+        if let Some(fd) = desc.fd {
+            #[cfg(target_os = "windows")]
+            {
+                error!(
+                    self.logger,
+                    "Specifying file descriptors in transfers is not supported under Windows"
+                );
+                return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
+            }
+
+            let file = File::from_fd(&desc.path.0, fd, i).map_err(|e| {
+                error!(
+                    logger,
+                    "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
+                );
+                ffi::types::NORDDROP_RES_TRANSFER_CREATE
+            })?;
+
+            files.push(file);
+        } else {
+            let batch = File::from_path(&desc.path.0, config).map_err(|e| {
+                error!(
+                    logger,
+                    "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
+                );
+                ffi::types::NORDDROP_RES_TRANSFER_CREATE
+            })?;
+
+            files.extend(batch);
+        }
+    }
+
+    Ok(files)
 }

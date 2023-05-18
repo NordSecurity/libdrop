@@ -88,33 +88,15 @@ impl File {
         Ok(files)
     }
 
-    pub fn from_path(
-        path: impl Into<PathBuf>,
-        fd: Option<i32>,
-        config: &DropConfig,
-    ) -> Result<Vec<Self>, Error> {
+    pub fn from_path(path: impl Into<PathBuf>, config: &DropConfig) -> Result<Vec<Self>, Error> {
         let path = path.into();
+        let meta = fs::symlink_metadata(&path)?;
 
-        #[allow(unused_variables)]
-        let files = if let Some(fd) = fd {
-            #[cfg(target_os = "windows")]
-            return Err(Error::InvalidArgument);
-
-            #[cfg(not(target_os = "windows"))]
-            vec![File::new_with_fd(
-                FileSubPath::from_file_name(&path)?,
-                &path,
-                fd,
-            )?]
+        let files = if meta.is_dir() {
+            File::walk(&path, config)?
         } else {
-            let meta = fs::symlink_metadata(&path)?;
-
-            if meta.is_dir() {
-                File::walk(&path, config)?
-            } else {
-                let file = File::new(FileSubPath::from_file_name(&path)?, path, meta)?;
-                vec![file]
-            }
+            let file = File::new(FileSubPath::from_file_name(&path)?, path, meta)?;
+            vec![file]
         };
 
         Ok(files)
@@ -136,8 +118,12 @@ impl File {
             .map_or("unknown", |t| t.mime_type())
             .to_string();
 
+        let abs = crate::utils::make_path_absolute(&path)?;
+        let mut hash = sha2::Sha256::new();
+        hash.update(abs.to_string_lossy().as_bytes());
+
         Ok(Self {
-            file_id: FileId::try_from(path.as_path())?,
+            file_id: FileId::from(hash),
             subpath,
             kind: FileKind::FileToSend {
                 meta: Hidden(meta),
@@ -148,7 +134,8 @@ impl File {
     }
 
     #[cfg(unix)]
-    fn new_with_fd(subpath: FileSubPath, path: &Path, fd: RawFd) -> Result<Self, Error> {
+    pub fn from_fd(path: impl AsRef<Path>, fd: RawFd, unique_id: usize) -> Result<Self, Error> {
+        let subpath = FileSubPath::from_file_name(path.as_ref())?;
         let f = unsafe { fs::File::from_raw_fd(fd) };
 
         let create_file = || {
@@ -164,8 +151,12 @@ impl File {
                 .map_or("unknown", |t| t.mime_type())
                 .to_string();
 
+            let mut hash = sha2::Sha256::new();
+            hash.update(path.as_ref().as_os_str().as_bytes());
+            hash.update(unique_id.to_ne_bytes());
+
             Ok(Self {
-                file_id: FileId::try_from(path)?,
+                file_id: FileId::from(hash),
                 subpath,
                 kind: FileKind::FileToSend {
                     meta: Hidden(meta),
@@ -267,8 +258,7 @@ mod tests {
             let mut tmp = tempfile::NamedTempFile::new().expect("Failed to create tmp file");
             tmp.write_all(TEST).unwrap();
 
-            let file =
-                &super::File::from_path(tmp.path(), None, &DropConfig::default()).unwrap()[0];
+            let file = &super::File::from_path(tmp.path(), &DropConfig::default()).unwrap()[0];
             let size = file.size();
 
             assert_eq!(size, TEST.len() as u64);
