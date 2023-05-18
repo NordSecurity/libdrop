@@ -54,14 +54,38 @@ pub struct ProgressEvent {
 }
 
 #[derive(Serialize)]
+pub struct Status {
+    status: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    os_error_code: Option<i32>,
+}
+
+#[derive(Serialize)]
 #[serde(tag = "reason", content = "data")]
 pub enum FinishEvent {
-    TransferCanceled { by_peer: bool },
-    FileDownloaded { file: String, final_path: String },
-    FileUploaded { file: String },
-    FileCanceled { file: String, by_peer: bool },
-    FileFailed { file: String, status: u32 },
-    TransferFailed { status: u32 },
+    TransferCanceled {
+        by_peer: bool,
+    },
+    FileDownloaded {
+        file: String,
+        final_path: String,
+    },
+    FileUploaded {
+        file: String,
+    },
+    FileCanceled {
+        file: String,
+        by_peer: bool,
+    },
+    FileFailed {
+        file: String,
+        #[serde(flatten)]
+        status: Status,
+    },
+    TransferFailed {
+        #[serde(flatten)]
+        status: Status,
+    },
 }
 
 #[derive(serde::Serialize)]
@@ -93,6 +117,15 @@ pub struct Config {
 
 const fn default_connection_max_retry_interval_ms() -> u64 {
     10000
+}
+
+impl From<&drop_transfer::Error> for Status {
+    fn from(value: &drop_transfer::Error) -> Self {
+        Self {
+            status: value.into(),
+            os_error_code: value.os_err_code(),
+        }
+    }
 }
 
 impl From<drop_transfer::Event> for Event {

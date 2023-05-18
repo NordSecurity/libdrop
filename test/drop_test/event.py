@@ -218,10 +218,17 @@ class FinishFileCanceled(Event):
 
 
 class FinishFileFailed(Event):
-    def __init__(self, uuid_slot: int, file: str, status: int):
+    def __init__(
+        self,
+        uuid_slot: int,
+        file: str,
+        status: int,
+        os_err: typing.Optional[int] = None,
+    ):
         self._uuid_slot = uuid_slot
         self._file = file
         self._status = status
+        self._os_err = os_err
 
     def __eq__(self, rhs):
         if not isinstance(rhs, FinishFileFailed):
@@ -232,17 +239,27 @@ class FinishFileFailed(Event):
             return False
         if self._status != rhs._status:
             return False
+        if self._os_err != rhs._os_err:
+            return False
 
         return True
 
     def __str__(self):
-        return f"FinishFileFailed(transfer={print_uuid(self._uuid_slot)}, file={self._file}, status={self._status})"
+        return f"FinishFileFailed(transfer={print_uuid(self._uuid_slot)}, file={self._file}, status={self._status}, os_err={self._os_err})"
 
 
 class FinishFailedTransfer(Event):
-    def __init__(self, uuid_slot: int, status: int):
+    def __init__(
+        self,
+        uuid_slot: int,
+        status: int,
+        os_err: typing.Optional[int] = None,
+        ignore_os: bool = False,
+    ):
         self._uuid_slot = uuid_slot
         self._status = status
+        self._os_err = os_err
+        self._ignore_os = ignore_os
 
     def __eq__(self, rhs):
         if not isinstance(rhs, FinishFailedTransfer):
@@ -251,11 +268,14 @@ class FinishFailedTransfer(Event):
             return False
         if self._status != rhs._status:
             return False
+        if not (self._ignore_os or rhs._ignore_os):
+            if self._os_err != rhs._os_err:
+                return False
 
         return True
 
     def __str__(self):
-        return f"FinishFailedTransfer(transfer={print_uuid(self._uuid_slot)}, status={self._status})"
+        return f"FinishFailedTransfer(transfer={print_uuid(self._uuid_slot)}, status={self._status}, os_err={self._os_err})"
 
 
 class Panic(Event):

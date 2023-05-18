@@ -1,7 +1,7 @@
 import asyncio
 from collections import Counter
 from functools import reduce
-import os
+import os, pwd
 from pathlib import Path
 import platform
 import subprocess
@@ -376,3 +376,15 @@ class WaitForResume(Action):
 
     def __str__(self):
         return f"WaitForResume({print_uuid(self._uuid_slot)}, {self._file_id}, {self._tmp_file_path})"
+
+
+class DropPrivileges(Action):
+    def __init__(self):
+        pass
+
+    async def run(self, drop: ffi.Drop):
+        uid = pwd.getpwnam("nobody").pw_uid
+        os.seteuid(uid)
+
+    def __str__(self):
+        return "DropPrivileges"
