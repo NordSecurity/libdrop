@@ -269,7 +269,7 @@ class Drop:
         self._instance = norddrop_instance
         self._events = events
         self._lib = norddrop_lib
-        self._retain = [logger_instance, eventer_instance]
+        self._retain = [logger_instance, eventer_instance, pubkey_instance]
 
     def new_transfer(self, peer: str, descriptors: typing.List[str]) -> str:
         descriptors_json = []
@@ -463,13 +463,17 @@ def new_event(event_str: str) -> event.Event:
         elif reason == "TransferCanceled":
             return event.FinishTransferCanceled(transfer_slot, data["by_peer"])
         elif reason == "TransferFailed":
-            return event.FinishFailedTransfer(transfer_slot, data["status"])
+            return event.FinishFailedTransfer(
+                transfer_slot, data["status"], data.get("os_error_code")
+            )
         elif reason == "FileCanceled":
             return event.FinishFileCanceled(
                 transfer_slot, data["file"], data["by_peer"]
             )
         elif reason == "FileFailed":
-            return event.FinishFileFailed(transfer_slot, data["file"], data["status"])
+            return event.FinishFileFailed(
+                transfer_slot, data["file"], data["status"], data.get("os_error_code")
+            )
         else:
             raise ValueError(f"Unexpected reason of {reason} for TransferFinished")
 
