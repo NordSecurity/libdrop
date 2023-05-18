@@ -269,7 +269,7 @@ class Drop:
         self._instance = norddrop_instance
         self._events = events
         self._lib = norddrop_lib
-        self._retain = [logger_instance, eventer_instance]
+        self._retain = [logger_instance, eventer_instance, pubkey_instance]
 
     def new_transfer(self, peer: str, descriptors: typing.List[str]) -> str:
         descriptors_json = []
