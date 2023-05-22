@@ -12,7 +12,7 @@ use tokio::{sync::mpsc::Sender, task::JoinHandle};
 use tokio_tungstenite::tungstenite::{self, Message};
 
 use super::{handler, ClientReq, WebSocket};
-use crate::{file::FileSubPath, protocol::v2, service::State, utils::Hidden, ws, FileId};
+use crate::{file::FileSubPath, protocol::v2, service::State, ws, FileId};
 
 pub struct HandlerInit<'a, const PING: bool = true> {
     state: &'a Arc<State>,
@@ -208,29 +208,27 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
     async fn on_error(&mut self, file: Option<FileSubPath>, msg: String) {
         error!(
             self.logger,
-            "Server reported and error: file: {:?}, message: {}",
-            Hidden(&file),
-            msg
+            "Server reported and error: file: {file:?}, message: {msg}",
         );
 
         if let Some(file) = file {
             if let Some(task) = self.tasks.remove(&file) {
                 if !task.job.is_finished() {
                     task.job.abort();
-
-                    let file = self
-                        .xfer
-                        .file_by_subpath(&file)
-                        .expect("File should exist since we have a transfer task running");
-
-                    task.events
-                        .stop(crate::Event::FileUploadFailed(
-                            self.xfer.clone(),
-                            file.id().clone(),
-                            crate::Error::BadTransfer,
-                        ))
-                        .await;
                 }
+
+                let file = self
+                    .xfer
+                    .file_by_subpath(&file)
+                    .expect("File should exist since we have a transfer task running");
+
+                task.events
+                    .stop(crate::Event::FileUploadFailed(
+                        self.xfer.clone(),
+                        file.id().clone(),
+                        crate::Error::BadTransfer,
+                    ))
+                    .await;
             }
         }
     }
