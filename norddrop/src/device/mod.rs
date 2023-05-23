@@ -7,7 +7,7 @@ use std::{
 
 use drop_auth::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH};
 use drop_config::{Config, DropConfig};
-use drop_transfer::{auth, utils::Hidden, File, Service, Transfer};
+use drop_transfer::{auth, storage_dispatch, utils::Hidden, File, Service, Transfer};
 use slog::{debug, error, trace, warn, Logger};
 use tokio::sync::{mpsc, Mutex};
 
