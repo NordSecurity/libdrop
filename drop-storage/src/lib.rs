@@ -77,20 +77,20 @@ impl Storage {
     ) -> Result<()> {
         match transfer_type {
             TransferType::Incoming => sqlx::query!(
-                "INSERT INTO incoming_paths (id, transfer_id, path, bytes) VALUES (?1, ?2, ?3, ?4)",
-                path.id,
+                "INSERT INTO incoming_paths (transfer_id, path, path_id, bytes) VALUES (?1, ?2, ?3, ?4)",
                 transfer_id,
                 path.path,
+                path.id,
                 path.size,
             )
             .execute(conn)
             .await
             .map_err(error::Error::DBError)?,
             TransferType::Outgoing => sqlx::query!(
-                "INSERT INTO outgoing_paths (id, transfer_id, path, bytes) VALUES (?1, ?2, ?3, ?4)",
-                path.id,
+                "INSERT INTO outgoing_paths (transfer_id, path, path_id, bytes) VALUES (?1, ?2, ?3, ?4)",
                 transfer_id,
                 path.path,
+                path.id,
                 path.size,
             )
             .execute(conn)
@@ -162,7 +162,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO outgoing_path_pending_states (path_id) VALUES ((SELECT id FROM \
-             outgoing_paths WHERE transfer_id = ?1 AND id = ?2))",
+             outgoing_paths WHERE transfer_id = ?1 AND path_id = ?2))",
             transfer_id,
             file_path
         )
@@ -176,15 +176,15 @@ impl Storage {
     pub async fn insert_incoming_path_pending_state(
         &self,
         transfer_id: String,
-        file_path: String,
+        path_id: String,
     ) -> Result<()> {
         let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
             "INSERT INTO incoming_path_pending_states (path_id) VALUES ((SELECT id FROM \
-             incoming_paths WHERE transfer_id = ?1 AND id = ?2))",
+             incoming_paths WHERE transfer_id = ?1 AND path_id = ?2))",
             transfer_id,
-            file_path
+            path_id,
         )
         .execute(&mut conn)
         .await
@@ -196,15 +196,15 @@ impl Storage {
     pub async fn insert_outgoing_path_started_state(
         &self,
         transfer_id: String,
-        file_path: String,
+        path_id: String,
     ) -> Result<()> {
         let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
             "INSERT INTO outgoing_path_started_states (path_id, bytes_sent) VALUES ((SELECT id \
-             FROM outgoing_paths WHERE transfer_id = ?1 AND id = ?2), ?3)",
+             FROM outgoing_paths WHERE transfer_id = ?1 AND path_id = ?2), ?3)",
             transfer_id,
-            file_path,
+            path_id,
             0
         )
         .execute(&mut conn)
@@ -217,15 +217,15 @@ impl Storage {
     pub async fn insert_incoming_path_started_state(
         &self,
         transfer_id: String,
-        file_path: String,
+        path_id: String,
     ) -> Result<()> {
         let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
             "INSERT INTO incoming_path_started_states (path_id, bytes_received) VALUES ((SELECT \
-             id FROM incoming_paths WHERE transfer_id = ?1 AND id = ?2), ?3)",
+             id FROM incoming_paths WHERE transfer_id = ?1 AND path_id = ?2), ?3)",
             transfer_id,
-            file_path,
+            path_id,
             0
         )
         .execute(&mut conn)
@@ -238,7 +238,7 @@ impl Storage {
     pub async fn insert_outgoing_path_cancel_state(
         &self,
         transfer_id: String,
-        file_path: String,
+        path_id: String,
         by_peer: bool,
         bytes_sent: i64,
     ) -> Result<()> {
@@ -246,9 +246,9 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO outgoing_path_cancel_states (path_id, by_peer, bytes_sent) VALUES \
-             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND id = ?2), ?3, ?4)",
+             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_id = ?2), ?3, ?4)",
             transfer_id,
-            file_path,
+            path_id,
             by_peer,
             bytes_sent
         )
@@ -262,7 +262,7 @@ impl Storage {
     pub async fn insert_incoming_path_cancel_state(
         &self,
         transfer_id: String,
-        file_path: String,
+        path_id: String,
         by_peer: bool,
         bytes_received: i64,
     ) -> Result<()> {
@@ -270,9 +270,9 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO incoming_path_cancel_states (path_id, by_peer, bytes_received) VALUES \
-             ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND id = ?2), ?3, ?4)",
+             ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_id = ?2), ?3, ?4)",
             transfer_id,
-            file_path,
+            path_id,
             by_peer,
             bytes_received
         )
@@ -286,7 +286,7 @@ impl Storage {
     pub async fn insert_incoming_path_failed_state(
         &self,
         transfer_id: String,
-        file_path: String,
+        path_id: String,
         error: u32,
         bytes_received: i64,
     ) -> Result<()> {
@@ -294,9 +294,9 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) \
-             VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?2 AND id = ?2), ?3, ?4)",
+             VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?2 AND path_id = ?2), ?3, ?4)",
             transfer_id,
-            file_path,
+            path_id,
             error,
             bytes_received
         )
@@ -310,7 +310,7 @@ impl Storage {
     pub async fn insert_outgoing_path_failed_state(
         &self,
         transfer_id: String,
-        file_path: String,
+        path_id: String,
         error: u32,
         bytes_sent: i64,
     ) -> Result<()> {
@@ -318,9 +318,9 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent) VALUES \
-             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?2 AND id = ?2), ?3, ?4)",
+             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?2 AND path_id = ?2), ?3, ?4)",
             transfer_id,
-            file_path,
+            path_id,
             error,
             bytes_sent
         )
@@ -334,15 +334,15 @@ impl Storage {
     pub async fn insert_outgoing_path_completed_state(
         &self,
         transfer_id: String,
-        file_path: String,
+        path_id: String,
     ) -> Result<()> {
         let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
             "INSERT INTO outgoing_path_completed_states (path_id) VALUES ((SELECT id FROM \
-             outgoing_paths WHERE transfer_id = ?1 AND id = ?2))",
+             outgoing_paths WHERE transfer_id = ?1 AND path_id = ?2))",
             transfer_id,
-            file_path,
+            path_id,
         )
         .execute(&mut conn)
         .await
@@ -354,16 +354,16 @@ impl Storage {
     pub async fn insert_incoming_path_completed_state(
         &self,
         transfer_id: String,
-        file_path: String,
+        path_id: String,
         final_path: String,
     ) -> Result<()> {
         let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
             "INSERT INTO incoming_path_completed_states (path_id, final_path) VALUES ((SELECT id \
-             from incoming_paths WHERE transfer_id = ?1 AND id = ?2), ?3)",
+             from incoming_paths WHERE transfer_id = ?1 AND path_id = ?2), ?3)",
             transfer_id,
-            file_path,
+            path_id,
             final_path
         )
         .execute(&mut conn)
@@ -474,7 +474,7 @@ impl Storage {
         .map_err(error::Error::DBError)?
         .iter()
         .map(|p| OutgoingPath {
-            id: p.id.clone(),
+            id: p.id,
             transfer_id: p.transfer_id.clone(),
             path: p.path.clone(),
             bytes: p.bytes,
