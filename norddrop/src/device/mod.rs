@@ -412,21 +412,24 @@ fn prepare_transfer_files(
             #[cfg(target_os = "windows")]
             {
                 error!(
-                    self.logger,
+                    logger,
                     "Specifying file descriptors in transfers is not supported under Windows"
                 );
                 return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
             }
 
-            let file = File::from_fd(&desc.path.0, fd, i).map_err(|e| {
-                error!(
-                    logger,
-                    "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
-                );
-                ffi::types::NORDDROP_RES_TRANSFER_CREATE
-            })?;
+            #[cfg(not(target_os = "windows"))]
+            {
+                let file = File::from_fd(&desc.path.0, fd, i).map_err(|e| {
+                    error!(
+                        logger,
+                        "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
+                    );
+                    ffi::types::NORDDROP_RES_TRANSFER_CREATE
+                })?;
 
-            files.push(file);
+                files.push(file);
+            }
         } else {
             let batch = File::from_path(&desc.path.0, config).map_err(|e| {
                 error!(
