@@ -40,7 +40,7 @@ impl StorageDispatch {
                             self.storage
                                 .insert_incoming_path_pending_state(
                                     transfer_info.id.clone(),
-                                    file.path,
+                                    file.id,
                                 )
                                 .await?
                         }
@@ -50,7 +50,7 @@ impl StorageDispatch {
                             self.storage
                                 .insert_outgoing_path_pending_state(
                                     transfer_info.id.clone(),
-                                    file.path,
+                                    file.id,
                                 )
                                 .await?
                         }
@@ -165,8 +165,10 @@ impl StorageDispatch {
             .unwrap_or(0)
     }
 
-    pub async fn get_transfers(&self) -> Vec<drop_storage::types::Transfer> {
-        self.storage.get_transfers().await.unwrap()
+    pub async fn get_transfers(
+        &self,
+    ) -> Result<Vec<drop_storage::types::Transfer>, drop_storage::error::Error> {
+        self.storage.get_transfers().await
     }
 }
 

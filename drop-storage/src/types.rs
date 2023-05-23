@@ -20,6 +20,7 @@ impl From<TransferType> for i32 {
 
 #[derive(Debug)]
 pub struct TransferPath {
+    pub id: String,
     pub path: String,
     pub size: i64,
 }
@@ -93,7 +94,7 @@ pub struct TransferFailedState {
 
 #[derive(Debug)]
 pub struct OutgoingPath {
-    pub id: i64,
+    pub id: String,
     pub transfer_id: String,
     pub path: String,
     pub bytes: i64,
@@ -107,20 +108,20 @@ pub struct OutgoingPath {
 
 #[derive(Debug)]
 pub struct OutgoingPathPendingState {
-    pub path_id: i64,
+    pub path_id: String,
     pub created_at: NaiveDateTime,
 }
 
 #[derive(Debug)]
 pub struct OutgoingPathStartedState {
-    pub path_id: i64,
+    pub path_id: String,
     pub bytes_sent: i64,
     pub created_at: NaiveDateTime,
 }
 
 #[derive(Debug)]
 pub struct OutgoingPathCancelState {
-    pub path_id: i64,
+    pub path_id: String,
     pub by_peer: i64,
     pub bytes_sent: i64,
     pub created_at: NaiveDateTime,
@@ -128,7 +129,7 @@ pub struct OutgoingPathCancelState {
 
 #[derive(Debug)]
 pub struct OutgoingPathFailedState {
-    pub path_id: i64,
+    pub path_id: String,
     pub status_code: i64,
     pub bytes_sent: i64,
     pub created_at: NaiveDateTime,
@@ -136,13 +137,13 @@ pub struct OutgoingPathFailedState {
 
 #[derive(Debug)]
 pub struct OutgoingPathCompletedState {
-    pub path_id: i64,
+    pub path_id: String,
     pub created_at: NaiveDateTime,
 }
 
 #[derive(Debug)]
 pub struct IncomingPath {
-    pub id: i64,
+    pub id: String,
     pub transfer_id: String,
     pub path: String,
     pub bytes: i64,
@@ -156,20 +157,20 @@ pub struct IncomingPath {
 
 #[derive(Debug)]
 pub struct IncomingPathPendingState {
-    pub path_id: i64,
+    pub path_id: String,
     pub created_at: NaiveDateTime,
 }
 
 #[derive(Debug)]
 pub struct IncomingPathStartedState {
-    pub path_id: i64,
+    pub path_id: String,
     pub bytes_received: i64,
     pub created_at: NaiveDateTime,
 }
 
 #[derive(Debug)]
 pub struct IncomingPathCancelState {
-    pub path_id: i64,
+    pub path_id: String,
     pub by_peer: i64,
     pub bytes_received: i64,
     pub created_at: NaiveDateTime,
@@ -177,7 +178,7 @@ pub struct IncomingPathCancelState {
 
 #[derive(Debug)]
 pub struct IncomingPathFailedState {
-    pub path_id: i64,
+    pub path_id: String,
     pub status_code: i64,
     pub bytes_received: i64,
     pub created_at: NaiveDateTime,
@@ -185,7 +186,7 @@ pub struct IncomingPathFailedState {
 
 #[derive(Debug)]
 pub struct IncomingPathCompletedState {
-    pub path_id: i64,
+    pub path_id: String,
     pub final_path: String,
     pub created_at: NaiveDateTime,
 }

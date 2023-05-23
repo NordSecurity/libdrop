@@ -92,12 +92,12 @@ impl Transfer {
             id: self.id().to_string(),
             peer: self.peer().to_string(),
             files: self
-                .flat_file_list()
-                .into_iter()
-                .filter(|(_, file)| file.size().is_some())
+                .files()
+                .iter()
                 .map(|(_, file)| TransferPath {
-                    path: file.name().to_string(),
-                    size: file.size().expect("Failed to get file size") as i64,
+                    id: file.id().to_string(),
+                    path: file.subpath().to_string(),
+                    size: file.size() as i64,
                 })
                 .collect(),
         }

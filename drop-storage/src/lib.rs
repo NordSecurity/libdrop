@@ -3,7 +3,13 @@ pub mod error;
 pub mod types;
 use slog::Logger;
 use sqlx::{pool::PoolConnection, sqlite::SqliteConnectOptions, Sqlite, SqlitePool};
-use types::*;
+use types::{
+    DbTransferType, IncomingPath, IncomingPathCancelState, IncomingPathCompletedState,
+    IncomingPathFailedState, IncomingPathPendingState, IncomingPathStartedState, OutgoingPath,
+    OutgoingPathCancelState, OutgoingPathCompletedState, OutgoingPathFailedState,
+    OutgoingPathPendingState, OutgoingPathStartedState, Transfer, TransferActiveState,
+    TransferCancelState, TransferFailedState,
+};
 
 use crate::error::Error;
 pub use crate::types::{TransferInfo, TransferPath, TransferType};
@@ -71,7 +77,8 @@ impl Storage {
     ) -> Result<()> {
         match transfer_type {
             TransferType::Incoming => sqlx::query!(
-                "INSERT INTO incoming_paths (transfer_id, path, bytes) VALUES (?1, ?2, ?3)",
+                "INSERT INTO incoming_paths (id, transfer_id, path, bytes) VALUES (?1, ?2, ?3, ?4)",
+                path.id,
                 transfer_id,
                 path.path,
                 path.size,
@@ -80,7 +87,8 @@ impl Storage {
             .await
             .map_err(error::Error::DBError)?,
             TransferType::Outgoing => sqlx::query!(
-                "INSERT INTO outgoing_paths (transfer_id, path, bytes) VALUES (?1, ?2, ?3)",
+                "INSERT INTO outgoing_paths (id, transfer_id, path, bytes) VALUES (?1, ?2, ?3, ?4)",
+                path.id,
                 transfer_id,
                 path.path,
                 path.size,
@@ -154,7 +162,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO outgoing_path_pending_states (path_id) VALUES ((SELECT id FROM \
-             outgoing_paths WHERE transfer_id = ?1 AND path = ?2))",
+             outgoing_paths WHERE transfer_id = ?1 AND id = ?2))",
             transfer_id,
             file_path
         )
@@ -174,7 +182,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO incoming_path_pending_states (path_id) VALUES ((SELECT id FROM \
-             incoming_paths WHERE transfer_id = ?1 AND path = ?2))",
+             incoming_paths WHERE transfer_id = ?1 AND id = ?2))",
             transfer_id,
             file_path
         )
@@ -194,7 +202,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO outgoing_path_started_states (path_id, bytes_sent) VALUES ((SELECT id \
-             FROM outgoing_paths WHERE transfer_id = ?1 AND path = ?2), ?3)",
+             FROM outgoing_paths WHERE transfer_id = ?1 AND id = ?2), ?3)",
             transfer_id,
             file_path,
             0
@@ -215,7 +223,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO incoming_path_started_states (path_id, bytes_received) VALUES ((SELECT \
-             id FROM incoming_paths WHERE transfer_id = ?1 AND path = ?2), ?3)",
+             id FROM incoming_paths WHERE transfer_id = ?1 AND id = ?2), ?3)",
             transfer_id,
             file_path,
             0
@@ -238,7 +246,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO outgoing_path_cancel_states (path_id, by_peer, bytes_sent) VALUES \
-             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path = ?2), ?3, ?4)",
+             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND id = ?2), ?3, ?4)",
             transfer_id,
             file_path,
             by_peer,
@@ -262,7 +270,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO incoming_path_cancel_states (path_id, by_peer, bytes_received) VALUES \
-             ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path = ?2), ?3, ?4)",
+             ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND id = ?2), ?3, ?4)",
             transfer_id,
             file_path,
             by_peer,
@@ -286,7 +294,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) \
-             VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?2 AND path = ?2), ?3, ?4)",
+             VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?2 AND id = ?2), ?3, ?4)",
             transfer_id,
             file_path,
             error,
@@ -310,7 +318,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent) VALUES \
-             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?2 AND path = ?2), ?3, ?4)",
+             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?2 AND id = ?2), ?3, ?4)",
             transfer_id,
             file_path,
             error,
@@ -332,7 +340,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO outgoing_path_completed_states (path_id) VALUES ((SELECT id FROM \
-             outgoing_paths WHERE transfer_id = ?1 AND path = ?2))",
+             outgoing_paths WHERE transfer_id = ?1 AND id = ?2))",
             transfer_id,
             file_path,
         )
@@ -353,7 +361,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO incoming_path_completed_states (path_id, final_path) VALUES ((SELECT id \
-             from incoming_paths WHERE transfer_id = ?1 AND path = ?2), ?3)",
+             from incoming_paths WHERE transfer_id = ?1 AND id = ?2), ?3)",
             transfer_id,
             file_path,
             final_path
@@ -466,7 +474,7 @@ impl Storage {
         .map_err(error::Error::DBError)?
         .iter()
         .map(|p| OutgoingPath {
-            id: p.id,
+            id: p.id.clone(),
             transfer_id: p.transfer_id.clone(),
             path: p.path.clone(),
             bytes: p.bytes,
@@ -489,7 +497,7 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| OutgoingPathPendingState {
-                path_id: s.path_id,
+                path_id: s.path_id.clone(),
                 created_at: s.created_at,
             })
             .collect();
@@ -503,7 +511,7 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| OutgoingPathStartedState {
-                path_id: s.path_id,
+                path_id: s.path_id.clone(),
                 bytes_sent: s.bytes_sent,
                 created_at: s.created_at,
             })
@@ -518,7 +526,7 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| OutgoingPathCancelState {
-                path_id: s.path_id,
+                path_id: s.path_id.clone(),
                 by_peer: s.by_peer,
                 bytes_sent: s.bytes_sent,
                 created_at: s.created_at,
@@ -534,7 +542,7 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| OutgoingPathFailedState {
-                path_id: s.path_id,
+                path_id: s.path_id.clone(),
                 status_code: s.status_code,
                 bytes_sent: s.bytes_sent,
                 created_at: s.created_at,
@@ -550,7 +558,7 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| OutgoingPathCompletedState {
-                path_id: s.path_id,
+                path_id: s.path_id.clone(),
                 created_at: s.created_at,
             })
             .collect();
@@ -571,7 +579,7 @@ impl Storage {
         .map_err(error::Error::DBError)?
         .iter()
         .map(|p| IncomingPath {
-            id: p.id,
+            id: p.id.clone(),
             transfer_id: p.transfer_id.clone(),
             path: p.path.clone(),
             bytes: p.bytes,
@@ -594,7 +602,7 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| IncomingPathPendingState {
-                path_id: s.path_id,
+                path_id: s.path_id.clone(),
                 created_at: s.created_at,
             })
             .collect();
@@ -608,7 +616,7 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| IncomingPathStartedState {
-                path_id: s.path_id,
+                path_id: s.path_id.clone(),
                 bytes_received: s.bytes_received,
                 created_at: s.created_at,
             })
@@ -623,7 +631,7 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| IncomingPathCancelState {
-                path_id: s.path_id,
+                path_id: s.path_id.clone(),
                 by_peer: s.by_peer,
                 bytes_received: s.bytes_received,
                 created_at: s.created_at,
@@ -639,7 +647,7 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| IncomingPathFailedState {
-                path_id: s.path_id,
+                path_id: s.path_id.clone(),
                 status_code: s.status_code,
                 bytes_received: s.bytes_received,
                 created_at: s.created_at,
@@ -655,7 +663,7 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| IncomingPathCompletedState {
-                path_id: s.path_id,
+                path_id: s.path_id.clone(),
                 final_path: s.final_path.clone(),
                 created_at: s.created_at,
             })
