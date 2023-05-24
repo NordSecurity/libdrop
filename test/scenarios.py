@@ -4118,4 +4118,73 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario25",
+        "Delete temporary file during the transfer, expect it to fail",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0, FILES["testfile-big"].id, Error.BAD_TRANSFER
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/25",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.DeleteFile(
+                        f"/tmp/received/25/{FILES['testfile-big'].id}.dropdl-part"
+                    ),
+                    action.Wait(
+                        event.FinishFileFailed(0, FILES["testfile-big"].id, Error.IO, 2)
+                    ),
+                    action.CompareTrees(Path("/tmp/received/25"), []),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]

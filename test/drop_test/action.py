@@ -388,3 +388,14 @@ class DropPrivileges(Action):
 
     def __str__(self):
         return "DropPrivileges"
+
+
+class DeleteFile(Action):
+    def __init__(self, file_path: str):
+        self._file_path = file_path
+
+    async def run(self, drop: ffi.Drop):
+        os.remove(self._file_path)
+
+    def __str__(self):
+        return f"DeleteFile({self._file_path})"
