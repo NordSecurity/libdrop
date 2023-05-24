@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS transfer_cancel_states (
   by_peer INTEGER NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
   FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE CASCADE ON UPDATE CASCADE
+  CHECK(by_peer = 0 OR by_peer = 1)
 );
 
 CREATE TABLE IF NOT EXISTS transfer_failed_states (
@@ -42,10 +43,11 @@ CREATE TABLE IF NOT EXISTS outgoing_paths (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   transfer_id TEXT NOT NULL,
   path TEXT NOT NULL,
-  path_id TEXT NOT NULL,
+  path_hash TEXT NOT NULL,
   bytes INT NOT NULL, 
   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
   FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE CASCADE ON UPDATE CASCADE
+  CHECK(bytes >= 0)
 );
 
 -- all the paths inside the incoming transfer
@@ -53,10 +55,11 @@ CREATE TABLE IF NOT EXISTS incoming_paths (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   transfer_id TEXT NOT NULL,   
   path TEXT NOT NULL, 
-  path_id TEXT NOT NULL,
+  path_hash TEXT NOT NULL,
   bytes INT NOT NULL, 
   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
   FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE CASCADE ON UPDATE CASCADE
+  CHECK(bytes >= 0)
 );
 
 -- states for outgoing paths(uploads)
