@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 thiserror = "*"
-sqlx = { version = "0.6", features = [ "runtime-tokio-rustls", "sqlite", "time", "chrono" ] }
+sqlx = { version = "0.6", features = [ "runtime-tokio-rustls", "sqlite", "time", "chrono", "offline"] }
 slog = { workspace = true }
 serde = { workspace = true }
