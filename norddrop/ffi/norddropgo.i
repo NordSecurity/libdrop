@@ -98,6 +98,7 @@ func call_norddrop_logger_cb(ctx uintptr, level C.int, str *C.char) {
                 callback(int(level), C.GoString(str))
         }
 }
+%}
 
 
 %typemap(gotype) norddrop_pubkey_cb "func(string, *byte) int";
@@ -133,4 +134,5 @@ func call_norddrop_pubkey_cb(ctx uintptr, ip *C.char, pubkey *C.char) C.int {
         return 1
 }
 %}
+
 #endif
