@@ -469,6 +469,18 @@ intgo _wrap_NORDDROPRESINVALIDPRIVKEY_norddropgo_7f406083ff4c9731() {
 }
 
 
+intgo _wrap_NORDDROPRESDBERROR_norddropgo_7f406083ff4c9731() {
+  enum norddrop_result result;
+  intgo _swig_go_result;
+  
+  
+  result = NORDDROP_RES_DB_ERROR;
+  
+  _swig_go_result = (intgo)result; 
+  return _swig_go_result;
+}
+
+
 void _wrap_NorddropEventCb_Ctx_set_norddropgo_7f406083ff4c9731(struct norddrop_event_cb *_swig_go_0, void *_swig_go_1) {
   struct norddrop_event_cb *arg1 = (struct norddrop_event_cb *) 0 ;
   void *arg2 = (void *) 0 ;
@@ -682,13 +694,12 @@ void _wrap_delete_NorddropPubkeyCb_norddropgo_7f406083ff4c9731(struct norddrop_p
 }
 
 
-struct norddrop *_wrap_new_Norddrop_norddropgo_7f406083ff4c9731(norddrop_event_cb _swig_go_0, intgo _swig_go_1, norddrop_logger_cb _swig_go_2, struct norddrop_pubkey_cb *_swig_go_3, _gostring_ _swig_go_4) {
+struct norddrop *_wrap_new_Norddrop_norddropgo_7f406083ff4c9731(norddrop_event_cb _swig_go_0, intgo _swig_go_1, norddrop_logger_cb _swig_go_2, norddrop_pubkey_cb _swig_go_3, _gostring_ _swig_go_4) {
   norddrop_event_cb arg1 ;
   enum norddrop_log_level arg2 ;
   norddrop_logger_cb arg3 ;
   norddrop_pubkey_cb arg4 ;
   char *arg5 = (char *) 0 ;
-  norddrop_pubkey_cb *argp4 ;
   struct norddrop *result = 0 ;
   struct norddrop *_swig_go_result;
   
@@ -699,13 +710,9 @@ struct norddrop *_wrap_new_Norddrop_norddropgo_7f406083ff4c9731(norddrop_event_c
   {
     arg3 = _swig_go_2;
   }
-  
-  argp4 = (norddrop_pubkey_cb *)_swig_go_3;
-  if (argp4 == NULL) {
-    _swig_gopanic("Attempt to dereference null norddrop_pubkey_cb");
+  {
+    arg4 = _swig_go_3;
   }
-  arg4 = (norddrop_pubkey_cb)*argp4;
-  
   
   arg5 = (char *)malloc(_swig_go_4.n + 1);
   memcpy(arg5, _swig_go_4.p, _swig_go_4.n);
