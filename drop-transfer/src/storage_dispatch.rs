@@ -1,10 +1,9 @@
-use std::collections::HashMap;
-
 use drop_storage::{
     error::Error,
     types::{Event, Transfer},
     Storage, TransferType,
 };
+use std::collections::HashMap;
 
 pub struct StorageDispatch {
     storage: drop_storage::Storage,
@@ -33,7 +32,10 @@ impl StorageDispatch {
     pub async fn handle_event(&mut self, event: &crate::Event) -> Result<(), Error> {
         let event = Into::<Event>::into(event);
         match event {
-            Event::Pending(transfer_type, transfer_info) => match transfer_type {
+            Event::Pending {
+                transfer_type,
+                transfer_info,
+            } => match transfer_type {
                 TransferType::Incoming => {
                     for file in transfer_info.files {
                         self.storage
@@ -50,7 +52,11 @@ impl StorageDispatch {
                 }
             },
 
-            Event::Started(transfer_type, transfer_id, file_id) => match transfer_type {
+            Event::Started {
+                transfer_type,
+                transfer_id,
+                file_id,
+            } => match transfer_type {
                 TransferType::Incoming => {
                     self.storage
                         .insert_incoming_path_started_state(transfer_id, file_id)
@@ -63,58 +69,71 @@ impl StorageDispatch {
                 }
             },
 
-            Event::FileCanceled(transfer_type, transfer_id, file_id, by_peer) => {
-                match transfer_type {
-                    TransferType::Incoming => {
-                        let progress = self.get_file_progress(&transfer_id, &file_id);
-                        self.storage
-                            .insert_incoming_path_cancel_state(
-                                transfer_id,
-                                file_id,
-                                by_peer,
-                                progress,
-                            )
-                            .await?
-                    }
-                    TransferType::Outgoing => {
-                        let progress = self.get_file_progress(&transfer_id, &file_id);
-                        self.storage
-                            .insert_outgoing_path_cancel_state(
-                                transfer_id,
-                                file_id,
-                                by_peer,
-                                progress,
-                            )
-                            .await?
-                    }
+            Event::FileCanceled {
+                transfer_type,
+                transfer_id,
+                file_id,
+                by_peer,
+            } => match transfer_type {
+                TransferType::Incoming => {
+                    let progress = self.get_file_progress(&transfer_id, &file_id);
+                    self.storage
+                        .insert_incoming_path_cancel_state(transfer_id, file_id, by_peer, progress)
+                        .await?
                 }
-            }
+                TransferType::Outgoing => {
+                    let progress = self.get_file_progress(&transfer_id, &file_id);
+                    self.storage
+                        .insert_outgoing_path_cancel_state(transfer_id, file_id, by_peer, progress)
+                        .await?
+                }
+            },
 
-            Event::FileDownloadComplete(transfer_id, file_id, final_path) => {
+            Event::FileDownloadComplete {
+                transfer_id,
+                file_id,
+                final_path,
+            } => {
                 self.storage
                     .insert_incoming_path_completed_state(transfer_id, file_id, final_path)
                     .await?
             }
 
-            Event::FileUploadComplete(transfer_id, file_id) => {
+            Event::FileUploadComplete {
+                transfer_id,
+                file_id,
+            } => {
                 self.storage
                     .insert_outgoing_path_completed_state(transfer_id, file_id)
                     .await?
             }
 
-            Event::TransferCanceled(_, transfer_info, by_peer) => {
+            Event::TransferCanceled {
+                transfer_type: _,
+                transfer_info,
+                by_peer,
+            } => {
                 self.storage
                     .insert_transfer_cancel_state(transfer_info.id, by_peer)
                     .await?
             }
 
-            Event::TransferFailed(_, transfer_info, error_code) => {
+            Event::TransferFailed {
+                transfer_type: _,
+                transfer_info,
+                error_code,
+            } => {
                 self.storage
                     .insert_transfer_failed_state(transfer_info.id, error_code)
                     .await?
             }
 
-            Event::FileFailed(transfer_type, transfer_id, file_id, error_code) => {
+            Event::FileFailed {
+                transfer_type,
+                transfer_id,
+                file_id,
+                error_code,
+            } => {
                 let progress = self.get_file_progress(&transfer_id, &file_id);
                 match transfer_type {
                     TransferType::Incoming => {
@@ -140,7 +159,11 @@ impl StorageDispatch {
                 }
             }
 
-            Event::Progress(transfer_id, file_id, progress) => {
+            Event::Progress {
+                transfer_id,
+                file_id,
+                progress,
+            } => {
                 *self
                     .file_progress
                     .entry((transfer_id, file_id))
@@ -173,61 +196,68 @@ impl StorageDispatch {
 impl From<&crate::Event> for Event {
     fn from(event: &crate::Event) -> Self {
         match event {
-            crate::Event::RequestReceived(transfer) => {
-                Event::Pending(TransferType::Incoming, transfer.storage_info())
-            }
-            crate::Event::RequestQueued(transfer) => {
-                Event::Pending(TransferType::Outgoing, transfer.storage_info())
-            }
-            crate::Event::FileDownloadStarted(transfer, file) => Event::Started(
-                TransferType::Incoming,
-                transfer.id().to_string(),
-                file.to_string(),
-            ),
-            crate::Event::FileUploadStarted(transfer, file) => Event::Started(
-                TransferType::Outgoing,
-                transfer.id().to_string(),
-                file.to_string(),
-            ),
-            crate::Event::FileDownloadCancelled(transfer, file, by_peer) => Event::FileCanceled(
-                TransferType::Incoming,
-                transfer.id().to_string(),
-                file.to_string(),
-                *by_peer,
-            ),
-            crate::Event::FileUploadCancelled(transfer, file, by_peer) => Event::FileCanceled(
-                TransferType::Outgoing,
-                transfer.id().to_string(),
-                file.to_string(),
-                *by_peer,
-            ),
-            crate::Event::FileDownloadSuccess(transfer, file) => Event::FileDownloadComplete(
-                transfer.id().to_string(),
-                file.id.to_string(),
-                file.final_path.to_string_lossy().to_string(),
-            ),
-            crate::Event::FileUploadSuccess(transfer, file) => {
-                Event::FileUploadComplete(transfer.id().to_string(), file.to_string())
-            }
-            crate::Event::FileDownloadFailed(transfer, file, error) => Event::FileFailed(
-                TransferType::Incoming,
-                transfer.id().to_string(),
-                file.to_string(),
-                error.into(),
-            ),
-            crate::Event::FileUploadFailed(transfer, file, error) => Event::FileFailed(
-                TransferType::Outgoing,
-                transfer.id().to_string(),
-                file.to_string(),
-                error.into(),
-            ),
+            crate::Event::RequestReceived(transfer) => Event::Pending {
+                transfer_type: TransferType::Incoming,
+                transfer_info: transfer.storage_info(),
+            },
+            crate::Event::RequestQueued(transfer) => Event::Pending {
+                transfer_type: TransferType::Outgoing,
+                transfer_info: transfer.storage_info(),
+            },
+            crate::Event::FileDownloadStarted(transfer, file) => Event::Started {
+                transfer_type: TransferType::Incoming,
+                transfer_id: transfer.id().to_string(),
+                file_id: file.to_string(),
+            },
+            crate::Event::FileUploadStarted(transfer, file) => Event::Started {
+                transfer_type: TransferType::Outgoing,
+                transfer_id: transfer.id().to_string(),
+                file_id: file.to_string(),
+            },
+            crate::Event::FileDownloadCancelled(transfer, file, by_peer) => Event::FileCanceled {
+                transfer_type: TransferType::Incoming,
+                transfer_id: transfer.id().to_string(),
+                file_id: file.to_string(),
+                by_peer: *by_peer,
+            },
+            crate::Event::FileUploadCancelled(transfer, file, by_peer) => Event::FileCanceled {
+                transfer_type: TransferType::Outgoing,
+                transfer_id: transfer.id().to_string(),
+                file_id: file.to_string(),
+                by_peer: *by_peer,
+            },
+            crate::Event::FileDownloadSuccess(transfer, file) => Event::FileDownloadComplete {
+                transfer_id: transfer.id().to_string(),
+                file_id: file.id.to_string(),
+                final_path: file.final_path.to_string_lossy().to_string(),
+            },
+            crate::Event::FileUploadSuccess(transfer, file) => Event::FileUploadComplete {
+                transfer_id: transfer.id().to_string(),
+                file_id: file.to_string(),
+            },
+            crate::Event::FileDownloadFailed(transfer, file, error) => Event::FileFailed {
+                transfer_type: TransferType::Incoming,
+                transfer_id: transfer.id().to_string(),
+                file_id: file.to_string(),
+                error_code: error.into(),
+            },
+            crate::Event::FileUploadFailed(transfer, file, error) => Event::FileFailed {
+                transfer_type: TransferType::Outgoing,
+                transfer_id: transfer.id().to_string(),
+                file_id: file.to_string(),
+                error_code: error.into(),
+            },
             crate::Event::TransferCanceled(transfer, is_sender, by_peer) => {
                 let transfer_type = match is_sender {
                     false => TransferType::Incoming,
                     true => TransferType::Outgoing,
                 };
 
-                Event::TransferCanceled(transfer_type, transfer.storage_info(), *by_peer)
+                Event::TransferCanceled {
+                    transfer_type,
+                    transfer_info: transfer.storage_info(),
+                    by_peer: *by_peer,
+                }
             }
             crate::Event::TransferFailed(transfer, error, by_peer) => {
                 let transfer_type = match by_peer {
@@ -235,18 +265,22 @@ impl From<&crate::Event> for Event {
                     true => TransferType::Incoming,
                 };
 
-                Event::TransferFailed(transfer_type, transfer.storage_info(), error.into())
+                Event::TransferFailed {
+                    transfer_type,
+                    transfer_info: transfer.storage_info(),
+                    error_code: error.into(),
+                }
             }
-            crate::Event::FileDownloadProgress(transfer, file, progress) => Event::Progress(
-                transfer.id().to_string(),
-                file.to_string(),
-                *progress as i64,
-            ),
-            crate::Event::FileUploadProgress(transfer, file, progress) => Event::Progress(
-                transfer.id().to_string(),
-                file.to_string(),
-                *progress as i64,
-            ),
+            crate::Event::FileDownloadProgress(transfer, file, progress) => Event::Progress {
+                transfer_id: transfer.id().to_string(),
+                file_id: file.to_string(),
+                progress: *progress as i64,
+            },
+            crate::Event::FileUploadProgress(transfer, file, progress) => Event::Progress {
+                transfer_id: transfer.id().to_string(),
+                file_id: file.to_string(),
+                progress: *progress as i64,
+            },
         }
     }
 }

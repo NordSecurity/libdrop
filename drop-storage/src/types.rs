@@ -1,21 +1,13 @@
 use serde::Serialize;
 
 type TransferId = String;
-type FilePath = String;
+type FileId = String;
 
 #[derive(Debug, Copy, Clone)]
+#[repr(u32)]
 pub enum TransferType {
     Incoming = 0,
     Outgoing = 1,
-}
-
-impl From<TransferType> for i32 {
-    fn from(transfer_type: TransferType) -> Self {
-        match transfer_type {
-            TransferType::Incoming => 0,
-            TransferType::Outgoing => 1,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -34,19 +26,51 @@ pub struct TransferInfo {
 
 #[derive(Debug)]
 pub enum Event {
-    Pending(TransferType, TransferInfo),
-    Started(TransferType, TransferId, FilePath),
-
-    FileCanceled(TransferType, TransferId, FilePath, bool),
-    TransferCanceled(TransferType, TransferInfo, bool),
-
-    FileFailed(TransferType, TransferId, FilePath, u32),
-    TransferFailed(TransferType, TransferInfo, u32),
-
-    FileUploadComplete(TransferId, FilePath),
-    FileDownloadComplete(TransferId, FilePath, String),
-
-    Progress(TransferId, FilePath, i64),
+    Pending {
+        transfer_type: TransferType,
+        transfer_info: TransferInfo,
+    },
+    Started {
+        transfer_type: TransferType,
+        transfer_id: TransferId,
+        file_id: FileId,
+    },
+    FileCanceled {
+        transfer_type: TransferType,
+        transfer_id: TransferId,
+        file_id: FileId,
+        by_peer: bool,
+    },
+    TransferCanceled {
+        transfer_type: TransferType,
+        transfer_info: TransferInfo,
+        by_peer: bool,
+    },
+    FileFailed {
+        transfer_type: TransferType,
+        transfer_id: TransferId,
+        file_id: FileId,
+        error_code: u32,
+    },
+    TransferFailed {
+        transfer_type: TransferType,
+        transfer_info: TransferInfo,
+        error_code: u32,
+    },
+    FileUploadComplete {
+        transfer_id: TransferId,
+        file_id: FileId,
+    },
+    FileDownloadComplete {
+        transfer_id: TransferId,
+        file_id: FileId,
+        final_path: String,
+    },
+    Progress {
+        transfer_id: TransferId,
+        file_id: FileId,
+        progress: i64,
+    },
 }
 
 #[derive(Debug, Serialize)]

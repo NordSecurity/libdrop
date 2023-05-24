@@ -42,7 +42,7 @@ impl Storage {
         transfer_type: TransferType,
     ) -> Result<()> {
         let mut conn = self.conn.acquire().await?;
-        let transfer_type_int: i32 = transfer_type.into();
+        let transfer_type_int = transfer_type as u32;
 
         sqlx::query!(
             "INSERT OR IGNORE INTO peers (id) VALUES (?1)",
@@ -61,15 +61,13 @@ impl Storage {
         .await?;
 
         for path in transfer.files {
-            self.insert_path(transfer_type, transfer.id.clone(), path, &mut conn)
-                .await?;
+            Self::insert_path(transfer_type, transfer.id.clone(), path, &mut conn).await?;
         }
 
         Ok(())
     }
 
     async fn insert_path(
-        &self,
         transfer_type: TransferType,
         transfer_id: String,
         path: TransferPath,
