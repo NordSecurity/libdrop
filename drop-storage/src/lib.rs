@@ -75,7 +75,7 @@ impl Storage {
     ) -> Result<()> {
         match transfer_type {
             TransferType::Incoming => sqlx::query!(
-                "INSERT INTO incoming_paths (transfer_id, path, path_id, bytes) VALUES (?1, ?2, \
+                "INSERT INTO incoming_paths (transfer_id, path, path_hash, bytes) VALUES (?1, ?2, \
                  ?3, ?4)",
                 transfer_id,
                 path.path,
@@ -86,7 +86,7 @@ impl Storage {
             .await
             .map_err(error::Error::DBError)?,
             TransferType::Outgoing => sqlx::query!(
-                "INSERT INTO outgoing_paths (transfer_id, path, path_id, bytes) VALUES (?1, ?2, \
+                "INSERT INTO outgoing_paths (transfer_id, path, path_hash, bytes) VALUES (?1, ?2, \
                  ?3, ?4)",
                 transfer_id,
                 path.path,
@@ -162,7 +162,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO outgoing_path_pending_states (path_id) VALUES ((SELECT id FROM \
-             outgoing_paths WHERE transfer_id = ?1 AND path_id = ?2))",
+             outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
             transfer_id,
             file_path
         )
@@ -182,7 +182,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO incoming_path_pending_states (path_id) VALUES ((SELECT id FROM \
-             incoming_paths WHERE transfer_id = ?1 AND path_id = ?2))",
+             incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
             transfer_id,
             path_id,
         )
@@ -202,7 +202,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO outgoing_path_started_states (path_id, bytes_sent) VALUES ((SELECT id \
-             FROM outgoing_paths WHERE transfer_id = ?1 AND path_id = ?2), ?3)",
+             FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
             transfer_id,
             path_id,
             0
@@ -223,7 +223,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO incoming_path_started_states (path_id, bytes_received) VALUES ((SELECT \
-             id FROM incoming_paths WHERE transfer_id = ?1 AND path_id = ?2), ?3)",
+             id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
             transfer_id,
             path_id,
             0
@@ -246,7 +246,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO outgoing_path_cancel_states (path_id, by_peer, bytes_sent) VALUES \
-             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_id = ?2), ?3, ?4)",
+             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
             transfer_id,
             path_id,
             by_peer,
@@ -270,7 +270,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO incoming_path_cancel_states (path_id, by_peer, bytes_received) VALUES \
-             ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_id = ?2), ?3, ?4)",
+             ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
             transfer_id,
             path_id,
             by_peer,
@@ -294,8 +294,8 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) \
-             VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?2 AND path_id = ?2), ?3, \
-             ?4)",
+             VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?2 AND path_hash = ?2), \
+             ?3, ?4)",
             transfer_id,
             path_id,
             error,
@@ -319,7 +319,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent) VALUES \
-             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?2 AND path_id = ?2), ?3, ?4)",
+             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?2 AND path_hash = ?2), ?3, ?4)",
             transfer_id,
             path_id,
             error,
@@ -341,7 +341,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO outgoing_path_completed_states (path_id) VALUES ((SELECT id FROM \
-             outgoing_paths WHERE transfer_id = ?1 AND path_id = ?2))",
+             outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
             transfer_id,
             path_id,
         )
@@ -362,7 +362,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO incoming_path_completed_states (path_id, final_path) VALUES ((SELECT id \
-             from incoming_paths WHERE transfer_id = ?1 AND path_id = ?2), ?3)",
+             from incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
             transfer_id,
             path_id,
             final_path

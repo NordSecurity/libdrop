@@ -1,9 +1,10 @@
+use std::collections::HashMap;
+
 use drop_storage::{
     error::Error,
     types::{Event, Transfer},
     Storage, TransferType,
 };
-use std::collections::HashMap;
 
 pub struct StorageDispatch {
     storage: drop_storage::Storage,
