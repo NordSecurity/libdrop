@@ -26,6 +26,7 @@ public class libnorddropJNI {
   public final static native int NORDDROP_RES_INSTANCE_START_get();
   public final static native int NORDDROP_RES_INSTANCE_STOP_get();
   public final static native int NORDDROP_RES_INVALID_PRIVKEY_get();
+  public final static native int NORDDROP_RES_DB_ERROR_get();
   public final static native long new_NordDrop(INordDropEventCb jarg1, int jarg2, INordDropLoggerCb jarg3, INordDropPubkeyCb jarg4, byte[] jarg5);
   public final static native void delete_NordDrop(long jarg1);
   public final static native int NordDrop_start(long jarg1, NordDrop jarg1_, String jarg2, String jarg3);

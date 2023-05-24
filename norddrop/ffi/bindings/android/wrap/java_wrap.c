@@ -620,6 +620,18 @@ SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NORDDROP_1RES_1
 }
 
 
+SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NORDDROP_1RES_1DB_1ERROR_1get(JNIEnv *jenv, jclass jcls) {
+  jint jresult = 0 ;
+  enum norddrop_result result;
+  
+  (void)jenv;
+  (void)jcls;
+  result = (enum norddrop_result)NORDDROP_RES_DB_ERROR;
+  jresult = (jint)result; 
+  return jresult;
+}
+
+
 SWIGEXPORT jlong JNICALL Java_com_nordsec_norddrop_libnorddropJNI_new_1NordDrop(JNIEnv *jenv, jclass jcls, jobject jarg1, jint jarg2, jobject jarg3, jobject jarg4, jbyteArray jarg5) {
   jlong jresult = 0 ;
   norddrop_event_cb arg1 ;

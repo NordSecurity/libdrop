@@ -33,7 +33,8 @@ public enum NorddropResult {
   ResAddrInUse = 7,
   ResInstanceStart = 8,
   ResInstanceStop = 9,
-  ResInvalidPrivkey = 10
+  ResInvalidPrivkey = 10,
+  ResDbError = 11
 }
 
 }
