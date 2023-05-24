@@ -2,7 +2,7 @@ use std::str::FromStr;
 pub mod error;
 pub mod types;
 use slog::Logger;
-use sqlx::{pool::PoolConnection, sqlite::SqliteConnectOptions, Sqlite, SqlitePool};
+use sqlx::{sqlite::SqliteConnectOptions, Connection, Sqlite, SqlitePool, Transaction};
 use types::{
     DbTransferType, IncomingPath, IncomingPathCancelState, IncomingPathCompletedState,
     IncomingPathFailedState, IncomingPathPendingState, IncomingPathStartedState, OutgoingPath,
@@ -42,6 +42,7 @@ impl Storage {
         transfer_type: TransferType,
     ) -> Result<()> {
         let mut conn = self.conn.acquire().await?;
+        let mut conn = conn.begin().await?;
         let transfer_type_int = transfer_type as u32;
 
         sqlx::query!(
@@ -64,14 +65,14 @@ impl Storage {
             Self::insert_path(transfer_type, transfer.id.clone(), path, &mut conn).await?;
         }
 
-        Ok(())
+        conn.commit().await.map_err(error::Error::DBError)
     }
 
     async fn insert_path(
         transfer_type: TransferType,
         transfer_id: String,
         path: TransferPath,
-        conn: &mut PoolConnection<Sqlite>,
+        conn: &mut Transaction<'_, Sqlite>,
     ) -> Result<()> {
         match transfer_type {
             TransferType::Incoming => sqlx::query!(
