@@ -44,9 +44,6 @@ pub enum DownloadInit {
         offset: u64,
         tmp_location: Hidden<PathBuf>,
     },
-    AlreadyDone {
-        destination: Hidden<PathBuf>,
-    },
 }
 
 #[async_trait::async_trait]
