@@ -1,3 +1,12 @@
+### UNRELEASE
+### **Calm**
+---
+* Remove reporting already downloaded file as finished. Instead, redownload it with (1) suffix 
+* Fix the go bindings being unusable
+
+---
+<br>
+
 ### v3.0.0
 ### **ANGERY**
 ---
