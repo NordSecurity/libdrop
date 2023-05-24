@@ -644,17 +644,6 @@ impl FileXferTask {
                     events.stop(event).await;
                 }
             }
-            handler::DownloadInit::AlreadyDone { destination } => {
-                events
-                    .emit_force(crate::Event::FileDownloadSuccess(
-                        self.xfer.clone(),
-                        DownloadSuccess {
-                            id: self.file.id().clone(),
-                            final_path: Hidden(destination.0.into_boxed_path()),
-                        },
-                    ))
-                    .await;
-            }
         }
     }
 }
