@@ -456,6 +456,7 @@ version = "1.0.0"
 name = "drop-storage"
 version = "1.0.0"
 dependencies = [
+ "serde",
  "slog",
  "sqlx",
  "thiserror",

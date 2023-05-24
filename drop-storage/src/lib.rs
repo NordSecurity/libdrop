@@ -77,7 +77,8 @@ impl Storage {
     ) -> Result<()> {
         match transfer_type {
             TransferType::Incoming => sqlx::query!(
-                "INSERT INTO incoming_paths (transfer_id, path, path_id, bytes) VALUES (?1, ?2, ?3, ?4)",
+                "INSERT INTO incoming_paths (transfer_id, path, path_id, bytes) VALUES (?1, ?2, \
+                 ?3, ?4)",
                 transfer_id,
                 path.path,
                 path.id,
@@ -87,7 +88,8 @@ impl Storage {
             .await
             .map_err(error::Error::DBError)?,
             TransferType::Outgoing => sqlx::query!(
-                "INSERT INTO outgoing_paths (transfer_id, path, path_id, bytes) VALUES (?1, ?2, ?3, ?4)",
+                "INSERT INTO outgoing_paths (transfer_id, path, path_id, bytes) VALUES (?1, ?2, \
+                 ?3, ?4)",
                 transfer_id,
                 path.path,
                 path.id,
@@ -294,7 +296,8 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) \
-             VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?2 AND path_id = ?2), ?3, ?4)",
+             VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?2 AND path_id = ?2), ?3, \
+             ?4)",
             transfer_id,
             path_id,
             error,
@@ -373,32 +376,59 @@ impl Storage {
         Ok(())
     }
 
-    pub async fn get_transfers(&self) -> Result<Vec<Transfer>> {
+    pub async fn purge_transfers_until(&self, until_timestamp: i64) -> Result<()> {
         let mut conn = self.conn.acquire().await?;
 
-        let mut transfers = sqlx::query!("SELECT * FROM transfers")
-            .fetch_all(&mut conn)
-            .await
-            .map_err(error::Error::DBError)?
-            .iter()
-            .map(|t| {
-                let transfer_type = match t.is_outgoing {
-                    0 => DbTransferType::Incoming(vec![]),
-                    1 => DbTransferType::Outgoing(vec![]),
-                    _ => unreachable!(),
-                };
+        sqlx::query!(
+            "DELETE FROM transfers WHERE created_at < datetime(?1, 'unixepoch')",
+            until_timestamp
+        )
+        .execute(&mut conn)
+        .await
+        .map_err(error::Error::DBError)
+        .map(|_| ())
+    }
 
-                Transfer {
-                    id: t.id.clone(),
-                    peer_id: t.peer_id.clone(),
-                    transfer_type,
-                    created_at: t.created_at,
-                    active_states: vec![],
-                    cancel_states: vec![],
-                    failed_states: vec![],
-                }
-            })
-            .collect::<Vec<_>>();
+    pub async fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<()> {
+        let mut conn = self.conn.acquire().await?;
+
+        let transfer_ids = transfer_ids.join(",");
+        sqlx::query!("DELETE FROM transfers WHERE id IN (?1)", transfer_ids)
+            .execute(&mut conn)
+            .await
+            .map_err(error::Error::DBError)
+            .map(|_| ())
+    }
+
+    pub async fn get_transfers(&self, since_timestamp: i64) -> Result<Vec<Transfer>> {
+        let mut conn = self.conn.acquire().await?;
+
+        let mut transfers = sqlx::query!(
+            "SELECT * FROM transfers WHERE created_at >= datetime(?1, 'unixepoch')",
+            since_timestamp
+        )
+        .fetch_all(&mut conn)
+        .await
+        .map_err(error::Error::DBError)?
+        .iter()
+        .map(|t| {
+            let transfer_type = match t.is_outgoing {
+                0 => DbTransferType::Incoming(vec![]),
+                1 => DbTransferType::Outgoing(vec![]),
+                _ => unreachable!(),
+            };
+
+            Transfer {
+                id: t.id.clone(),
+                peer_id: t.peer_id.clone(),
+                transfer_type,
+                created_at: t.created_at.timestamp_millis(),
+                active_states: vec![],
+                cancel_states: vec![],
+                failed_states: vec![],
+            }
+        })
+        .collect::<Vec<_>>();
 
         for transfer in &mut transfers {
             match transfer.transfer_type {
@@ -424,7 +454,7 @@ impl Storage {
             .iter()
             .map(|s| TransferActiveState {
                 transfer_id: s.transfer_id.clone(),
-                created_at: s.created_at,
+                created_at: s.created_at.timestamp_millis(),
             })
             .collect();
 
@@ -439,7 +469,7 @@ impl Storage {
             .map(|s| TransferCancelState {
                 transfer_id: s.transfer_id.clone(),
                 by_peer: s.by_peer,
-                created_at: s.created_at,
+                created_at: s.created_at.timestamp_millis(),
             })
             .collect();
 
@@ -454,7 +484,7 @@ impl Storage {
             .map(|s| TransferFailedState {
                 transfer_id: s.transfer_id.clone(),
                 status_code: s.status_code,
-                created_at: s.created_at,
+                created_at: s.created_at.timestamp_millis(),
             })
             .collect();
         }
@@ -478,7 +508,7 @@ impl Storage {
             transfer_id: p.transfer_id.clone(),
             path: p.path.clone(),
             bytes: p.bytes,
-            created_at: p.created_at,
+            created_at: p.created_at.timestamp_millis(),
             pending_states: vec![],
             started_states: vec![],
             cancel_states: vec![],
@@ -497,8 +527,8 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| OutgoingPathPendingState {
-                path_id: s.path_id.clone(),
-                created_at: s.created_at,
+                path_id: s.path_id,
+                created_at: s.created_at.timestamp_millis(),
             })
             .collect();
 
@@ -511,9 +541,9 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| OutgoingPathStartedState {
-                path_id: s.path_id.clone(),
+                path_id: s.path_id,
                 bytes_sent: s.bytes_sent,
-                created_at: s.created_at,
+                created_at: s.created_at.timestamp_millis(),
             })
             .collect();
 
@@ -526,10 +556,10 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| OutgoingPathCancelState {
-                path_id: s.path_id.clone(),
+                path_id: s.path_id,
                 by_peer: s.by_peer,
                 bytes_sent: s.bytes_sent,
-                created_at: s.created_at,
+                created_at: s.created_at.timestamp_millis(),
             })
             .collect();
 
@@ -542,10 +572,10 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| OutgoingPathFailedState {
-                path_id: s.path_id.clone(),
+                path_id: s.path_id,
                 status_code: s.status_code,
                 bytes_sent: s.bytes_sent,
-                created_at: s.created_at,
+                created_at: s.created_at.timestamp_millis(),
             })
             .collect();
 
@@ -558,8 +588,8 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| OutgoingPathCompletedState {
-                path_id: s.path_id.clone(),
-                created_at: s.created_at,
+                path_id: s.path_id,
+                created_at: s.created_at.timestamp_millis(),
             })
             .collect();
         }
@@ -579,11 +609,11 @@ impl Storage {
         .map_err(error::Error::DBError)?
         .iter()
         .map(|p| IncomingPath {
-            id: p.id.clone(),
+            id: p.id,
             transfer_id: p.transfer_id.clone(),
             path: p.path.clone(),
             bytes: p.bytes,
-            created_at: p.created_at,
+            created_at: p.created_at.timestamp_millis(),
             pending_states: vec![],
             started_states: vec![],
             cancel_states: vec![],
@@ -602,8 +632,8 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| IncomingPathPendingState {
-                path_id: s.path_id.clone(),
-                created_at: s.created_at,
+                path_id: s.path_id,
+                created_at: s.created_at.timestamp_millis(),
             })
             .collect();
 
@@ -616,9 +646,9 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| IncomingPathStartedState {
-                path_id: s.path_id.clone(),
+                path_id: s.path_id,
                 bytes_received: s.bytes_received,
-                created_at: s.created_at,
+                created_at: s.created_at.timestamp_millis(),
             })
             .collect();
 
@@ -631,10 +661,10 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| IncomingPathCancelState {
-                path_id: s.path_id.clone(),
+                path_id: s.path_id,
                 by_peer: s.by_peer,
                 bytes_received: s.bytes_received,
-                created_at: s.created_at,
+                created_at: s.created_at.timestamp_millis(),
             })
             .collect();
 
@@ -647,10 +677,10 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| IncomingPathFailedState {
-                path_id: s.path_id.clone(),
+                path_id: s.path_id,
                 status_code: s.status_code,
                 bytes_received: s.bytes_received,
-                created_at: s.created_at,
+                created_at: s.created_at.timestamp_millis(),
             })
             .collect();
 
@@ -663,9 +693,9 @@ impl Storage {
             .map_err(error::Error::DBError)?
             .iter()
             .map(|s| IncomingPathCompletedState {
-                path_id: s.path_id.clone(),
+                path_id: s.path_id,
                 final_path: s.final_path.clone(),
-                created_at: s.created_at,
+                created_at: s.created_at.timestamp_millis(),
             })
             .collect();
         }
