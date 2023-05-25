@@ -19,6 +19,7 @@ use crate::{
     auth,
     error::ResultExt,
     manager::TransferConnection,
+    storage_dispatch,
     ws::{
         self,
         client::ClientReq,
@@ -65,7 +66,7 @@ macro_rules! moose_try_file {
 impl Service {
     pub fn start(
         addr: IpAddr,
-        storage: drop_storage::Storage,
+        storage: Arc<Mutex<storage_dispatch::StorageDispatch>>,
         event_tx: mpsc::Sender<Event>,
         logger: Logger,
         config: Arc<DropConfig>,
@@ -75,7 +76,7 @@ impl Service {
         let task = || {
             let state = Arc::new(State {
                 event_tx,
-                transfer_manager: Mutex::new(TransferManager::new(storage)),
+                transfer_manager: Mutex::new(TransferManager::new(logger.clone(), storage)),
                 moose: moose.clone(),
                 config,
                 auth: auth.clone(),
@@ -132,7 +133,7 @@ impl Service {
 
                 state
                     .event_tx
-                    .send(Event::TransferFailed(xfer, crate::Error::Canceled))
+                    .send(Event::TransferFailed(xfer, crate::Error::Canceled, true))
                     .await
                     .expect("Failed to send TransferFailed event");
             }

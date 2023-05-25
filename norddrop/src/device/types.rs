@@ -204,11 +204,11 @@ impl From<drop_transfer::Event> for Event {
                     status: From::from(&status),
                 },
             },
-            drop_transfer::Event::TransferCanceled(tx, by_peer) => Event::TransferFinished {
+            drop_transfer::Event::TransferCanceled(tx, _, by_peer) => Event::TransferFinished {
                 transfer: tx.id().to_string(),
                 data: FinishEvent::TransferCanceled { by_peer },
             },
-            drop_transfer::Event::TransferFailed(tx, status) => Event::TransferFinished {
+            drop_transfer::Event::TransferFailed(tx, status, _) => Event::TransferFinished {
                 transfer: tx.id().to_string(),
                 data: FinishEvent::TransferFailed {
                     status: From::from(&status),
