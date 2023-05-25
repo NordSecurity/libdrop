@@ -14,7 +14,7 @@ use drop_auth::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
 use drop_config::DropConfig;
 use drop_transfer::{auth, storage_dispatch, Event, File, Service, Transfer};
 use slog::{o, Drain, Logger};
-use slog_scope::{info, warn};
+use slog_scope::{error, info, warn};
 use tokio::sync::{mpsc, watch, Mutex};
 use uuid::Uuid;
 
@@ -55,7 +55,9 @@ async fn listen(
     };
 
     while let Some(ev) = rx.recv().await {
-        storage.lock().await.handle_event(&ev).await?;
+        if let Err(e) = storage.lock().await.handle_event(&ev).await {
+            error!("Failed to handle storage event: {}", e);
+        }
         match ev {
             Event::RequestReceived(xfer) => {
                 let xfid = xfer.id();
