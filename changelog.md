@@ -3,6 +3,7 @@
 ---
 * Remove reporting already downloaded file as finished. Instead, redownload it with (1) suffix 
 * Fix the go bindings being unusable
+* Fix directory flattening on Windows
 
 ---
 <br>
