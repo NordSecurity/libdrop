@@ -77,11 +77,11 @@ impl File {
             let subpath = entry
                 .path()
                 .strip_prefix(parent)
-                .map_err(|_| crate::Error::BadPath)?
-                .to_str()
-                .ok_or(crate::Error::BadPath)?;
+                .map_err(|_| crate::Error::BadPath)?;
 
-            let file = File::new(subpath.into(), entry.into_path(), meta)?;
+            let subpath = FileSubPath::from_path(subpath)?;
+
+            let file = File::new(subpath, entry.into_path(), meta)?;
             files.push(file);
         }
 
