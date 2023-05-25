@@ -40,6 +40,10 @@ You can verify the transfer by checking the file system in the server container 
 ```bash
 echo -n "<absolute file path>" | sha256sum  | cut -d " " -f1 | xxd -ps -r | basenc --base64url | tr -d '='
 ```
+## Database development
+When developing the database, it is strongly encouraged to use the "online" mode of `sqlx`, by setting the environment variable `DATABASE_URL` or providing it in `drop-storage/.env` file, the variable should contain the path to a database file for sqlx to validate your queries against.
+
+Before pushing new code that contains changes to the queries, the `sqlx-data.json` file should be updated by calling `cargo sqlx prepare`, else the CI pipelines will most likely fail.
 
 # Contributing
 [CONTRIBUTING.md](CONTRIBUTING.md)

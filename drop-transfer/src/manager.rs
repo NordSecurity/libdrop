@@ -5,11 +5,13 @@ use std::{
     sync::Arc,
 };
 
-use tokio::sync::mpsc::UnboundedSender;
+use slog::Logger;
+use tokio::sync::{mpsc::UnboundedSender, Mutex};
 use uuid::Uuid;
 
 use crate::{
     service::State,
+    storage_dispatch,
     ws::{client::ClientReq, server::ServerReq},
     Error, FileId, Transfer,
 };
@@ -31,8 +33,8 @@ pub struct TransferState {
 /// transfers and their status
 pub(crate) struct TransferManager {
     transfers: HashMap<Uuid, TransferState>,
-    #[allow(dead_code)]
-    storage: drop_storage::Storage,
+    storage: Arc<Mutex<storage_dispatch::StorageDispatch>>,
+    logger: Logger,
 }
 
 impl TransferState {
@@ -46,10 +48,14 @@ impl TransferState {
 }
 
 impl TransferManager {
-    pub(crate) fn new(storage: drop_storage::Storage) -> TransferManager {
+    pub(crate) fn new(
+        logger: Logger,
+        storage: Arc<Mutex<storage_dispatch::StorageDispatch>>,
+    ) -> TransferManager {
         TransferManager {
             transfers: HashMap::new(),
             storage,
+            logger,
         }
     }
 
@@ -62,14 +68,29 @@ impl TransferManager {
         Ok(())
     }
 
-    pub(crate) fn insert_transfer(
+    pub(crate) async fn insert_transfer(
         &mut self,
         xfer: Transfer,
         connection: TransferConnection,
+        transfer_type: drop_storage::TransferType,
     ) -> crate::Result<()> {
         match self.transfers.entry(xfer.id()) {
             Entry::Occupied(_) => Err(Error::BadTransferState),
             Entry::Vacant(entry) => {
+                if let Err(err) = self
+                    .storage
+                    .lock()
+                    .await
+                    .insert_transfer(transfer_type, &xfer)
+                    .await
+                {
+                    slog::error!(
+                        self.logger,
+                        "Failed to insert transfer into storage: {}",
+                        err
+                    );
+                }
+
                 entry.insert(TransferState::new(xfer, connection));
                 Ok(())
             }

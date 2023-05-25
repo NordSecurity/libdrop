@@ -7,7 +7,7 @@ use std::{
 
 use drop_auth::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH};
 use drop_config::{Config, DropConfig};
-use drop_transfer::{auth, utils::Hidden, File, Service, Transfer};
+use drop_transfer::{auth, storage_dispatch, utils::Hidden, File, Service, Transfer};
 use slog::{debug, error, trace, warn, Logger};
 use tokio::sync::{mpsc, Mutex};
 
@@ -125,13 +125,30 @@ impl NordDropFFI {
 
         let (tx, mut rx) = mpsc::channel::<drop_transfer::Event>(16);
 
+        let storage = Arc::new(Mutex::new(self.rt.block_on(async {
+            storage_dispatch::StorageDispatch::new(
+                self.logger.clone(),
+                &self.config.drop.storage_path,
+            )
+            .await
+            .map_err(|e| {
+                error!(self.logger, "Failed to prepare storage: {}", e);
+                ffi::types::NORDDROP_RES_DB_ERROR
+            })
+        })?));
+
         // Spawn a task grabbing events from the inner service and dispatch them
         // to the host app
         let ed = self.event_dispatcher.clone();
         let event_logger = self.logger.clone();
+        let event_storage = storage.clone();
         self.rt.spawn(async move {
             while let Some(e) = rx.recv().await {
                 debug!(event_logger, "emitting event: {:#?}", e);
+
+                if let Err(err) = event_storage.lock().await.handle_event(&e).await {
+                    error!(event_logger, "Failed to handle database event: {}", err);
+                }
 
                 // Android team reported problems with the event ordering.
                 // The events where dispatched in different order than where emitted.
@@ -142,14 +159,6 @@ impl NordDropFFI {
         });
 
         self.rt.block_on(async {
-            let storage =
-                drop_storage::Storage::new(self.logger.clone(), &self.config.drop.storage_path)
-                    .await
-                    .map_err(|e| {
-                        error!(self.logger, "Failed to prepare storage: {}", e);
-                        ffi::types::NORDDROP_RES_DB_ERROR
-                    })?;
-
             let service = match Service::start(
                 addr,
                 storage,
