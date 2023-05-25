@@ -1,3 +1,11 @@
+### v4.0.0
+### **UNRELEASED**
+---
+* Persist transfers to SQLite
+
+---
+<br>
+
 ### v3.0.0
 ### **ANGERY**
 ---
