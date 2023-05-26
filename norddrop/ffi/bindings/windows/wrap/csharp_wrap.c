@@ -314,7 +314,7 @@ SWIGINTERN void delete_norddrop(struct norddrop *self){
 extern "C" {
 #endif
 
-SWIGEXPORT void * SWIGSTDCALL CSharp_NordSecfNordDrop_new_Norddrop___(cs_norddrop_event_cb jarg1, int jarg2, cs_norddrop_logger_cb jarg3, cs_norddrop_pubkey_cb jarg4, char * jarg5) {
+SWIGEXPORT void * SWIGSTDCALL CSharp_NordSecfNordDrop_new_Norddrop___(cs_norddrop_event_cb jarg1, int jarg2, cs_norddrop_logger_cb jarg3, cs_norddrop_pubkey_cb jarg4, unsigned char* jarg5) {
   void * jresult ;
   norddrop_event_cb arg1 ;
   enum norddrop_log_level arg2 ;
@@ -342,11 +342,13 @@ SWIGEXPORT void * SWIGSTDCALL CSharp_NordSecfNordDrop_new_Norddrop___(cs_norddro
     .cb = call_norddrop_pubkey_cb,
   };
   
-  arg5 = (char *)jarg5; 
+  arg5 = jarg5;
   
   result = (struct norddrop *)new_norddrop(arg1,arg2,arg3,arg4,(char const *)arg5);
   
   jresult = (void *)result; 
+  
+  
   return jresult;
 }
 
