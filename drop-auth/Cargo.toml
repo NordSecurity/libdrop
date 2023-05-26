@@ -9,5 +9,5 @@ edition = "2021"
 base64 = { workspace = true }
 rand = "0.8.5"
 hmac = "0.12.1"
-x25519-dalek = "1.2.0"
+x25519-dalek = { version = "2.0.0-rc.2", features = ["static_secrets"]}
 sha2 = "0.10.6"
