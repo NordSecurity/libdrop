@@ -1,5 +1,5 @@
-### UNRELEASE
-### **Calm**
+### v3.1.0
+### **ANGERY^2**
 ---
 * Remove reporting already downloaded file as finished. Instead, redownload it with (1) suffix 
 * Fix the go bindings being unusable
