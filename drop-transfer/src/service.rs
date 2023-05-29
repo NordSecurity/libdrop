@@ -117,6 +117,48 @@ impl Service {
         res
     }
 
+    pub async fn purge_transfers(&mut self, transfer_ids: Vec<String>) -> Result<(), Error> {
+        let task = async {
+            self.state
+                .storage
+                .lock()
+                .await
+                .purge_transfers(transfer_ids)
+                .await
+        };
+
+        task.await.map_err(|_| Error::StorageError)
+    }
+
+    pub async fn purge_transfers_until(&mut self, until_timestamp: i64) -> Result<(), Error> {
+        let task = async {
+            self.state
+                .storage
+                .lock()
+                .await
+                .purge_transfers_until(until_timestamp)
+                .await
+        };
+
+        task.await.map_err(|_| Error::StorageError)
+    }
+
+    pub async fn get_transfers(
+        &mut self,
+        since_timestamp: i64,
+    ) -> Result<Vec<drop_storage::types::Transfer>, Error> {
+        let task = async {
+            self.state
+                .storage
+                .lock()
+                .await
+                .get_transfers(since_timestamp)
+                .await
+        };
+
+        task.await.map_err(|_| Error::StorageError)
+    }
+
     pub fn send_request(&mut self, xfer: crate::Transfer) {
         self.state.moose.service_quality_transfer_batch(
             drop_analytics::Phase::Start,
