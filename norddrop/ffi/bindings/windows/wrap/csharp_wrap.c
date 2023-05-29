@@ -454,6 +454,61 @@ SWIGEXPORT char * SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_NewTransfer___(vo
 }
 
 
+SWIGEXPORT int SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_PurgeTransfers___(void * jarg1, char * jarg2) {
+  int jresult ;
+  struct norddrop *arg1 = (struct norddrop *) 0 ;
+  char *arg2 = (char *) 0 ;
+  enum norddrop_result result;
+  
+  arg1 = (struct norddrop *)jarg1; 
+  arg2 = (char *)jarg2; 
+  result = (enum norddrop_result)norddrop_purge_transfers(arg1,(char const *)arg2);
+  jresult = (int)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT int SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_PurgeTransfersUntil___(void * jarg1, void * jarg2) {
+  int jresult ;
+  struct norddrop *arg1 = (struct norddrop *) 0 ;
+  int64_t arg2 ;
+  int64_t *argp2 ;
+  enum norddrop_result result;
+  
+  arg1 = (struct norddrop *)jarg1; 
+  argp2 = (int64_t *)jarg2; 
+  if (!argp2) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "Attempt to dereference null int64_t", 0);
+    return 0;
+  }
+  arg2 = *argp2; 
+  result = (enum norddrop_result)norddrop_purge_transfers_until(arg1,arg2);
+  jresult = (int)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT char * SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_GetTransfers___(void * jarg1, void * jarg2) {
+  char * jresult ;
+  struct norddrop *arg1 = (struct norddrop *) 0 ;
+  int64_t arg2 ;
+  int64_t *argp2 ;
+  char *result = 0 ;
+  
+  arg1 = (struct norddrop *)jarg1; 
+  argp2 = (int64_t *)jarg2; 
+  if (!argp2) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "Attempt to dereference null int64_t", 0);
+    return 0;
+  }
+  arg2 = *argp2; 
+  result = (char *)norddrop_get_transfers(arg1,arg2);
+  jresult = SWIG_csharp_string_callback((const char *)result); 
+  free(result);
+  return jresult;
+}
+
+
 SWIGEXPORT char * SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_Version___() {
   char * jresult ;
   char *result = 0 ;

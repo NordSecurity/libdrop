@@ -203,6 +203,71 @@ impl NordDropFFI {
         })
     }
 
+    pub(super) fn purge_transfers(&mut self, transfer_ids: &str) -> Result<()> {
+        trace!(
+            self.logger,
+            "norddrop_purge_transfers() : {:?}",
+            transfer_ids
+        );
+
+        let transfer_ids: Vec<String> =
+            serde_json::from_str(transfer_ids).map_err(|_| ffi::types::NORDDROP_RES_JSON_PARSE)?;
+
+        self.rt.block_on(async {
+            self.instance
+                .lock()
+                .await
+                .as_mut()
+                .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+                .purge_transfers(transfer_ids)
+                .await
+                .map_err(|_| ffi::types::NORDDROP_RES_DB_ERROR)
+        })
+    }
+
+    pub(super) fn purge_transfers_until(&mut self, until_timestamp: i64) -> Result<()> {
+        trace!(
+            self.logger,
+            "norddrop_purge_transfers_until() : {:?}",
+            until_timestamp
+        );
+
+        self.rt.block_on(async {
+            self.instance
+                .lock()
+                .await
+                .as_mut()
+                .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+                .purge_transfers_until(until_timestamp)
+                .await
+                .map_err(|_| ffi::types::NORDDROP_RES_DB_ERROR)
+        })
+    }
+
+    pub(super) fn get_transfers(&mut self, since_timestamp: i64) -> Result<String> {
+        trace!(
+            self.logger,
+            "norddrop_get_transfers() since_timestamp: {:?}",
+            since_timestamp
+        );
+
+        let result = self.rt.block_on(async {
+            self.instance
+                .lock()
+                .await
+                .as_mut()
+                .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+                .get_transfers(since_timestamp)
+                .await
+                .map_err(|_| ffi::types::NORDDROP_RES_DB_ERROR)
+        })?;
+
+        let result =
+            serde_json::to_string(&result).map_err(|_| ffi::types::NORDDROP_RES_JSON_PARSE)?;
+
+        Ok(result)
+    }
+
     pub(super) fn new_transfer(&mut self, peer: &str, descriptors: &str) -> Result<uuid::Uuid> {
         trace!(
             self.logger,
