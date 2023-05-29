@@ -311,14 +311,17 @@ pub extern "C" fn norddrop_purge_transfers_until(
 /// Get all transfers since the given timestamp from the database. Accepts a
 /// UNIX timestamp in seconds
 #[no_mangle]
-pub extern "C" fn norddrop_get_transfers(dev: &norddrop, since_timestamp: i64) -> *mut c_char {
+pub extern "C" fn norddrop_get_transfers_since(
+    dev: &norddrop,
+    since_timestamp: i64,
+) -> *mut c_char {
     let res = panic::catch_unwind(move || {
         let mut dev = match dev.0.lock() {
             Ok(inst) => inst,
             Err(poisoned) => poisoned.into_inner(),
         };
 
-        let transfers = dev.get_transfers(since_timestamp)?;
+        let transfers = dev.get_transfers_since(since_timestamp)?;
 
         Ok::<Vec<u8>, norddrop_result>(transfers.into_bytes())
     });

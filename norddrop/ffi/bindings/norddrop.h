@@ -177,21 +177,23 @@ enum norddrop_result norddrop_start(const struct norddrop *dev,
 enum norddrop_result norddrop_stop(const struct norddrop *dev);
 
 /**
- * Purge transfers with the given id(s) from the database, accepts a JSON array of strings
+ * Purge transfers with the given id(s) from the database, accepts a JSON array
+ * of strings
  */
 enum norddrop_result norddrop_purge_transfers(const struct norddrop *dev, const char *txids);
 
 /**
- * Purge all transfers that are older than the given timestamp from the database. Accepts a UNIX timestamp in seconds
+ * Purge all transfers that are older than the given timestamp from the
+ * database. Accepts a UNIX timestamp in seconds
  */
 enum norddrop_result norddrop_purge_transfers_until(const struct norddrop *dev,
                                                     int64_t until_timestamp);
 
 /**
- * Get all transfers since the given timestamp from the database. Accepts a UNIX timestamp in seconds
+ * Get all transfers since the given timestamp from the database. Accepts a
+ * UNIX timestamp in seconds
  */
-char *norddrop_get_transfers(const struct norddrop *dev,
-                             int64_t since_timestamp);
+char *norddrop_get_transfers_since(const struct norddrop *dev, int64_t since_timestamp);
 
 /**
  * Create a new instance of norddrop. This is a required step to work with API
