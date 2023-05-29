@@ -178,8 +178,8 @@ impl<'a> StorageDispatch<'a> {
         self.storage.purge_transfers_until(until_timestamp).await
     }
 
-    pub async fn get_transfers(&self, since_timestamp: i64) -> Result<Vec<Transfer>, Error> {
-        self.storage.get_transfers(since_timestamp).await
+    pub async fn get_transfers_since(&self, since_timestamp: i64) -> Result<Vec<Transfer>, Error> {
+        self.storage.get_transfers_since(since_timestamp).await
     }
 }
 

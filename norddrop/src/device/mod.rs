@@ -221,7 +221,13 @@ impl NordDropFFI {
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
                 .purge_transfers(transfer_ids)
                 .await
-                .map_err(|_| ffi::types::NORDDROP_RES_DB_ERROR)
+                .map_err(|err| {
+                    error!(self.logger, "Failed to purge transfers: {:?}", err);
+                    match err {
+                        drop_transfer::Error::StorageError => ffi::types::NORDDROP_RES_DB_ERROR,
+                        _ => ffi::types::NORDDROP_RES_DB_ERROR,
+                    }
+                })
         })
     }
 
@@ -240,14 +246,20 @@ impl NordDropFFI {
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
                 .purge_transfers_until(until_timestamp)
                 .await
-                .map_err(|_| ffi::types::NORDDROP_RES_DB_ERROR)
+                .map_err(|err| {
+                    error!(self.logger, "Failed to purge transfers: {:?}", err);
+                    match err {
+                        drop_transfer::Error::StorageError => ffi::types::NORDDROP_RES_DB_ERROR,
+                        _ => ffi::types::NORDDROP_RES_DB_ERROR,
+                    }
+                })
         })
     }
 
-    pub(super) fn get_transfers(&mut self, since_timestamp: i64) -> Result<String> {
+    pub(super) fn get_transfers_since(&mut self, since_timestamp: i64) -> Result<String> {
         trace!(
             self.logger,
-            "norddrop_get_transfers() since_timestamp: {:?}",
+            "norddrop_get_transfers_since() since_timestamp: {:?}",
             since_timestamp
         );
 
@@ -257,9 +269,15 @@ impl NordDropFFI {
                 .await
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
-                .get_transfers(since_timestamp)
+                .get_transfers_since(since_timestamp)
                 .await
-                .map_err(|_| ffi::types::NORDDROP_RES_DB_ERROR)
+                .map_err(|err| {
+                    error!(self.logger, "Failed to get transfers: {:?}", err);
+                    match err {
+                        drop_transfer::Error::StorageError => ffi::types::NORDDROP_RES_DB_ERROR,
+                        _ => ffi::types::NORDDROP_RES_DB_ERROR,
+                    }
+                })
         })?;
 
         let result =

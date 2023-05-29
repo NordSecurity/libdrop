@@ -905,7 +905,7 @@ SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1purge
 }
 
 
-SWIGEXPORT jstring JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1getTransfers(JNIEnv *jenv, jclass jcls, jlong jarg1, jobject jarg1_, jlong jarg2) {
+SWIGEXPORT jstring JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1getTransfersSince(JNIEnv *jenv, jclass jcls, jlong jarg1, jobject jarg1_, jlong jarg2) {
   jstring jresult = 0 ;
   struct norddrop *arg1 = (struct norddrop *) 0 ;
   int64_t arg2 ;
@@ -922,7 +922,7 @@ SWIGEXPORT jstring JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1ge
     return 0;
   }
   arg2 = *argp2; 
-  result = (char *)norddrop_get_transfers(arg1,arg2);
+  result = (char *)norddrop_get_transfers_since(arg1,arg2);
   if (result) jresult = (*jenv)->NewStringUTF(jenv, (const char *)result);
   free(result);
   return jresult;

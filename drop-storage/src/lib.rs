@@ -454,7 +454,7 @@ impl Storage {
         Ok(())
     }
 
-    pub async fn get_transfers(&self, since_timestamp: i64) -> Result<Vec<Transfer>> {
+    pub async fn transfers_since(&self, since_timestamp: i64) -> Result<Vec<Transfer>> {
         let mut conn = self.conn.acquire().await?;
 
         let mut transfers = sqlx::query!(
