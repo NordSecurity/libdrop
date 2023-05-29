@@ -14,6 +14,7 @@ pub struct Storage {
 }
 
 impl Storage {
+    #[allow(clippy::all)]
     pub async fn new(logger: Logger, _path: &str) -> Result<Self> {
         Ok(Self { _logger: logger })
         // let options = SqliteConnectOptions::from_str(path)?;
