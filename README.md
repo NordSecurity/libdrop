@@ -43,7 +43,16 @@ echo -n "<absolute file path>" | sha256sum  | cut -d " " -f1 | xxd -ps -r | base
 ## Database development
 When developing the database, it is strongly encouraged to use the "online" mode of `sqlx`, by setting the environment variable `DATABASE_URL` or providing it in `drop-storage/.env` file, the variable should contain the path to a database file for sqlx to validate your queries against.
 
-Before pushing new code that contains changes to the queries, the `sqlx-data.json` file should be updated by calling `cargo sqlx prepare`, else the CI pipelines will most likely fail.
+Before pushing new code that contains changes to the queries, the `sqlx-data.json` file should be updated by calling `cargo sqlx prepare --merged`, else the CI pipelines will most likely fail.
+
+Examplary flow:
+```
+cd libdrop
+touch /tmp/database.sqlite
+echo "DATABASE_URL=sqlite:///tmp/db.sqlite" > drop-storage/.env
+sqlx migrate run
+cargo sqlx prepare
+```
 
 # Contributing
 [CONTRIBUTING.md](CONTRIBUTING.md)
