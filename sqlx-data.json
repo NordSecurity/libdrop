@@ -46,16 +46,6 @@
     },
     "query": "SELECT * FROM transfers WHERE created_at >= datetime(?1, 'unixepoch')"
   },
-  "1db7e93bfe4738f07b132ab2553debd5a919971e5353126e7538a26e4650d35f": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Right": 1
-      }
-    },
-    "query": "DELETE FROM transfers WHERE id IN (?1)"
-  },
   "1e44a51b263b0f53cb71cd1a2f5c28abd27f83565f65515d4e24116af8943866": {
     "describe": {
       "columns": [
@@ -383,6 +373,16 @@
       }
     },
     "query": "INSERT INTO outgoing_path_completed_states (path_id) VALUES ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))"
+  },
+  "9a5dc2cc111c3377a27a0d6f128e5e1c13e00a4abd62120b1e503184af418caf": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "DELETE FROM transfers WHERE id = $1"
   },
   "9dc4cd5cc2d95b8531b0f840e7319a3f976de8d9ab62f80881c6a5bf87c8123b": {
     "describe": {

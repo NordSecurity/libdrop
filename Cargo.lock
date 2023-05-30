@@ -460,6 +460,7 @@ dependencies = [
  "slog",
  "sqlx",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]
