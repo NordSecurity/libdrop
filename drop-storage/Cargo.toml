@@ -10,3 +10,6 @@ thiserror = "*"
 sqlx = { version = "0.6", features = [ "runtime-tokio-rustls", "sqlite", "time", "chrono", "offline"] }
 slog = { workspace = true }
 serde = { workspace = true }
+
+[dev-dependencies]
+tokio = { version = "^1.20", features = ["rt-multi-thread", "macros"] }

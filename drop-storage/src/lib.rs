@@ -388,15 +388,29 @@ impl Storage {
         .map(|_| ())
     }
 
-    pub async fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<()> {
+    /// From the FAQ:
+    /// ### How can I do a `SELECT ... WHERE foo IN (...)` query?
+    /// In the future SQLx will support binding arrays as a comma-separated list
+    /// for every database, but unfortunately there's no general solution
+    /// for that currently in SQLx itself. You would need to manually
+    /// generate the query, at which point it cannot be used with the
+    /// macros.
+    async fn purge_transfer(&self, transfer_id: String) -> Result<()> {
         let mut conn = self.conn.acquire().await?;
 
-        let transfer_ids = transfer_ids.join(",");
-        sqlx::query!("DELETE FROM transfers WHERE id IN (?1)", transfer_ids)
+        sqlx::query!("DELETE FROM transfers WHERE id = $1", transfer_id)
             .execute(&mut conn)
             .await
             .map_err(error::Error::DBError)
             .map(|_| ())
+    }
+
+    pub async fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<()> {
+        for id in transfer_ids {
+            self.purge_transfer(id).await?;
+        }
+
+        Ok(())
     }
 
     pub async fn get_transfers(&self, since_timestamp: i64) -> Result<Vec<Transfer>> {
@@ -700,5 +714,92 @@ impl Storage {
         }
 
         Ok(paths)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_insert_transfer() {
+        let logger = slog::Logger::root(slog::Discard, slog::o!());
+        let storage = Storage::new(logger, ":memory:").await.unwrap();
+        // let storage = Storage::new(logger, "/tmp/mem.sqlite").await.unwrap();
+
+        {
+            let transfer = TransferInfo {
+                id: "transfer_id_1".to_string(),
+                peer: "1.2.3.4".to_string(),
+                files: vec![
+                    TransferPath {
+                        id: "id1".to_string(),
+                        path: "/dir/1".to_string(),
+                        size: 1024,
+                    },
+                    TransferPath {
+                        id: "id2".to_string(),
+                        path: "/dir/2".to_string(),
+                        size: 2048,
+                    },
+                ],
+            };
+
+            storage
+                .insert_transfer(transfer, TransferType::Incoming)
+                .await
+                .unwrap();
+        }
+
+        {
+            let transfer = TransferInfo {
+                id: "transfer_id_2".to_string(),
+                peer: "5.6.7.8".to_string(),
+                files: vec![
+                    TransferPath {
+                        id: "id3".to_string(),
+                        path: "/dir/3".to_string(),
+                        size: 1024,
+                    },
+                    TransferPath {
+                        id: "id4".to_string(),
+                        path: "/dir/4".to_string(),
+                        size: 2048,
+                    },
+                ],
+            };
+
+            storage
+                .insert_transfer(transfer, TransferType::Outgoing)
+                .await
+                .unwrap();
+        }
+
+        {
+            let transfers = storage.get_transfers(0).await.unwrap();
+            assert_eq!(transfers.len(), 2);
+
+            let incoming_transfer = &transfers[0];
+            let outgoing_transfer = &transfers[1];
+
+            assert_eq!(incoming_transfer.id, "transfer_id_1");
+            assert_eq!(outgoing_transfer.id, "transfer_id_2");
+
+            assert_eq!(incoming_transfer.peer_id, "1.2.3.4".to_string());
+            assert_eq!(outgoing_transfer.peer_id, "5.6.7.8".to_string());
+        }
+
+        storage
+            .purge_transfers(vec![
+                "transfer_id_1".to_string(),
+                "transfer_id_2".to_string(),
+            ])
+            .await
+            .unwrap();
+
+        let transfers = storage.get_transfers(0).await.unwrap();
+
+        println!("transfers: {:?}", transfers);
+        assert_eq!(transfers.len(), 0);
     }
 }

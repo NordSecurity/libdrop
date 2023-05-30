@@ -45,6 +45,14 @@ When developing the database, it is strongly encouraged to use the "online" mode
 
 Before pushing new code that contains changes to the queries, the `sqlx-data.json` file should be updated by calling `cargo sqlx prepare`, else the CI pipelines will most likely fail.
 
+Examplary flow:
+```
+touch /tmp/database.sqlite
+echo "DATABASE_URL=sqlite:///tmp/db.sqlite" > drop-storage/.env
+sqlx migrate run
+cargo sqlx prepare
+```
+
 # Contributing
 [CONTRIBUTING.md](CONTRIBUTING.md)
 
