@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 thiserror = "*"
-sqlx = { git="https://github.com/NordSecurity/sqlx.git", branch="fix/force-libsqlite3-sys-0.26.0", features = [ "runtime-tokio-rustls", "sqlite", "time", "chrono", "offline"] }
+sqlx = { git="https://github.com/NordSecurity/sqlx.git", branch="wip/remove-tls", features = [ "sqlite", "time", "chrono"] }
 slog = { workspace = true }
 serde = { workspace = true }
 
