@@ -336,7 +336,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) \
-             VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?2 AND path_hash = ?2), \
+             VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), \
              ?3, ?4)",
             transfer_id,
             path_id,
@@ -361,7 +361,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent) VALUES \
-             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?2 AND path_hash = ?2), ?3, ?4)",
+             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
             transfer_id,
             path_id,
             error,
