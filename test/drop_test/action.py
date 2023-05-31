@@ -1,11 +1,14 @@
 import asyncio
 from collections import Counter
+from collections.abc import Iterable
 from functools import reduce
 import os, pwd
 from pathlib import Path
 import platform
 import subprocess
 import typing
+import json
+import time
 
 from . import event, ffi
 from .logger import logger
@@ -13,6 +16,23 @@ from .event import Event, print_uuid, UUIDS, UUIDS_LOCK
 
 import sys
 
+def compare_json_struct(expected: dict, actual: dict):
+    for key in expected:
+        if key is not int:
+            if key not in actual:
+                raise Exception(f"Key: '{key}' was not found in actual json struct")
+
+        expected_value = expected[key]
+        actual_value = actual[key]
+
+        if isinstance(expected_value, dict):
+            compare_json_struct(expected_value, actual_value)
+        elif isinstance(expected_value, list):
+            for i in range(len(expected_value)):
+                compare_json_struct(expected_value[i], actual_value[i])
+        else:
+            if expected_value != actual_value:
+                raise Exception(f"Value missmatch for key: '{key}'. Expected '{expected_value}', got '{actual_value}'")
 
 class File:
     def __init__(self, path: str, size: int):
@@ -389,7 +409,6 @@ class DropPrivileges(Action):
     def __str__(self):
         return "DropPrivileges"
 
-
 class DeleteFile(Action):
     def __init__(self, file_path: str):
         self._file_path = file_path
@@ -399,3 +418,30 @@ class DeleteFile(Action):
 
     def __str__(self):
         return f"DeleteFile({self._file_path})"
+
+class AssertTransfers(Action):
+    # offset the timestamp by 10 seconds to account for the time it takes for the test to run
+    def __init__(self, expected_outputs: typing.List[str], since_timestamp: int = int(time.time() - 10)):
+        self._since_timestamp = since_timestamp
+        self._expected_outputs = expected_outputs
+
+    async def run(self, drop: ffi.Drop):
+        transfers = json.loads(drop.get_transfers_since(self._since_timestamp))
+
+        if len(transfers) != len(self._expected_outputs):
+            raise Exception(f"Expected {len(self._expected_outputs)} transfer(s), got {len(transfers)}")
+        for i in range(len(self._expected_outputs)):
+            compare_json_struct(json.loads(self._expected_outputs[i]), transfers[i])
+  
+    def __str__(self):
+        return f"AssertTransfers({self._since_timestamp}, {','.join(self._expected_outputs)})"
+
+class PurgeTransfers(Action):
+    def __init__(self, until_timestamp: int):
+        self._until_timestamp = until_timestamp
+
+    async def run(self, drop: ffi.Drop):
+        drop.purge_transfers_until(self._until_timestamp)
+
+    def __str__(self):
+        return f"PurgeTransfers({self._until_timestamp})"
