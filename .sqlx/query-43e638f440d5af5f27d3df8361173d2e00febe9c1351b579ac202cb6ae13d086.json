@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO incoming_paths (transfer_id, path, path_hash, bytes) VALUES (?1, ?2, ?3, ?4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "43e638f440d5af5f27d3df8361173d2e00febe9c1351b579ac202cb6ae13d086"
+}
