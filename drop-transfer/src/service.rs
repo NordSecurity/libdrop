@@ -137,7 +137,7 @@ impl Service {
             .map_err(|_| Error::StorageError)
     }
 
-    pub async fn get_transfers_since(
+    pub async fn transfers_since(
         &mut self,
         since_timestamp: i64,
     ) -> Result<Vec<drop_storage::types::Transfer>, Error> {
@@ -145,7 +145,7 @@ impl Service {
             .storage
             .lock()
             .await
-            .get_transfers_since(since_timestamp)
+            .transfers_since(since_timestamp)
             .await
             .map_err(|_| Error::StorageError)
     }

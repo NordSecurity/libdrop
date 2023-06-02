@@ -321,7 +321,7 @@ pub extern "C" fn norddrop_get_transfers_since(
             Err(poisoned) => poisoned.into_inner(),
         };
 
-        let transfers = dev.get_transfers_since(since_timestamp)?;
+        let transfers = dev.transfers_since(since_timestamp)?;
 
         Ok::<Vec<u8>, norddrop_result>(transfers.into_bytes())
     });
