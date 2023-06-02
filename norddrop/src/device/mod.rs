@@ -256,7 +256,7 @@ impl NordDropFFI {
         })
     }
 
-    pub(super) fn get_transfers_since(&mut self, since_timestamp: i64) -> Result<String> {
+    pub(super) fn transfers_since(&mut self, since_timestamp: i64) -> Result<String> {
         trace!(
             self.logger,
             "norddrop_get_transfers_since() since_timestamp: {:?}",
@@ -269,7 +269,7 @@ impl NordDropFFI {
                 .await
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
-                .get_transfers_since(since_timestamp)
+                .transfers_since(since_timestamp)
                 .await
                 .map_err(|err| {
                     error!(self.logger, "Failed to get transfers: {:?}", err);

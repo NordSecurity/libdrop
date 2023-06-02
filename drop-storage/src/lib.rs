@@ -816,7 +816,7 @@ mod tests {
         }
 
         {
-            let transfers = storage.get_transfers(0).await.unwrap();
+            let transfers = storage.transfers_since(0).await.unwrap();
             assert_eq!(transfers.len(), 2);
 
             let incoming_transfer = &transfers[0];
@@ -837,7 +837,7 @@ mod tests {
             .await
             .unwrap();
 
-        let transfers = storage.get_transfers(0).await.unwrap();
+        let transfers = storage.transfers_since(0).await.unwrap();
 
         assert_eq!(transfers.len(), 0);
     }
