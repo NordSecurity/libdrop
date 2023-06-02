@@ -19,17 +19,6 @@ impl<'a> StorageDispatch<'a> {
         }
     }
 
-    pub async fn insert_transfer(
-        &self,
-        transfer_type: TransferType,
-        transfer: &crate::Transfer,
-    ) -> Result<(), Error> {
-        self.storage
-            .insert_transfer(transfer.storage_info(), transfer_type)
-            .await?;
-        Ok(())
-    }
-
     pub async fn handle_event(&mut self, event: &crate::Event) -> Result<(), Error> {
         let event = Into::<Event>::into(event);
         match event {

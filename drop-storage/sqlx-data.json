@@ -1,0 +1,809 @@
+{
+  "db": "SQLite",
+  "08f35fc8694464397b55400fe70950cc77dae0b76aa2df7dfa7b9caba34ad627": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 3
+      }
+    },
+    "query": "UPDATE incoming_paths SET checksum = ?3 WHERE transfer_id = ?1 AND path_hash = ?2"
+  },
+  "0a3f1122199c61c93d6df986cd7310cc6f1f7a0be9daff8efc645b57cb49f37a": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 4
+      }
+    },
+    "query": "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?2 AND path_hash = ?2), ?3, ?4)"
+  },
+  "19d6ed1a7bd1e330c02fc05a1e8151877496ec61c489c6a63742a39cb091689d": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "peer_id",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "is_outgoing",
+          "ordinal": 2,
+          "type_info": "Int64"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 3,
+          "type_info": "Datetime"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM transfers WHERE created_at >= datetime(?1, 'unixepoch')"
+  },
+  "1e44a51b263b0f53cb71cd1a2f5c28abd27f83565f65515d4e24116af8943866": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "transfer_id",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "path",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "path_hash",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "bytes",
+          "ordinal": 4,
+          "type_info": "Int64"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 5,
+          "type_info": "Datetime"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM outgoing_paths WHERE transfer_id = ?1"
+  },
+  "1f2ef7d9bd124f2aec37e98fc60614dd8f41a6ddd5114d2e86634d042769e247": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 4
+      }
+    },
+    "query": "INSERT INTO outgoing_paths (transfer_id, path, path_hash, bytes) VALUES (?1, ?2, ?3, ?4)"
+  },
+  "1f5fc475637a1f09cfd7190214e013972d607e0a3867c205f8a361d3e58ff3ca": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "path_id",
+          "ordinal": 1,
+          "type_info": "Int64"
+        },
+        {
+          "name": "status_code",
+          "ordinal": 2,
+          "type_info": "Int64"
+        },
+        {
+          "name": "bytes_sent",
+          "ordinal": 3,
+          "type_info": "Int64"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 4,
+          "type_info": "Datetime"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM outgoing_path_failed_states WHERE path_id = ?1"
+  },
+  "2367f21a68f64e4da800aef7bb6e44e5233a70ec70ed04f49adec67a1908fd01": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "path_id",
+          "ordinal": 1,
+          "type_info": "Int64"
+        },
+        {
+          "name": "bytes_received",
+          "ordinal": 2,
+          "type_info": "Int64"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 3,
+          "type_info": "Datetime"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM incoming_path_started_states WHERE path_id = ?1"
+  },
+  "2ff0b969cd857ded2df9e44e91b57ff6ac4c7ef69fef5e35baaaf14a2edf672f": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "INSERT OR IGNORE INTO peers (id) VALUES (?1)"
+  },
+  "427d287f1d75ea7b1e408f7ffdd6ef2b1dea37aeaf075ac6fda9d74a3da7b4ed": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "INSERT INTO transfer_failed_states (transfer_id, status_code) VALUES (?1, ?2)"
+  },
+  "43e638f440d5af5f27d3df8361173d2e00febe9c1351b579ac202cb6ae13d086": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 4
+      }
+    },
+    "query": "INSERT INTO incoming_paths (transfer_id, path, path_hash, bytes) VALUES (?1, ?2, ?3, ?4)"
+  },
+  "4688b96928def1d6e17671b9989c5b69d3afc7a919d639df8ef5771757972cb3": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 3
+      }
+    },
+    "query": "INSERT OR IGNORE INTO transfers (id, peer_id, is_outgoing) VALUES (?1, ?2, ?3)"
+  },
+  "5ec61dee21ec948c3ed56b1da2a87a467d54d3688270f28d005035620973735a": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "DELETE FROM transfers WHERE created_at < datetime(?1, 'unixepoch')"
+  },
+  "667f55a67e76285b38c5e2735af5a7598cff00f4a25062f5d9868c98caa77bd3": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "path_id",
+          "ordinal": 1,
+          "type_info": "Int64"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 2,
+          "type_info": "Datetime"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM incoming_path_pending_states WHERE path_id = ?1"
+  },
+  "6919fa75a7d31db86e5e3448738ae593cf6ce425a096191cec0ecdf05f91ffbd": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "path_id",
+          "ordinal": 1,
+          "type_info": "Int64"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 2,
+          "type_info": "Datetime"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM outgoing_path_completed_states WHERE path_id = ?1"
+  },
+  "831da3e9f061d0e0573b5420d5b1bfade2d7e956b1b91113062bbc47c0257138": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 3
+      }
+    },
+    "query": "INSERT INTO incoming_path_completed_states (path_id, final_path) VALUES ((SELECT id from incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)"
+  },
+  "88628483e67f9b4ef8f20c13ac237d99d7b970e4d6e011543cd95005333d2bb2": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "path_id",
+          "ordinal": 1,
+          "type_info": "Int64"
+        },
+        {
+          "name": "by_peer",
+          "ordinal": 2,
+          "type_info": "Int64"
+        },
+        {
+          "name": "bytes_sent",
+          "ordinal": 3,
+          "type_info": "Int64"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 4,
+          "type_info": "Datetime"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM outgoing_path_cancel_states WHERE path_id = ?1"
+  },
+  "8d84a46c78fbfc5bbf741b8e3c8ad425f3e7a4b62642740e22352ab5f532ed7c": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 3
+      }
+    },
+    "query": "INSERT INTO outgoing_path_started_states (path_id, bytes_sent) VALUES ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)"
+  },
+  "917108c284b0346e344c2e64ae9be4fb690c6d68afc6fdd99dc3d55cd3b3bf88": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 4
+      }
+    },
+    "query": "INSERT INTO outgoing_path_cancel_states (path_id, by_peer, bytes_sent) VALUES ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)"
+  },
+  "96166e1916c136a5b71d980cfa382b38163b30b0cae4f5ca49f057bddfe9cf29": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "INSERT INTO outgoing_path_completed_states (path_id) VALUES ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))"
+  },
+  "9a5dc2cc111c3377a27a0d6f128e5e1c13e00a4abd62120b1e503184af418caf": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "DELETE FROM transfers WHERE id = $1"
+  },
+  "9dc4cd5cc2d95b8531b0f840e7319a3f976de8d9ab62f80881c6a5bf87c8123b": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "transfer_id",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "status_code",
+          "ordinal": 2,
+          "type_info": "Int64"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 3,
+          "type_info": "Datetime"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM transfer_failed_states WHERE transfer_id = ?1"
+  },
+  "ad28514a56ccb24ea37fec487f473a2b62b7e3774ec223b17f5ac4e0f258a77d": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "INSERT INTO transfer_cancel_states (transfer_id, by_peer) VALUES (?1, ?2)"
+  },
+  "ae2fe7c2244f498a24dfa8900a5a455b696d56fa6c06b4b0fd00c64dc611a154": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 4
+      }
+    },
+    "query": "INSERT INTO incoming_path_cancel_states (path_id, by_peer, bytes_received) VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)"
+  },
+  "b0aab3cbe531bfdaa27d7873e92bad7224055671a59b73c94627239d35a57700": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 3
+      }
+    },
+    "query": "INSERT INTO incoming_path_started_states (path_id, bytes_received) VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)"
+  },
+  "b71bfff9a9e4e78fbb37c86e4167cbbfdcc8fb01b75d1e5ce81ab2f8b24e68f7": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "INSERT INTO incoming_path_pending_states (path_id) VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2))"
+  },
+  "bba13fd686fbf3b7fa433e4a4447879cebb0f9cd88bc95c61797b1fe37da4328": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "path_id",
+          "ordinal": 1,
+          "type_info": "Int64"
+        },
+        {
+          "name": "by_peer",
+          "ordinal": 2,
+          "type_info": "Int64"
+        },
+        {
+          "name": "bytes_received",
+          "ordinal": 3,
+          "type_info": "Int64"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 4,
+          "type_info": "Datetime"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM incoming_path_cancel_states WHERE path_id = ?1"
+  },
+  "bc31cccedafbec0c00097e6f93b3854c89552f6ae8e6d9794fb90c483efa15aa": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "INSERT INTO outgoing_path_pending_states (path_id) VALUES ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))"
+  },
+  "c48298283d99c618c8d12ebc1b00b0772cb2b97515deaa3f062644c976dbd06b": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "path_id",
+          "ordinal": 1,
+          "type_info": "Int64"
+        },
+        {
+          "name": "status_code",
+          "ordinal": 2,
+          "type_info": "Int64"
+        },
+        {
+          "name": "bytes_received",
+          "ordinal": 3,
+          "type_info": "Int64"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 4,
+          "type_info": "Datetime"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM incoming_path_failed_states WHERE path_id = ?1"
+  },
+  "c935d1ea4ecb327269d584272a3a26901a8824cb5516e747b25fb8500591aa91": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "INSERT INTO transfer_active_states (transfer_id) VALUES (?1)"
+  },
+  "ca9b29cd59d9156ab3d26b271021fd00e3ad6fa4de838227577d6737af79a60d": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "transfer_id",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "by_peer",
+          "ordinal": 2,
+          "type_info": "Int64"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 3,
+          "type_info": "Datetime"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM transfer_cancel_states WHERE transfer_id = ?1"
+  },
+  "cec030854ff74f77a88e405713001dbcd62b61aee345a3def4fbea0d6e86c904": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "path_id",
+          "ordinal": 1,
+          "type_info": "Int64"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 2,
+          "type_info": "Datetime"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM outgoing_path_pending_states WHERE path_id = ?1"
+  },
+  "d4d44c0ad4b7943966ec90f9b3857a712267678f98eee41d62a75d61357bc286": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "transfer_id",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "path",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "path_hash",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "bytes",
+          "ordinal": 4,
+          "type_info": "Int64"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 5,
+          "type_info": "Datetime"
+        },
+        {
+          "name": "checksum",
+          "ordinal": 6,
+          "type_info": "Blob"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM incoming_paths WHERE transfer_id = ?1"
+  },
+  "ddf1b2c535766a5987b14ee3c26189b9ab88cac5271a6658ed979758f4a207bf": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "path_id",
+          "ordinal": 1,
+          "type_info": "Int64"
+        },
+        {
+          "name": "final_path",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 3,
+          "type_info": "Datetime"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM incoming_path_completed_states WHERE path_id = ?1"
+  },
+  "f3fa5322f038393a2545ce0a1bbbc0bec62c3d7d8c7742624128b572013bfc1c": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "path_id",
+          "ordinal": 1,
+          "type_info": "Int64"
+        },
+        {
+          "name": "bytes_sent",
+          "ordinal": 2,
+          "type_info": "Int64"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 3,
+          "type_info": "Datetime"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM outgoing_path_started_states WHERE path_id = ?1"
+  },
+  "f7c9066cea69f5619ebbbeeb32d00a737804efd38e23aa68d63b15014f49c391": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "transfer_id",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 2,
+          "type_info": "Datetime"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM transfer_active_states WHERE transfer_id = ?1"
+  },
+  "fe3cb549731345e6e827d33a7c1483b25420c8fe1e4859c787aedfb4748049be": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 4
+      }
+    },
+    "query": "INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent) VALUES ((SELECT id FROM outgoing_paths WHERE transfer_id = ?2 AND path_hash = ?2), ?3, ?4)"
+  }
+}

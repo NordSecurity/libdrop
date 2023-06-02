@@ -34,6 +34,7 @@ pub(super) struct State {
     pub(crate) moose: Arc<dyn Moose>,
     pub(crate) auth: Arc<auth::Context>,
     pub(crate) config: Arc<DropConfig>,
+    pub(crate) storage: Arc<Storage>,
 }
 
 pub struct Service {
@@ -80,6 +81,7 @@ impl Service {
                 moose: moose.clone(),
                 config,
                 auth: auth.clone(),
+                storage,
             });
 
             let stop = CancellationToken::new();
