@@ -86,6 +86,9 @@ extern void _wrap_NorddropPubkeyCb_Cb_set_norddropgo_7f406083ff4c9731(uintptr_t 
 extern swig_type_6 _wrap_NorddropPubkeyCb_Cb_get_norddropgo_7f406083ff4c9731(uintptr_t arg1);
 extern uintptr_t _wrap_new_NorddropPubkeyCb_norddropgo_7f406083ff4c9731(void);
 extern void _wrap_delete_NorddropPubkeyCb_norddropgo_7f406083ff4c9731(uintptr_t arg1);
+
+#include <string.h>
+
 extern uintptr_t _wrap_new_Norddrop_norddropgo_7f406083ff4c9731(norddrop_event_cb arg1, swig_intgo arg2, norddrop_logger_cb arg3, norddrop_pubkey_cb arg4, swig_type_7 arg5);
 extern void _wrap_delete_Norddrop_norddropgo_7f406083ff4c9731(uintptr_t arg1);
 extern swig_intgo _wrap_Norddrop_Start_norddropgo_7f406083ff4c9731(uintptr_t arg1, swig_type_8 arg2, swig_type_9 arg3);
@@ -435,7 +438,7 @@ type NorddropPubkeyCb interface {
 
 var eventCallbacks = map[uintptr]func(string){}
 var loggerCallbacks = map[uintptr]func(int, string){}
-var pubkeyCallbacks = map[uintptr]func(string) *byte[]{}
+var pubkeyCallbacks = map[uintptr]func(string) []byte{}
 // Note: This can only ensure enough place for 8 callbacks
 // Application can crash when creating more if these the last
 // items on stack
@@ -497,7 +500,7 @@ func call_norddrop_pubkey_cb(ctx uintptr, ip *C.char, pubkey *C.char) C.int {
 
                 if gokey != nil {
                         ckey := C.CBytes(gokey)
-                        C.memcpy(pubkey, ckey, 32)
+                        C.memcpy(unsafe.Pointer(pubkey), ckey, 32)
                         C.free(ckey)
 
                         return 0
@@ -516,7 +519,7 @@ func (p SwigcptrNorddrop) Swigcptr() uintptr {
 func (p SwigcptrNorddrop) SwigIsNorddrop() {
 }
 
-func NewNorddrop(arg1 func(string), arg2 Enum_SS_norddrop_log_level, arg3 func(int, string), arg4 func(string, *byte) int, arg5 string) (_swig_ret Norddrop) {
+func NewNorddrop(arg1 func(string), arg2 Enum_SS_norddrop_log_level, arg3 func(int, string), arg4 func(string) []byte, arg5 string) (_swig_ret Norddrop) {
 	var swig_r Norddrop
 	var _swig_i_0 C.norddrop_event_cb
 {

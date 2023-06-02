@@ -1,10 +1,14 @@
 #if SWIGGO
 %go_import("unsafe")
 
+%insert(cgo_comment) %{
+#include <string.h>
+%}
+
 %insert(go_wrapper) %{
 var eventCallbacks = map[uintptr]func(string){}
 var loggerCallbacks = map[uintptr]func(int, string){}
-var pubkeyCallbacks = map[uintptr]func(string) *byte[]{}
+var pubkeyCallbacks = map[uintptr]func(string) []byte{}
 // Note: This can only ensure enough place for 8 callbacks
 // Application can crash when creating more if these the last
 // items on stack
@@ -101,7 +105,7 @@ func call_norddrop_logger_cb(ctx uintptr, level C.int, str *C.char) {
 %}
 
 
-%typemap(gotype) norddrop_pubkey_cb "func(string, *byte) int";
+%typemap(gotype) norddrop_pubkey_cb "func(string) []byte";
 %typemap(imtype) norddrop_pubkey_cb "C.norddrop_pubkey_cb";
 %typemap(goin) norddrop_pubkey_cb {
         index := maxPubkeyCbIndex() + 1
@@ -124,7 +128,7 @@ func call_norddrop_pubkey_cb(ctx uintptr, ip *C.char, pubkey *C.char) C.int {
 
                 if gokey != nil {
                         ckey := C.CBytes(gokey)
-                        C.memcpy(pubkey, ckey, 32)
+                        C.memcpy(unsafe.Pointer(pubkey), ckey, 32)
                         C.free(ckey)
 
                         return 0
