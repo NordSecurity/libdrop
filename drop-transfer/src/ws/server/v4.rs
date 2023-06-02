@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fs, io,
+    fs,
     net::IpAddr,
     ops::ControlFlow,
     path::PathBuf,
@@ -20,8 +20,7 @@ use warp::ws::{Message, WebSocket};
 
 use super::{handler, ServerReq};
 use crate::{
-    file, file::FileKind, protocol::v4, service::State, utils::Hidden, ws::events::FileEventTx,
-    FileId,
+    file::FileKind, protocol::v4, service::State, utils::Hidden, ws::events::FileEventTx, FileId,
 };
 
 pub struct HandlerInit<'a> {
@@ -415,78 +414,6 @@ impl Downloader {
 
         Ok(report)
     }
-
-    async fn check_candidate_file(
-        &mut self,
-        task: &super::FileXferTask,
-    ) -> crate::Result<Option<Hidden<PathBuf>>> {
-        let mut csum = None;
-        for variant in crate::utils::filepath_variants(&task.location.0)?.map(Hidden) {
-            let meta = if let Ok(meta) = variant.symlink_metadata() {
-                meta
-            } else {
-                // If the file does not exists we expect that furter iteration will not yield
-                // more file with (i) suffix
-                break;
-            };
-
-            if !meta.is_file() {
-                continue;
-            }
-
-            if meta.len() != task.file.size() {
-                info!(
-                    self.logger,
-                    "Fould file {variant:?} but size does not match {}",
-                    task.file.size(),
-                );
-                continue;
-            }
-
-            // The file exists let's compare checksum
-            let target_csum = if let Some(csum) = &csum {
-                csum
-            } else {
-                let report = self.request_csum(task.file.size()).await?;
-                if report.limit != task.file.size() {
-                    error!(
-                        self.logger,
-                        "Checksum report missmatch. Most likely protocol error"
-                    );
-                    return Err(crate::Error::BadTransferState);
-                }
-
-                &*csum.insert(report.checksum)
-            };
-
-            let candidate_csum = match tokio::task::block_in_place(|| {
-                let file = fs::File::open(&*variant)?;
-                file::checksum(&mut io::BufReader::new(file))
-            }) {
-                Ok(csum) => csum,
-                Err(err) => {
-                    warn!(
-                        self.logger,
-                        "Failed to compute checksum for candidate file {variant:?}: {err}",
-                    );
-                    continue;
-                }
-            };
-
-            if candidate_csum != *target_csum {
-                info!(
-                    self.logger,
-                    "Fould file {variant:?} but checksum does not match"
-                );
-                continue;
-            }
-
-            // We found the file
-            return Ok(Some(variant));
-        }
-
-        Ok(None)
-    }
 }
 
 #[async_trait::async_trait]
@@ -501,25 +428,6 @@ impl handler::Downloader for Downloader {
         if filename_len + super::MAX_FILE_SUFFIX_LEN > super::MAX_FILENAME_LENGTH {
             return Err(crate::Error::FilenameTooLong);
         }
-
-        // Check if the file is already there
-        match self.check_candidate_file(task).await? {
-            Some(destination) => {
-                info!(
-                    self.logger,
-                    "Found the file here {destination:?}, it's already downloaded"
-                );
-
-                let msg = v4::ServerMsg::Done(v4::Done {
-                    file: self.file_id.clone(),
-                    bytes_transfered: task.file.size(),
-                });
-                self.send(Message::from(&msg)).await?;
-
-                return Ok(handler::DownloadInit::AlreadyDone { destination });
-            }
-            None => debug!(self.logger, "Did not find any candidate files"),
-        };
 
         let tmp_location: Hidden<PathBuf> = Hidden(
             task.location

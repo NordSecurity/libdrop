@@ -33,7 +33,8 @@ public enum NorddropResult {
   ResAddrInUse = 7,
   ResInstanceStart = 8,
   ResInstanceStop = 9,
-  ResInvalidPrivkey = 10
+  ResInvalidPrivkey = 10,
+  ResDbError = 11
 }
 
 }
@@ -75,9 +76,9 @@ public class Norddrop : global::System.IDisposable {
 
   public delegate void EventDelegate(string message);
   public delegate void LoggerDelegate(NorddropLogLevel level, string message);
-  public delegate int PubkeyDelegate(string ip, byte* pubkey);
+  public unsafe delegate int PubkeyDelegate(string ip, byte* pubkey);
 
-  public Norddrop(EventDelegate events, NorddropLogLevel level, LoggerDelegate logger, PubkeyDelegate pubkeyCb, string privkey) : this(libnorddropPINVOKE.new_Norddrop(events, (int)level, logger, pubkeyCb, privkey), true) {
+  public Norddrop(EventDelegate events, NorddropLogLevel level, LoggerDelegate logger, PubkeyDelegate pubkeyCb, byte[] privkey) : this(libnorddropPINVOKE.new_Norddrop(events, (int)level, logger, pubkeyCb, privkey), true) {
     if (libnorddropPINVOKE.SWIGPendingException.Pending) throw libnorddropPINVOKE.SWIGPendingException.Retrieve();
   }
 
@@ -305,7 +306,7 @@ class libnorddropPINVOKE {
 
 
   [global::System.Runtime.InteropServices.DllImport("norddrop", EntryPoint="CSharp_NordSecfNordDrop_new_Norddrop___")]
-  public static extern global::System.IntPtr new_Norddrop(Norddrop.EventDelegate jarg1, int jarg2, Norddrop.LoggerDelegate jarg3, Norddrop.PubkeyDelegate jarg4, string jarg5);
+  public static extern global::System.IntPtr new_Norddrop(Norddrop.EventDelegate jarg1, int jarg2, Norddrop.LoggerDelegate jarg3, Norddrop.PubkeyDelegate jarg4, [global::System.Runtime.InteropServices.In, global::System.Runtime.InteropServices.MarshalAs(global::System.Runtime.InteropServices.UnmanagedType.LPArray)]byte[] jarg5);
 
   [global::System.Runtime.InteropServices.DllImport("norddrop", EntryPoint="CSharp_NordSecfNordDrop_delete_Norddrop___")]
   public static extern void delete_Norddrop(global::System.Runtime.InteropServices.HandleRef jarg1);

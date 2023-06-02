@@ -92,6 +92,15 @@ impl FileSubPath {
     pub fn name(&self) -> &str {
         self.0.last().expect("Missing last path component")
     }
+
+    pub fn from_path(path: impl AsRef<Path>) -> crate::Result<Self> {
+        let vec = path
+            .as_ref()
+            .iter()
+            .map(|cmp| cmp.to_str().map(String::from).ok_or(crate::Error::BadPath))
+            .collect::<Result<_, _>>()?;
+        Ok(Self(vec))
+    }
 }
 
 impl<T> From<T> for FileSubPath

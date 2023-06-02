@@ -415,8 +415,8 @@ fn prepare_transfer_files(
 ) -> Result<Vec<File>> {
     let mut files = Vec::new();
 
+    #[allow(unused_variables)]
     for (i, desc) in descriptors.iter().enumerate() {
-        #[allow(unused_variables)]
         if let Some(fd) = desc.fd {
             #[cfg(target_os = "windows")]
             {
