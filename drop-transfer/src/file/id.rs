@@ -45,9 +45,15 @@ impl From<&FileSubPath> for FileId {
     }
 }
 
-impl ToString for FileId {
-    fn to_string(&self) -> String {
-        self.0.clone()
+impl fmt::Display for FileId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for FileId {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 

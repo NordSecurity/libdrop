@@ -1,6 +1,8 @@
-use std::str::FromStr;
 pub mod error;
 pub mod types;
+
+use std::str::FromStr;
+
 use slog::Logger;
 use sqlx::{sqlite::SqliteConnectOptions, Connection, Sqlite, SqlitePool, Transaction};
 use types::{
@@ -98,6 +100,26 @@ impl Storage {
             .await
             .map_err(error::Error::DBError)?,
         };
+
+        Ok(())
+    }
+
+    pub async fn save_checksum(
+        &self,
+        transfer_id: &str,
+        file_id: &str,
+        checksum: &[u8],
+    ) -> Result<()> {
+        let mut conn = self.conn.acquire().await?;
+
+        sqlx::query!(
+            "UPDATE incoming_paths SET checksum = ?3 WHERE transfer_id = ?1 AND path_hash = ?2",
+            transfer_id,
+            file_id,
+            checksum,
+        )
+        .execute(&mut conn)
+        .await?;
 
         Ok(())
     }
