@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT * FROM transfers WHERE created_at >= datetime(?1, 'unixepoch')",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "peer_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_outgoing",
+        "ordinal": 2,
+        "type_info": "Int64"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 3,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "19d6ed1a7bd1e330c02fc05a1e8151877496ec61c489c6a63742a39cb091689d"
+}

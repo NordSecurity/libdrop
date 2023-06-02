@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO transfer_active_states (transfer_id) VALUES (?1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "c935d1ea4ecb327269d584272a3a26901a8824cb5516e747b25fb8500591aa91"
+}
