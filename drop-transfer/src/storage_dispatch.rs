@@ -6,17 +6,17 @@ use drop_storage::{
     Storage, TransferType,
 };
 
-pub struct StorageDispatch {
-    storage: drop_storage::Storage,
+pub struct StorageDispatch<'a> {
+    storage: &'a drop_storage::Storage,
     file_progress: HashMap<(String, String), i64>,
 }
 
-impl StorageDispatch {
-    pub async fn new(logger: slog::Logger, storage_path: &str) -> Result<Self, Error> {
-        Ok(Self {
-            storage: Storage::new(logger, storage_path).await?,
+impl<'a> StorageDispatch<'a> {
+    pub fn new(storage: &'a Storage) -> Self {
+        Self {
+            storage,
             file_progress: HashMap::new(),
-        })
+        }
     }
 
     pub async fn insert_transfer(
