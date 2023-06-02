@@ -445,10 +445,18 @@ impl FileXferTask {
             }
         };
 
-        fs::rename(&tmp_location.0, &dst_location)?;
+        if let Err(err) = fs::rename(&tmp_location.0, &dst_location) {
+            if let Err(err) = fs::remove_file(&dst_location) {
+                warn!(
+                    logger,
+                    "Failed to remove touched destination file on move error: {err}"
+                );
+            }
+            return Err(err.into());
+        }
 
         if let Err(err) = dst_location.quarantine() {
-            error!(logger, "Failed to quarantine downloaded file: {}", err);
+            error!(logger, "Failed to quarantine downloaded file: {err}");
         }
 
         Ok(dst_location)
@@ -539,20 +547,18 @@ impl FileXferTask {
             }
         };
 
-        downloader.done(bytes_received).await?;
-
         let dst = match self.move_tmp_to_dst(tmp_location, logger) {
             Ok(dst) => dst,
             Err(err) => {
                 error!(
                     logger,
-                    "Could not rename temporary file {:?} after downloading: {}",
-                    self.location,
-                    err
+                    "Could not rename temporary file {:?} after downloading: {err}", self.location,
                 );
                 return Err(err);
             }
         };
+
+        downloader.done(bytes_received).await?;
 
         Ok(dst)
     }
@@ -642,17 +648,6 @@ impl FileXferTask {
                 if let Some(event) = event {
                     events.stop(event).await;
                 }
-            }
-            handler::DownloadInit::AlreadyDone { destination } => {
-                events
-                    .emit_force(crate::Event::FileDownloadSuccess(
-                        self.xfer.clone(),
-                        DownloadSuccess {
-                            id: self.file.id().clone(),
-                            final_path: Hidden(destination.0.into_boxed_path()),
-                        },
-                    ))
-                    .await;
             }
         }
     }

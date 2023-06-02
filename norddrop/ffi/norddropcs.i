@@ -1,6 +1,6 @@
-
-
 #if SWIGCSHARP
+
+%include "arrays_csharp.i"
 
 %rename("%(lowercamelcase)s") "";
 %rename("%(camelcase)s", %$isfunction) "";
@@ -30,7 +30,7 @@ int call_norddrop_pubkey_cb(void *ctx, const char* ip, char* privkey) {
 %typemap(cscode) norddrop %{
   public delegate void EventDelegate(string message);
   public delegate void LoggerDelegate(NorddropLogLevel level, string message);
-  public delegate int PubkeyDelegate(string ip, byte* pubkey);
+  public unsafe delegate int PubkeyDelegate(string ip, byte* pubkey);
 %}
 
 %typemap(cstype) norddrop_event_cb "EventDelegate";
@@ -70,6 +70,8 @@ int call_norddrop_pubkey_cb(void *ctx, const char* ip, char* privkey) {
     .cb = call_norddrop_pubkey_cb,
   };
 %}
+
+%apply unsigned char INPUT[] { char *privkey };
 
 %extend norddrop {
     %exception norddrop %{

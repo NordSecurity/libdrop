@@ -261,21 +261,23 @@ impl HandlerLoop<'_> {
             if let Some(task) = self.tasks.remove(&file_id) {
                 if !task.job.is_finished() {
                     task.job.abort();
-
-                    let file = self
-                        .xfer
-                        .files()
-                        .get(&file_id)
-                        .expect("File should exists since we have a transfer task running");
-
-                    task.events
-                        .stop(crate::Event::FileUploadFailed(
-                            self.xfer.clone(),
-                            file.id().clone(),
-                            crate::Error::BadTransfer,
-                        ))
-                        .await;
                 }
+
+                let file = self
+                    .xfer
+                    .files()
+                    .get(&file_id)
+                    .expect("File should exists since we have a transfer task running");
+
+                task.events
+                    .stop(crate::Event::FileUploadFailed(
+                        self.xfer.clone(),
+                        file.id().clone(),
+                        crate::Error::BadTransfer,
+                    ))
+                    .await;
+
+                self.done.insert(file_id);
             }
         }
     }

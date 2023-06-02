@@ -1573,7 +1573,7 @@ scenarios = [
     ),
     Scenario(
         "scenario9",
-        "Send the same file twice, expect reporting that the file is already downloaded",
+        "Send the same file twice, expect downloading the file again and appending (1) suffix",
         {
             "ren": ActionList(
                 [
@@ -1608,6 +1608,7 @@ scenarios = [
                             },
                         )
                     ),
+                    action.Wait(event.Start(1, FILES["deep/path/file1.ext1"].id)),
                     action.Wait(
                         event.FinishFileUploaded(1, FILES["deep/path/file1.ext1"].id)
                     ),
@@ -1662,16 +1663,18 @@ scenarios = [
                         FILES["deep/path/file1.ext1"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Start(1, FILES["deep/path/file1.ext1"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             1,
                             FILES["deep/path/file1.ext1"].id,
-                            "/tmp/received/file1.ext1",
+                            "/tmp/received/file1(1).ext1",
                         )
                     ),
                     action.CheckDownloadedFiles(
                         [
                             action.File("/tmp/received/file1.ext1", 1048576),
+                            action.File("/tmp/received/file1(1).ext1", 1048576),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -2605,6 +2608,13 @@ scenarios = [
                             FILES["testfile-small"].id,
                         )
                     ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-small"].id,
+                        )
+                    ),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
@@ -2643,16 +2653,18 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
                             FILES["testfile-small"].id,
-                            "/tmp/received/testfile-small",
+                            "/tmp/received/testfile-small(1)",
                         )
                     ),
                     action.CheckDownloadedFiles(
                         [
                             action.File("/tmp/received/testfile-small", 1048576),
+                            action.File("/tmp/received/testfile-small(1)", 1048576),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -4110,6 +4122,75 @@ scenarios = [
                             13,
                         )
                     ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario25",
+        "Delete temporary file during the transfer, expect it to fail",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0, FILES["testfile-big"].id, Error.BAD_TRANSFER
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/25",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.DeleteFile(
+                        f"/tmp/received/25/{FILES['testfile-big'].id}.dropdl-part"
+                    ),
+                    action.Wait(
+                        event.FinishFileFailed(0, FILES["testfile-big"].id, Error.IO, 2)
+                    ),
+                    action.CompareTrees(Path("/tmp/received/25"), []),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),

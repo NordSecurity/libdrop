@@ -20,6 +20,7 @@ public final class NorddropResult {
   public final static NorddropResult NORDDROP_RES_INSTANCE_START = new NorddropResult("NORDDROP_RES_INSTANCE_START", libnorddropJNI.NORDDROP_RES_INSTANCE_START_get());
   public final static NorddropResult NORDDROP_RES_INSTANCE_STOP = new NorddropResult("NORDDROP_RES_INSTANCE_STOP", libnorddropJNI.NORDDROP_RES_INSTANCE_STOP_get());
   public final static NorddropResult NORDDROP_RES_INVALID_PRIVKEY = new NorddropResult("NORDDROP_RES_INVALID_PRIVKEY", libnorddropJNI.NORDDROP_RES_INVALID_PRIVKEY_get());
+  public final static NorddropResult NORDDROP_RES_DB_ERROR = new NorddropResult("NORDDROP_RES_DB_ERROR", libnorddropJNI.NORDDROP_RES_DB_ERROR_get());
 
   public final int swigValue() {
     return swigValue;
@@ -55,7 +56,7 @@ public final class NorddropResult {
     swigNext = this.swigValue+1;
   }
 
-  private static NorddropResult[] swigValues = { NORDDROP_RES_OK, NORDDROP_RES_ERROR, NORDDROP_RES_INVALID_STRING, NORDDROP_RES_BAD_INPUT, NORDDROP_RES_JSON_PARSE, NORDDROP_RES_TRANSFER_CREATE, NORDDROP_RES_NOT_STARTED, NORDDROP_RES_ADDR_IN_USE, NORDDROP_RES_INSTANCE_START, NORDDROP_RES_INSTANCE_STOP, NORDDROP_RES_INVALID_PRIVKEY };
+  private static NorddropResult[] swigValues = { NORDDROP_RES_OK, NORDDROP_RES_ERROR, NORDDROP_RES_INVALID_STRING, NORDDROP_RES_BAD_INPUT, NORDDROP_RES_JSON_PARSE, NORDDROP_RES_TRANSFER_CREATE, NORDDROP_RES_NOT_STARTED, NORDDROP_RES_ADDR_IN_USE, NORDDROP_RES_INSTANCE_START, NORDDROP_RES_INSTANCE_STOP, NORDDROP_RES_INVALID_PRIVKEY, NORDDROP_RES_DB_ERROR };
   private static int swigNext = 0;
   private final int swigValue;
   private final String swigName;
