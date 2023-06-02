@@ -2,6 +2,12 @@
 libdrop is a library for sending/receiving files, primarily over meshnet, but
 WAN is also an option.
 
+# Releasing
+- We follow the semver.
+- After changes are introduced it might need security review.
+- After major version increase we need to do release candidates in the form of `v1.2.3-rc1` to ensure that the final major version upgrade contains as litle broken things as possible
+- Before releasing `changelog.md` must be updated with the version name being released.
+
 # Tests
 ## Whole testsuite
 ```
