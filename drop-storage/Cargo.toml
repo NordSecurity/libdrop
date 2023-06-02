@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 thiserror = "*"
-sqlx = { version = "0.6", features = [ "runtime-tokio-rustls", "sqlite", "time", "chrono", "offline"] }
+sqlx = { git="https://github.com/NordSecurity/sqlx.git", branch="libdrop-compat", features = [ "sqlite", "time", "chrono", "runtime-tokio"] }
 slog = { workspace = true }
 serde = { workspace = true }
 

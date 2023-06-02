@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO incoming_path_pending_states (path_id) VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "b71bfff9a9e4e78fbb37c86e4167cbbfdcc8fb01b75d1e5ce81ab2f8b24e68f7"
+}

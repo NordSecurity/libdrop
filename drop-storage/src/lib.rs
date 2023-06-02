@@ -4,7 +4,7 @@ pub mod types;
 use std::str::FromStr;
 
 use slog::Logger;
-use sqlx::{sqlite::SqliteConnectOptions, Connection, Sqlite, SqlitePool, Transaction};
+use sqlx::{sqlite::SqliteConnectOptions, Acquire, SqliteConnection, SqlitePool};
 use types::{
     DbTransferType, IncomingPath, IncomingPathCancelState, IncomingPathCompletedState,
     IncomingPathFailedState, IncomingPathPendingState, IncomingPathStartedState, OutgoingPath,
@@ -31,9 +31,10 @@ pub struct FileChecksum {
 impl Storage {
     pub async fn new(logger: Logger, path: &str) -> Result<Self> {
         let options = SqliteConnectOptions::from_str(path)?.create_if_missing(true);
-        let conn = SqlitePool::connect_with(options).await?;
+        let conn = SqlitePool::connect_with(options.clone()).await?;
+
         sqlx::migrate!("./migrations")
-            .run(&conn)
+            .run(&mut conn.acquire().await?)
             .await
             .map_err(|e| error::Error::InternalError(e.to_string()))?;
 
@@ -56,7 +57,7 @@ impl Storage {
             "INSERT OR IGNORE INTO peers (id) VALUES (?1)",
             transfer.peer
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await?;
 
         sqlx::query!(
@@ -65,11 +66,11 @@ impl Storage {
             transfer.peer,
             transfer_type_int,
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await?;
 
         for path in transfer.files {
-            Self::insert_path(transfer_type, transfer.id.clone(), path, &mut conn).await?;
+            Self::insert_path(transfer_type, transfer.id.clone(), path, &mut *conn).await?;
         }
 
         conn.commit().await.map_err(error::Error::DBError)
@@ -79,7 +80,7 @@ impl Storage {
         transfer_type: TransferType,
         transfer_id: String,
         path: TransferPath,
-        conn: &mut Transaction<'_, Sqlite>,
+        conn: &mut SqliteConnection,
     ) -> Result<()> {
         match transfer_type {
             TransferType::Incoming => sqlx::query!(
@@ -123,7 +124,7 @@ impl Storage {
             file_id,
             checksum,
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await?;
 
         Ok(())
@@ -137,7 +138,7 @@ impl Storage {
             "SELECT path_hash as file_id, checksum FROM incoming_paths WHERE transfer_id = ?1",
             transfer_id
         )
-        .fetch_all(&mut conn)
+        .fetch_all(&mut *conn)
         .await?;
 
         Ok(out)
@@ -150,7 +151,7 @@ impl Storage {
             "INSERT INTO transfer_active_states (transfer_id) VALUES (?1)",
             transfer_id,
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await
         .map_err(error::Error::DBError)?;
 
@@ -169,7 +170,7 @@ impl Storage {
             transfer_id,
             error,
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await
         .map_err(error::Error::DBError)?;
 
@@ -188,7 +189,7 @@ impl Storage {
             transfer_id,
             by_peer,
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await
         .map_err(error::Error::DBError)?;
 
@@ -208,7 +209,7 @@ impl Storage {
             transfer_id,
             file_path
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await
         .map_err(error::Error::DBError)?;
 
@@ -228,7 +229,7 @@ impl Storage {
             transfer_id,
             path_id,
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await
         .map_err(error::Error::DBError)?;
 
@@ -249,7 +250,7 @@ impl Storage {
             path_id,
             0
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await
         .map_err(error::Error::DBError)?;
 
@@ -270,7 +271,7 @@ impl Storage {
             path_id,
             0
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await
         .map_err(error::Error::DBError)?;
 
@@ -294,7 +295,7 @@ impl Storage {
             by_peer,
             bytes_sent
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await
         .map_err(error::Error::DBError)?;
 
@@ -318,7 +319,7 @@ impl Storage {
             by_peer,
             bytes_received
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await
         .map_err(error::Error::DBError)?;
 
@@ -343,7 +344,7 @@ impl Storage {
             error,
             bytes_received
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await
         .map_err(error::Error::DBError)?;
 
@@ -367,7 +368,7 @@ impl Storage {
             error,
             bytes_sent
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await
         .map_err(error::Error::DBError)?;
 
@@ -387,7 +388,7 @@ impl Storage {
             transfer_id,
             path_id,
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await
         .map_err(error::Error::DBError)?;
 
@@ -409,7 +410,7 @@ impl Storage {
             path_id,
             final_path
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await
         .map_err(error::Error::DBError)?;
 
@@ -423,7 +424,7 @@ impl Storage {
             "DELETE FROM transfers WHERE created_at < datetime(?1, 'unixepoch')",
             until_timestamp
         )
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await
         .map_err(error::Error::DBError)
         .map(|_| ())
@@ -440,7 +441,7 @@ impl Storage {
         let mut conn = self.conn.acquire().await?;
 
         sqlx::query!("DELETE FROM transfers WHERE id = $1", transfer_id)
-            .execute(&mut conn)
+            .execute(&mut *conn)
             .await
             .map_err(error::Error::DBError)
             .map(|_| ())
@@ -461,7 +462,7 @@ impl Storage {
             "SELECT * FROM transfers WHERE created_at >= datetime(?1, 'unixepoch')",
             since_timestamp
         )
-        .fetch_all(&mut conn)
+        .fetch_all(&mut *conn)
         .await
         .map_err(error::Error::DBError)?
         .iter()
@@ -502,7 +503,7 @@ impl Storage {
                 "SELECT * FROM transfer_active_states WHERE transfer_id = ?1",
                 transfer.id
             )
-            .fetch_all(&mut conn)
+            .fetch_all(&mut *conn)
             .await
             .map_err(error::Error::DBError)?
             .iter()
@@ -516,7 +517,7 @@ impl Storage {
                 "SELECT * FROM transfer_cancel_states WHERE transfer_id = ?1",
                 transfer.id
             )
-            .fetch_all(&mut conn)
+            .fetch_all(&mut *conn)
             .await
             .map_err(error::Error::DBError)?
             .iter()
@@ -531,7 +532,7 @@ impl Storage {
                 "SELECT * FROM transfer_failed_states WHERE transfer_id = ?1",
                 transfer.id
             )
-            .fetch_all(&mut conn)
+            .fetch_all(&mut *conn)
             .await
             .map_err(error::Error::DBError)?
             .iter()
@@ -553,7 +554,7 @@ impl Storage {
             "SELECT * FROM outgoing_paths WHERE transfer_id = ?1",
             transfer_id
         )
-        .fetch_all(&mut conn)
+        .fetch_all(&mut *conn)
         .await
         .map_err(error::Error::DBError)?
         .iter()
@@ -576,7 +577,7 @@ impl Storage {
                 "SELECT * FROM outgoing_path_pending_states WHERE path_id = ?1",
                 path.id
             )
-            .fetch_all(&mut conn)
+            .fetch_all(&mut *conn)
             .await
             .map_err(error::Error::DBError)?
             .iter()
@@ -590,7 +591,7 @@ impl Storage {
                 "SELECT * FROM outgoing_path_started_states WHERE path_id = ?1",
                 path.id
             )
-            .fetch_all(&mut conn)
+            .fetch_all(&mut *conn)
             .await
             .map_err(error::Error::DBError)?
             .iter()
@@ -605,7 +606,7 @@ impl Storage {
                 "SELECT * FROM outgoing_path_cancel_states WHERE path_id = ?1",
                 path.id
             )
-            .fetch_all(&mut conn)
+            .fetch_all(&mut *conn)
             .await
             .map_err(error::Error::DBError)?
             .iter()
@@ -621,7 +622,7 @@ impl Storage {
                 "SELECT * FROM outgoing_path_failed_states WHERE path_id = ?1",
                 path.id
             )
-            .fetch_all(&mut conn)
+            .fetch_all(&mut *conn)
             .await
             .map_err(error::Error::DBError)?
             .iter()
@@ -637,7 +638,7 @@ impl Storage {
                 "SELECT * FROM outgoing_path_completed_states WHERE path_id = ?1",
                 path.id
             )
-            .fetch_all(&mut conn)
+            .fetch_all(&mut *conn)
             .await
             .map_err(error::Error::DBError)?
             .iter()
@@ -658,7 +659,7 @@ impl Storage {
             "SELECT * FROM incoming_paths WHERE transfer_id = ?1",
             transfer_id
         )
-        .fetch_all(&mut conn)
+        .fetch_all(&mut *conn)
         .await
         .map_err(error::Error::DBError)?
         .iter()
@@ -681,7 +682,7 @@ impl Storage {
                 "SELECT * FROM incoming_path_pending_states WHERE path_id = ?1",
                 path.id
             )
-            .fetch_all(&mut conn)
+            .fetch_all(&mut *conn)
             .await
             .map_err(error::Error::DBError)?
             .iter()
@@ -695,7 +696,7 @@ impl Storage {
                 "SELECT * FROM incoming_path_started_states WHERE path_id = ?1",
                 path.id
             )
-            .fetch_all(&mut conn)
+            .fetch_all(&mut *conn)
             .await
             .map_err(error::Error::DBError)?
             .iter()
@@ -710,7 +711,7 @@ impl Storage {
                 "SELECT * FROM incoming_path_cancel_states WHERE path_id = ?1",
                 path.id
             )
-            .fetch_all(&mut conn)
+            .fetch_all(&mut *conn)
             .await
             .map_err(error::Error::DBError)?
             .iter()
@@ -726,7 +727,7 @@ impl Storage {
                 "SELECT * FROM incoming_path_failed_states WHERE path_id = ?1",
                 path.id
             )
-            .fetch_all(&mut conn)
+            .fetch_all(&mut *conn)
             .await
             .map_err(error::Error::DBError)?
             .iter()
@@ -742,7 +743,7 @@ impl Storage {
                 "SELECT * FROM incoming_path_completed_states WHERE path_id = ?1",
                 path.id
             )
-            .fetch_all(&mut conn)
+            .fetch_all(&mut *conn)
             .await
             .map_err(error::Error::DBError)?
             .iter()

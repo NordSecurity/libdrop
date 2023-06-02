@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?2 AND path_hash = ?2), ?3, ?4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "0a3f1122199c61c93d6df986cd7310cc6f1f7a0be9daff8efc645b57cb49f37a"
+}

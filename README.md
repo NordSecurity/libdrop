@@ -48,19 +48,22 @@ You can verify the transfer by checking the file system in the server container 
 echo -n "<absolute file path>" | sha256sum  | cut -d " " -f1 | xxd -ps -r | basenc --base64url | tr -d '='
 ```
 ## Database development
-When developing the database, it is strongly encouraged to use the "online" mode of `sqlx`, by setting the environment variable `DATABASE_URL` or providing it in `drop-storage/.env` file, the variable should contain the path to a database file for sqlx to validate your queries against.
+When developing the database there are two modes:
+- `online`: query live database for each query
+- `offline`: using pregenerated files in .sqlx to validate the queries
 
-Before pushing new code that contains changes to the queries, the `sqlx-data.json` file should be updated by calling `cargo sqlx prepare --merged`, else the CI pipelines will most likely fail.
+SQLX has `offline` always enabled and based on `DATABASE_URL` env var decides which one to use. Env variable has precedence over .sqlx dir.
 
-Examplary flow:
+For any query changes or new queries the database needs to be set-up:
 ```
-cd libdrop
-touch /tmp/database.sqlite
-echo "DATABASE_URL=sqlite:///tmp/db.sqlite" > drop-storage/.env
-sqlx migrate run
-cargo sqlx prepare
+touch /tmp/db.sqlite
+cd drop-storage
+cargo sqlx migrate run --database-url sqlite:///tmp/db.sqlite
+cd ..
+SQLX_OFFLINE_DIR="./.sqlx" DATABASE_URL=sqlite:///tmp/db.sqlite cargo sqlx prepare
+git add .sqlx
 ```
-
+To speed up the process `.env` file can be created in `drop-storage` with `DATABASE_URL` set up to always use it.
 # Contributing
 [CONTRIBUTING.md](CONTRIBUTING.md)
 
