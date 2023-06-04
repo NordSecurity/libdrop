@@ -12,7 +12,7 @@ import time
 
 from . import event, ffi
 from .logger import logger
-from .event import Event, print_uuid, UUIDS, UUIDS_LOCK
+from .event import Event, print_uuid, get_uuid, UUIDS, UUIDS_LOCK
 
 import sys
 
@@ -436,7 +436,7 @@ class AssertTransfers(Action):
     def __str__(self):
         return f"AssertTransfers({self._since_timestamp}, {','.join(self._expected_outputs)})"
 
-class PurgeTransfers(Action):
+class PurgeTransfersUntil(Action):
     def __init__(self, until_timestamp: int):
         self._until_timestamp = until_timestamp
 
@@ -444,4 +444,15 @@ class PurgeTransfers(Action):
         drop.purge_transfers_until(self._until_timestamp)
 
     def __str__(self):
-        return f"PurgeTransfers({self._until_timestamp})"
+        return f"PurgeTransfersUntil({self._until_timestamp})"
+
+class PurgeTransfers(Action):
+    def __init__(self, uuid_indices: typing.List[int]):
+        self.uuid_indices = uuid_indices
+
+    async def run(self, drop: ffi.Drop):
+        xfids = [get_uuid(i) for i in self.uuid_indices]
+        drop.purge_transfers(xfids)
+
+    def __str__(self):
+        return f"PurgeTransfers({self.uuid_indices})"

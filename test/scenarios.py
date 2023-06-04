@@ -75,6 +75,8 @@ scenarios = [
                             ]
                         }
                     }"""]),
+                    action.PurgeTransfers([0]),
+                    action.AssertTransfers([]),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -149,6 +151,8 @@ scenarios = [
                             ]
                         }
                     }"""]),
+                    action.PurgeTransfers([0]),
+                    action.AssertTransfers([]),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -276,7 +280,7 @@ scenarios = [
                             ]
                         } 
                     }"""]),
-                    action.PurgeTransfers(int(time.time() + 10)),
+                    action.PurgeTransfersUntil(int(time.time() + 10)),
                     action.AssertTransfers([]),
                     action.Stop(),
                 ]
@@ -416,7 +420,7 @@ scenarios = [
                             ]
                         }
                     }"""]),
-                    action.PurgeTransfers(int(time.time() + 10)),
+                    action.PurgeTransfersUntil(int(time.time() + 10)),
                     action.AssertTransfers([]),
                     action.NoEvent(),
                     action.Stop(),
