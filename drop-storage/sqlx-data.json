@@ -10,16 +10,6 @@
     },
     "query": "UPDATE incoming_paths SET checksum = ?3 WHERE transfer_id = ?1 AND path_hash = ?2"
   },
-  "0a3f1122199c61c93d6df986cd7310cc6f1f7a0be9daff8efc645b57cb49f37a": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Right": 4
-      }
-    },
-    "query": "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?2 AND path_hash = ?2), ?3, ?4)"
-  },
   "19d6ed1a7bd1e330c02fc05a1e8151877496ec61c489c6a63742a39cb091689d": {
     "describe": {
       "columns": [
@@ -231,6 +221,16 @@
       }
     },
     "query": "INSERT OR IGNORE INTO transfers (id, peer_id, is_outgoing) VALUES (?1, ?2, ?3)"
+  },
+  "505f47577f0efa1c3815bb4858313c61eb83009d4843133a1b51eabc76593e47": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 4
+      }
+    },
+    "query": "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)"
   },
   "5ec61dee21ec948c3ed56b1da2a87a467d54d3688270f28d005035620973735a": {
     "describe": {
@@ -546,6 +546,16 @@
     },
     "query": "INSERT INTO outgoing_path_pending_states (path_id) VALUES ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))"
   },
+  "c189a03a1eb204e24e93a544b5579f3ddd16babd59e91dcf90965e106d8ba918": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 4
+      }
+    },
+    "query": "INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent) VALUES ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)"
+  },
   "c48298283d99c618c8d12ebc1b00b0772cb2b97515deaa3f062644c976dbd06b": {
     "describe": {
       "columns": [
@@ -819,15 +829,5 @@
       }
     },
     "query": "SELECT * FROM transfer_active_states WHERE transfer_id = ?1"
-  },
-  "fe3cb549731345e6e827d33a7c1483b25420c8fe1e4859c787aedfb4748049be": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Right": 4
-      }
-    },
-    "query": "INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent) VALUES ((SELECT id FROM outgoing_paths WHERE transfer_id = ?2 AND path_hash = ?2), ?3, ?4)"
   }
 }

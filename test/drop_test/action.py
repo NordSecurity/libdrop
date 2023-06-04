@@ -16,6 +16,7 @@ from .event import Event, print_uuid, get_uuid, UUIDS, UUIDS_LOCK
 
 import sys
 
+
 def compare_json_struct(expected: dict, actual: dict):
     for key in expected:
         if key is not int:
@@ -32,7 +33,10 @@ def compare_json_struct(expected: dict, actual: dict):
                 compare_json_struct(expected_value[i], actual_value[i])
         else:
             if expected_value != actual_value:
-                raise Exception(f"Value missmatch for key: '{key}'. Expected '{expected_value}', got '{actual_value}'")
+                raise Exception(
+                    f"Value missmatch for key: '{key}'. Expected '{expected_value}', got '{actual_value}'"
+                )
+
 
 class File:
     def __init__(self, path: str, size: int):
@@ -409,6 +413,7 @@ class DropPrivileges(Action):
     def __str__(self):
         return "DropPrivileges"
 
+
 class DeleteFile(Action):
     def __init__(self, file_path: str):
         self._file_path = file_path
@@ -419,9 +424,14 @@ class DeleteFile(Action):
     def __str__(self):
         return f"DeleteFile({self._file_path})"
 
+
 class AssertTransfers(Action):
     # offset the timestamp by 10 seconds to account for the time it takes for the test to run
-    def __init__(self, expected_outputs: typing.List[str], since_timestamp: int = int(time.time() - 10)):
+    def __init__(
+        self,
+        expected_outputs: typing.List[str],
+        since_timestamp: int = int(time.time() - 10),
+    ):
         self._since_timestamp = since_timestamp
         self._expected_outputs = expected_outputs
 
@@ -429,12 +439,15 @@ class AssertTransfers(Action):
         transfers = json.loads(drop.get_transfers_since(self._since_timestamp))
 
         if len(transfers) != len(self._expected_outputs):
-            raise Exception(f"Expected {len(self._expected_outputs)} transfer(s), got {len(transfers)}")
+            raise Exception(
+                f"Expected {len(self._expected_outputs)} transfer(s), got {len(transfers)}"
+            )
         for i in range(len(self._expected_outputs)):
             compare_json_struct(json.loads(self._expected_outputs[i]), transfers[i])
-  
+
     def __str__(self):
         return f"AssertTransfers({self._since_timestamp}, {','.join(self._expected_outputs)})"
+
 
 class PurgeTransfersUntil(Action):
     def __init__(self, until_timestamp: int):
@@ -445,6 +458,7 @@ class PurgeTransfersUntil(Action):
 
     def __str__(self):
         return f"PurgeTransfersUntil({self._until_timestamp})"
+
 
 class PurgeTransfers(Action):
     def __init__(self, uuid_indices: typing.List[int]):

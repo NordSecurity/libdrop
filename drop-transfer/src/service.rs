@@ -117,34 +117,28 @@ impl Service {
         res
     }
 
-    pub async fn purge_transfers(&mut self, transfer_ids: Vec<String>) -> Result<(), Error> {
+    pub async fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<(), Error> {
         self.state
             .storage
-            .lock()
-            .await
             .purge_transfers(transfer_ids)
             .await
             .map_err(|_| Error::StorageError)
     }
 
-    pub async fn purge_transfers_until(&mut self, until_timestamp: i64) -> Result<(), Error> {
+    pub async fn purge_transfers_until(&self, until_timestamp: i64) -> Result<(), Error> {
         self.state
             .storage
-            .lock()
-            .await
             .purge_transfers_until(until_timestamp)
             .await
             .map_err(|_| Error::StorageError)
     }
 
     pub async fn transfers_since(
-        &mut self,
+        &self,
         since_timestamp: i64,
     ) -> Result<Vec<drop_storage::types::Transfer>, Error> {
         self.state
             .storage
-            .lock()
-            .await
             .transfers_since(since_timestamp)
             .await
             .map_err(|_| Error::StorageError)

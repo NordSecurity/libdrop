@@ -1,10 +1,6 @@
 use std::collections::HashMap;
 
-use drop_storage::{
-    error::Error,
-    types::{Event, Transfer},
-    Storage, TransferType,
-};
+use drop_storage::{error::Error, types::Event, Storage, TransferType};
 
 pub struct StorageDispatch<'a> {
     storage: &'a drop_storage::Storage,
@@ -168,18 +164,6 @@ impl<'a> StorageDispatch<'a> {
         self.file_progress
             .remove(&(transfer_id.to_string(), file_id.to_string()))
             .unwrap_or(0)
-    }
-
-    pub async fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<(), Error> {
-        self.storage.purge_transfers(transfer_ids).await
-    }
-
-    pub async fn purge_transfers_until(&self, until_timestamp: i64) -> Result<(), Error> {
-        self.storage.purge_transfers_until(until_timestamp).await
-    }
-
-    pub async fn transfers_since(&self, since_timestamp: i64) -> Result<Vec<Transfer>, Error> {
-        self.storage.transfers_since(since_timestamp).await
     }
 }
 

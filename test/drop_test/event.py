@@ -22,6 +22,7 @@ def print_uuid(slot: int) -> str:
 
     return f"{uuid} (slot: {slot})"
 
+
 def get_uuid(slot: int) -> str:
     uuid: str = "MISSING"
 
@@ -33,6 +34,7 @@ def get_uuid(slot: int) -> str:
     UUIDS_LOCK.release()
 
     return uuid
+
 
 class Event:
     def __init__(self):
