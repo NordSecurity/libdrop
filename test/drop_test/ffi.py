@@ -356,6 +356,16 @@ class Drop:
             err_type = LibResult(err).name
             raise Exception(f"purge_transfers_until has failed with code: {err}({err_type})")
 
+    def purge_transfers(self, xfids: typing.List[str]):
+        err = self._lib.norddrop_purge_transfers(
+            self._instance,
+            ctypes.create_string_buffer(bytes(json.dumps(xfids), "utf-8")),
+        )
+
+        if err != 0:
+            err_type = LibResult(err).name
+            raise Exception(f"purge_transfers has failed with code: {err}({err_type})")
+
     def start(self, addr: str, runner: str):
         cfg = {
             "dir_depth_limit": 5,
