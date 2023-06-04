@@ -48,56 +48,61 @@ typedef _gostring_ swig_type_16;
 typedef _gostring_ swig_type_17;
 typedef _gostring_ swig_type_18;
 typedef _gostring_ swig_type_19;
-extern void _wrap_Swig_free_norddropgo_7f406083ff4c9731(uintptr_t arg1);
-extern uintptr_t _wrap_Swig_malloc_norddropgo_7f406083ff4c9731(swig_intgo arg1);
-extern swig_intgo _wrap_NORDDROPLOGCRITICAL_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPLOGERROR_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPLOGWARNING_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPLOGINFO_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPLOGDEBUG_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPLOGTRACE_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPRESOK_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPRESERROR_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPRESINVALIDSTRING_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPRESBADINPUT_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPRESJSONPARSE_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPRESTRANSFERCREATE_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPRESNOTSTARTED_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPRESADDRINUSE_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPRESINSTANCESTART_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPRESINSTANCESTOP_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPRESINVALIDPRIVKEY_norddropgo_7f406083ff4c9731(void);
-extern swig_intgo _wrap_NORDDROPRESDBERROR_norddropgo_7f406083ff4c9731(void);
-extern void _wrap_NorddropEventCb_Ctx_set_norddropgo_7f406083ff4c9731(uintptr_t arg1, uintptr_t arg2);
-extern uintptr_t _wrap_NorddropEventCb_Ctx_get_norddropgo_7f406083ff4c9731(uintptr_t arg1);
-extern void _wrap_NorddropEventCb_Cb_set_norddropgo_7f406083ff4c9731(uintptr_t arg1, swig_type_1 arg2);
-extern swig_type_2 _wrap_NorddropEventCb_Cb_get_norddropgo_7f406083ff4c9731(uintptr_t arg1);
-extern uintptr_t _wrap_new_NorddropEventCb_norddropgo_7f406083ff4c9731(void);
-extern void _wrap_delete_NorddropEventCb_norddropgo_7f406083ff4c9731(uintptr_t arg1);
-extern void _wrap_NorddropLoggerCb_Ctx_set_norddropgo_7f406083ff4c9731(uintptr_t arg1, uintptr_t arg2);
-extern uintptr_t _wrap_NorddropLoggerCb_Ctx_get_norddropgo_7f406083ff4c9731(uintptr_t arg1);
-extern void _wrap_NorddropLoggerCb_Cb_set_norddropgo_7f406083ff4c9731(uintptr_t arg1, swig_type_3 arg2);
-extern swig_type_4 _wrap_NorddropLoggerCb_Cb_get_norddropgo_7f406083ff4c9731(uintptr_t arg1);
-extern uintptr_t _wrap_new_NorddropLoggerCb_norddropgo_7f406083ff4c9731(void);
-extern void _wrap_delete_NorddropLoggerCb_norddropgo_7f406083ff4c9731(uintptr_t arg1);
-extern void _wrap_NorddropPubkeyCb_Ctx_set_norddropgo_7f406083ff4c9731(uintptr_t arg1, uintptr_t arg2);
-extern uintptr_t _wrap_NorddropPubkeyCb_Ctx_get_norddropgo_7f406083ff4c9731(uintptr_t arg1);
-extern void _wrap_NorddropPubkeyCb_Cb_set_norddropgo_7f406083ff4c9731(uintptr_t arg1, swig_type_5 arg2);
-extern swig_type_6 _wrap_NorddropPubkeyCb_Cb_get_norddropgo_7f406083ff4c9731(uintptr_t arg1);
-extern uintptr_t _wrap_new_NorddropPubkeyCb_norddropgo_7f406083ff4c9731(void);
-extern void _wrap_delete_NorddropPubkeyCb_norddropgo_7f406083ff4c9731(uintptr_t arg1);
+typedef _gostring_ swig_type_20;
+typedef _gostring_ swig_type_21;
+extern void _wrap_Swig_free_norddropgo_66601ed8ddecf11f(uintptr_t arg1);
+extern uintptr_t _wrap_Swig_malloc_norddropgo_66601ed8ddecf11f(swig_intgo arg1);
+extern swig_intgo _wrap_NORDDROPLOGCRITICAL_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPLOGERROR_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPLOGWARNING_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPLOGINFO_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPLOGDEBUG_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPLOGTRACE_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPRESOK_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPRESERROR_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPRESINVALIDSTRING_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPRESBADINPUT_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPRESJSONPARSE_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPRESTRANSFERCREATE_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPRESNOTSTARTED_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPRESADDRINUSE_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPRESINSTANCESTART_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPRESINSTANCESTOP_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPRESINVALIDPRIVKEY_norddropgo_66601ed8ddecf11f(void);
+extern swig_intgo _wrap_NORDDROPRESDBERROR_norddropgo_66601ed8ddecf11f(void);
+extern void _wrap_NorddropEventCb_Ctx_set_norddropgo_66601ed8ddecf11f(uintptr_t arg1, uintptr_t arg2);
+extern uintptr_t _wrap_NorddropEventCb_Ctx_get_norddropgo_66601ed8ddecf11f(uintptr_t arg1);
+extern void _wrap_NorddropEventCb_Cb_set_norddropgo_66601ed8ddecf11f(uintptr_t arg1, swig_type_1 arg2);
+extern swig_type_2 _wrap_NorddropEventCb_Cb_get_norddropgo_66601ed8ddecf11f(uintptr_t arg1);
+extern uintptr_t _wrap_new_NorddropEventCb_norddropgo_66601ed8ddecf11f(void);
+extern void _wrap_delete_NorddropEventCb_norddropgo_66601ed8ddecf11f(uintptr_t arg1);
+extern void _wrap_NorddropLoggerCb_Ctx_set_norddropgo_66601ed8ddecf11f(uintptr_t arg1, uintptr_t arg2);
+extern uintptr_t _wrap_NorddropLoggerCb_Ctx_get_norddropgo_66601ed8ddecf11f(uintptr_t arg1);
+extern void _wrap_NorddropLoggerCb_Cb_set_norddropgo_66601ed8ddecf11f(uintptr_t arg1, swig_type_3 arg2);
+extern swig_type_4 _wrap_NorddropLoggerCb_Cb_get_norddropgo_66601ed8ddecf11f(uintptr_t arg1);
+extern uintptr_t _wrap_new_NorddropLoggerCb_norddropgo_66601ed8ddecf11f(void);
+extern void _wrap_delete_NorddropLoggerCb_norddropgo_66601ed8ddecf11f(uintptr_t arg1);
+extern void _wrap_NorddropPubkeyCb_Ctx_set_norddropgo_66601ed8ddecf11f(uintptr_t arg1, uintptr_t arg2);
+extern uintptr_t _wrap_NorddropPubkeyCb_Ctx_get_norddropgo_66601ed8ddecf11f(uintptr_t arg1);
+extern void _wrap_NorddropPubkeyCb_Cb_set_norddropgo_66601ed8ddecf11f(uintptr_t arg1, swig_type_5 arg2);
+extern swig_type_6 _wrap_NorddropPubkeyCb_Cb_get_norddropgo_66601ed8ddecf11f(uintptr_t arg1);
+extern uintptr_t _wrap_new_NorddropPubkeyCb_norddropgo_66601ed8ddecf11f(void);
+extern void _wrap_delete_NorddropPubkeyCb_norddropgo_66601ed8ddecf11f(uintptr_t arg1);
 
 #include <string.h>
 
-extern uintptr_t _wrap_new_Norddrop_norddropgo_7f406083ff4c9731(norddrop_event_cb arg1, swig_intgo arg2, norddrop_logger_cb arg3, norddrop_pubkey_cb arg4, swig_type_7 arg5);
-extern void _wrap_delete_Norddrop_norddropgo_7f406083ff4c9731(uintptr_t arg1);
-extern swig_intgo _wrap_Norddrop_Start_norddropgo_7f406083ff4c9731(uintptr_t arg1, swig_type_8 arg2, swig_type_9 arg3);
-extern swig_intgo _wrap_Norddrop_Stop_norddropgo_7f406083ff4c9731(uintptr_t arg1);
-extern swig_intgo _wrap_Norddrop_CancelTransfer_norddropgo_7f406083ff4c9731(uintptr_t arg1, swig_type_10 arg2);
-extern swig_intgo _wrap_Norddrop_CancelFile_norddropgo_7f406083ff4c9731(uintptr_t arg1, swig_type_11 arg2, swig_type_12 arg3);
-extern swig_intgo _wrap_Norddrop_Download_norddropgo_7f406083ff4c9731(uintptr_t arg1, swig_type_13 arg2, swig_type_14 arg3, swig_type_15 arg4);
-extern swig_type_16 _wrap_Norddrop_NewTransfer_norddropgo_7f406083ff4c9731(uintptr_t arg1, swig_type_17 arg2, swig_type_18 arg3);
-extern swig_type_19 _wrap_Norddrop_Version_norddropgo_7f406083ff4c9731(void);
+extern uintptr_t _wrap_new_Norddrop_norddropgo_66601ed8ddecf11f(norddrop_event_cb arg1, swig_intgo arg2, norddrop_logger_cb arg3, norddrop_pubkey_cb arg4, swig_type_7 arg5);
+extern void _wrap_delete_Norddrop_norddropgo_66601ed8ddecf11f(uintptr_t arg1);
+extern swig_intgo _wrap_Norddrop_Start_norddropgo_66601ed8ddecf11f(uintptr_t arg1, swig_type_8 arg2, swig_type_9 arg3);
+extern swig_intgo _wrap_Norddrop_Stop_norddropgo_66601ed8ddecf11f(uintptr_t arg1);
+extern swig_intgo _wrap_Norddrop_CancelTransfer_norddropgo_66601ed8ddecf11f(uintptr_t arg1, swig_type_10 arg2);
+extern swig_intgo _wrap_Norddrop_CancelFile_norddropgo_66601ed8ddecf11f(uintptr_t arg1, swig_type_11 arg2, swig_type_12 arg3);
+extern swig_intgo _wrap_Norddrop_Download_norddropgo_66601ed8ddecf11f(uintptr_t arg1, swig_type_13 arg2, swig_type_14 arg3, swig_type_15 arg4);
+extern swig_type_16 _wrap_Norddrop_NewTransfer_norddropgo_66601ed8ddecf11f(uintptr_t arg1, swig_type_17 arg2, swig_type_18 arg3);
+extern swig_intgo _wrap_Norddrop_PurgeTransfers_norddropgo_66601ed8ddecf11f(uintptr_t arg1, swig_type_19 arg2);
+extern swig_intgo _wrap_Norddrop_PurgeTransfersUntil_norddropgo_66601ed8ddecf11f(uintptr_t arg1, uintptr_t arg2);
+extern swig_type_20 _wrap_Norddrop_GetTransfersSince_norddropgo_66601ed8ddecf11f(uintptr_t arg1, uintptr_t arg2);
+extern swig_type_21 _wrap_Norddrop_Version_norddropgo_66601ed8ddecf11f(void);
 #undef intgo
 */
 import "C"
@@ -265,7 +270,7 @@ func _swig_getNORDDROPRESINVALIDPRIVKEY() (_swig_ret Enum_SS_norddrop_result) {
 var NORDDROPRESINVALIDPRIVKEY Enum_SS_norddrop_result = _swig_getNORDDROPRESINVALIDPRIVKEY()
 func _swig_getNORDDROPRESDBERROR() (_swig_ret Enum_SS_norddrop_result) {
 	var swig_r Enum_SS_norddrop_result
-	swig_r = (Enum_SS_norddrop_result)(C._wrap_NORDDROPRESDBERROR_norddropgo_7f406083ff4c9731())
+	swig_r = (Enum_SS_norddrop_result)(C._wrap_NORDDROPRESDBERROR_norddropgo_66601ed8ddecf11f())
 	return swig_r
 }
 
@@ -553,7 +558,7 @@ func NewNorddrop(arg1 func(string), arg2 Enum_SS_norddrop_log_level, arg3 func(i
         _swig_i_3 = cb
 }
 	_swig_i_4 := arg5
-	swig_r = (Norddrop)(SwigcptrNorddrop(C._wrap_new_Norddrop_norddropgo_7f406083ff4c9731(C.norddrop_event_cb(_swig_i_0), C.swig_intgo(_swig_i_1), C.norddrop_logger_cb(_swig_i_2), C.norddrop_pubkey_cb(_swig_i_3), *(*C.swig_type_7)(unsafe.Pointer(&_swig_i_4)))))
+	swig_r = (Norddrop)(SwigcptrNorddrop(C._wrap_new_Norddrop_norddropgo_66601ed8ddecf11f(C.norddrop_event_cb(_swig_i_0), C.swig_intgo(_swig_i_1), C.norddrop_logger_cb(_swig_i_2), C.norddrop_pubkey_cb(_swig_i_3), *(*C.swig_type_7)(unsafe.Pointer(&_swig_i_4)))))
 	if Swig_escape_always_false {
 		Swig_escape_val = arg5
 	}

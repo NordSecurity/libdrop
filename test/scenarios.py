@@ -38,7 +38,9 @@ scenarios = [
                         )
                     ),
                     action.ExpectCancel([0], True),
-                    action.AssertTransfers(["""{
+                    action.AssertTransfers(
+                        [
+                            """{
                         "peer_id": "172.20.0.15",
                         "active_states": [],
                         "cancel_states": [
@@ -74,7 +76,9 @@ scenarios = [
                                 }
                             ]
                         }
-                    }"""]),
+                    }"""
+                        ]
+                    ),
                     action.PurgeTransfers([0]),
                     action.AssertTransfers([]),
                     action.NoEvent(),
@@ -114,7 +118,9 @@ scenarios = [
                     ),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
-                    action.AssertTransfers(["""{
+                    action.AssertTransfers(
+                        [
+                            """{
                         "peer_id": "172.20.0.5",
                         "active_states": [],
                         "cancel_states": [
@@ -150,7 +156,9 @@ scenarios = [
                                 }
                             ]
                         }
-                    }"""]),
+                    }"""
+                        ]
+                    ),
                     action.PurgeTransfers([0]),
                     action.AssertTransfers([]),
                     action.NoEvent(),
@@ -206,7 +214,9 @@ scenarios = [
                     ),
                     action.ExpectCancel([0, 1], True),
                     action.NoEvent(),
-                    action.AssertTransfers(["""{
+                    action.AssertTransfers(
+                        [
+                            """{
                         "peer_id": "172.20.0.15",
                         "active_states": [],
                         "cancel_states": [
@@ -243,7 +253,7 @@ scenarios = [
                             ]
                         }
                     }""",
-                    """{
+                            """{
                         "peer_id": "172.20.0.15",
                         "active_states": [],
                         "cancel_states": [
@@ -279,7 +289,9 @@ scenarios = [
                                 }
                             ]
                         } 
-                    }"""]),
+                    }""",
+                        ]
+                    ),
                     action.PurgeTransfersUntil(int(time.time() + 10)),
                     action.AssertTransfers([]),
                     action.Stop(),
@@ -346,7 +358,9 @@ scenarios = [
                     action.CancelTransferRequest(0),
                     action.CancelTransferRequest(1),
                     action.ExpectCancel([0, 1], False),
-                    action.AssertTransfers(["""{
+                    action.AssertTransfers(
+                        [
+                            """{
                         "peer_id": "172.20.0.5",
                         "active_states": [],
                         "cancel_states": [
@@ -383,7 +397,7 @@ scenarios = [
                             ]
                         }
                     }""",
-                    """{
+                            """{
                         "peer_id": "172.20.0.5",
                         "active_states": [],
                         "cancel_states": [
@@ -419,7 +433,9 @@ scenarios = [
                                 }
                             ]
                         }
-                    }"""]),
+                    }""",
+                        ]
+                    ),
                     action.PurgeTransfersUntil(int(time.time() + 10)),
                     action.AssertTransfers([]),
                     action.NoEvent(),
@@ -3163,7 +3179,9 @@ scenarios = [
                         )
                     ),
                     action.ExpectCancel([0], True),
-                    action.AssertTransfers(["""{
+                    action.AssertTransfers(
+                        [
+                            """{
                         "peer_id": "172.20.0.15",
                         "active_states": [],
                         "cancel_states": [
@@ -3201,7 +3219,8 @@ scenarios = [
                             ]
                         }
                     }"""
-                    ]),
+                        ]
+                    ),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -3235,7 +3254,9 @@ scenarios = [
                     ),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
-                    action.AssertTransfers(["""{
+                    action.AssertTransfers(
+                        [
+                            """{
                         "peer_id": "172.20.0.5",
                         "active_states": [],
                         "cancel_states": [
@@ -3273,7 +3294,8 @@ scenarios = [
                             ]
                         }
                     }"""
-                    ]),
+                        ]
+                    ),
                     action.NoEvent(),
                     action.Stop(),
                 ]
