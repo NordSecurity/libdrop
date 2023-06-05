@@ -223,8 +223,7 @@ impl RunContext<'_> {
         let (tx, rx) = mpsc::unbounded_channel();
 
         let mut lock = self.state.transfer_manager.lock().await;
-        lock.insert_transfer(self.xfer.clone(), TransferConnection::Client(tx))
-            .map_err(|_| crate::Error::BadTransfer)?;
+        lock.insert_transfer(self.xfer.clone(), TransferConnection::Client(tx))?;
 
         self.state
             .event_tx

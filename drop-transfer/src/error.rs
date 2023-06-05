@@ -6,16 +6,16 @@ use tokio_tungstenite::tungstenite;
 pub enum Error {
     #[error("Operation was canceled")]
     Canceled,
-    #[error("Invalid path")]
-    BadPath,
+    #[error("Invalid path: {0}")]
+    BadPath(String),
     #[error("Could not open file")]
     BadFile,
     #[error("Service failed to stop")]
     ServiceStop,
     #[error("Transfer not found")]
     BadTransfer,
-    #[error("Invalid transfer state")]
-    BadTransferState,
+    #[error("Invalid transfer state: {0}")]
+    BadTransferState(String),
     #[error("Invalid file ID")]
     BadFileId,
     #[error("File size has changed")]
@@ -74,11 +74,11 @@ impl From<&Error> for u32 {
     fn from(err: &Error) -> Self {
         match err {
             Error::Canceled => 1,
-            Error::BadPath => 2,
+            Error::BadPath(_) => 2,
             Error::BadFile => 3,
             Error::ServiceStop => 6,
             Error::BadTransfer => 7,
-            Error::BadTransferState => 8,
+            Error::BadTransferState(_) => 8,
             Error::BadFileId => 9,
             Error::Io(_) => 15,
             Error::DirectoryNotExpected => 17,
@@ -116,6 +116,6 @@ impl From<walkdir::Error> for Error {
         value
             .into_io_error()
             .map(Into::into)
-            .unwrap_or(Error::BadPath)
+            .unwrap_or(Error::BadPath("Filesystem loop detected".into()))
     }
 }
