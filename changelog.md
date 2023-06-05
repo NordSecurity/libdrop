@@ -1,3 +1,11 @@
+### UNRELEASED
+### **ANGERY^3**
+---
+* Fix the go bindings being unusable, again
+
+---
+<br>
+
 ### v3.1.0
 ### **ANGERY^2**
 ---
