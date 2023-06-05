@@ -199,13 +199,17 @@ impl Service {
 
         // Path validation
         if location.components().any(|x| x == Component::ParentDir) {
-            let err = Err(Error::BadPath);
+            let err = Err(Error::BadPath(
+                "Path should not contain a reference to parrent directory".into(),
+            ));
             moose_try_file!(self.state.moose, err, uuid, file_info);
         }
 
         let parent_location = moose_try_file!(
             self.state.moose,
-            location.parent().ok_or(Error::BadPath),
+            location
+                .parent()
+                .ok_or_else(|| Error::BadPath("Missing parent path".into())),
             uuid,
             file_info
         );
@@ -216,12 +220,19 @@ impl Service {
                 self.logger,
                 "Destination should not contain directory symlinks"
             );
-            moose_try_file!(self.state.moose, Err(Error::BadPath), uuid, file_info);
+            moose_try_file!(
+                self.state.moose,
+                Err(Error::BadPath(
+                    "Destination should not contain directory symlinks".into()
+                )),
+                uuid,
+                file_info
+            );
         }
 
         moose_try_file!(
             self.state.moose,
-            fs::create_dir_all(parent_location).map_err(|_| Error::BadPath),
+            fs::create_dir_all(parent_location).map_err(|ioerr| Error::BadPath(ioerr.to_string())),
             uuid,
             file_info
         );
@@ -237,7 +248,7 @@ impl Service {
             .send(ServerReq::Download {
                 task: Box::new(task),
             })
-            .map_err(|_| Error::BadTransfer)?;
+            .map_err(|err| Error::BadTransferState(err.to_string()))?;
 
         Ok(())
     }
@@ -251,11 +262,11 @@ impl Service {
         match conn {
             TransferConnection::Client(conn) => {
                 conn.send(ClientReq::Cancel { file })
-                    .map_err(|_| Error::BadTransferState)?;
+                    .map_err(|err| Error::BadTransferState(err.to_string()))?;
             }
             TransferConnection::Server(conn) => {
                 conn.send(ServerReq::Cancel { file })
-                    .map_err(|_| Error::BadTransferState)?;
+                    .map_err(|err| Error::BadTransferState(err.to_string()))?;
             }
         }
 

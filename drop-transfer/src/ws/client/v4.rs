@@ -273,7 +273,9 @@ impl HandlerLoop<'_> {
                     .stop(crate::Event::FileUploadFailed(
                         self.xfer.clone(),
                         file.id().clone(),
-                        crate::Error::BadTransfer,
+                        crate::Error::BadTransferState(format!(
+                            "Receiver reported an error: {msg}"
+                        )),
                     ))
                     .await;
 
@@ -390,10 +392,10 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
         let err = match err.downcast::<crate::Error>() {
             Ok(err) => err,
-            Err(err) => match err.downcast::<tungstenite::Error>() {
-                Ok(err) => err.into(),
-                Err(_) => crate::Error::BadTransferState,
-            },
+            Err(err) => err.downcast::<tungstenite::Error>().map_or_else(
+                |err| crate::Error::BadTransferState(err.to_string()),
+                Into::into,
+            ),
         };
 
         self.state
