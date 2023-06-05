@@ -98,21 +98,26 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
         Ok(())
     }
 
-    fn upgrade(self, msg_tx: Sender<Message>, xfer: crate::Transfer) -> Self::Loop {
+    async fn upgrade(
+        self,
+        _: &mut WebSocket,
+        msg_tx: Sender<Message>,
+        xfer: crate::Transfer,
+    ) -> Option<Self::Loop> {
         let Self {
             peer: _,
             state,
             logger,
         } = self;
 
-        HandlerLoop {
+        Some(HandlerLoop {
             state,
             msg_tx,
             xfer,
             last_recv: Instant::now(),
             jobs: HashMap::new(),
             logger,
-        }
+        })
     }
 
     fn pinger(&mut self) -> Self::Pinger {

@@ -1,4 +1,5 @@
 use std::{
+    borrow::Borrow,
     fmt,
     hash::Hash,
     path::{Path, PathBuf},
@@ -53,6 +54,12 @@ impl fmt::Display for FileId {
 
 impl AsRef<str> for FileId {
     fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Borrow<String> for FileId {
+    fn borrow(&self) -> &String {
         &self.0
     }
 }

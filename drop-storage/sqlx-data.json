@@ -302,6 +302,30 @@
     },
     "query": "SELECT * FROM outgoing_path_completed_states WHERE path_id = ?1"
   },
+  "692e2720cb2ae23263326df119a7b9cada9f2f81eadd37521f00cfeed84d6eea": {
+    "describe": {
+      "columns": [
+        {
+          "name": "file_id",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "checksum",
+          "ordinal": 1,
+          "type_info": "Blob"
+        }
+      ],
+      "nullable": [
+        false,
+        true
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT path_hash as file_id, checksum FROM incoming_paths WHERE transfer_id = ?1"
+  },
   "831da3e9f061d0e0573b5420d5b1bfade2d7e956b1b91113062bbc47c0257138": {
     "describe": {
       "columns": [],

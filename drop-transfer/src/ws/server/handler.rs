@@ -14,8 +14,13 @@ pub trait HandlerInit {
 
     async fn recv_req(&mut self, ws: &mut WebSocket) -> anyhow::Result<Self::Request>;
     async fn on_error(&mut self, ws: &mut WebSocket, err: anyhow::Error) -> anyhow::Result<()>;
+    async fn upgrade(
+        self,
+        ws: &mut WebSocket,
+        msg_tx: Sender<Message>,
+        xfer: crate::Transfer,
+    ) -> Option<Self::Loop>;
 
-    fn upgrade(self, msg_tx: Sender<Message>, xfer: crate::Transfer) -> Self::Loop;
     fn pinger(&mut self) -> Self::Pinger;
 }
 

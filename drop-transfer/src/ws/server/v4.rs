@@ -100,7 +100,55 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
         Ok(())
     }
 
-    fn upgrade(self, msg_tx: Sender<Message>, xfer: crate::Transfer) -> Self::Loop {
+    async fn upgrade(
+        mut self,
+        ws: &mut WebSocket,
+        msg_tx: Sender<Message>,
+        xfer: crate::Transfer,
+    ) -> Option<Self::Loop> {
+        let task = async {
+            let checksums = self
+                .state
+                .storage
+                .fetch_checksums(&xfer.id().to_string())
+                .await
+                .context("Failed to fetch fileche chsums from DB")?;
+
+            let mut checksum_map = HashMap::new();
+            let mut to_fetch = Vec::new();
+
+            for (xfile, csum_bytes) in checksums.into_iter().filter_map(|csum| {
+                let xfile = xfer.files().get(&csum.file_id)?;
+                Some((xfile, csum.checksum))
+            }) {
+                let acell = checksum_map
+                    .entry(xfile.id().clone())
+                    .or_insert_with(AsyncCell::shared);
+
+                match csum_bytes {
+                    Some(csbytes) => acell.set(
+                        csbytes
+                            .try_into()
+                            .ok()
+                            .context("Invalid length checksum stored in the DB")?,
+                    ),
+                    None => to_fetch.push(xfile.id().clone()),
+                }
+            }
+
+            Ok((to_fetch, checksum_map))
+        };
+
+        let (to_fetch, checksums) = match task.await {
+            Ok(res) => res,
+            Err(err) => {
+                error!(self.logger, "Failed to prepare checksum info: {err}");
+
+                let _ = self.on_error(ws, err).await;
+                return None;
+            }
+        };
+
         let Self {
             peer: _,
             state,
@@ -114,7 +162,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             let xfer = xfer.clone();
 
             async move {
-                for xfile in xfer.files().values() {
+                for xfile in to_fetch.into_iter().filter_map(|id| xfer.files().get(&id)) {
                     let msg = v4::ReqChsum {
                         file: xfile.file_id.clone(),
                         limit: xfile.size(),
@@ -128,13 +176,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
         };
         tokio::spawn(req_file_checksums);
 
-        let checksums = xfer
-            .files()
-            .keys()
-            .map(|id| (id.clone(), AsyncCell::shared()))
-            .collect();
-
-        HandlerLoop {
+        Some(HandlerLoop {
             state,
             msg_tx,
             xfer,
@@ -142,7 +184,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             jobs: HashMap::new(),
             logger,
             checksums,
-        }
+        })
     }
 
     fn pinger(&mut self) -> Self::Pinger {

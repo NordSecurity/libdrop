@@ -341,9 +341,15 @@ async fn handle_client(
         }
     }
 
-    let (send_tx, mut send_rx) = mpsc::channel(2);
     let mut ping = hander.pinger();
-    let mut handler = hander.upgrade(send_tx, xfer);
+
+    let (send_tx, mut send_rx) = mpsc::channel(2);
+    let mut handler = if let Some(handler) = hander.upgrade(&mut socket, send_tx, xfer).await {
+        handler
+    } else {
+        let _ = socket.close().await;
+        return;
+    };
 
     let task = async {
         loop {
