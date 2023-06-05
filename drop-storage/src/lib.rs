@@ -23,6 +23,11 @@ pub struct Storage {
     conn: SqlitePool,
 }
 
+pub struct FileChecksum {
+    pub file_id: String,
+    pub checksum: Option<Vec<u8>>,
+}
+
 impl Storage {
     pub async fn new(logger: Logger, path: &str) -> Result<Self> {
         let options = SqliteConnectOptions::from_str(path)?.create_if_missing(true);
@@ -122,6 +127,20 @@ impl Storage {
         .await?;
 
         Ok(())
+    }
+
+    pub async fn fetch_checksums(&self, transfer_id: &str) -> Result<Vec<FileChecksum>> {
+        let mut conn = self.conn.acquire().await?;
+
+        let out = sqlx::query_as!(
+            FileChecksum,
+            "SELECT path_hash as file_id, checksum FROM incoming_paths WHERE transfer_id = ?1",
+            transfer_id
+        )
+        .fetch_all(&mut conn)
+        .await?;
+
+        Ok(out)
     }
 
     pub async fn insert_transfer_active_state(&self, transfer_id: String) -> Result<()> {
