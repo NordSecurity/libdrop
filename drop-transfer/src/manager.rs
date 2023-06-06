@@ -68,7 +68,7 @@ impl TransferManager {
         connection: TransferConnection,
     ) -> crate::Result<()> {
         match self.transfers.entry(xfer.id()) {
-            Entry::Occupied(_) => Err(Error::BadTransferState),
+            Entry::Occupied(_) => Err(Error::BadTransferState("Transfer already exists".into())),
             Entry::Vacant(entry) => {
                 entry.insert(TransferState::new(xfer, connection));
                 Ok(())
@@ -103,7 +103,9 @@ impl TransferManager {
 
         let mut iter = file.subpath().iter().map(crate::utils::normalize_filename);
 
-        let probe = iter.next().ok_or(crate::Error::BadPath)?;
+        let probe = iter.next().ok_or_else(|| {
+            crate::Error::BadPath("Path should contain at least one component".into())
+        })?;
         let next = iter.next();
 
         let mapped = match next {
@@ -118,7 +120,7 @@ impl TransferManager {
                         vacc.insert(
                             mapped
                                 .file_name()
-                                .ok_or(crate::Error::BadPath)?
+                                .ok_or_else(|| crate::Error::BadPath("Missing file name".into()))?
                                 .to_string_lossy()
                                 .to_string(),
                         )

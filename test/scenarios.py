@@ -2959,7 +2959,7 @@ scenarios = [
                         event.FinishFileFailed(
                             0,
                             FILES["testfile-big"].id,
-                            Error.BAD_TRANSFER,
+                            Error.BAD_TRANSFER_STATE,
                         )
                     ),
                     action.CancelTransferRequest(0),
@@ -4084,7 +4084,7 @@ scenarios = [
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileFailed(
-                            0, FILES["testfile-small"].id, Error.BAD_TRANSFER
+                            0, FILES["testfile-small"].id, Error.BAD_TRANSFER_STATE
                         )
                     ),
                     action.ExpectCancel([0], True),
@@ -4154,7 +4154,7 @@ scenarios = [
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileFailed(
-                            0, FILES["testfile-big"].id, Error.BAD_TRANSFER
+                            0, FILES["testfile-big"].id, Error.BAD_TRANSFER_STATE
                         )
                     ),
                     action.ExpectCancel([0], True),
