@@ -6,6 +6,8 @@ from drop_test.config import FILES
 from pathlib import Path
 from tempfile import gettempdir
 
+import time
+
 # We are using the transfer slots instead of UUIDS.
 # Each call to `action.NewTransfer` or the `Receive` event inserts the transfer UUID into the next slot - starting from 0
 
@@ -36,6 +38,49 @@ scenarios = [
                         )
                     ),
                     action.ExpectCancel([0], True),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "peer_id": "172.20.0.15",
+                        "active_states": [],
+                        "cancel_states": [
+                            {
+                                "by_peer": 1
+                            }
+                        ],
+                        "failed_states": [],
+                        "transfer_type": {
+                            "Outgoing": [
+                                {
+                                    "id": 1,
+                                    "path": "testfile-big",
+                                    "bytes": 10485760,
+                                    "pending_states": [
+                                        {
+                                            "path_id": 1
+                                        }
+                                    ],
+                                    "started_states": [
+                                        {
+                                            "path_id": 1,
+                                            "bytes_sent": 0
+                                        }
+                                    ],
+                                    "cancel_states": [],
+                                    "failed_states": [],
+                                    "completed_states": [
+                                        {
+                                            "path_id": 1
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }"""
+                        ]
+                    ),
+                    action.PurgeTransfers([0]),
+                    action.AssertTransfers([]),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -73,6 +118,49 @@ scenarios = [
                     ),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "peer_id": "172.20.0.5",
+                        "active_states": [],
+                        "cancel_states": [
+                            {
+                                "by_peer": 0
+                            }
+                        ],
+                        "failed_states": [],
+                        "transfer_type": {
+                            "Incoming": [
+                                {
+                                    "id": 1,
+                                    "path": "testfile-big",
+                                    "bytes": 10485760,
+                                    "pending_states": [
+                                        {
+                                            "path_id": 1
+                                        }
+                                    ],
+                                    "started_states": [
+                                        {
+                                            "path_id": 1,
+                                            "bytes_received": 0
+                                        }
+                                    ],
+                                    "cancel_states": [],
+                                    "failed_states": [],
+                                    "completed_states": [
+                                        {
+                                            "path_id": 1
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }"""
+                        ]
+                    ),
+                    action.PurgeTransfers([0]),
+                    action.AssertTransfers([]),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -126,6 +214,86 @@ scenarios = [
                     ),
                     action.ExpectCancel([0, 1], True),
                     action.NoEvent(),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "peer_id": "172.20.0.15",
+                        "active_states": [],
+                        "cancel_states": [
+                            {
+                                "by_peer": 1
+                            }
+                        ],
+                        "failed_states": [],
+                        "transfer_type": {
+                            "Outgoing": [
+                                {
+                                    "id": 1,
+                                    "path": "testfile-small",
+                                    "bytes": 1048576,
+                                    "pending_states": [
+                                        {
+                                            "path_id": 1
+                                        }
+                                    ],
+                                    "started_states": [
+                                        {
+                                            "path_id": 1,
+                                            "bytes_sent": 0
+                                        }
+                                    ],
+                                    "cancel_states": [],
+                                    "failed_states": [],
+                                    "completed_states": [
+                                        {
+                                            "path_id": 1
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }""",
+                            """{
+                        "peer_id": "172.20.0.15",
+                        "active_states": [],
+                        "cancel_states": [
+                            {
+                                "by_peer": 1
+                            }
+                        ],
+                        "failed_states": [],
+                        "transfer_type": {
+                            "Outgoing": [
+                                {
+                                    "id": 2,
+                                    "path": "testfile-big",
+                                    "bytes": 10485760,
+                                    "pending_states": [
+                                        {
+                                            "path_id": 2
+                                        }
+                                    ],
+                                    "started_states": [
+                                        {
+                                            "path_id": 2,
+                                            "bytes_sent": 0
+                                        }
+                                    ],
+                                    "cancel_states": [],
+                                    "failed_states": [],
+                                    "completed_states": [
+                                        {
+                                            "path_id": 2
+                                        }
+                                    ]
+                                }
+                            ]
+                        } 
+                    }""",
+                        ]
+                    ),
+                    action.PurgeTransfersUntil(int(time.time() + 10)),
+                    action.AssertTransfers([]),
                     action.Stop(),
                 ]
             ),
@@ -190,6 +358,86 @@ scenarios = [
                     action.CancelTransferRequest(0),
                     action.CancelTransferRequest(1),
                     action.ExpectCancel([0, 1], False),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "peer_id": "172.20.0.5",
+                        "active_states": [],
+                        "cancel_states": [
+                            {
+                                "by_peer": 0
+                            }
+                        ],
+                        "failed_states": [],
+                        "transfer_type": {
+                            "Incoming": [
+                                {
+                                    "id": 1,
+                                    "path": "testfile-small",
+                                    "bytes": 1048576,
+                                    "pending_states": [
+                                        {
+                                            "path_id": 1
+                                        }
+                                    ],
+                                    "started_states": [
+                                        {
+                                            "path_id": 1,
+                                            "bytes_received": 0
+                                        }
+                                    ],
+                                    "cancel_states": [],
+                                    "failed_states": [],
+                                    "completed_states": [
+                                        {
+                                            "path_id": 1
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }""",
+                            """{
+                        "peer_id": "172.20.0.5",
+                        "active_states": [],
+                        "cancel_states": [
+                            {
+                                "by_peer": 0
+                            }
+                        ],
+                        "failed_states": [],
+                        "transfer_type": {
+                            "Incoming": [
+                                {
+                                    "id": 2,
+                                    "path": "testfile-big",
+                                    "bytes": 10485760,
+                                    "pending_states": [
+                                        {
+                                            "path_id": 2
+                                        }
+                                    ],
+                                    "started_states": [
+                                        {
+                                            "path_id": 2,
+                                            "bytes_received": 0
+                                        }
+                                    ],
+                                    "cancel_states": [],
+                                    "failed_states": [],
+                                    "completed_states": [
+                                        {
+                                            "path_id": 2
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }""",
+                        ]
+                    ),
+                    action.PurgeTransfersUntil(int(time.time() + 10)),
+                    action.AssertTransfers([]),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2931,6 +3179,48 @@ scenarios = [
                         )
                     ),
                     action.ExpectCancel([0], True),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "peer_id": "172.20.0.15",
+                        "active_states": [],
+                        "cancel_states": [
+                            {
+                                "by_peer": 1
+                            }
+                        ],
+                        "failed_states": [],
+                        "transfer_type": {
+                            "Outgoing": [
+                                {
+                                    "id": 1,
+                                    "path": "testfile-big",
+                                    "bytes": 10485760,
+                                    "pending_states": [
+                                        {
+                                            "path_id": 1
+                                        }
+                                    ],
+                                    "started_states": [
+                                        {
+                                            "path_id": 1,
+                                            "bytes_sent": 0
+                                        }
+                                    ],
+                                    "cancel_states": [],
+                                    "failed_states": [
+                                        {
+                                            "path_id": 1,
+                                            "status_code": 28
+                                        }
+                                    ],
+                                    "completed_states": []
+                                }
+                            ]
+                        }
+                    }"""
+                        ]
+                    ),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2964,6 +3254,48 @@ scenarios = [
                     ),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "peer_id": "172.20.0.5",
+                        "active_states": [],
+                        "cancel_states": [
+                            {
+                                "by_peer": 0
+                            }
+                        ],
+                        "failed_states": [],
+                        "transfer_type": {
+                            "Incoming": [
+                                {
+                                    "id": 1,
+                                    "path": "testfile-big",
+                                    "bytes": 10485760,
+                                    "pending_states": [
+                                        {
+                                            "path_id": 1
+                                        }
+                                    ],
+                                    "started_states": [
+                                        {
+                                            "path_id": 1,
+                                            "bytes_received": 0
+                                        }
+                                    ],
+                                    "cancel_states": [],
+                                    "failed_states": [
+                                        {
+                                            "path_id": 1,
+                                            "status_code": 8
+                                        }
+                                    ],
+                                    "completed_states": []
+                                }
+                            ]
+                        }
+                    }"""
+                        ]
+                    ),
                     action.NoEvent(),
                     action.Stop(),
                 ]

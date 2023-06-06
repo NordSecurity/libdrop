@@ -336,7 +336,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) \
-             VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?2 AND path_hash = ?2), \
+             VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), \
              ?3, ?4)",
             transfer_id,
             path_id,
@@ -361,7 +361,7 @@ impl Storage {
 
         sqlx::query!(
             "INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent) VALUES \
-             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?2 AND path_hash = ?2), ?3, ?4)",
+             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
             transfer_id,
             path_id,
             error,
@@ -454,7 +454,7 @@ impl Storage {
         Ok(())
     }
 
-    pub async fn get_transfers(&self, since_timestamp: i64) -> Result<Vec<Transfer>> {
+    pub async fn transfers_since(&self, since_timestamp: i64) -> Result<Vec<Transfer>> {
         let mut conn = self.conn.acquire().await?;
 
         let mut transfers = sqlx::query!(
@@ -816,7 +816,7 @@ mod tests {
         }
 
         {
-            let transfers = storage.get_transfers(0).await.unwrap();
+            let transfers = storage.transfers_since(0).await.unwrap();
             assert_eq!(transfers.len(), 2);
 
             let incoming_transfer = &transfers[0];
@@ -837,7 +837,7 @@ mod tests {
             .await
             .unwrap();
 
-        let transfers = storage.get_transfers(0).await.unwrap();
+        let transfers = storage.transfers_since(0).await.unwrap();
 
         assert_eq!(transfers.len(), 0);
     }

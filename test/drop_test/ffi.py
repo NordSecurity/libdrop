@@ -206,6 +206,7 @@ class Drop:
 
         norddrop_lib.norddrop_version.restype = ctypes.c_char_p
         norddrop_lib.norddrop_new_transfer.restype = ctypes.c_char_p
+        norddrop_lib.norddrop_get_transfers_since.restype = ctypes.c_char_p
 
         norddrop_lib.norddrop_start.argtypes = (
             ctypes.c_void_p,
@@ -334,6 +335,39 @@ class Drop:
             err_type = LibResult(err).name
             raise Exception(f"cancel_file has failed with code: {err}({err_type})")
 
+    def get_transfers_since(self, since_timestamp: int) -> str:
+        transfers = self._lib.norddrop_get_transfers_since(
+            self._instance,
+            ctypes.c_int64(since_timestamp),
+        )
+
+        if transfers is None:
+            raise Exception(f"get_transfers_since has failed)")
+
+        return transfers.decode("utf-8")
+
+    def purge_transfers_until(self, until_timestamp: int):
+        err = self._lib.norddrop_purge_transfers_until(
+            self._instance,
+            ctypes.c_int64(until_timestamp),
+        )
+
+        if err != 0:
+            err_type = LibResult(err).name
+            raise Exception(
+                f"purge_transfers_until has failed with code: {err}({err_type})"
+            )
+
+    def purge_transfers(self, xfids: typing.List[str]):
+        err = self._lib.norddrop_purge_transfers(
+            self._instance,
+            ctypes.create_string_buffer(bytes(json.dumps(xfids), "utf-8")),
+        )
+
+        if err != 0:
+            err_type = LibResult(err).name
+            raise Exception(f"purge_transfers has failed with code: {err}({err_type})")
+
     def start(self, addr: str, runner: str):
         cfg = {
             "dir_depth_limit": 5,
@@ -343,7 +377,7 @@ class Drop:
             "transfer_idle_lifetime_ms": 10000,
             "moose_event_path": "/tmp/moose-events",
             "moose_prod": False,
-            "storage_path": f"/src/libdrop_{runner}.sqlite",
+            "storage_path": ":memory:",
         }
 
         err = self._lib.norddrop_start(

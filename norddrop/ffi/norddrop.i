@@ -78,6 +78,19 @@ struct norddrop {};
     // Create a new transfer for the given descriptor(s). Returns transfer id(xfid)
     char* new_transfer(const char* peer, const char* descriptors);
 
+    // Purge transfers with the given id(s) from the database, accepts a JSON
+    // array of strings
+    enum norddrop_result purge_transfers(const char *txids);
+
+    // Purge all transfers that are older than the given timestamp from the
+    // database. Accepts a UNIX timestamp in seconds
+    enum norddrop_result purge_transfers_until(int64_t until_timestamp);
+
+    %newobject get_transfers_since;
+    // Get all transfers since the given timestamp from the database.
+    // Accepts a UNIX timestamp in seconds
+    char *get_transfers_since(int64_t since_timestamp);
+
     // Returns current version of the library
     static char* version();
 };
