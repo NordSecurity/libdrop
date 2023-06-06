@@ -51,7 +51,9 @@ pub struct File {
 
 impl File {
     fn walk(path: &Path, config: &DropConfig) -> Result<Vec<Self>, Error> {
-        let parent = path.parent().ok_or(crate::Error::BadPath)?;
+        let parent = path
+            .parent()
+            .ok_or_else(|| crate::Error::BadPath("Missing parent directory".into()))?;
 
         let mut files = Vec::new();
         let mut breadth = 0;
@@ -77,7 +79,7 @@ impl File {
             let subpath = entry
                 .path()
                 .strip_prefix(parent)
-                .map_err(|_| crate::Error::BadPath)?;
+                .map_err(|err| crate::Error::BadPath(err.to_string()))?;
 
             let subpath = FileSubPath::from_path(subpath)?;
 
