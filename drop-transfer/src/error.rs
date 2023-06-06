@@ -116,6 +116,6 @@ impl From<walkdir::Error> for Error {
         value
             .into_io_error()
             .map(Into::into)
-            .unwrap_or(Error::BadPath("Filesystem loop detected".into()))
+            .unwrap_or_else(|| Error::BadPath("Filesystem loop detected".into()))
     }
 }
