@@ -5,7 +5,7 @@ use std::{
     net::IpAddr,
     path::{Path, PathBuf},
     sync::Arc,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use anyhow::Context;
@@ -325,7 +325,6 @@ async fn main() -> anyhow::Result<()> {
         .get_matches();
 
     let config = Arc::new(DropConfig {
-        req_connection_timeout: Duration::from_secs(10),
         ..Default::default()
     });
 
