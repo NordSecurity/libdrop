@@ -167,7 +167,9 @@ impl NordDropFFI {
                 Arc::new(self.config.drop.clone()),
                 moose,
                 self.keys.clone(),
-            ) {
+            )
+            .await
+            {
                 Ok(srv) => srv,
                 Err(err) => {
                     error!(self.logger, "Failed to start the service: {}", err);

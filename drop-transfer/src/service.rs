@@ -65,7 +65,7 @@ macro_rules! moose_try_file {
 
 // todo: better name to reduce confusion
 impl Service {
-    pub fn start(
+    pub async fn start(
         addr: IpAddr,
         storage: Arc<Storage>,
         event_tx: mpsc::Sender<Event>,
@@ -74,7 +74,7 @@ impl Service {
         moose: Arc<dyn Moose>,
         auth: Arc<auth::Context>,
     ) -> Result<Self, Error> {
-        let task = || {
+        let task = async {
             let state = Arc::new(State {
                 event_tx,
                 transfer_manager: Mutex::default(),
@@ -88,6 +88,8 @@ impl Service {
             let join_handle =
                 ws::server::start(addr, stop.clone(), state.clone(), auth, logger.clone())?;
 
+            ws::client::resume(&state, &stop, &logger).await;
+
             Ok(Self {
                 state,
                 join_handle,
@@ -96,7 +98,7 @@ impl Service {
             })
         };
 
-        let res = task();
+        let res = task.await;
         moose.service_quality_initialization_init(res.to_status(), drop_analytics::Phase::Start);
 
         res
@@ -160,32 +162,16 @@ impl Service {
             error!(self.logger, "Failed to insert transfer into storage: {err}",);
         }
 
-        let stop_job = {
-            let state = self.state.clone();
-            let xfer = xfer.clone();
-            let logger = self.logger.clone();
-
-            async move {
-                // Stop the download job
-                warn!(logger, "Aborting transfer download");
-
-                state
-                    .event_tx
-                    .send(Event::TransferFailed(xfer, crate::Error::Canceled, true))
-                    .await
-                    .expect("Failed to send TransferFailed event");
-            }
-        };
-
         let client_job = ws::client::run(self.state.clone(), xfer, self.logger.clone());
         let stop = self.stop.clone();
+        let logger = self.logger.clone();
 
         tokio::spawn(async move {
             tokio::select! {
                 biased;
 
                 _ = stop.cancelled() => {
-                    stop_job.await;
+                    warn!(logger, "Aborting transfer download");
                 },
                 _ = client_job => (),
             }

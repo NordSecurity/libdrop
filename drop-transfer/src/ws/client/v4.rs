@@ -15,12 +15,12 @@ use super::{handler, ClientReq, WebSocket};
 use crate::{protocol::v4, service::State, ws, FileId};
 
 pub struct HandlerInit<'a> {
-    state: Arc<State>,
+    state: &'a Arc<State>,
     logger: &'a slog::Logger,
 }
 
 pub struct HandlerLoop<'a> {
-    state: Arc<State>,
+    state: &'a Arc<State>,
     logger: &'a slog::Logger,
     upload_tx: Sender<Message>,
     tasks: HashMap<FileId, FileTask>,
@@ -41,7 +41,7 @@ struct Uploader {
 }
 
 impl<'a> HandlerInit<'a> {
-    pub(crate) fn new(state: Arc<State>, logger: &'a slog::Logger) -> Self {
+    pub(crate) fn new(state: &'a Arc<State>, logger: &'a slog::Logger) -> Self {
         Self { state, logger }
     }
 }
