@@ -1,6 +1,8 @@
-use std::str::FromStr;
 pub mod error;
 pub mod types;
+
+use std::str::FromStr;
+
 use slog::Logger;
 use sqlx::{sqlite::SqliteConnectOptions, Connection, Sqlite, SqlitePool, Transaction};
 use types::{
@@ -19,6 +21,11 @@ type Result<T> = std::result::Result<T, Error>;
 pub struct Storage {
     _logger: Logger,
     conn: SqlitePool,
+}
+
+pub struct FileChecksum {
+    pub file_id: String,
+    pub checksum: Option<Vec<u8>>,
 }
 
 impl Storage {
@@ -100,6 +107,40 @@ impl Storage {
         };
 
         Ok(())
+    }
+
+    pub async fn save_checksum(
+        &self,
+        transfer_id: &str,
+        file_id: &str,
+        checksum: &[u8],
+    ) -> Result<()> {
+        let mut conn = self.conn.acquire().await?;
+
+        sqlx::query!(
+            "UPDATE incoming_paths SET checksum = ?3 WHERE transfer_id = ?1 AND path_hash = ?2",
+            transfer_id,
+            file_id,
+            checksum,
+        )
+        .execute(&mut conn)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn fetch_checksums(&self, transfer_id: &str) -> Result<Vec<FileChecksum>> {
+        let mut conn = self.conn.acquire().await?;
+
+        let out = sqlx::query_as!(
+            FileChecksum,
+            "SELECT path_hash as file_id, checksum FROM incoming_paths WHERE transfer_id = ?1",
+            transfer_id
+        )
+        .fetch_all(&mut conn)
+        .await?;
+
+        Ok(out)
     }
 
     pub async fn insert_transfer_active_state(&self, transfer_id: String) -> Result<()> {
