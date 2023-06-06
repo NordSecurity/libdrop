@@ -7,6 +7,7 @@ use std::{
 
 use drop_analytics::Moose;
 use drop_config::DropConfig;
+use drop_storage::Storage;
 use slog::{debug, error, warn, Logger};
 use tokio::{
     sync::{mpsc, Mutex},
@@ -19,7 +20,6 @@ use crate::{
     auth,
     error::ResultExt,
     manager::TransferConnection,
-    storage_dispatch,
     ws::{
         self,
         client::ClientReq,
@@ -34,6 +34,7 @@ pub(super) struct State {
     pub(crate) moose: Arc<dyn Moose>,
     pub(crate) auth: Arc<auth::Context>,
     pub(crate) config: Arc<DropConfig>,
+    pub(crate) storage: Arc<Storage>,
 }
 
 pub struct Service {
@@ -66,7 +67,7 @@ macro_rules! moose_try_file {
 impl Service {
     pub fn start(
         addr: IpAddr,
-        storage: Arc<Mutex<storage_dispatch::StorageDispatch>>,
+        storage: Arc<Storage>,
         event_tx: mpsc::Sender<Event>,
         logger: Logger,
         config: Arc<DropConfig>,
@@ -76,10 +77,11 @@ impl Service {
         let task = || {
             let state = Arc::new(State {
                 event_tx,
-                transfer_manager: Mutex::new(TransferManager::new(logger.clone(), storage)),
+                transfer_manager: Mutex::new(TransferManager::new(logger.clone(), storage.clone())),
                 moose: moose.clone(),
                 config,
                 auth: auth.clone(),
+                storage,
             });
 
             let stop = CancellationToken::new();
