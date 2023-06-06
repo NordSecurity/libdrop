@@ -75,9 +75,9 @@ impl FileSubPath {
         let name = path
             .as_ref()
             .file_name()
-            .ok_or(crate::Error::BadPath)?
+            .ok_or_else(|| crate::Error::BadPath("Missing file name".into()))?
             .to_str()
-            .ok_or(crate::Error::BadPath)?;
+            .ok_or_else(|| crate::Error::BadPath("File name should be valid UTF8".into()))?;
 
         Ok(Self(vec![name.to_owned()]))
     }
@@ -94,9 +94,9 @@ impl FileSubPath {
         let name = path
             .as_ref()
             .file_name()
-            .ok_or(crate::Error::BadPath)?
+            .ok_or_else(|| crate::Error::BadPath("Missing file name".into()))?
             .to_str()
-            .ok_or(crate::Error::BadPath)?;
+            .ok_or_else(|| crate::Error::BadPath("File name should be valid UTF8".into()))?;
 
         self.0.push(name.to_owned());
         Ok(self)
@@ -110,7 +110,11 @@ impl FileSubPath {
         let vec = path
             .as_ref()
             .iter()
-            .map(|cmp| cmp.to_str().map(String::from).ok_or(crate::Error::BadPath))
+            .map(|cmp| {
+                cmp.to_str()
+                    .map(String::from)
+                    .ok_or_else(|| crate::Error::BadPath("Paths should be valid UTF8".into()))
+            })
             .collect::<Result<_, _>>()?;
         Ok(Self(vec))
     }

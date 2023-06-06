@@ -228,8 +228,7 @@ impl RunContext<'_> {
             TransferConnection::Client(tx),
             drop_storage::TransferType::Outgoing,
         )
-        .await
-        .map_err(|_| crate::Error::BadTransfer)?;
+        .await?;
 
         self.state
             .event_tx
