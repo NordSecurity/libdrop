@@ -3286,7 +3286,7 @@ scenarios = [
                                     "failed_states": [
                                         {
                                             "path_id": 1,
-                                            "status_code": 7
+                                            "status_code": 8
                                         }
                                     ],
                                     "completed_states": []
