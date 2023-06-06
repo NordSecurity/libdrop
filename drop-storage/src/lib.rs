@@ -22,6 +22,19 @@ pub struct Storage {
     conn: SqlitePool,
 }
 
+pub struct FileToRetry {
+    pub file_id: String,
+    pub subpath: String,
+    pub basepath: String,
+    pub size: u64,
+}
+
+pub struct TransferToRetry {
+    pub uuid: uuid::Uuid,
+    pub peer: String,
+    pub files: Vec<FileToRetry>,
+}
+
 impl Storage {
     pub async fn new(logger: Logger, path: &str) -> Result<Self> {
         let options = SqliteConnectOptions::from_str(path)?.create_if_missing(true);
@@ -481,6 +494,53 @@ impl Storage {
         }
 
         Ok(())
+    }
+
+    pub async fn transfers_to_retry(&self) -> Result<Vec<TransferToRetry>> {
+        let mut conn = self.conn.begin().await?;
+
+        let rec_transfers = sqlx::query!(
+            r#"
+            SELECT transfers.id as  "id: Hyphenated", peer_id, COUNT(transfer_cancel_states.id) as cancel_count
+            FROM transfers
+            LEFT JOIN transfer_cancel_states ON transfers.id = transfer_cancel_states.transfer_id
+            WHERE
+                is_outgoing = ?1
+            GROUP BY transfers.id
+            HAVING cancel_count = 0
+            "#,
+            TransferType::Outgoing as u32
+        )
+        .fetch_all(&mut *conn)
+        .await?;
+
+        let mut out = Vec::with_capacity(rec_transfers.len());
+        for rec_transfer in rec_transfers {
+            let files = sqlx::query!(
+                "SELECT relative_path, base_path, path_hash, bytes FROM outgoing_paths WHERE transfer_id = ?1",
+                rec_transfer.id
+            )
+            .fetch_all(&mut *conn)
+            .await?
+            .into_iter()
+            .map(|rec_file| FileToRetry {
+                file_id: rec_file.path_hash,
+                basepath: rec_file.base_path,
+                subpath: rec_file.relative_path,
+                size: rec_file.bytes as _,
+            })
+            .collect();
+
+            out.push(TransferToRetry {
+                uuid: rec_transfer.id.into_uuid(),
+                peer: rec_transfer.peer_id,
+                files,
+            });
+        }
+
+        conn.commit().await?;
+
+        Ok(out)
     }
 
     pub async fn transfers_since(&self, since_timestamp: i64) -> Result<Vec<Transfer>> {

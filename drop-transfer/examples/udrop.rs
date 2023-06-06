@@ -377,6 +377,7 @@ async fn main() -> anyhow::Result<()> {
         drop_analytics::moose_mock(),
         Arc::new(auth),
     )
+    .await
     .context("Failed to start service")?;
 
     if let Some(xfer) = xfer {

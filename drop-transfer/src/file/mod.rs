@@ -83,7 +83,9 @@ impl File {
 
             let subpath = FileSubPath::from_path(subpath)?;
 
-            let file = File::new(subpath, entry.into_path(), meta)?;
+            let path = entry.into_path();
+            let file_id = file_id_from_path(&path)?;
+            let file = File::new(subpath, path, meta, file_id)?;
             files.push(file);
         }
 
@@ -93,18 +95,24 @@ impl File {
     pub fn from_path(path: impl Into<PathBuf>, config: &DropConfig) -> Result<Vec<Self>, Error> {
         let path = path.into();
         let meta = fs::symlink_metadata(&path)?;
+        let file_id = file_id_from_path(&path)?;
 
         let files = if meta.is_dir() {
             File::walk(&path, config)?
         } else {
-            let file = File::new(FileSubPath::from_file_name(&path)?, path, meta)?;
+            let file = File::new(FileSubPath::from_file_name(&path)?, path, meta, file_id)?;
             vec![file]
         };
 
         Ok(files)
     }
 
-    fn new(subpath: FileSubPath, path: PathBuf, meta: fs::Metadata) -> Result<Self, Error> {
+    pub(crate) fn new(
+        subpath: FileSubPath,
+        path: PathBuf,
+        meta: fs::Metadata,
+        file_id: FileId,
+    ) -> Result<Self, Error> {
         assert!(!meta.is_dir(), "Did not expect directory metadata");
 
         let mut options = OpenOptions::new();
@@ -120,12 +128,8 @@ impl File {
             .map_or("unknown", |t| t.mime_type())
             .to_string();
 
-        let abs = crate::utils::make_path_absolute(&path)?;
-        let mut hash = sha2::Sha256::new();
-        hash.update(abs.to_string_lossy().as_bytes());
-
         Ok(Self {
-            file_id: FileId::from(hash),
+            file_id,
             subpath,
             kind: FileKind::FileToSend {
                 meta: Hidden(meta),
@@ -237,6 +241,13 @@ pub fn checksum(reader: &mut impl io::Read) -> io::Result<[u8; 32]> {
     let mut csum = sha2::Sha256::new();
     io::copy(reader, &mut csum)?;
     Ok(csum.finalize().into())
+}
+
+fn file_id_from_path(path: impl AsRef<Path>) -> crate::Result<FileId> {
+    let abs = crate::utils::make_path_absolute(path)?;
+    let mut hash = sha2::Sha256::new();
+    hash.update(abs.to_string_lossy().as_bytes());
+    Ok(FileId::from(hash))
 }
 
 #[cfg(test)]

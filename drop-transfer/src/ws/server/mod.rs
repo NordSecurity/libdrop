@@ -341,6 +341,10 @@ async fn handle_client(
         }
     }
 
+    if let Err(err) = state.storage.insert_transfer(&xfer.storage_info()).await {
+        error!(logger, "Failed to insert transfer into storage: {err}",);
+    }
+
     let mut ping = hander.pinger();
 
     let (send_tx, mut send_rx) = mpsc::channel(2);
