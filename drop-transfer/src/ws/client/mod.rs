@@ -89,12 +89,7 @@ async fn establish_ws_conn(
     ip: IpAddr,
     logger: &Logger,
 ) -> crate::Result<(WebSocket, protocol::Version)> {
-    let mut socket = tokio::time::timeout(
-        state.config.req_connection_timeout,
-        tcp_connect(state, ip, logger),
-    )
-    .await
-    .map_err(|err| io::Error::new(io::ErrorKind::TimedOut, err))?;
+    let mut socket = tcp_connect(state, ip, logger).await;
 
     let mut versions_to_try = [
         protocol::Version::V4,

@@ -10,7 +10,6 @@ pub struct Config {
 pub struct DropConfig {
     pub dir_depth_limit: usize,
     pub transfer_file_limit: usize,
-    pub req_connection_timeout: Duration,
     pub connection_max_retry_interval: Duration,
     pub transfer_idle_lifetime: Duration,
     pub storage_path: String,
@@ -21,7 +20,6 @@ impl Default for DropConfig {
         Self {
             dir_depth_limit: 5,
             transfer_file_limit: 1000,
-            req_connection_timeout: Duration::from_secs(5),
             connection_max_retry_interval: Duration::from_secs(10),
             transfer_idle_lifetime: Duration::from_secs(60),
             storage_path: "libdrop.sqlite".to_string(),
