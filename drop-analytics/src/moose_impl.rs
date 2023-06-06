@@ -14,7 +14,7 @@ const DROP_MOOSE_APP_NAME: &str = "norddrop";
 
 /// Version of the tracker used, should be updated everytime the tracker library
 /// is updated
-const DROP_MOOSE_TRACKER_VERSION: &str = "0.1.2";
+const DROP_MOOSE_TRACKER_VERSION: &str = "0.4.0";
 
 const MOOSE_STATUS_SUCCESS: i32 = 0;
 
