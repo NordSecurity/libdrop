@@ -56,7 +56,7 @@ impl<T> Borrow<T> for Hidden<T> {
 pub fn filepath_variants(location: &'_ Path) -> crate::Result<impl Iterator<Item = PathBuf> + '_> {
     let filename = location
         .file_stem()
-        .ok_or(crate::Error::BadPath)?
+        .ok_or_else(|| crate::Error::BadPath("Missing file stem".into()))?
         .to_string_lossy();
 
     let iter = iter::once(location.to_path_buf()).chain((1..).map(move |i| {

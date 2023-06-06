@@ -579,6 +579,14 @@ impl FileXferTask {
     ) {
         let init_res = match downloader.init(&self).await {
             Ok(init) => init,
+            Err(crate::Error::Canceled) => {
+                // TODO(msz): This is not 100% correct. So there are two cases when we can get
+                // this error here: transfer cancel or file cancel. In case of transfer
+                // cancellation, we do not want to emit any event, but in case of file
+                // cancelation, we actually want.
+                warn!(logger, "File cancelled on download init stage");
+                return;
+            }
             Err(err) => {
                 events
                     .emit_force(crate::Event::FileDownloadFailed(

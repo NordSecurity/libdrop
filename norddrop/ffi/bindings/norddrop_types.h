@@ -108,8 +108,6 @@ typedef struct norddrop_logger_cb {
 /**
  * Writes the peer's public key into the buffer of length 32.
  * The peer is identifed by IP address passed as string,
- * If IP is null that means we're requesting the public key
- * of the caller itself.
  * Returns 0 on success and 1 on failure or missing key
  */
 typedef int (*norddrop_pubkey_fn)(void*, const char*, char*);
