@@ -2,11 +2,11 @@ use std::{collections::HashMap, net::IpAddr};
 
 use drop_analytics::TransferInfo;
 use drop_config::DropConfig;
-use drop_storage::{TransferInfo as StorageInfo, TransferPath};
+use drop_storage::TransferInfo as StorageInfo;
 use uuid::Uuid;
 
 use crate::{
-    file::{FileId, FileSubPath},
+    file::{FileId, FileKind, FileSource, FileSubPath},
     Error, File,
 };
 
@@ -88,18 +88,58 @@ impl Transfer {
     }
 
     pub fn storage_info(&self) -> StorageInfo {
+        // TODO(msz): this insane check wouldn't be needed if we had two different
+        // `Transfer` types
+        let is_incoming = match self.files.values().next() {
+            Some(files) => matches!(files.kind, FileKind::FileToRecv { .. }),
+            None => true, // TODO(msz): Arbitrarily chosen, there is no way to differentiate here
+        };
+
+        let files = if is_incoming {
+            let files = self
+                .files
+                .values()
+                .map(|f| drop_storage::types::TransferIncomingPath {
+                    file_id: f.file_id.to_string(),
+                    relative_path: f.subpath.to_string(),
+                    size: f.size() as _,
+                })
+                .collect();
+
+            drop_storage::types::TransferFiles::Incoming(files)
+        } else {
+            let files = self
+                .files
+                .values()
+                .filter_map(|f| {
+                    let base_path = match &f.kind {
+                        FileKind::FileToSend {
+                            source: FileSource::Path(fullpath),
+                            ..
+                        } => fullpath
+                            .ancestors()
+                            .nth(f.subpath.iter().count())?
+                            .to_string_lossy()
+                            .to_string(),
+                        _ => return None,
+                    };
+
+                    Some(drop_storage::types::TransferOutgoingPath {
+                        file_id: f.file_id.to_string(),
+                        relative_path: f.subpath.to_string(),
+                        base_path,
+                        size: f.size() as _,
+                    })
+                })
+                .collect();
+
+            drop_storage::types::TransferFiles::Outgoing(files)
+        };
+
         StorageInfo {
             id: self.id().to_string(),
             peer: self.peer().to_string(),
-            files: self
-                .files()
-                .iter()
-                .map(|(_, file)| TransferPath {
-                    id: file.id().to_string(),
-                    path: file.subpath().to_string(),
-                    size: file.size() as i64,
-                })
-                .collect(),
+            files,
         }
     }
 

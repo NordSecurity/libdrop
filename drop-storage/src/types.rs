@@ -11,23 +11,42 @@ pub enum TransferType {
 }
 
 #[derive(Debug)]
-pub struct TransferPath {
-    pub id: String,
-    pub path: String,
+pub struct TransferIncomingPath {
+    pub file_id: String,
+    pub relative_path: String,
     pub size: i64,
+}
+
+#[derive(Debug)]
+pub struct TransferOutgoingPath {
+    pub file_id: String,
+    pub relative_path: String,
+    pub base_path: String,
+    pub size: i64,
+}
+
+#[derive(Debug)]
+pub enum TransferFiles {
+    Incoming(Vec<TransferIncomingPath>),
+    Outgoing(Vec<TransferOutgoingPath>),
 }
 
 #[derive(Debug)]
 pub struct TransferInfo {
     pub id: String,
     pub peer: String,
-    pub files: Vec<TransferPath>,
+    pub files: TransferFiles,
+}
+
+#[derive(Debug)]
+pub struct FileChecksum {
+    pub file_id: String,
+    pub checksum: Option<Vec<u8>>,
 }
 
 #[derive(Debug)]
 pub enum Event {
     Pending {
-        transfer_type: TransferType,
         transfer_info: TransferInfo,
     },
     Started {
@@ -120,7 +139,8 @@ pub struct TransferFailedState {
 pub struct OutgoingPath {
     pub id: i64,
     pub transfer_id: String,
-    pub path: String,
+    pub base_path: String,
+    pub relative_path: String,
     pub bytes: i64,
     pub created_at: i64,
     pub pending_states: Vec<OutgoingPathPendingState>,
@@ -169,7 +189,7 @@ pub struct OutgoingPathCompletedState {
 pub struct IncomingPath {
     pub id: i64,
     pub transfer_id: String,
-    pub path: String,
+    pub relative_path: String,
     pub bytes: i64,
     pub created_at: i64,
     pub pending_states: Vec<IncomingPathPendingState>,

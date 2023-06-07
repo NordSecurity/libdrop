@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
-use drop_storage::{error::Error, types::Event, Storage, TransferType};
+use drop_storage::{
+    error::Error,
+    types::{Event, TransferFiles},
+    Storage, TransferType,
+};
 
 pub struct StorageDispatch<'a> {
     storage: &'a drop_storage::Storage,
@@ -18,21 +22,18 @@ impl<'a> StorageDispatch<'a> {
     pub async fn handle_event(&mut self, event: &crate::Event) -> Result<(), Error> {
         let event = Into::<Event>::into(event);
         match event {
-            Event::Pending {
-                transfer_type,
-                transfer_info,
-            } => match transfer_type {
-                TransferType::Incoming => {
-                    for file in transfer_info.files {
+            Event::Pending { transfer_info } => match &transfer_info.files {
+                TransferFiles::Incoming(files) => {
+                    for file in files {
                         self.storage
-                            .insert_incoming_path_pending_state(transfer_info.id.clone(), file.id)
+                            .insert_incoming_path_pending_state(&transfer_info.id, &file.file_id)
                             .await?
                     }
                 }
-                TransferType::Outgoing => {
-                    for file in transfer_info.files {
+                TransferFiles::Outgoing(files) => {
+                    for file in files {
                         self.storage
-                            .insert_outgoing_path_pending_state(transfer_info.id.clone(), file.id)
+                            .insert_outgoing_path_pending_state(&transfer_info.id, &file.file_id)
                             .await?
                     }
                 }
@@ -171,11 +172,9 @@ impl From<&crate::Event> for Event {
     fn from(event: &crate::Event) -> Self {
         match event {
             crate::Event::RequestReceived(transfer) => Event::Pending {
-                transfer_type: TransferType::Incoming,
                 transfer_info: transfer.storage_info(),
             },
             crate::Event::RequestQueued(transfer) => Event::Pending {
-                transfer_type: TransferType::Outgoing,
                 transfer_info: transfer.storage_info(),
             },
             crate::Event::FileDownloadStarted(transfer, file) => Event::Started {
