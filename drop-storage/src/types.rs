@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-type TransferId = String;
+type TransferId = uuid::Uuid;
 type FileId = String;
 
 #[derive(Debug, Copy, Clone)]
@@ -12,14 +12,14 @@ pub enum TransferType {
 
 #[derive(Debug)]
 pub struct TransferIncomingPath {
-    pub file_id: String,
+    pub file_id: FileId,
     pub relative_path: String,
     pub size: i64,
 }
 
 #[derive(Debug)]
 pub struct TransferOutgoingPath {
-    pub file_id: String,
+    pub file_id: FileId,
     pub relative_path: String,
     pub base_path: String,
     pub size: i64,
@@ -33,14 +33,14 @@ pub enum TransferFiles {
 
 #[derive(Debug)]
 pub struct TransferInfo {
-    pub id: String,
+    pub id: TransferId,
     pub peer: String,
     pub files: TransferFiles,
 }
 
 #[derive(Debug)]
 pub struct FileChecksum {
-    pub file_id: String,
+    pub file_id: FileId,
     pub checksum: Option<Vec<u8>>,
 }
 
@@ -106,7 +106,7 @@ pub struct Peer {
 
 #[derive(Debug, Serialize)]
 pub struct Transfer {
-    pub id: String,
+    pub id: TransferId,
     pub peer_id: String,
     pub transfer_type: DbTransferType,
     pub created_at: i64,
@@ -117,20 +117,20 @@ pub struct Transfer {
 
 #[derive(Debug, Serialize)]
 pub struct TransferActiveState {
-    pub transfer_id: String,
+    pub transfer_id: TransferId,
     pub created_at: i64,
 }
 
 #[derive(Debug, Serialize)]
 pub struct TransferCancelState {
-    pub transfer_id: String,
+    pub transfer_id: TransferId,
     pub by_peer: i64,
     pub created_at: i64,
 }
 
 #[derive(Debug, Serialize)]
 pub struct TransferFailedState {
-    pub transfer_id: String,
+    pub transfer_id: TransferId,
     pub status_code: i64,
     pub created_at: i64,
 }
@@ -138,7 +138,7 @@ pub struct TransferFailedState {
 #[derive(Debug, Serialize)]
 pub struct OutgoingPath {
     pub id: i64,
-    pub transfer_id: String,
+    pub transfer_id: TransferId,
     pub base_path: String,
     pub relative_path: String,
     pub bytes: i64,
@@ -188,7 +188,7 @@ pub struct OutgoingPathCompletedState {
 #[derive(Debug, Serialize)]
 pub struct IncomingPath {
     pub id: i64,
-    pub transfer_id: String,
+    pub transfer_id: TransferId,
     pub relative_path: String,
     pub bytes: i64,
     pub created_at: i64,

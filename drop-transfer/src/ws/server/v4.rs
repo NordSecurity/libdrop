@@ -110,7 +110,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             let checksums = self
                 .state
                 .storage
-                .fetch_checksums(&xfer.id().to_string())
+                .fetch_checksums(xfer.id())
                 .await
                 .context("Failed to fetch fileche chsums from DB")?;
 
@@ -353,7 +353,7 @@ impl HandlerLoop<'_> {
 
             tokio::spawn(async move {
                 if let Err(err) = storage
-                    .save_checksum(&transfer_id.to_string(), file_id.as_ref(), &report.checksum)
+                    .save_checksum(transfer_id, file_id.as_ref(), &report.checksum)
                     .await
                 {
                     error!(logger, "Failed to save checksum into DB: {err}");
