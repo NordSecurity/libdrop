@@ -293,7 +293,7 @@ pub extern "C" fn norddrop_purge_transfers(
 #[no_mangle]
 pub extern "C" fn norddrop_purge_transfers_until(
     dev: &norddrop,
-    until_timestamp: i64,
+    until_timestamp: std::ffi::c_longlong,
 ) -> norddrop_result {
     let result = panic::catch_unwind(move || {
         let mut dev = match dev.0.lock() {
@@ -313,7 +313,7 @@ pub extern "C" fn norddrop_purge_transfers_until(
 #[no_mangle]
 pub extern "C" fn norddrop_get_transfers_since(
     dev: &norddrop,
-    since_timestamp: i64,
+    since_timestamp: std::ffi::c_longlong,
 ) -> *mut c_char {
     let res = panic::catch_unwind(move || {
         let mut dev = match dev.0.lock() {
