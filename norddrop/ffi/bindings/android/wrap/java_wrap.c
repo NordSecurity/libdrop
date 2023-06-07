@@ -885,20 +885,14 @@ SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1purge
 SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1purgeTransfersUntil(JNIEnv *jenv, jclass jcls, jlong jarg1, jobject jarg1_, jlong jarg2) {
   jint jresult = 0 ;
   struct norddrop *arg1 = (struct norddrop *) 0 ;
-  int64_t arg2 ;
-  int64_t *argp2 ;
+  long long arg2 ;
   enum norddrop_result result;
   
   (void)jenv;
   (void)jcls;
   (void)jarg1_;
   arg1 = *(struct norddrop **)&jarg1; 
-  argp2 = *(int64_t **)&jarg2; 
-  if (!argp2) {
-    SWIG_JavaThrowException(jenv, SWIG_JavaNullPointerException, "Attempt to dereference null int64_t");
-    return 0;
-  }
-  arg2 = *argp2; 
+  arg2 = (long long)jarg2; 
   result = (enum norddrop_result)norddrop_purge_transfers_until(arg1,arg2);
   jresult = (jint)result; 
   return jresult;
@@ -908,20 +902,14 @@ SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1purge
 SWIGEXPORT jstring JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1getTransfersSince(JNIEnv *jenv, jclass jcls, jlong jarg1, jobject jarg1_, jlong jarg2) {
   jstring jresult = 0 ;
   struct norddrop *arg1 = (struct norddrop *) 0 ;
-  int64_t arg2 ;
-  int64_t *argp2 ;
+  long long arg2 ;
   char *result = 0 ;
   
   (void)jenv;
   (void)jcls;
   (void)jarg1_;
   arg1 = *(struct norddrop **)&jarg1; 
-  argp2 = *(int64_t **)&jarg2; 
-  if (!argp2) {
-    SWIG_JavaThrowException(jenv, SWIG_JavaNullPointerException, "Attempt to dereference null int64_t");
-    return 0;
-  }
-  arg2 = *argp2; 
+  arg2 = (long long)jarg2; 
   result = (char *)norddrop_get_transfers_since(arg1,arg2);
   if (result) jresult = (*jenv)->NewStringUTF(jenv, (const char *)result);
   free(result);
