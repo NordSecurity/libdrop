@@ -54,12 +54,13 @@ When developing the database there are two modes:
 
 SQLX has `offline` always enabled and based on `DATABASE_URL` env var decides which one to use. Env variable has precedence over .sqlx dir.
 
-For any query changes or new queries the database needs to be set-up:
+For any query changes or new queries the database needs to be set-up. Make sure you're running `sqlx-cli` 0.7
+which you can build manually by checking out the repository:
+
 ```
 touch /tmp/db.sqlite
 cd drop-storage
 cargo sqlx migrate run --database-url sqlite:///tmp/db.sqlite
-cd ..
 SQLX_OFFLINE_DIR="./.sqlx" DATABASE_URL=sqlite:///tmp/db.sqlite cargo sqlx prepare
 git add .sqlx
 ```
