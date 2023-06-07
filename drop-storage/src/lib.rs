@@ -269,7 +269,7 @@ impl Storage {
     pub async fn insert_outgoing_path_started_state(
         &self,
         transfer_id: Uuid,
-        path_id: String,
+        path_id: &str,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
 
@@ -292,8 +292,8 @@ impl Storage {
     pub async fn insert_incoming_path_started_state(
         &self,
         transfer_id: Uuid,
-        path_id: String,
-        base_dir: String,
+        path_id: &str,
+        base_dir: &str,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
 
@@ -317,7 +317,7 @@ impl Storage {
     pub async fn insert_outgoing_path_cancel_state(
         &self,
         transfer_id: Uuid,
-        path_id: String,
+        path_id: &str,
         by_peer: bool,
         bytes_sent: i64,
     ) -> Result<()> {
@@ -343,7 +343,7 @@ impl Storage {
     pub async fn insert_incoming_path_cancel_state(
         &self,
         transfer_id: Uuid,
-        path_id: String,
+        path_id: &str,
         by_peer: bool,
         bytes_received: i64,
     ) -> Result<()> {
@@ -369,7 +369,7 @@ impl Storage {
     pub async fn insert_incoming_path_failed_state(
         &self,
         transfer_id: Uuid,
-        path_id: String,
+        path_id: &str,
         error: u32,
         bytes_received: i64,
     ) -> Result<()> {
@@ -396,7 +396,7 @@ impl Storage {
     pub async fn insert_outgoing_path_failed_state(
         &self,
         transfer_id: Uuid,
-        path_id: String,
+        path_id: &str,
         error: u32,
         bytes_sent: i64,
     ) -> Result<()> {
@@ -422,7 +422,7 @@ impl Storage {
     pub async fn insert_outgoing_path_completed_state(
         &self,
         transfer_id: Uuid,
-        path_id: String,
+        path_id: &str,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
 
@@ -444,8 +444,8 @@ impl Storage {
     pub async fn insert_incoming_path_completed_state(
         &self,
         transfer_id: Uuid,
-        path_id: String,
-        final_path: String,
+        path_id: &str,
+        final_path: &str,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
 
