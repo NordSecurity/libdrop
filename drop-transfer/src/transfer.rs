@@ -137,7 +137,7 @@ impl Transfer {
         };
 
         StorageInfo {
-            id: self.id().to_string(),
+            id: self.id(),
             peer: self.peer().to_string(),
             files,
         }
