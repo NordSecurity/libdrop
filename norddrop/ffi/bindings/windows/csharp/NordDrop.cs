@@ -117,15 +117,13 @@ public class Norddrop : global::System.IDisposable {
     return ret;
   }
 
-  public NorddropResult PurgeTransfersUntil(SWIGTYPE_p_int64_t untilTimestamp) {
-    NorddropResult ret = (NorddropResult)libnorddropPINVOKE.Norddrop_PurgeTransfersUntil(swigCPtr, SWIGTYPE_p_int64_t.getCPtr(untilTimestamp));
-    if (libnorddropPINVOKE.SWIGPendingException.Pending) throw libnorddropPINVOKE.SWIGPendingException.Retrieve();
+  public NorddropResult PurgeTransfersUntil(long untilTimestamp) {
+    NorddropResult ret = (NorddropResult)libnorddropPINVOKE.Norddrop_PurgeTransfersUntil(swigCPtr, untilTimestamp);
     return ret;
   }
 
-  public string GetTransfersSince(SWIGTYPE_p_int64_t sinceTimestamp) {
-    string ret = libnorddropPINVOKE.Norddrop_GetTransfersSince(swigCPtr, SWIGTYPE_p_int64_t.getCPtr(sinceTimestamp));
-    if (libnorddropPINVOKE.SWIGPendingException.Pending) throw libnorddropPINVOKE.SWIGPendingException.Retrieve();
+  public string GetTransfersSince(long sinceTimestamp) {
+    string ret = libnorddropPINVOKE.Norddrop_GetTransfersSince(swigCPtr, sinceTimestamp);
     return ret;
   }
 
@@ -350,10 +348,10 @@ class libnorddropPINVOKE {
   public static extern int Norddrop_PurgeTransfers(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2);
 
   [global::System.Runtime.InteropServices.DllImport("norddrop", EntryPoint="CSharp_NordSecfNordDrop_Norddrop_PurgeTransfersUntil___")]
-  public static extern int Norddrop_PurgeTransfersUntil(global::System.Runtime.InteropServices.HandleRef jarg1, global::System.Runtime.InteropServices.HandleRef jarg2);
+  public static extern int Norddrop_PurgeTransfersUntil(global::System.Runtime.InteropServices.HandleRef jarg1, long jarg2);
 
   [global::System.Runtime.InteropServices.DllImport("norddrop", EntryPoint="CSharp_NordSecfNordDrop_Norddrop_GetTransfersSince___")]
-  public static extern string Norddrop_GetTransfersSince(global::System.Runtime.InteropServices.HandleRef jarg1, global::System.Runtime.InteropServices.HandleRef jarg2);
+  public static extern string Norddrop_GetTransfersSince(global::System.Runtime.InteropServices.HandleRef jarg1, long jarg2);
 
   [global::System.Runtime.InteropServices.DllImport("norddrop", EntryPoint="CSharp_NordSecfNordDrop_Norddrop_Version___")]
   public static extern string Norddrop_Version();
@@ -363,25 +361,6 @@ class libnorddropPINVOKE {
 namespace NordSec.NordDrop {
 
 public class libnorddrop {
-}
-
-}
-namespace NordSec.NordDrop {
-
-public class SWIGTYPE_p_int64_t {
-  private global::System.Runtime.InteropServices.HandleRef swigCPtr;
-
-  internal SWIGTYPE_p_int64_t(global::System.IntPtr cPtr, bool futureUse) {
-    swigCPtr = new global::System.Runtime.InteropServices.HandleRef(this, cPtr);
-  }
-
-  protected SWIGTYPE_p_int64_t() {
-    swigCPtr = new global::System.Runtime.InteropServices.HandleRef(null, global::System.IntPtr.Zero);
-  }
-
-  internal static global::System.Runtime.InteropServices.HandleRef getCPtr(SWIGTYPE_p_int64_t obj) {
-    return (obj == null) ? new global::System.Runtime.InteropServices.HandleRef(null, global::System.IntPtr.Zero) : obj.swigCPtr;
-  }
 }
 
 }

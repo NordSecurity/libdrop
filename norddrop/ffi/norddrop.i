@@ -84,12 +84,12 @@ struct norddrop {};
 
     // Purge all transfers that are older than the given timestamp from the
     // database. Accepts a UNIX timestamp in seconds
-    enum norddrop_result purge_transfers_until(int64_t until_timestamp);
+    enum norddrop_result purge_transfers_until(long long until_timestamp);
 
     %newobject get_transfers_since;
     // Get all transfers since the given timestamp from the database.
     // Accepts a UNIX timestamp in seconds
-    char *get_transfers_since(int64_t since_timestamp);
+    char *get_transfers_since(long long since_timestamp);
 
     // Returns current version of the library
     static char* version();
