@@ -53,7 +53,8 @@ scenarios = [
                             "Outgoing": [
                                 {
                                     "id": 1,
-                                    "path": "testfile-big",
+                                    "relative_path": "testfile-big",
+                                    "base_path": "/tmp",
                                     "bytes": 10485760,
                                     "pending_states": [
                                         {
@@ -133,7 +134,7 @@ scenarios = [
                             "Incoming": [
                                 {
                                     "id": 1,
-                                    "path": "testfile-big",
+                                    "relative_path": "testfile-big",
                                     "bytes": 10485760,
                                     "pending_states": [
                                         {
@@ -229,7 +230,8 @@ scenarios = [
                             "Outgoing": [
                                 {
                                     "id": 1,
-                                    "path": "testfile-small",
+                                    "relative_path": "testfile-small",
+                                    "base_path": "/tmp",
                                     "bytes": 1048576,
                                     "pending_states": [
                                         {
@@ -266,7 +268,8 @@ scenarios = [
                             "Outgoing": [
                                 {
                                     "id": 2,
-                                    "path": "testfile-big",
+                                    "relative_path": "testfile-big",
+                                    "base_path": "/tmp",
                                     "bytes": 10485760,
                                     "pending_states": [
                                         {
@@ -373,7 +376,7 @@ scenarios = [
                             "Incoming": [
                                 {
                                     "id": 1,
-                                    "path": "testfile-small",
+                                    "relative_path": "testfile-small",
                                     "bytes": 1048576,
                                     "pending_states": [
                                         {
@@ -410,7 +413,7 @@ scenarios = [
                             "Incoming": [
                                 {
                                     "id": 2,
-                                    "path": "testfile-big",
+                                    "relative_path": "testfile-big",
                                     "bytes": 10485760,
                                     "pending_states": [
                                         {
@@ -3194,7 +3197,8 @@ scenarios = [
                             "Outgoing": [
                                 {
                                     "id": 1,
-                                    "path": "testfile-big",
+                                    "relative_path": "testfile-big",
+                                    "base_path": "/tmp",
                                     "bytes": 10485760,
                                     "pending_states": [
                                         {
@@ -3269,7 +3273,7 @@ scenarios = [
                             "Incoming": [
                                 {
                                     "id": 1,
-                                    "path": "testfile-big",
+                                    "relative_path": "testfile-big",
                                     "bytes": 10485760,
                                     "pending_states": [
                                         {
