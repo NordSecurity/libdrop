@@ -293,16 +293,18 @@ impl Storage {
         &self,
         transfer_id: Uuid,
         path_id: String,
+        base_dir: String,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
 
         let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
-            "INSERT INTO incoming_path_started_states (path_id, bytes_received) VALUES ((SELECT \
-             id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
+            "INSERT INTO incoming_path_started_states (path_id, base_dir, bytes_received) VALUES \
+             ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
             tid,
             path_id,
+            base_dir,
             0
         )
         .execute(&mut *conn)

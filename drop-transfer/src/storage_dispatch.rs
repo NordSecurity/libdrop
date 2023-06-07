@@ -40,22 +40,24 @@ impl<'a> StorageDispatch<'a> {
                 }
             },
 
-            Event::Started {
-                transfer_type,
+            Event::FileUploadStarted {
                 transfer_id,
                 file_id,
-            } => match transfer_type {
-                TransferType::Incoming => {
-                    self.storage
-                        .insert_incoming_path_started_state(transfer_id, file_id)
-                        .await?
-                }
-                TransferType::Outgoing => {
-                    self.storage
-                        .insert_outgoing_path_started_state(transfer_id, file_id)
-                        .await?
-                }
-            },
+            } => {
+                self.storage
+                    .insert_outgoing_path_started_state(transfer_id, file_id)
+                    .await?
+            }
+
+            Event::FileDownloadStarted {
+                transfer_id,
+                file_id,
+                base_dir,
+            } => {
+                self.storage
+                    .insert_incoming_path_started_state(transfer_id, file_id, base_dir)
+                    .await?
+            }
 
             Event::FileCanceled {
                 transfer_type,
@@ -178,13 +180,14 @@ impl From<&crate::Event> for Event {
             crate::Event::RequestQueued(transfer) => Event::Pending {
                 transfer_info: transfer.storage_info(),
             },
-            crate::Event::FileDownloadStarted(transfer, file) => Event::Started {
-                transfer_type: TransferType::Incoming,
-                transfer_id: transfer.id(),
-                file_id: file.to_string(),
-            },
-            crate::Event::FileUploadStarted(transfer, file) => Event::Started {
-                transfer_type: TransferType::Outgoing,
+            crate::Event::FileDownloadStarted(transfer, file, base_dir) => {
+                Event::FileDownloadStarted {
+                    transfer_id: transfer.id(),
+                    file_id: file.to_string(),
+                    base_dir: base_dir.clone(),
+                }
+            }
+            crate::Event::FileUploadStarted(transfer, file) => Event::FileUploadStarted {
                 transfer_id: transfer.id(),
                 file_id: file.to_string(),
             },

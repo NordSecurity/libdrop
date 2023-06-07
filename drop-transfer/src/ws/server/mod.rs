@@ -60,6 +60,7 @@ pub struct FileXferTask {
     pub file: crate::File,
     pub location: Hidden<PathBuf>,
     pub xfer: crate::Transfer,
+    pub base_dir: Hidden<PathBuf>,
 }
 
 struct TmpFileState {
@@ -412,11 +413,17 @@ async fn handle_client(
 }
 
 impl FileXferTask {
-    pub fn new(file: crate::File, xfer: crate::Transfer, location: PathBuf) -> crate::Result<Self> {
+    pub fn new(
+        file: crate::File,
+        xfer: crate::Transfer,
+        location: PathBuf,
+        base_dir: PathBuf,
+    ) -> crate::Result<Self> {
         Ok(Self {
             file,
             xfer,
             location: Hidden(location),
+            base_dir: Hidden(base_dir),
         })
     }
 
@@ -614,6 +621,7 @@ impl FileXferTask {
                     .start(crate::Event::FileDownloadStarted(
                         self.xfer.clone(),
                         self.file.id().clone(),
+                        self.base_dir.to_string_lossy().to_string(),
                     ))
                     .await;
 
