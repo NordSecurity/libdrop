@@ -45,7 +45,7 @@ impl<'a> StorageDispatch<'a> {
                 file_id,
             } => {
                 self.storage
-                    .insert_outgoing_path_started_state(transfer_id, file_id)
+                    .insert_outgoing_path_started_state(transfer_id, &file_id)
                     .await?
             }
 
@@ -55,7 +55,7 @@ impl<'a> StorageDispatch<'a> {
                 base_dir,
             } => {
                 self.storage
-                    .insert_incoming_path_started_state(transfer_id, file_id, base_dir)
+                    .insert_incoming_path_started_state(transfer_id, &file_id, &base_dir)
                     .await?
             }
 
@@ -68,13 +68,13 @@ impl<'a> StorageDispatch<'a> {
                 TransferType::Incoming => {
                     let progress = self.get_file_progress(transfer_id, &file_id);
                     self.storage
-                        .insert_incoming_path_cancel_state(transfer_id, file_id, by_peer, progress)
+                        .insert_incoming_path_cancel_state(transfer_id, &file_id, by_peer, progress)
                         .await?
                 }
                 TransferType::Outgoing => {
                     let progress = self.get_file_progress(transfer_id, &file_id);
                     self.storage
-                        .insert_outgoing_path_cancel_state(transfer_id, file_id, by_peer, progress)
+                        .insert_outgoing_path_cancel_state(transfer_id, &file_id, by_peer, progress)
                         .await?
                 }
             },
@@ -85,7 +85,7 @@ impl<'a> StorageDispatch<'a> {
                 final_path,
             } => {
                 self.storage
-                    .insert_incoming_path_completed_state(transfer_id, file_id, final_path)
+                    .insert_incoming_path_completed_state(transfer_id, &file_id, &final_path)
                     .await?
             }
 
@@ -94,7 +94,7 @@ impl<'a> StorageDispatch<'a> {
                 file_id,
             } => {
                 self.storage
-                    .insert_outgoing_path_completed_state(transfer_id, file_id)
+                    .insert_outgoing_path_completed_state(transfer_id, &file_id)
                     .await?
             }
 
@@ -130,7 +130,7 @@ impl<'a> StorageDispatch<'a> {
                         self.storage
                             .insert_incoming_path_failed_state(
                                 transfer_id,
-                                file_id,
+                                &file_id,
                                 error_code,
                                 progress,
                             )
@@ -140,7 +140,7 @@ impl<'a> StorageDispatch<'a> {
                         self.storage
                             .insert_outgoing_path_failed_state(
                                 transfer_id,
-                                file_id,
+                                &file_id,
                                 error_code,
                                 progress,
                             )
