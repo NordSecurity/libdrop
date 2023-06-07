@@ -144,7 +144,7 @@ scenarios = [
                                     "started_states": [
                                         {
                                             "path_id": 1,
-                                            "bytes_received": 0
+                                            "bytes_received": 0,
                                             "base_dir": "/tmp/received"
                                         }
                                     ],
@@ -3285,7 +3285,7 @@ scenarios = [
                                     "started_states": [
                                         {
                                             "path_id": 1,
-                                            "bytes_received": 0
+                                            "bytes_received": 0,
                                             "base_dir": "/tmp/received"
                                         }
                                     ],
