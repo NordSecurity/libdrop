@@ -269,7 +269,7 @@ impl Service {
 
         let task = moose_try_file!(
             self.state.moose,
-            FileXferTask::new(file, xfer, location),
+            FileXferTask::new(file, xfer, location, parent_dir.into()),
             uuid,
             file_info
         );
