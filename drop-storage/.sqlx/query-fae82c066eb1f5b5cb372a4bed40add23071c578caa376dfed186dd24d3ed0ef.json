@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT * FROM transfers WHERE created_at >= datetime(?1, 'unixepoch')",
+  "query": "\n            SELECT id as \"id: Hyphenated\", peer_id, created_at, is_outgoing FROM transfers\n            WHERE created_at >= datetime(?1, 'unixepoch')\n            ",
   "describe": {
     "columns": [
       {
-        "name": "id",
+        "name": "id: Hyphenated",
         "ordinal": 0,
         "type_info": "Text"
       },
@@ -14,14 +14,14 @@
         "type_info": "Text"
       },
       {
-        "name": "is_outgoing",
+        "name": "created_at",
         "ordinal": 2,
-        "type_info": "Int64"
+        "type_info": "Datetime"
       },
       {
-        "name": "created_at",
+        "name": "is_outgoing",
         "ordinal": 3,
-        "type_info": "Datetime"
+        "type_info": "Int64"
       }
     ],
     "parameters": {
@@ -34,5 +34,5 @@
       false
     ]
   },
-  "hash": "19d6ed1a7bd1e330c02fc05a1e8151877496ec61c489c6a63742a39cb091689d"
+  "hash": "fae82c066eb1f5b5cb372a4bed40add23071c578caa376dfed186dd24d3ed0ef"
 }

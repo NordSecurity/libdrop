@@ -1,21 +1,16 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT * FROM transfer_active_states WHERE transfer_id = ?1",
+  "query": "SELECT by_peer, created_at FROM transfer_cancel_states WHERE transfer_id = ?1",
   "describe": {
     "columns": [
       {
-        "name": "id",
+        "name": "by_peer",
         "ordinal": 0,
         "type_info": "Int64"
       },
       {
-        "name": "transfer_id",
-        "ordinal": 1,
-        "type_info": "Text"
-      },
-      {
         "name": "created_at",
-        "ordinal": 2,
+        "ordinal": 1,
         "type_info": "Datetime"
       }
     ],
@@ -24,9 +19,8 @@
     },
     "nullable": [
       false,
-      false,
       false
     ]
   },
-  "hash": "f7c9066cea69f5619ebbbeeb32d00a737804efd38e23aa68d63b15014f49c391"
+  "hash": "1524b369d7d32b7a2a70e4f12f54170b98b06a4a694d68c8813d11af5c4ca389"
 }

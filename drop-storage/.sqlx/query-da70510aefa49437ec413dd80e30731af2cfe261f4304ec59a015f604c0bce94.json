@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT status_code, created_at FROM transfer_failed_states WHERE transfer_id = ?1",
+  "describe": {
+    "columns": [
+      {
+        "name": "status_code",
+        "ordinal": 0,
+        "type_info": "Int64"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 1,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "da70510aefa49437ec413dd80e30731af2cfe261f4304ec59a015f604c0bce94"
+}

@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS transfer_failed_states (
 CREATE TABLE IF NOT EXISTS outgoing_paths (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   transfer_id TEXT NOT NULL,
-  path TEXT NOT NULL,
+  relative_path TEXT NOT NULL,
+  base_path TEXT NOT NULL,
   path_hash TEXT NOT NULL,
   bytes INT NOT NULL, 
   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
@@ -54,7 +55,7 @@ CREATE TABLE IF NOT EXISTS outgoing_paths (
 CREATE TABLE IF NOT EXISTS incoming_paths (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   transfer_id TEXT NOT NULL,   
-  path TEXT NOT NULL, 
+  relative_path TEXT NOT NULL,
   path_hash TEXT NOT NULL,
   bytes INT NOT NULL, 
   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
