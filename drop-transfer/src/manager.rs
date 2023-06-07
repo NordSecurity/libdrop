@@ -69,16 +69,11 @@ impl TransferManager {
         &mut self,
         xfer: Transfer,
         connection: TransferConnection,
-        transfer_type: drop_storage::TransferType,
     ) -> crate::Result<()> {
         match self.transfers.entry(xfer.id()) {
             Entry::Occupied(_) => Err(Error::BadTransferState("Transfer already exists".into())),
             Entry::Vacant(entry) => {
-                if let Err(err) = self
-                    .storage
-                    .insert_transfer(xfer.storage_info(), transfer_type)
-                    .await
-                {
+                if let Err(err) = self.storage.insert_transfer(&xfer.storage_info()).await {
                     slog::error!(
                         self.logger,
                         "Failed to insert transfer into storage: {}",

@@ -4,28 +4,24 @@ pub mod types;
 use std::str::FromStr;
 
 use slog::Logger;
-use sqlx::{sqlite::SqliteConnectOptions, Acquire, SqliteConnection, SqlitePool};
+use sqlx::{sqlite::SqliteConnectOptions, SqliteConnection, SqlitePool};
 use types::{
     DbTransferType, IncomingPath, IncomingPathCancelState, IncomingPathCompletedState,
     IncomingPathFailedState, IncomingPathPendingState, IncomingPathStartedState, OutgoingPath,
     OutgoingPathCancelState, OutgoingPathCompletedState, OutgoingPathFailedState,
     OutgoingPathPendingState, OutgoingPathStartedState, Transfer, TransferActiveState,
-    TransferCancelState, TransferFailedState,
+    TransferCancelState, TransferFailedState, TransferFiles, TransferIncomingPath,
+    TransferOutgoingPath,
 };
 
 use crate::error::Error;
-pub use crate::types::{TransferInfo, TransferPath, TransferType};
+pub use crate::types::{FileChecksum, TransferInfo, TransferType};
 
 type Result<T> = std::result::Result<T, Error>;
 // SQLite storage wrapper
 pub struct Storage {
     _logger: Logger,
     conn: SqlitePool,
-}
-
-pub struct FileChecksum {
-    pub file_id: String,
-    pub checksum: Option<Vec<u8>>,
 }
 
 impl Storage {
@@ -44,14 +40,13 @@ impl Storage {
         })
     }
 
-    pub async fn insert_transfer(
-        &self,
-        transfer: TransferInfo,
-        transfer_type: TransferType,
-    ) -> Result<()> {
-        let mut conn = self.conn.acquire().await?;
-        let mut conn = conn.begin().await?;
-        let transfer_type_int = transfer_type as u32;
+    pub async fn insert_transfer(&self, transfer: &TransferInfo) -> Result<()> {
+        let transfer_type_int = match &transfer.files {
+            TransferFiles::Incoming(_) => TransferType::Incoming as u32,
+            TransferFiles::Outgoing(_) => TransferType::Outgoing as u32,
+        };
+
+        let mut conn = self.conn.begin().await?;
 
         sqlx::query!(
             "INSERT OR IGNORE INTO peers (id) VALUES (?1)",
@@ -69,43 +64,61 @@ impl Storage {
         .execute(&mut *conn)
         .await?;
 
-        for path in transfer.files {
-            Self::insert_path(transfer_type, transfer.id.clone(), path, &mut *conn).await?;
+        match &transfer.files {
+            TransferFiles::Incoming(files) => {
+                for file in files {
+                    Self::insert_incoming_path(&mut conn, &transfer.id, file).await?;
+                }
+            }
+            TransferFiles::Outgoing(files) => {
+                for file in files {
+                    Self::insert_outgoing_path(&mut conn, &transfer.id, file).await?;
+                }
+            }
         }
 
         conn.commit().await.map_err(error::Error::DBError)
     }
 
-    async fn insert_path(
-        transfer_type: TransferType,
-        transfer_id: String,
-        path: TransferPath,
+    async fn insert_incoming_path(
         conn: &mut SqliteConnection,
+        transfer_id: &str,
+        path: &TransferIncomingPath,
     ) -> Result<()> {
-        match transfer_type {
-            TransferType::Incoming => sqlx::query!(
-                "INSERT INTO incoming_paths (transfer_id, path, path_hash, bytes) VALUES (?1, ?2, \
-                 ?3, ?4)",
-                transfer_id,
-                path.path,
-                path.id,
-                path.size,
-            )
-            .execute(conn)
-            .await
-            .map_err(error::Error::DBError)?,
-            TransferType::Outgoing => sqlx::query!(
-                "INSERT INTO outgoing_paths (transfer_id, path, path_hash, bytes) VALUES (?1, ?2, \
-                 ?3, ?4)",
-                transfer_id,
-                path.path,
-                path.id,
-                path.size,
-            )
-            .execute(conn)
-            .await
-            .map_err(error::Error::DBError)?,
-        };
+        sqlx::query!(
+            r#"
+            INSERT INTO incoming_paths (transfer_id, relative_path, path_hash, bytes)
+            VALUES (?1, ?2, ?3, ?4)
+            "#,
+            transfer_id,
+            path.relative_path,
+            path.file_id,
+            path.size,
+        )
+        .execute(conn)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn insert_outgoing_path(
+        conn: &mut SqliteConnection,
+        transfer_id: &str,
+        path: &TransferOutgoingPath,
+    ) -> Result<()> {
+        sqlx::query!(
+            r#"
+            INSERT INTO outgoing_paths (transfer_id, relative_path, path_hash, bytes, base_path)
+            VALUES (?1, ?2, ?3, ?4, ?5)
+            "#,
+            transfer_id,
+            path.relative_path,
+            path.file_id,
+            path.size,
+            path.base_path,
+        )
+        .execute(conn)
+        .await?;
 
         Ok(())
     }
@@ -198,8 +211,8 @@ impl Storage {
 
     pub async fn insert_outgoing_path_pending_state(
         &self,
-        transfer_id: String,
-        file_path: String,
+        transfer_id: &str,
+        file_id: &str,
     ) -> Result<()> {
         let mut conn = self.conn.acquire().await?;
 
@@ -207,7 +220,7 @@ impl Storage {
             "INSERT INTO outgoing_path_pending_states (path_id) VALUES ((SELECT id FROM \
              outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
             transfer_id,
-            file_path
+            file_id
         )
         .execute(&mut *conn)
         .await
@@ -218,8 +231,8 @@ impl Storage {
 
     pub async fn insert_incoming_path_pending_state(
         &self,
-        transfer_id: String,
-        path_id: String,
+        transfer_id: &str,
+        file_id: &str,
     ) -> Result<()> {
         let mut conn = self.conn.acquire().await?;
 
@@ -227,7 +240,7 @@ impl Storage {
             "INSERT INTO incoming_path_pending_states (path_id) VALUES ((SELECT id FROM \
              incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
             transfer_id,
-            path_id,
+            file_id,
         )
         .execute(&mut *conn)
         .await
@@ -555,13 +568,13 @@ impl Storage {
             transfer_id
         )
         .fetch_all(&mut *conn)
-        .await
-        .map_err(error::Error::DBError)?
-        .iter()
+        .await?
+        .into_iter()
         .map(|p| OutgoingPath {
             id: p.id,
-            transfer_id: p.transfer_id.clone(),
-            path: p.path.clone(),
+            transfer_id: p.transfer_id,
+            base_path: p.base_path,
+            relative_path: p.relative_path,
             bytes: p.bytes,
             created_at: p.created_at.timestamp_millis(),
             pending_states: vec![],
@@ -660,13 +673,12 @@ impl Storage {
             transfer_id
         )
         .fetch_all(&mut *conn)
-        .await
-        .map_err(error::Error::DBError)?
-        .iter()
+        .await?
+        .into_iter()
         .map(|p| IncomingPath {
             id: p.id,
-            transfer_id: p.transfer_id.clone(),
-            path: p.path.clone(),
+            transfer_id: p.transfer_id,
+            relative_path: p.relative_path,
             bytes: p.bytes,
             created_at: p.created_at.timestamp_millis(),
             pending_states: vec![],
@@ -772,48 +784,44 @@ mod tests {
             let transfer = TransferInfo {
                 id: "transfer_id_1".to_string(),
                 peer: "1.2.3.4".to_string(),
-                files: vec![
-                    TransferPath {
-                        id: "id1".to_string(),
-                        path: "/dir/1".to_string(),
+                files: TransferFiles::Incoming(vec![
+                    TransferIncomingPath {
+                        file_id: "id1".to_string(),
+                        relative_path: "/dir/1".to_string(),
                         size: 1024,
                     },
-                    TransferPath {
-                        id: "id2".to_string(),
-                        path: "/dir/2".to_string(),
+                    TransferIncomingPath {
+                        file_id: "id2".to_string(),
+                        relative_path: "/dir/2".to_string(),
                         size: 2048,
                     },
-                ],
+                ]),
             };
 
-            storage
-                .insert_transfer(transfer, TransferType::Incoming)
-                .await
-                .unwrap();
+            storage.insert_transfer(&transfer).await.unwrap();
         }
 
         {
             let transfer = TransferInfo {
                 id: "transfer_id_2".to_string(),
                 peer: "5.6.7.8".to_string(),
-                files: vec![
-                    TransferPath {
-                        id: "id3".to_string(),
-                        path: "/dir/3".to_string(),
+                files: TransferFiles::Outgoing(vec![
+                    TransferOutgoingPath {
+                        file_id: "id3".to_string(),
+                        relative_path: "/dir/3".to_string(),
                         size: 1024,
+                        base_path: "3".to_string(),
                     },
-                    TransferPath {
-                        id: "id4".to_string(),
-                        path: "/dir/4".to_string(),
+                    TransferOutgoingPath {
+                        file_id: "id4".to_string(),
+                        relative_path: "/dir/4".to_string(),
                         size: 2048,
+                        base_path: "4".to_string(),
                     },
-                ],
+                ]),
             };
 
-            storage
-                .insert_transfer(transfer, TransferType::Outgoing)
-                .await
-                .unwrap();
+            storage.insert_transfer(&transfer).await.unwrap();
         }
 
         {
