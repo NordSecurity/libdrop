@@ -749,6 +749,7 @@ impl Storage {
             .iter()
             .map(|s| IncomingPathStartedState {
                 path_id: s.path_id,
+                base_dir: s.base_dir.clone(),
                 bytes_received: s.bytes_received,
                 created_at: s.created_at.timestamp_millis(),
             })
