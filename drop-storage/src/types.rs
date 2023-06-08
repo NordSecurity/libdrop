@@ -212,6 +212,7 @@ pub struct IncomingPathPendingState {
 #[derive(Debug, Serialize)]
 pub struct IncomingPathStartedState {
     pub path_id: i64,
+    pub base_dir: String,
     pub bytes_received: i64,
     pub created_at: i64,
 }
