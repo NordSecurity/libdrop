@@ -185,13 +185,13 @@ enum norddrop_result norddrop_purge_transfers(const struct norddrop *dev, const 
  * database. Accepts a UNIX timestamp in seconds
  */
 enum norddrop_result norddrop_purge_transfers_until(const struct norddrop *dev,
-                                                    int64_t until_timestamp);
+                                                    long long until_timestamp);
 
 /**
  * Get all transfers since the given timestamp from the database. Accepts a
  * UNIX timestamp in seconds
  */
-char *norddrop_get_transfers_since(const struct norddrop *dev, int64_t since_timestamp);
+char *norddrop_get_transfers_since(const struct norddrop *dev, long long since_timestamp);
 
 /**
  * Create a new instance of norddrop. This is a required step to work with API
