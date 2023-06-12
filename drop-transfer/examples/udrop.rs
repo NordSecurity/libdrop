@@ -49,26 +49,18 @@ async fn listen(
 
                 info!("[EVENT] RequestReceived {}: {:?}", xfid, files);
 
-                let file_set = active_file_downloads
-                    .entry(xfid)
-                    .or_insert_with(HashSet::new);
+                if files.is_empty() {
+                    service
+                        .cancel_all(xfid)
+                        .await
+                        .context("Failed to cancled transfer")?;
+                }
 
                 for file in xfer.files().values() {
                     service
                         .download(xfid, file.id(), out_dir)
                         .await
                         .context("Cannot issue download call")?;
-
-                    file_set.insert(file.id().clone());
-                }
-
-                if file_set.is_empty() {
-                    service
-                        .cancel_all(xfid)
-                        .await
-                        .context("Failed to cancled transfer")?;
-
-                    active_file_downloads.remove(&xfid);
                 }
             }
             Event::FileDownloadStarted(xfer, file, base_dir) => {
@@ -78,6 +70,11 @@ async fn listen(
                     file,
                     base_dir
                 );
+
+                active_file_downloads
+                    .entry(xfer.id())
+                    .or_insert_with(HashSet::new)
+                    .insert(file);
             }
 
             Event::FileUploadProgress(xfer, file, byte_count) => {
@@ -123,6 +120,11 @@ async fn listen(
                     file,
                     progress
                 );
+
+                active_file_downloads
+                    .entry(xfer.id())
+                    .or_insert_with(HashSet::new)
+                    .insert(file);
             }
             Event::FileUploadCancelled(xfer, file, by_peer) => {
                 info!(

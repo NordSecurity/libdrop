@@ -315,7 +315,7 @@ async fn handle_client(
             .transfer_manager
             .lock()
             .await
-            .insert_transfer(xfer.clone(), TransferConnection::Server(req_send))
+            .insert_transfer(xfer.clone(), TransferConnection::Server(req_send.clone()))
         {
             error!(logger, "Failed to insert a new trasfer: {}", err);
 
@@ -328,22 +328,66 @@ async fn handle_client(
             let _ = socket.close().await;
 
             return;
-        } else {
-            if let Err(err) = state.storage.insert_transfer(&xfer.storage_info()).await {
-                error!(logger, "Failed to insert transfer into storage: {err}",);
-            }
+        }
+    }
 
+    let mode = match state.storage.insert_transfer(&xfer.storage_info()).await {
+        Ok(mode) => mode,
+        Err(err) => {
+            error!(logger, "Failed to insert transfer into storage: {err}",);
+            drop_storage::TransferIncomingMode::New
+        }
+    };
+
+    match mode {
+        drop_storage::TransferIncomingMode::New => {
             state
                 .event_tx
                 .send(Event::RequestReceived(xfer.clone()))
                 .await
                 .expect("Failed to notify receiving peer!");
         }
-    }
+        drop_storage::TransferIncomingMode::Resume => {
+            let task = async {
+                info!(
+                    logger,
+                    "Transfer {} resume. Resuming started files",
+                    xfer.id()
+                );
 
-    if let Err(err) = state.storage.insert_transfer(&xfer.storage_info()).await {
-        error!(logger, "Failed to insert transfer into storage: {err}",);
-    }
+                let files = state
+                    .storage
+                    .incoming_files_to_resume(xfer.id())
+                    .await
+                    .context("Failed to fetch files to resume")?;
+
+                for file in files {
+                    info!(logger, "Resuming file: {}", file.file_id);
+
+                    let xfile = crate::File {
+                        file_id: file.file_id.into(),
+                        subpath: From::from(&file.subpath),
+                        kind: crate::file::FileKind::FileToRecv { size: file.size },
+                    };
+                    let fullpath = PathBuf::from(&file.basepath).join(file.subpath);
+                    let task =
+                        FileXferTask::new(xfile, xfer.clone(), fullpath, file.basepath.into());
+
+                    let _ = req_send.send(ServerReq::Download {
+                        task: Box::new(task),
+                    });
+                }
+
+                anyhow::Ok(())
+            };
+
+            if let Err(err) = task.await {
+                warn!(logger, "Failed to resume started files: {err:?}");
+            }
+        }
+    };
+
+    drop(req_send); // We need to drop in for transfer cancelation to work
 
     let mut ping = hander.pinger();
 
@@ -425,13 +469,13 @@ impl FileXferTask {
         xfer: crate::Transfer,
         absolute_path: PathBuf,
         base_dir: PathBuf,
-    ) -> crate::Result<Self> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             file,
             xfer,
             absolute_path: Hidden(absolute_path),
             base_dir: Hidden(base_dir),
-        })
+        }
     }
 
     fn move_tmp_to_dst(
