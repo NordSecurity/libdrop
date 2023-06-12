@@ -49,10 +49,14 @@ pub enum Event {
     Pending {
         transfer_info: TransferInfo,
     },
-    Started {
-        transfer_type: TransferType,
+    FileUploadStarted {
         transfer_id: TransferId,
         file_id: FileId,
+    },
+    FileDownloadStarted {
+        transfer_id: TransferId,
+        file_id: FileId,
+        base_dir: String,
     },
     FileCanceled {
         transfer_type: TransferType,
@@ -208,6 +212,7 @@ pub struct IncomingPathPendingState {
 #[derive(Debug, Serialize)]
 pub struct IncomingPathStartedState {
     pub path_id: i64,
+    pub base_dir: String,
     pub bytes_received: i64,
     pub created_at: i64,
 }

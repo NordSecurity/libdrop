@@ -101,11 +101,12 @@ async fn listen(
                     });
                 }
             }
-            Event::FileDownloadStarted(xfer, file) => {
+            Event::FileDownloadStarted(xfer, file, base_dir) => {
                 info!(
-                    "[EVENT] [{}] FileDownloadStarted {:?} transfer started",
+                    "[EVENT] [{}] FileDownloadStarted {:?} transfer started, to {:?}",
                     xfer.id(),
                     file,
+                    base_dir
                 );
             }
 

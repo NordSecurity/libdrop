@@ -14,13 +14,18 @@
         "type_info": "Int64"
       },
       {
-        "name": "bytes_received",
+        "name": "base_dir",
         "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "bytes_received",
+        "ordinal": 3,
         "type_info": "Int64"
       },
       {
         "name": "created_at",
-        "ordinal": 3,
+        "ordinal": 4,
         "type_info": "Datetime"
       }
     ],
@@ -28,6 +33,7 @@
       "Right": 1
     },
     "nullable": [
+      false,
       false,
       false,
       false,
