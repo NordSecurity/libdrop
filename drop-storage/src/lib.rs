@@ -269,7 +269,7 @@ impl Storage {
     pub async fn insert_outgoing_path_started_state(
         &self,
         transfer_id: Uuid,
-        path_id: String,
+        path_id: &str,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
 
@@ -292,17 +292,19 @@ impl Storage {
     pub async fn insert_incoming_path_started_state(
         &self,
         transfer_id: Uuid,
-        path_id: String,
+        path_id: &str,
+        base_dir: &str,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
 
         let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
-            "INSERT INTO incoming_path_started_states (path_id, bytes_received) VALUES ((SELECT \
-             id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
+            "INSERT INTO incoming_path_started_states (path_id, base_dir, bytes_received) VALUES \
+             ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
             tid,
             path_id,
+            base_dir,
             0
         )
         .execute(&mut *conn)
@@ -315,7 +317,7 @@ impl Storage {
     pub async fn insert_outgoing_path_cancel_state(
         &self,
         transfer_id: Uuid,
-        path_id: String,
+        path_id: &str,
         by_peer: bool,
         bytes_sent: i64,
     ) -> Result<()> {
@@ -341,7 +343,7 @@ impl Storage {
     pub async fn insert_incoming_path_cancel_state(
         &self,
         transfer_id: Uuid,
-        path_id: String,
+        path_id: &str,
         by_peer: bool,
         bytes_received: i64,
     ) -> Result<()> {
@@ -367,7 +369,7 @@ impl Storage {
     pub async fn insert_incoming_path_failed_state(
         &self,
         transfer_id: Uuid,
-        path_id: String,
+        path_id: &str,
         error: u32,
         bytes_received: i64,
     ) -> Result<()> {
@@ -394,7 +396,7 @@ impl Storage {
     pub async fn insert_outgoing_path_failed_state(
         &self,
         transfer_id: Uuid,
-        path_id: String,
+        path_id: &str,
         error: u32,
         bytes_sent: i64,
     ) -> Result<()> {
@@ -420,7 +422,7 @@ impl Storage {
     pub async fn insert_outgoing_path_completed_state(
         &self,
         transfer_id: Uuid,
-        path_id: String,
+        path_id: &str,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
 
@@ -442,8 +444,8 @@ impl Storage {
     pub async fn insert_incoming_path_completed_state(
         &self,
         transfer_id: Uuid,
-        path_id: String,
-        final_path: String,
+        path_id: &str,
+        final_path: &str,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
 
@@ -747,6 +749,7 @@ impl Storage {
             .iter()
             .map(|s| IncomingPathStartedState {
                 path_id: s.path_id,
+                base_dir: s.base_dir.clone(),
                 bytes_received: s.bytes_received,
                 created_at: s.created_at.timestamp_millis(),
             })

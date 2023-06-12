@@ -139,7 +139,7 @@ impl From<drop_transfer::Event> for Event {
                     file: fid.to_string(),
                 })
             }
-            drop_transfer::Event::FileDownloadStarted(tx, fid) => {
+            drop_transfer::Event::FileDownloadStarted(tx, fid, _) => {
                 Event::TransferStarted(StartEvent {
                     transfer: tx.id().to_string(),
                     file: fid.to_string(),

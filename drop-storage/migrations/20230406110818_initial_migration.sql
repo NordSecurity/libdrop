@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS incoming_path_pending_states (
 CREATE TABLE IF NOT EXISTS incoming_path_started_states (
   id INTEGER PRIMARY KEY AUTOINCREMENT, 
   path_id INTEGER NOT NULL,
+  base_dir TEXT NOT NULL,
   bytes_received INTEGER NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
   FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON DELETE CASCADE ON UPDATE CASCADE,

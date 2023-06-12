@@ -529,7 +529,7 @@ impl Downloader {
 impl handler::Downloader for Downloader {
     async fn init(&mut self, task: &super::FileXferTask) -> crate::Result<handler::DownloadInit> {
         let filename_len = task
-            .location
+            .absolute_path
             .file_name()
             .expect("Cannot extract file name")
             .len();
@@ -539,7 +539,7 @@ impl handler::Downloader for Downloader {
         }
 
         let tmp_location: Hidden<PathBuf> = Hidden(
-            task.location
+            task.absolute_path
                 .0
                 .with_file_name(format!("{}.dropdl-part", task.file.id())),
         );

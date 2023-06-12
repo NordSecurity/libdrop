@@ -144,7 +144,8 @@ scenarios = [
                                     "started_states": [
                                         {
                                             "path_id": 1,
-                                            "bytes_received": 0
+                                            "bytes_received": 0,
+                                            "base_dir": "/tmp/received"
                                         }
                                     ],
                                     "cancel_states": [],
@@ -386,7 +387,8 @@ scenarios = [
                                     "started_states": [
                                         {
                                             "path_id": 1,
-                                            "bytes_received": 0
+                                            "bytes_received": 0,
+                                            "base_dir": "/tmp/received"
                                         }
                                     ],
                                     "cancel_states": [],
@@ -3283,7 +3285,8 @@ scenarios = [
                                     "started_states": [
                                         {
                                             "path_id": 1,
-                                            "bytes_received": 0
+                                            "bytes_received": 0,
+                                            "base_dir": "/tmp/received"
                                         }
                                     ],
                                     "cancel_states": [],
