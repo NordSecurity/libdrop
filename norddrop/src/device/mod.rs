@@ -16,6 +16,9 @@ use crate::{device::types::FinishEvent, ffi, ffi::types as ffi_types};
 
 pub type Result<T = ()> = std::result::Result<T, ffi::types::norddrop_result>;
 
+const SQLITE_TIMESTAMP_MIN: i64 = -210866760000;
+const SQLITE_TIMESTAMP_MAX: i64 = 253402300799;
+
 pub(super) struct NordDropFFI {
     rt: tokio::runtime::Runtime,
     pub logger: Logger,
@@ -238,6 +241,15 @@ impl NordDropFFI {
             until_timestamp
         );
 
+        if !(SQLITE_TIMESTAMP_MIN..=SQLITE_TIMESTAMP_MAX).contains(&until_timestamp) {
+            error!(
+                self.logger,
+                "Invalid timestamp: {until_timestamp}, the value must be between \
+                 {SQLITE_TIMESTAMP_MIN} and {SQLITE_TIMESTAMP_MAX}"
+            );
+            return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
+        }
+
         self.rt.block_on(async {
             self.instance
                 .lock()
@@ -262,6 +274,15 @@ impl NordDropFFI {
             "norddrop_get_transfers_since() since_timestamp: {:?}",
             since_timestamp
         );
+
+        if !(SQLITE_TIMESTAMP_MIN..=SQLITE_TIMESTAMP_MAX).contains(&since_timestamp) {
+            error!(
+                self.logger,
+                "Invalid timestamp: {since_timestamp}, the value must be between \
+                 {SQLITE_TIMESTAMP_MIN} and {SQLITE_TIMESTAMP_MAX}"
+            );
+            return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
+        }
 
         let result = self.rt.block_on(async {
             self.instance
