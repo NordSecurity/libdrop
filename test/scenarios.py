@@ -1207,24 +1207,11 @@ scenarios = [
     ),
     Scenario(
         "scenario5",
-        "Try to send two files to an offline peer",
+        "Try to send file to an offline peer. Expect slient retries",
         {
             "ren": ActionList(
                 [
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
-                    action.Wait(
-                        event.FinishFailedTransfer(
-                            0,
-                            Error.IO,
-                        )
-                    ),
-                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
-                    action.Wait(
-                        event.FinishFailedTransfer(
-                            1,
-                            Error.IO,
-                        )
-                    ),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -3112,26 +3099,6 @@ scenarios = [
                     action.CancelTransferRequest(0),
                     action.CancelTransferRequest(1),
                     action.ExpectCancel([0, 1], False),
-                    action.NoEvent(),
-                    action.Stop(),
-                ]
-            ),
-        },
-    ),
-    Scenario(
-        "scenario16",
-        "Activate connection timeout",
-        {
-            "ren": ActionList(
-                [
-                    action.ConfigureNetwork(latency="10000ms"),
-                    action.NewTransfer("172.20.0.100", ["/tmp/testfile-big"]),
-                    action.Wait(
-                        event.FinishFailedTransfer(
-                            0,
-                            Error.IO,
-                        )
-                    ),
                     action.NoEvent(),
                     action.Stop(),
                 ]
