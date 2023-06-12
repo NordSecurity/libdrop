@@ -214,7 +214,7 @@ impl Service {
             Ok((xfer, chann, mapped_file_path))
         };
 
-        let (xfer, channel, location) =
+        let (xfer, channel, absolute_path) =
             moose_try_file!(self.state.moose, fetch_xfer.await, uuid, None);
 
         let file = moose_try_file!(
@@ -228,7 +228,10 @@ impl Service {
         let file_info = file.info();
 
         // Path validation
-        if location.components().any(|x| x == Component::ParentDir) {
+        if absolute_path
+            .components()
+            .any(|x| x == Component::ParentDir)
+        {
             let err = Err(Error::BadPath(
                 "Path should not contain a reference to parrent directory".into(),
             ));
@@ -237,7 +240,7 @@ impl Service {
 
         let parent_location = moose_try_file!(
             self.state.moose,
-            location
+            absolute_path
                 .parent()
                 .ok_or_else(|| Error::BadPath("Missing parent path".into())),
             uuid,
@@ -269,7 +272,7 @@ impl Service {
 
         let task = moose_try_file!(
             self.state.moose,
-            FileXferTask::new(file, xfer, location, parent_dir.into()),
+            FileXferTask::new(file, xfer, absolute_path, parent_dir.into()),
             uuid,
             file_info
         );

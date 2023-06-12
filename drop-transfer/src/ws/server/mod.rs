@@ -58,7 +58,7 @@ pub enum ServerReq {
 
 pub struct FileXferTask {
     pub file: crate::File,
-    pub location: Hidden<PathBuf>,
+    pub absolute_path: Hidden<PathBuf>,
     pub xfer: crate::Transfer,
     pub base_dir: Hidden<PathBuf>,
 }
@@ -416,13 +416,13 @@ impl FileXferTask {
     pub fn new(
         file: crate::File,
         xfer: crate::Transfer,
-        location: PathBuf,
+        absolute_path: PathBuf,
         base_dir: PathBuf,
     ) -> crate::Result<Self> {
         Ok(Self {
             file,
             xfer,
-            location: Hidden(location),
+            absolute_path: Hidden(absolute_path),
             base_dir: Hidden(base_dir),
         })
     }
@@ -435,7 +435,7 @@ impl FileXferTask {
         let mut opts = fs::OpenOptions::new();
         opts.write(true).create_new(true);
 
-        let mut iter = crate::utils::filepath_variants(&self.location.0)?;
+        let mut iter = crate::utils::filepath_variants(&self.absolute_path.0)?;
         let dst_location = loop {
             let path = iter.next().expect("File paths iterator should never end");
 
@@ -561,7 +561,8 @@ impl FileXferTask {
             Err(err) => {
                 error!(
                     logger,
-                    "Could not rename temporary file {:?} after downloading: {err}", self.location,
+                    "Could not rename temporary file {:?} after downloading: {err}",
+                    self.absolute_path,
                 );
                 return Err(err);
             }
