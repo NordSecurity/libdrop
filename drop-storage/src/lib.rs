@@ -13,26 +13,15 @@ use types::{
 use uuid::{fmt::Hyphenated, Uuid};
 
 use crate::error::Error;
-pub use crate::types::{Event, FileChecksum, TransferInfo, TransferType};
+pub use crate::types::{
+    FileChecksum, FileToRetry, TransferIncomingMode, TransferInfo, TransferToRetry, TransferType,
+};
 
 type Result<T> = std::result::Result<T, Error>;
 // SQLite storage wrapper
 pub struct Storage {
     _logger: Logger,
     conn: SqlitePool,
-}
-
-pub struct FileToRetry {
-    pub file_id: String,
-    pub subpath: String,
-    pub basepath: String,
-    pub size: u64,
-}
-
-pub struct TransferToRetry {
-    pub uuid: uuid::Uuid,
-    pub peer: String,
-    pub files: Vec<FileToRetry>,
 }
 
 impl Storage {
@@ -51,7 +40,7 @@ impl Storage {
         })
     }
 
-    pub async fn insert_transfer(&self, transfer: &TransferInfo) -> Result<()> {
+    pub async fn insert_transfer(&self, transfer: &TransferInfo) -> Result<TransferIncomingMode> {
         let transfer_type_int = match &transfer.files {
             TransferFiles::Incoming(_) => TransferType::Incoming as u32,
             TransferFiles::Outgoing(_) => TransferType::Outgoing as u32,
@@ -61,14 +50,21 @@ impl Storage {
 
         let mut conn = self.conn.begin().await?;
 
-        sqlx::query!(
+        let affected = sqlx::query!(
             "INSERT OR IGNORE INTO transfers (id, peer, is_outgoing) VALUES (?1, ?2, ?3)",
             tid,
             transfer.peer,
             transfer_type_int,
         )
         .execute(&mut *conn)
-        .await?;
+        .await?
+        .rows_affected();
+
+        let mode = if affected == 0 {
+            TransferIncomingMode::Resume
+        } else {
+            TransferIncomingMode::New
+        };
 
         match &transfer.files {
             TransferFiles::Incoming(files) => {
@@ -83,7 +79,9 @@ impl Storage {
             }
         }
 
-        conn.commit().await.map_err(error::Error::DBError)
+        conn.commit().await?;
+
+        Ok(mode)
     }
 
     async fn insert_incoming_path(
@@ -501,7 +499,7 @@ impl Storage {
 
         let rec_transfers = sqlx::query!(
             r#"
-            SELECT transfers.id as  "id: Hyphenated", peer_id, COUNT(transfer_cancel_states.id) as cancel_count
+            SELECT transfers.id as  "id: Hyphenated", peer, COUNT(transfer_cancel_states.id) as cancel_count
             FROM transfers
             LEFT JOIN transfer_cancel_states ON transfers.id = transfer_cancel_states.transfer_id
             WHERE
@@ -517,7 +515,8 @@ impl Storage {
         let mut out = Vec::with_capacity(rec_transfers.len());
         for rec_transfer in rec_transfers {
             let files = sqlx::query!(
-                "SELECT relative_path, base_path, path_hash, bytes FROM outgoing_paths WHERE transfer_id = ?1",
+                "SELECT relative_path, base_path, path_hash, bytes FROM outgoing_paths WHERE \
+                 transfer_id = ?1",
                 rec_transfer.id
             )
             .fetch_all(&mut *conn)
@@ -533,10 +532,57 @@ impl Storage {
 
             out.push(TransferToRetry {
                 uuid: rec_transfer.id.into_uuid(),
-                peer: rec_transfer.peer_id,
+                peer: rec_transfer.peer,
                 files,
             });
         }
+
+        conn.commit().await?;
+
+        Ok(out)
+    }
+
+    pub async fn incoming_files_to_resume(&self, transfer_id: Uuid) -> Result<Vec<FileToRetry>> {
+        let tid = transfer_id.hyphenated();
+
+        let mut conn = self.conn.begin().await?;
+
+        let out = sqlx::query!(
+            r#"
+            SELECT 
+                path_hash as "file_id!",
+                relative_path as "subpath!",
+                bytes as "size!",
+                strt.base_dir as "basedir!",
+                MAX(strt.created_at) as last_start,
+                MAX(canc.created_at) as last_cancel,
+                MAX(fail.created_at) as last_fail,
+                MAX(comp.created_at) as last_complete
+            FROM incoming_paths p
+            INNER JOIN incoming_path_started_states strt ON p.id = strt.path_id
+            LEFT JOIN incoming_path_cancel_states canc ON p.id = canc.path_id
+            LEFT JOIN incoming_path_failed_states fail ON p.id = fail.path_id
+            LEFT JOIN incoming_path_completed_states comp ON p.id = comp.path_id
+            WHERE transfer_id = ?1
+            GROUP BY p.id
+            HAVING 
+                last_start IS NOT NULL
+                AND (last_cancel IS NULL OR last_start > last_cancel)
+                AND (last_fail IS NULL OR last_start > last_fail)
+                AND (last_complete IS NULL OR last_start > last_complete)
+            "#,
+            tid
+        )
+        .fetch_all(&mut *conn)
+        .await?
+        .into_iter()
+        .map(|r| FileToRetry {
+            file_id: r.file_id,
+            subpath: r.subpath,
+            basepath: r.basedir,
+            size: r.size as _,
+        })
+        .collect();
 
         conn.commit().await?;
 

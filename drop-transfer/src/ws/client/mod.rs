@@ -93,10 +93,13 @@ pub(crate) async fn resume(state: &Arc<State>, stop: &CancellationToken, logger:
                             anyhow::ensure!(!meta.is_dir(), "Invalid file type");
 
                             let file_id: FileId = dbfile.file_id.into();
-                            crate::File::new(dbfile.subpath.into(), fullpath, meta, file_id.clone())
-                                .with_context(|| {
-                                    format!("Failed to restore file {file_id} from DB")
-                                })
+                            crate::File::new_to_send(
+                                dbfile.subpath.into(),
+                                fullpath,
+                                meta,
+                                file_id.clone(),
+                            )
+                            .with_context(|| format!("Failed to restore file {file_id} from DB"))
                         })
                         .collect::<Result<_, _>>()?;
 

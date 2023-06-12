@@ -129,6 +129,25 @@ pub struct FileChecksum {
     pub checksum: Option<Vec<u8>>,
 }
 
+pub struct FileToRetry {
+    pub file_id: String,
+    pub subpath: String,
+    pub basepath: String,
+    pub size: u64,
+}
+
+pub struct TransferToRetry {
+    pub uuid: uuid::Uuid,
+    pub peer: String,
+    pub files: Vec<FileToRetry>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TransferIncomingMode {
+    New,
+    Resume,
+}
+
 #[derive(Debug)]
 pub enum Event {
     Pending {

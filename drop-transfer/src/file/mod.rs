@@ -85,7 +85,7 @@ impl File {
 
             let path = entry.into_path();
             let file_id = file_id_from_path(&path)?;
-            let file = File::new(subpath, path, meta, file_id)?;
+            let file = File::new_to_send(subpath, path, meta, file_id)?;
             files.push(file);
         }
 
@@ -100,14 +100,14 @@ impl File {
         let files = if meta.is_dir() {
             File::walk(&path, config)?
         } else {
-            let file = File::new(FileSubPath::from_file_name(&path)?, path, meta, file_id)?;
+            let file = File::new_to_send(FileSubPath::from_file_name(&path)?, path, meta, file_id)?;
             vec![file]
         };
 
         Ok(files)
     }
 
-    pub(crate) fn new(
+    pub(crate) fn new_to_send(
         subpath: FileSubPath,
         path: PathBuf,
         meta: fs::Metadata,

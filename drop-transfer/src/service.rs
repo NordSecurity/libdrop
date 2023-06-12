@@ -265,13 +265,7 @@ impl Service {
             file_info
         );
 
-        let task = moose_try_file!(
-            self.state.moose,
-            FileXferTask::new(file, xfer, absolute_path, parent_dir.into()),
-            uuid,
-            file_info
-        );
-
+        let task = FileXferTask::new(file, xfer, absolute_path, parent_dir.into());
         channel
             .send(ServerReq::Download {
                 task: Box::new(task),
