@@ -162,16 +162,32 @@ impl Service {
             error!(self.logger, "Failed to insert transfer into storage: {err}",);
         }
 
+        let stop_job = {
+            let state = self.state.clone();
+            let xfer = xfer.clone();
+            let logger = self.logger.clone();
+
+            async move {
+                // Stop the download job
+                warn!(logger, "Aborting transfer download");
+
+                state
+                    .event_tx
+                    .send(Event::TransferFailed(xfer, crate::Error::Canceled, true))
+                    .await
+                    .expect("Failed to send TransferFailed event");
+            }
+        };
+
         let client_job = ws::client::run(self.state.clone(), xfer, self.logger.clone());
         let stop = self.stop.clone();
-        let logger = self.logger.clone();
 
         tokio::spawn(async move {
             tokio::select! {
                 biased;
 
                 _ = stop.cancelled() => {
-                    warn!(logger, "Aborting transfer download");
+                    stop_job.await;
                 },
                 _ = client_job => (),
             }
