@@ -437,7 +437,7 @@ impl handler::Downloader for Downloader {
         let tmp_location: Hidden<PathBuf> = Hidden(
             format!(
                 "{}.dropdl-{}",
-                task.location.display(),
+                task.absolute_path.display(),
                 suffix.get(..8).unwrap_or(&suffix),
             )
             .into(),
