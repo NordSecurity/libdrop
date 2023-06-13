@@ -834,12 +834,12 @@ mod tests {
                 files: TransferFiles::Incoming(vec![
                     TransferIncomingPath {
                         file_id: "id1".to_string(),
-                        relative_path: "/dir/1".to_string(),
+                        relative_path: "1".to_string(),
                         size: 1024,
                     },
                     TransferIncomingPath {
                         file_id: "id2".to_string(),
-                        relative_path: "/dir/2".to_string(),
+                        relative_path: "2".to_string(),
                         size: 2048,
                     },
                 ]),
@@ -855,15 +855,15 @@ mod tests {
                 files: TransferFiles::Outgoing(vec![
                     TransferOutgoingPath {
                         file_id: "id3".to_string(),
-                        relative_path: "/dir/3".to_string(),
                         size: 1024,
-                        base_path: "3".to_string(),
+                        base_path: "/dir".to_string(),
+                        relative_path: "3".to_string(),
                     },
                     TransferOutgoingPath {
                         file_id: "id4".to_string(),
-                        relative_path: "/dir/4".to_string(),
+                        relative_path: "4".to_string(),
+                        base_path: "/dir".to_string(),
                         size: 2048,
-                        base_path: "4".to_string(),
                     },
                 ]),
             };
