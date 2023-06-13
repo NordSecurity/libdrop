@@ -3,7 +3,7 @@ pub mod types;
 
 use std::str::FromStr;
 
-use slog::Logger;
+use slog::{debug, info, trace, warn, Logger};
 use sqlx::{sqlite::SqliteConnectOptions, SqliteConnection, SqlitePool};
 use types::{
     DbTransferType, IncomingPath, IncomingPathCancelState, IncomingPathCompletedState,
@@ -30,6 +30,12 @@ impl Storage {
         let options = SqliteConnectOptions::from_str(path)?.create_if_missing(true);
         let conn = SqlitePool::connect_with(options).await?;
 
+        slog::warn!(logger, "*** warn Storage::new ***");
+        slog::debug!(logger, "*** debug Storage::new ***");
+        slog::error!(logger, "*** error Storage::new ***");
+        slog::info!(logger, "*** info Storage::new ***");
+        slog::trace!(logger, "*** trace Storage::new ***");
+
         sqlx::migrate!("./migrations")
             .run(&mut conn.acquire().await?)
             .await
@@ -46,6 +52,13 @@ impl Storage {
             TransferFiles::Incoming(_) => TransferType::Incoming as u32,
             TransferFiles::Outgoing(_) => TransferType::Outgoing as u32,
         };
+
+        info!(
+            self._logger,
+            "Inserting transfer";
+            "transfer_id" => transfer.id.hyphenated().to_string(),
+            "transfer_type" => transfer_type_int,
+        );
 
         let mut conn = self.conn.begin().await?;
 
@@ -70,11 +83,28 @@ impl Storage {
         match &transfer.files {
             TransferFiles::Incoming(files) => {
                 for file in files {
+                    info!(
+                        self._logger,
+                        "Inserting incoming path";
+                        "transfer_id" => tid.to_string(),
+                        "relative_path" => file.relative_path.clone(),
+                        "path_hash" => file.file_id.clone(),
+                        "bytes" => file.size
+                    );
                     Self::insert_incoming_path(&mut conn, transfer.id, file).await?;
                 }
             }
             TransferFiles::Outgoing(files) => {
                 for file in files {
+                    info!(
+                        self._logger,
+                        "Inserting outgoing path";
+                        "transfer_id" => tid.to_string(),
+                        "relative_path" => file.relative_path.clone(),
+                        "path_hash" => file.file_id.clone(),
+                        "bytes" => file.size,
+                        "base_path" => file.base_path.clone()
+                    );
                     Self::insert_outgoing_path(&mut conn, transfer.id, file).await?;
                 }
             }
@@ -139,6 +169,12 @@ impl Storage {
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
 
+        info!(
+            self._logger,
+            "Saving checksum";
+            "transfer_id" => tid.to_string(),
+            "file_id" => file_id,
+        );
         let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
@@ -154,6 +190,11 @@ impl Storage {
     }
 
     pub async fn fetch_checksums(&self, transfer_id: Uuid) -> Result<Vec<FileChecksum>> {
+        info!(
+            self._logger,
+            "Fetching checksums";
+            "transfer_id" => transfer_id.hyphenated().to_string());
+
         let tid = transfer_id.hyphenated();
 
         let mut conn = self.conn.acquire().await?;
@@ -172,6 +213,11 @@ impl Storage {
     pub async fn insert_transfer_active_state(&self, transfer_id: Uuid) -> Result<()> {
         let tid = transfer_id.hyphenated();
 
+        info!(
+            self._logger,
+            "Inserting transfer active state";
+            "transfer_id" => tid.to_string());
+
         let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
@@ -187,6 +233,12 @@ impl Storage {
 
     pub async fn insert_transfer_failed_state(&self, transfer_id: Uuid, error: u32) -> Result<()> {
         let tid = transfer_id.hyphenated();
+
+        info!(
+            self._logger,
+            "Inserting transfer failed state";
+            "transfer_id" => tid.to_string(),
+            "error" => error);
 
         let mut conn = self.conn.acquire().await?;
 
@@ -208,6 +260,11 @@ impl Storage {
         by_peer: bool,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
+        info!(
+            self._logger,
+            "Inserting transfer cancel state";
+            "transfer_id" => tid.to_string(),
+            "by_peer" => by_peer);
 
         let mut conn = self.conn.acquire().await?;
 
@@ -229,6 +286,11 @@ impl Storage {
         file_id: &str,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
+        info!(
+            self._logger,
+            "Inserting outgoing path pending state";
+            "transfer_id" => tid.to_string(),
+            "file_id" => file_id);
 
         let mut conn = self.conn.acquire().await?;
 
@@ -253,6 +315,11 @@ impl Storage {
         file_id: &str,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
+        info!(
+            self._logger,
+            "Inserting incoming path pending state";
+            "transfer_id" => tid.to_string(),
+            "file_id" => file_id);
 
         let mut conn = self.conn.acquire().await?;
 
@@ -275,6 +342,11 @@ impl Storage {
         path_id: &str,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
+        info!(
+            self._logger,
+            "Inserting outgoing path started state";
+            "transfer_id" => tid.to_string(),
+            "path_id" => path_id);
 
         let mut conn = self.conn.acquire().await?;
 
@@ -299,6 +371,12 @@ impl Storage {
         base_dir: &str,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
+        info!(
+            self._logger,
+            "Inserting incoming path started state";
+            "transfer_id" => tid.to_string(),
+            "path_id" => path_id,
+            "base_dir" => base_dir);
 
         let mut conn = self.conn.acquire().await?;
 
@@ -325,6 +403,13 @@ impl Storage {
         bytes_sent: i64,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
+        info!(
+            self._logger,
+            "Inserting outgoing path cancel state";
+            "transfer_id" => tid.to_string(),
+            "path_id" => path_id,
+            "by_peer" => by_peer,
+            "bytes_sent" => bytes_sent);
 
         let mut conn = self.conn.acquire().await?;
 
@@ -351,6 +436,13 @@ impl Storage {
         bytes_received: i64,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
+        info!(
+            self._logger,
+            "Inserting incoming path cancel state";
+            "transfer_id" => tid.to_string(),
+            "path_id" => path_id,
+            "by_peer" => by_peer,
+            "bytes_received" => bytes_received);
 
         let mut conn = self.conn.acquire().await?;
 
@@ -377,6 +469,13 @@ impl Storage {
         bytes_received: i64,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
+        info!(
+            self._logger,
+            "Inserting incoming path failed state";
+            "transfer_id" => tid.to_string(),
+            "path_id" => path_id,
+            "error" => error,
+            "bytes_received" => bytes_received);
 
         let mut conn = self.conn.acquire().await?;
 
@@ -404,6 +503,13 @@ impl Storage {
         bytes_sent: i64,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
+        info!(
+            self._logger,
+            "Inserting outgoing path failed state";
+            "transfer_id" => tid.to_string(),
+            "path_id" => path_id,
+            "error" => error,
+            "bytes_sent" => bytes_sent);
 
         let mut conn = self.conn.acquire().await?;
 
@@ -428,6 +534,11 @@ impl Storage {
         path_id: &str,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
+        info!(
+            self._logger,
+            "Inserting outgoing path completed state";
+            "transfer_id" => tid.to_string(),
+            "path_id" => path_id);
 
         let mut conn = self.conn.acquire().await?;
 
@@ -451,6 +562,12 @@ impl Storage {
         final_path: &str,
     ) -> Result<()> {
         let tid = transfer_id.hyphenated();
+        info!(
+            self._logger,
+            "Inserting incoming path completed state";
+            "transfer_id" => tid.to_string(),
+            "path_id" => path_id,
+            "final_path" => final_path);
 
         let mut conn = self.conn.acquire().await?;
 
@@ -470,6 +587,11 @@ impl Storage {
 
     pub async fn purge_transfers_until(&self, until_timestamp: i64) -> Result<()> {
         let mut conn = self.conn.acquire().await?;
+
+        info!(
+            self._logger,
+            "Purging transfers until timestamp";
+            "until_timestamp" => until_timestamp);
 
         sqlx::query!(
             "DELETE FROM transfers WHERE created_at < datetime(?1, 'unixepoch')",
@@ -491,6 +613,10 @@ impl Storage {
     async fn purge_transfer(&self, transfer_id: String) -> Result<()> {
         let mut conn = self.conn.acquire().await?;
 
+        info!(
+            self._logger,
+            "Purging transfer";
+            "transfer_id" => transfer_id.clone());
         sqlx::query!("DELETE FROM transfers WHERE id = $1", transfer_id)
             .execute(&mut *conn)
             .await
@@ -499,6 +625,11 @@ impl Storage {
     }
 
     pub async fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<()> {
+        info!(
+            self._logger,
+            "Purging transfers";
+            "transfer_ids" => format!("{:?}", transfer_ids));
+
         for id in transfer_ids {
             self.purge_transfer(id).await?;
         }
@@ -508,6 +639,11 @@ impl Storage {
 
     pub async fn transfers_since(&self, since_timestamp: i64) -> Result<Vec<Transfer>> {
         let mut conn = self.conn.acquire().await?;
+
+        info!(
+            self._logger,
+            "Fetching transfers since timestamp";
+            "since_timestamp" => since_timestamp);
 
         let mut transfers = sqlx::query!(
             r#"
@@ -602,6 +738,11 @@ impl Storage {
 
     async fn get_outgoing_paths(&self, transfer_id: Uuid) -> Result<Vec<OutgoingPath>> {
         let tid = transfer_id.hyphenated();
+        info!(
+            self._logger,
+            "Fetching outgoing paths for transfer";
+            "transfer_id" => tid.to_string()
+        );
 
         let mut conn = self.conn.acquire().await?;
 
@@ -710,6 +851,11 @@ impl Storage {
 
     async fn get_incoming_paths(&self, transfer_id: Uuid) -> Result<Vec<IncomingPath>> {
         let tid = transfer_id.hyphenated();
+
+        info!(
+            self._logger,
+            "Fetching incoming paths for transfer";
+            "transfer_id" => tid.to_string());
 
         let mut conn = self.conn.acquire().await?;
 
