@@ -1,41 +1,46 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT * FROM outgoing_paths WHERE transfer_id = ?1",
+  "query": "SELECT id as \"path_id!\", * FROM outgoing_paths WHERE transfer_id = ?1",
   "describe": {
     "columns": [
       {
-        "name": "id",
+        "name": "path_id!",
         "ordinal": 0,
         "type_info": "Int64"
       },
       {
-        "name": "transfer_id",
+        "name": "id",
         "ordinal": 1,
-        "type_info": "Text"
+        "type_info": "Int64"
       },
       {
-        "name": "relative_path",
+        "name": "transfer_id",
         "ordinal": 2,
         "type_info": "Text"
       },
       {
-        "name": "base_path",
+        "name": "relative_path",
         "ordinal": 3,
         "type_info": "Text"
       },
       {
-        "name": "path_hash",
+        "name": "base_path",
         "ordinal": 4,
         "type_info": "Text"
       },
       {
-        "name": "bytes",
+        "name": "path_hash",
         "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "bytes",
+        "ordinal": 6,
         "type_info": "Int64"
       },
       {
         "name": "created_at",
-        "ordinal": 6,
+        "ordinal": 7,
         "type_info": "Datetime"
       }
     ],
@@ -43,7 +48,8 @@
       "Right": 1
     },
     "nullable": [
-      false,
+      true,
+      true,
       false,
       false,
       false,
@@ -52,5 +58,5 @@
       false
     ]
   },
-  "hash": "1e44a51b263b0f53cb71cd1a2f5c28abd27f83565f65515d4e24116af8943866"
+  "hash": "ea58e8aa666f9c57790afea062a32f7d30781bc59934f4de8c9c1a7d809a1bed"
 }
