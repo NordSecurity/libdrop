@@ -304,7 +304,7 @@ async fn handle_client(
     state: &Arc<State>,
     logger: &slog::Logger,
     mut socket: WebSocket,
-    mut hander: impl handler::HandlerInit,
+    mut handler: impl handler::HandlerInit,
     xfer: crate::Transfer,
 ) {
     let _guard = TransferGuard::new(state.clone(), xfer.id());
@@ -319,7 +319,7 @@ async fn handle_client(
         {
             error!(logger, "Failed to insert a new trasfer: {}", err);
 
-            let _ = hander
+            let _ = handler
                 .on_error(
                     &mut socket,
                     anyhow::anyhow!("Failed to init transfer: {err}"),
@@ -389,10 +389,10 @@ async fn handle_client(
 
     drop(req_send); // We need to drop in for transfer cancelation to work
 
-    let mut ping = hander.pinger();
+    let mut ping = handler.pinger();
 
     let (send_tx, mut send_rx) = mpsc::channel(2);
-    let mut handler = if let Some(handler) = hander.upgrade(&mut socket, send_tx, xfer).await {
+    let mut handler = if let Some(handler) = handler.upgrade(&mut socket, send_tx, xfer).await {
         handler
     } else {
         let _ = socket.close().await;

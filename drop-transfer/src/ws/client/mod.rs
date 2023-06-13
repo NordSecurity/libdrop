@@ -53,13 +53,8 @@ struct RunContext<'a> {
 }
 
 pub(crate) async fn run(state: Arc<State>, xfer: crate::Transfer, logger: Logger) {
-    let cf = connect_to_peer::<true>(&state, &xfer, &logger).await;
-    if cf.is_break() {
-        return;
-    }
-
     loop {
-        let cf = connect_to_peer::<false>(&state, &xfer, &logger).await;
+        let cf = connect_to_peer(&state, &xfer, &logger).await;
         if cf.is_break() {
             return;
         }
@@ -142,7 +137,7 @@ pub(crate) async fn resume(state: &Arc<State>, stop: &CancellationToken, logger:
     }
 }
 
-async fn connect_to_peer<const DB_INSERT: bool>(
+async fn connect_to_peer(
     state: &Arc<State>,
     xfer: &crate::Transfer,
     logger: &Logger,
@@ -163,12 +158,6 @@ async fn connect_to_peer<const DB_INSERT: bool>(
     };
 
     info!(logger, "Client connected, using version: {ver}");
-
-    if DB_INSERT {
-        if let Err(err) = state.storage.insert_transfer(&xfer.storage_info()).await {
-            error!(logger, "Failed to insert transfer into storage: {err}");
-        }
-    }
 
     let ctx = RunContext {
         logger,
