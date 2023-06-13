@@ -4,6 +4,4 @@ pub enum Error {
     InternalError(String),
     #[error("DB Error: {0}")]
     DBError(#[from] sqlx::Error),
-    #[error("No rows found")]
-    RowNotFound,
 }

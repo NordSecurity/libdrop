@@ -100,6 +100,9 @@ pub enum Event {
         #[serde(flatten)]
         data: FinishEvent,
     },
+    DbLost {
+        context: String,
+    },
 }
 
 #[derive(Deserialize, Clone, Debug)]
