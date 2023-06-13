@@ -16,7 +16,7 @@ use types::{
 use uuid::{fmt::Hyphenated, Uuid};
 
 use crate::error::Error;
-pub use crate::types::{FileChecksum, TransferInfo, TransferType};
+pub use crate::types::{Event, FileChecksum, TransferInfo, TransferType};
 
 type Result<T> = std::result::Result<T, Error>;
 // SQLite storage wrapper
@@ -28,12 +28,12 @@ pub struct Storage {
 impl Storage {
     pub async fn new(logger: Logger, path: &str) -> Result<Self> {
         let options = SqliteConnectOptions::from_str(path)?.create_if_missing(true);
-        let conn = SqlitePool::connect_with(options.clone()).await?;
+        let conn = SqlitePool::connect_with(options).await?;
 
         sqlx::migrate!("./migrations")
             .run(&mut conn.acquire().await?)
             .await
-            .map_err(|e| error::Error::InternalError(e.to_string()))?;
+            .map_err(|e| error::Error::InternalError(format!("Failed to run migrations: {e}")))?;
 
         Ok(Self {
             _logger: logger,
