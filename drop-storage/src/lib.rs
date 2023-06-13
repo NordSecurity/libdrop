@@ -605,25 +605,28 @@ impl Storage {
 
         let mut conn = self.conn.acquire().await?;
 
-        let mut paths = sqlx::query!("SELECT * FROM outgoing_paths WHERE transfer_id = ?1", tid)
-            .fetch_all(&mut *conn)
-            .await?
-            .into_iter()
-            .map(|p| OutgoingPath {
-                id: p.id,
-                transfer_id,
-                base_path: p.base_path,
-                relative_path: p.relative_path,
-                file_id: p.path_hash,
-                bytes: p.bytes,
-                created_at: p.created_at.timestamp_millis(),
-                pending_states: vec![],
-                started_states: vec![],
-                cancel_states: vec![],
-                failed_states: vec![],
-                completed_states: vec![],
-            })
-            .collect::<Vec<_>>();
+        let mut paths = sqlx::query!(
+            r#"SELECT id as "path_id!", * FROM outgoing_paths WHERE transfer_id = ?1"#,
+            tid
+        )
+        .fetch_all(&mut *conn)
+        .await?
+        .into_iter()
+        .map(|p| OutgoingPath {
+            id: p.path_id,
+            transfer_id,
+            base_path: p.base_path,
+            relative_path: p.relative_path,
+            file_id: p.path_hash,
+            bytes: p.bytes,
+            created_at: p.created_at.timestamp_millis(),
+            pending_states: vec![],
+            started_states: vec![],
+            cancel_states: vec![],
+            failed_states: vec![],
+            completed_states: vec![],
+        })
+        .collect::<Vec<_>>();
 
         for path in &mut paths {
             path.pending_states = sqlx::query!(
