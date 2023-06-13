@@ -94,6 +94,7 @@ impl Storage {
             r#"
             INSERT INTO incoming_paths (transfer_id, relative_path, path_hash, bytes)
             VALUES (?1, ?2, ?3, ?4)
+            ON CONFLICT DO NOTHING
             "#,
             tid,
             path.relative_path,
@@ -232,8 +233,10 @@ impl Storage {
         let mut conn = self.conn.acquire().await?;
 
         sqlx::query!(
-            "INSERT INTO outgoing_path_pending_states (path_id) VALUES ((SELECT id FROM \
-             outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
+            r#"
+            INSERT INTO outgoing_path_pending_states (path_id)
+            SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2
+            "#,
             tid,
             file_id
         )
@@ -707,24 +710,27 @@ impl Storage {
 
         let mut conn = self.conn.acquire().await?;
 
-        let mut paths = sqlx::query!("SELECT * FROM incoming_paths WHERE transfer_id = ?1", tid)
-            .fetch_all(&mut *conn)
-            .await?
-            .into_iter()
-            .map(|p| IncomingPath {
-                id: p.id,
-                transfer_id,
-                relative_path: p.relative_path,
-                file_id: p.path_hash,
-                bytes: p.bytes,
-                created_at: p.created_at.timestamp_millis(),
-                pending_states: vec![],
-                started_states: vec![],
-                cancel_states: vec![],
-                failed_states: vec![],
-                completed_states: vec![],
-            })
-            .collect::<Vec<_>>();
+        let mut paths = sqlx::query!(
+            r#"SELECT id as "path_id!", * FROM incoming_paths WHERE transfer_id = ?1"#,
+            tid
+        )
+        .fetch_all(&mut *conn)
+        .await?
+        .into_iter()
+        .map(|p| IncomingPath {
+            id: p.path_id,
+            transfer_id,
+            relative_path: p.relative_path,
+            file_id: p.path_hash,
+            bytes: p.bytes,
+            created_at: p.created_at.timestamp_millis(),
+            pending_states: vec![],
+            started_states: vec![],
+            cancel_states: vec![],
+            failed_states: vec![],
+            completed_states: vec![],
+        })
+        .collect::<Vec<_>>();
 
         for path in &mut paths {
             path.pending_states = sqlx::query!(
