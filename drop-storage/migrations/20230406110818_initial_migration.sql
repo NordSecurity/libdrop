@@ -60,8 +60,10 @@ CREATE TABLE IF NOT EXISTS incoming_paths (
   bytes INT NOT NULL, 
   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
   checksum BLOB DEFAULT NULL,
+
   FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE CASCADE ON UPDATE CASCADE
   CHECK(bytes >= 0)
+  UNIQUE(transfer_id, path_hash)
 );
 
 -- states for outgoing paths(uploads)
