@@ -42,41 +42,41 @@ scenarios = [
                         [
                             """{
                         "peer_id": "172.20.0.15",
+                        "created_at": "*",
                         "active_states": [],
                         "cancel_states": [
                             {
-                                "by_peer": 1
+                                "by_peer": true,
+                                "created_at": "*"
                             }
                         ],
                         "failed_states": [],
-                        "transfer_type": {
-                            "Outgoing": [
-                                {
-                                    "id": 1,
-                                    "relative_path": "testfile-big",
-                                    "base_path": "/tmp",
-                                    "bytes": 10485760,
-                                    "pending_states": [
-                                        {
-                                            "path_id": 1
-                                        }
-                                    ],
-                                    "started_states": [
-                                        {
-                                            "path_id": 1,
-                                            "bytes_sent": 0
-                                        }
-                                    ],
-                                    "cancel_states": [],
-                                    "failed_states": [],
-                                    "completed_states": [
-                                        {
-                                            "path_id": 1
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-big",
+                                "base_path": "/tmp",
+                                "bytes": 10485760,
+                                "pending_states": [
+                                    {
+                                        "created_at": "*"
+                                    }
+                                ],
+                                "started_states": [
+                                    {
+                                        "bytes_sent": 0,
+                                        "created_at": "*"
+                                    }
+                                ],
+                                "cancel_states": [],
+                                "failed_states": [],
+                                "completed_states": [
+                                    {
+                                        "created_at": "*"
+                                    }
+                                ]
+                            }
+                        ]
                     }"""
                         ]
                     ),
@@ -123,41 +123,41 @@ scenarios = [
                         [
                             """{
                         "peer_id": "172.20.0.5",
+                        "created_at": "*",
                         "active_states": [],
                         "cancel_states": [
                             {
-                                "by_peer": 0
+                                "by_peer": false,
+                                "created_at": "*"
                             }
                         ],
                         "failed_states": [],
-                        "transfer_type": {
-                            "Incoming": [
-                                {
-                                    "id": 1,
-                                    "relative_path": "testfile-big",
-                                    "bytes": 10485760,
-                                    "pending_states": [
-                                        {
-                                            "path_id": 1
-                                        }
-                                    ],
-                                    "started_states": [
-                                        {
-                                            "path_id": 1,
-                                            "bytes_received": 0,
-                                            "base_dir": "/tmp/received"
-                                        }
-                                    ],
-                                    "cancel_states": [],
-                                    "failed_states": [],
-                                    "completed_states": [
-                                        {
-                                            "path_id": 1
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
+                        "type": "incoming",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-big",
+                                "bytes": 10485760,
+                                "pending_states": [
+                                    {
+                                        "created_at": "*"
+                                    }
+                                ],
+                                "started_states": [
+                                    {
+                                        "created_at": "*",
+                                        "bytes_received": 0,
+                                        "base_dir": "/tmp/received"
+                                    }
+                                ],
+                                "cancel_states": [],
+                                "failed_states": [],
+                                "completed_states": [
+                                    {
+                                        "created_at": "*"
+                                    }
+                                ]
+                            }
+                        ]
                     }"""
                         ]
                     ),
@@ -220,79 +220,79 @@ scenarios = [
                         [
                             """{
                         "peer_id": "172.20.0.15",
+                        "created_at": "*",
                         "active_states": [],
                         "cancel_states": [
                             {
-                                "by_peer": 1
+                                "by_peer": true,
+                                "created_at": "*"
                             }
                         ],
                         "failed_states": [],
-                        "transfer_type": {
-                            "Outgoing": [
-                                {
-                                    "id": 1,
-                                    "relative_path": "testfile-small",
-                                    "base_path": "/tmp",
-                                    "bytes": 1048576,
-                                    "pending_states": [
-                                        {
-                                            "path_id": 1
-                                        }
-                                    ],
-                                    "started_states": [
-                                        {
-                                            "path_id": 1,
-                                            "bytes_sent": 0
-                                        }
-                                    ],
-                                    "cancel_states": [],
-                                    "failed_states": [],
-                                    "completed_states": [
-                                        {
-                                            "path_id": 1
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "base_path": "/tmp",
+                                "bytes": 1048576,
+                                "pending_states": [
+                                    {
+                                        "created_at": "*"
+                                    }
+                                ],
+                                "started_states": [
+                                    {
+                                        "created_at": "*",
+                                        "bytes_sent": 0
+                                    }
+                                ],
+                                "cancel_states": [],
+                                "failed_states": [],
+                                "completed_states": [
+                                    {
+                                        "created_at": "*"
+                                    }
+                                ]
+                            }
+                        ]
                     }""",
                             """{
                         "peer_id": "172.20.0.15",
+                        "created_at": "*",
                         "active_states": [],
                         "cancel_states": [
                             {
-                                "by_peer": 1
+                                "created_at": "*",
+                                "by_peer": true
                             }
                         ],
                         "failed_states": [],
-                        "transfer_type": {
-                            "Outgoing": [
-                                {
-                                    "id": 2,
-                                    "relative_path": "testfile-big",
-                                    "base_path": "/tmp",
-                                    "bytes": 10485760,
-                                    "pending_states": [
-                                        {
-                                            "path_id": 2
-                                        }
-                                    ],
-                                    "started_states": [
-                                        {
-                                            "path_id": 2,
-                                            "bytes_sent": 0
-                                        }
-                                    ],
-                                    "cancel_states": [],
-                                    "failed_states": [],
-                                    "completed_states": [
-                                        {
-                                            "path_id": 2
-                                        }
-                                    ]
-                                }
-                            ]
-                        } 
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-big",
+                                "base_path": "/tmp",
+                                "bytes": 10485760,
+                                "pending_states": [
+                                    {
+                                        "created_at": "*"
+                                    }
+                                ],
+                                "started_states": [
+                                    {
+                                        "created_at": "*",
+                                        "bytes_sent": 0
+                                    }
+                                ],
+                                "cancel_states": [],
+                                "failed_states": [],
+                                "completed_states": [
+                                    {
+                                        "created_at": "*"
+                                    }
+                                ]
+                            }
+                        ]
                     }""",
                         ]
                     ),
@@ -366,78 +366,78 @@ scenarios = [
                         [
                             """{
                         "peer_id": "172.20.0.5",
+                        "created_at": "*",
                         "active_states": [],
                         "cancel_states": [
                             {
-                                "by_peer": 0
+                                "created_at": "*",
+                                "by_peer": false
                             }
                         ],
                         "failed_states": [],
-                        "transfer_type": {
-                            "Incoming": [
-                                {
-                                    "id": 1,
-                                    "relative_path": "testfile-small",
-                                    "bytes": 1048576,
-                                    "pending_states": [
-                                        {
-                                            "path_id": 1
-                                        }
-                                    ],
-                                    "started_states": [
-                                        {
-                                            "path_id": 1,
-                                            "bytes_received": 0,
-                                            "base_dir": "/tmp/received"
-                                        }
-                                    ],
-                                    "cancel_states": [],
-                                    "failed_states": [],
-                                    "completed_states": [
-                                        {
-                                            "path_id": 1
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
+                        "type": "incoming",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "bytes": 1048576,
+                                "pending_states": [
+                                    {   
+                                        "created_at": "*"
+                                    }
+                                ],
+                                "started_states": [
+                                    {
+                                        "created_at": "*",
+                                        "bytes_received": 0,
+                                        "base_dir": "/tmp/received"
+                                    }
+                                ],
+                                "cancel_states": [],
+                                "failed_states": [],
+                                "completed_states": [
+                                    {
+                                        "created_at": "*"
+                                    }
+                                ]
+                            }
+                        ]
                     }""",
                             """{
                         "peer_id": "172.20.0.5",
+                        "created_at": "*",
                         "active_states": [],
                         "cancel_states": [
                             {
-                                "by_peer": 0
+                                "created_at": "*",
+                                "by_peer": false
                             }
                         ],
                         "failed_states": [],
-                        "transfer_type": {
-                            "Incoming": [
-                                {
-                                    "id": 2,
-                                    "relative_path": "testfile-big",
-                                    "bytes": 10485760,
-                                    "pending_states": [
-                                        {
-                                            "path_id": 2
-                                        }
-                                    ],
-                                    "started_states": [
-                                        {
-                                            "path_id": 2,
-                                            "bytes_received": 0
-                                        }
-                                    ],
-                                    "cancel_states": [],
-                                    "failed_states": [],
-                                    "completed_states": [
-                                        {
-                                            "path_id": 2
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
+                        "type": "incoming",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-big",
+                                "bytes": 10485760,
+                                "pending_states": [
+                                    {
+                                        "created_at": "*"
+                                    }
+                                ],
+                                "started_states": [
+                                    {
+                                        "created_at": "*",
+                                        "bytes_received": 0
+                                    }
+                                ],
+                                "cancel_states": [],
+                                "failed_states": [],
+                                "completed_states": [
+                                    {
+                                        "created_at": "*"
+                                    }
+                                ]
+                            }
+                        ]
                     }""",
                         ]
                     ),
@@ -3188,42 +3188,42 @@ scenarios = [
                         [
                             """{
                         "peer_id": "172.20.0.15",
+                        "created_at": "*",
                         "active_states": [],
                         "cancel_states": [
                             {
-                                "by_peer": 1
+                                "created_at": "*",
+                                "by_peer": true
                             }
                         ],
                         "failed_states": [],
-                        "transfer_type": {
-                            "Outgoing": [
-                                {
-                                    "id": 1,
-                                    "relative_path": "testfile-big",
-                                    "base_path": "/tmp",
-                                    "bytes": 10485760,
-                                    "pending_states": [
-                                        {
-                                            "path_id": 1
-                                        }
-                                    ],
-                                    "started_states": [
-                                        {
-                                            "path_id": 1,
-                                            "bytes_sent": 0
-                                        }
-                                    ],
-                                    "cancel_states": [],
-                                    "failed_states": [
-                                        {
-                                            "path_id": 1,
-                                            "status_code": 28
-                                        }
-                                    ],
-                                    "completed_states": []
-                                }
-                            ]
-                        }
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-big",
+                                "base_path": "/tmp",
+                                "bytes": 10485760,
+                                "pending_states": [
+                                    {
+                                        "created_at": "*"
+                                    }
+                                ],
+                                "started_states": [
+                                    {
+                                        "created_at": "*",
+                                        "bytes_sent": 0
+                                    }
+                                ],
+                                "cancel_states": [],
+                                "failed_states": [
+                                    {
+                                        "created_at": "*",
+                                        "status_code": 28
+                                    }
+                                ],
+                                "completed_states": []
+                            }
+                        ]
                     }"""
                         ]
                     ),
@@ -3264,42 +3264,42 @@ scenarios = [
                         [
                             """{
                         "peer_id": "172.20.0.5",
+                        "created_at": "*",
                         "active_states": [],
                         "cancel_states": [
                             {
-                                "by_peer": 0
+                                "created_at": "*",
+                                "by_peer": false
                             }
                         ],
                         "failed_states": [],
-                        "transfer_type": {
-                            "Incoming": [
-                                {
-                                    "id": 1,
-                                    "relative_path": "testfile-big",
-                                    "bytes": 10485760,
-                                    "pending_states": [
-                                        {
-                                            "path_id": 1
-                                        }
-                                    ],
-                                    "started_states": [
-                                        {
-                                            "path_id": 1,
-                                            "bytes_received": 0,
-                                            "base_dir": "/tmp/received"
-                                        }
-                                    ],
-                                    "cancel_states": [],
-                                    "failed_states": [
-                                        {
-                                            "path_id": 1,
-                                            "status_code": 8
-                                        }
-                                    ],
-                                    "completed_states": []
-                                }
-                            ]
-                        }
+                        "type": "incoming",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-big",
+                                "bytes": 10485760,
+                                "pending_states": [
+                                    {
+                                        "created_at": "*"
+                                    }
+                                ],
+                                "started_states": [
+                                    {
+                                        "created_at": "*",
+                                        "bytes_received": 0,
+                                        "base_dir": "/tmp/received"
+                                    }
+                                ],
+                                "cancel_states": [],
+                                "failed_states": [
+                                    {
+                                        "created_at": "*",
+                                        "status_code": 8
+                                    }
+                                ],
+                                "completed_states": []
+                            }
+                        ]
                     }"""
                         ]
                     ),

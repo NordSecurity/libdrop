@@ -97,8 +97,11 @@ pub enum Event {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(tag = "type", content = "paths")]
 pub enum DbTransferType {
+    #[serde(rename = "incoming")]
     Incoming(Vec<IncomingPath>),
+    #[serde(rename = "outgoing")]
     Outgoing(Vec<OutgoingPath>),
 }
 
@@ -110,8 +113,10 @@ pub struct Peer {
 
 #[derive(Debug, Serialize)]
 pub struct Transfer {
+    #[serde(skip_serializing)]
     pub id: TransferId,
     pub peer_id: String,
+    #[serde(flatten)]
     pub transfer_type: DbTransferType,
     pub created_at: i64,
     pub active_states: Vec<TransferActiveState>,
@@ -121,19 +126,22 @@ pub struct Transfer {
 
 #[derive(Debug, Serialize)]
 pub struct TransferActiveState {
+    #[serde(skip_serializing)]
     pub transfer_id: TransferId,
     pub created_at: i64,
 }
 
 #[derive(Debug, Serialize)]
 pub struct TransferCancelState {
+    #[serde(skip_serializing)]
     pub transfer_id: TransferId,
-    pub by_peer: i64,
+    pub by_peer: bool,
     pub created_at: i64,
 }
 
 #[derive(Debug, Serialize)]
 pub struct TransferFailedState {
+    #[serde(skip_serializing)]
     pub transfer_id: TransferId,
     pub status_code: i64,
     pub created_at: i64,
@@ -141,6 +149,7 @@ pub struct TransferFailedState {
 
 #[derive(Debug, Serialize)]
 pub struct OutgoingPath {
+    #[serde(skip_serializing)]
     pub id: i64,
     pub transfer_id: TransferId,
     pub base_path: String,
@@ -157,12 +166,14 @@ pub struct OutgoingPath {
 
 #[derive(Debug, Serialize)]
 pub struct OutgoingPathPendingState {
+    #[serde(skip_serializing)]
     pub path_id: i64,
     pub created_at: i64,
 }
 
 #[derive(Debug, Serialize)]
 pub struct OutgoingPathStartedState {
+    #[serde(skip_serializing)]
     pub path_id: i64,
     pub bytes_sent: i64,
     pub created_at: i64,
@@ -170,14 +181,16 @@ pub struct OutgoingPathStartedState {
 
 #[derive(Debug, Serialize)]
 pub struct OutgoingPathCancelState {
+    #[serde(skip_serializing)]
     pub path_id: i64,
-    pub by_peer: i64,
+    pub by_peer: bool,
     pub bytes_sent: i64,
     pub created_at: i64,
 }
 
 #[derive(Debug, Serialize)]
 pub struct OutgoingPathFailedState {
+    #[serde(skip_serializing)]
     pub path_id: i64,
     pub status_code: i64,
     pub bytes_sent: i64,
@@ -186,12 +199,14 @@ pub struct OutgoingPathFailedState {
 
 #[derive(Debug, Serialize)]
 pub struct OutgoingPathCompletedState {
+    #[serde(skip_serializing)]
     pub path_id: i64,
     pub created_at: i64,
 }
 
 #[derive(Debug, Serialize)]
 pub struct IncomingPath {
+    #[serde(skip_serializing)]
     pub id: i64,
     pub transfer_id: TransferId,
     pub relative_path: String,
@@ -207,12 +222,14 @@ pub struct IncomingPath {
 
 #[derive(Debug, Serialize)]
 pub struct IncomingPathPendingState {
+    #[serde(skip_serializing)]
     pub path_id: i64,
     pub created_at: i64,
 }
 
 #[derive(Debug, Serialize)]
 pub struct IncomingPathStartedState {
+    #[serde(skip_serializing)]
     pub path_id: i64,
     pub base_dir: String,
     pub bytes_received: i64,
@@ -221,14 +238,16 @@ pub struct IncomingPathStartedState {
 
 #[derive(Debug, Serialize)]
 pub struct IncomingPathCancelState {
+    #[serde(skip_serializing)]
     pub path_id: i64,
-    pub by_peer: i64,
+    pub by_peer: bool,
     pub bytes_received: i64,
     pub created_at: i64,
 }
 
 #[derive(Debug, Serialize)]
 pub struct IncomingPathFailedState {
+    #[serde(skip_serializing)]
     pub path_id: i64,
     pub status_code: i64,
     pub bytes_received: i64,
@@ -237,6 +256,7 @@ pub struct IncomingPathFailedState {
 
 #[derive(Debug, Serialize)]
 pub struct IncomingPathCompletedState {
+    #[serde(skip_serializing)]
     pub path_id: i64,
     pub final_path: String,
     pub created_at: i64,

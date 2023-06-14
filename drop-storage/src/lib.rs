@@ -576,7 +576,7 @@ impl Storage {
             .iter()
             .map(|s| TransferCancelState {
                 transfer_id: transfer.id,
-                by_peer: s.by_peer,
+                by_peer: s.by_peer != 0,
                 created_at: s.created_at.timestamp_millis(),
             })
             .collect();
@@ -668,7 +668,7 @@ impl Storage {
             .iter()
             .map(|s| OutgoingPathCancelState {
                 path_id: s.path_id,
-                by_peer: s.by_peer,
+                by_peer: s.by_peer != 0,
                 bytes_sent: s.bytes_sent,
                 created_at: s.created_at.timestamp_millis(),
             })
@@ -776,7 +776,7 @@ impl Storage {
             .iter()
             .map(|s| IncomingPathCancelState {
                 path_id: s.path_id,
-                by_peer: s.by_peer,
+                by_peer: s.by_peer != 0,
                 bytes_received: s.bytes_received,
                 created_at: s.created_at.timestamp_millis(),
             })
