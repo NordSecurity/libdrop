@@ -368,7 +368,7 @@ class Drop:
             err_type = LibResult(err).name
             raise Exception(f"purge_transfers has failed with code: {err}({err_type})")
 
-    def start(self, addr: str, runner: str):
+    def start(self, addr: str, runner: str, dbpath: str):
         cfg = {
             "dir_depth_limit": 5,
             "transfer_file_limit": 1000,
@@ -377,7 +377,7 @@ class Drop:
             "transfer_idle_lifetime_ms": 10000,
             "moose_event_path": "/tmp/moose-events",
             "moose_prod": False,
-            "storage_path": ":memory:",
+            "storage_path": dbpath,
         }
 
         err = self._lib.norddrop_start(
@@ -517,6 +517,11 @@ def new_event(event_str: str) -> event.Event:
             transfer_slot,
             {event.File(f["id"], f["path"], f["size"]) for f in event_data["files"]},
         )
+
+    elif event_type == "RuntimeError":
+        status = event_data["status"]
+
+        return event.RuntimeError(status)
 
     raise ValueError(f"Unhandled event received: {event_type}")
 
