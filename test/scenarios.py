@@ -42,36 +42,37 @@ scenarios = [
                         [
                             """{
                         "peer_id": "172.20.0.15",
+                        "created_at": "*",
                         "active_states": [],
                         "cancel_states": [
                             {
-                                "by_peer": 1
+                                "by_peer": 1,
+                                "created_at": "*"
                             }
                         ],
                         "failed_states": [],
                         "transfer_type": {
                             "Outgoing": [
                                 {
-                                    "id": 1,
                                     "relative_path": "testfile-big",
                                     "base_path": "/tmp",
                                     "bytes": 10485760,
                                     "pending_states": [
                                         {
-                                            "path_id": 1
+                                            "created_at": "*"
                                         }
                                     ],
                                     "started_states": [
                                         {
-                                            "path_id": 1,
-                                            "bytes_sent": 0
+                                            "bytes_sent": 0,
+                                            "created_at": "*"
                                         }
                                     ],
                                     "cancel_states": [],
                                     "failed_states": [],
                                     "completed_states": [
                                         {
-                                            "path_id": 1
+                                            "created_at": "*"
                                         }
                                     ]
                                 }
@@ -123,27 +124,28 @@ scenarios = [
                         [
                             """{
                         "peer_id": "172.20.0.5",
+                        "created_at": "*",
                         "active_states": [],
                         "cancel_states": [
                             {
-                                "by_peer": 0
+                                "by_peer": 0,
+                                "created_at": "*"
                             }
                         ],
                         "failed_states": [],
                         "transfer_type": {
                             "Incoming": [
                                 {
-                                    "id": 1,
                                     "relative_path": "testfile-big",
                                     "bytes": 10485760,
                                     "pending_states": [
                                         {
-                                            "path_id": 1
+                                            "created_at": "*"
                                         }
                                     ],
                                     "started_states": [
                                         {
-                                            "path_id": 1,
+                                            "created_at": "*",
                                             "bytes_received": 0,
                                             "base_dir": "/tmp/received"
                                         }
@@ -152,7 +154,7 @@ scenarios = [
                                     "failed_states": [],
                                     "completed_states": [
                                         {
-                                            "path_id": 1
+                                            "created_at": "*"
                                         }
                                     ]
                                 }
@@ -220,28 +222,29 @@ scenarios = [
                         [
                             """{
                         "peer_id": "172.20.0.15",
+                        "created_at": "*",
                         "active_states": [],
                         "cancel_states": [
                             {
-                                "by_peer": 1
+                                "by_peer": 1,
+                                "created_at": "*"
                             }
                         ],
                         "failed_states": [],
                         "transfer_type": {
                             "Outgoing": [
                                 {
-                                    "id": 1,
                                     "relative_path": "testfile-small",
                                     "base_path": "/tmp",
                                     "bytes": 1048576,
                                     "pending_states": [
                                         {
-                                            "path_id": 1
+                                            "created_at": "*"
                                         }
                                     ],
                                     "started_states": [
                                         {
-                                            "path_id": 1,
+                                            "created_at": "*",
                                             "bytes_sent": 0
                                         }
                                     ],
@@ -249,7 +252,7 @@ scenarios = [
                                     "failed_states": [],
                                     "completed_states": [
                                         {
-                                            "path_id": 1
+                                            "created_at": "*"
                                         }
                                     ]
                                 }
@@ -258,9 +261,11 @@ scenarios = [
                     }""",
                             """{
                         "peer_id": "172.20.0.15",
+                        "created_at": "*",
                         "active_states": [],
                         "cancel_states": [
                             {
+                                "created_at": "*",
                                 "by_peer": 1
                             }
                         ],
@@ -268,18 +273,17 @@ scenarios = [
                         "transfer_type": {
                             "Outgoing": [
                                 {
-                                    "id": 2,
                                     "relative_path": "testfile-big",
                                     "base_path": "/tmp",
                                     "bytes": 10485760,
                                     "pending_states": [
                                         {
-                                            "path_id": 2
+                                            "created_at": "*"
                                         }
                                     ],
                                     "started_states": [
                                         {
-                                            "path_id": 2,
+                                            "created_at": "*",
                                             "bytes_sent": 0
                                         }
                                     ],
@@ -287,7 +291,7 @@ scenarios = [
                                     "failed_states": [],
                                     "completed_states": [
                                         {
-                                            "path_id": 2
+                                            "created_at": "*"
                                         }
                                     ]
                                 }
@@ -366,9 +370,11 @@ scenarios = [
                         [
                             """{
                         "peer_id": "172.20.0.5",
+                        "created_at": "*",
                         "active_states": [],
                         "cancel_states": [
                             {
+                                "created_at": "*",
                                 "by_peer": 0
                             }
                         ],
@@ -376,17 +382,16 @@ scenarios = [
                         "transfer_type": {
                             "Incoming": [
                                 {
-                                    "id": 1,
                                     "relative_path": "testfile-small",
                                     "bytes": 1048576,
                                     "pending_states": [
-                                        {
-                                            "path_id": 1
+                                        {   
+                                            "created_at": "*"
                                         }
                                     ],
                                     "started_states": [
                                         {
-                                            "path_id": 1,
+                                            "created_at": "*",
                                             "bytes_received": 0,
                                             "base_dir": "/tmp/received"
                                         }
@@ -395,7 +400,7 @@ scenarios = [
                                     "failed_states": [],
                                     "completed_states": [
                                         {
-                                            "path_id": 1
+                                            "created_at": "*"
                                         }
                                     ]
                                 }
@@ -404,9 +409,11 @@ scenarios = [
                     }""",
                             """{
                         "peer_id": "172.20.0.5",
+                        "created_at": "*",
                         "active_states": [],
                         "cancel_states": [
                             {
+                                "created_at": "*",
                                 "by_peer": 0
                             }
                         ],
@@ -414,17 +421,16 @@ scenarios = [
                         "transfer_type": {
                             "Incoming": [
                                 {
-                                    "id": 2,
                                     "relative_path": "testfile-big",
                                     "bytes": 10485760,
                                     "pending_states": [
                                         {
-                                            "path_id": 2
+                                            "created_at": "*"
                                         }
                                     ],
                                     "started_states": [
                                         {
-                                            "path_id": 2,
+                                            "created_at": "*",
                                             "bytes_received": 0
                                         }
                                     ],
@@ -432,7 +438,7 @@ scenarios = [
                                     "failed_states": [],
                                     "completed_states": [
                                         {
-                                            "path_id": 2
+                                            "created_at": "*"
                                         }
                                     ]
                                 }
@@ -3188,9 +3194,11 @@ scenarios = [
                         [
                             """{
                         "peer_id": "172.20.0.15",
+                        "created_at": "*",
                         "active_states": [],
                         "cancel_states": [
                             {
+                                "created_at": "*",
                                 "by_peer": 1
                             }
                         ],
@@ -3198,25 +3206,24 @@ scenarios = [
                         "transfer_type": {
                             "Outgoing": [
                                 {
-                                    "id": 1,
                                     "relative_path": "testfile-big",
                                     "base_path": "/tmp",
                                     "bytes": 10485760,
                                     "pending_states": [
                                         {
-                                            "path_id": 1
+                                            "created_at": "*"
                                         }
                                     ],
                                     "started_states": [
                                         {
-                                            "path_id": 1,
+                                            "created_at": "*",
                                             "bytes_sent": 0
                                         }
                                     ],
                                     "cancel_states": [],
                                     "failed_states": [
                                         {
-                                            "path_id": 1,
+                                            "created_at": "*",
                                             "status_code": 28
                                         }
                                     ],
@@ -3264,9 +3271,11 @@ scenarios = [
                         [
                             """{
                         "peer_id": "172.20.0.5",
+                        "created_at": "*",
                         "active_states": [],
                         "cancel_states": [
                             {
+                                "created_at": "*",
                                 "by_peer": 0
                             }
                         ],
@@ -3274,17 +3283,16 @@ scenarios = [
                         "transfer_type": {
                             "Incoming": [
                                 {
-                                    "id": 1,
                                     "relative_path": "testfile-big",
                                     "bytes": 10485760,
                                     "pending_states": [
                                         {
-                                            "path_id": 1
+                                            "created_at": "*"
                                         }
                                     ],
                                     "started_states": [
                                         {
-                                            "path_id": 1,
+                                            "created_at": "*",
                                             "bytes_received": 0,
                                             "base_dir": "/tmp/received"
                                         }
@@ -3292,7 +3300,7 @@ scenarios = [
                                     "cancel_states": [],
                                     "failed_states": [
                                         {
-                                            "path_id": 1,
+                                            "created_at": "*",
                                             "status_code": 8
                                         }
                                     ],
