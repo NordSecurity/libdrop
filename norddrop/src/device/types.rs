@@ -100,8 +100,8 @@ pub enum Event {
         #[serde(flatten)]
         data: FinishEvent,
     },
-    DbLost {
-        context: String,
+    RuntimeError {
+        status: drop_core::Status,
     },
 }
 
