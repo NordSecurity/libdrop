@@ -14,7 +14,7 @@ from scenarios import scenarios
 from drop_test import ffi, config
 
 
-def prepare_files(files: typing.Dict, symlinks: typing.Dict):
+def prepare_files(files: typing.Dict, symlinks: typing.Dict, dbfiles: typing.Dict):
     os.mkdir("/tmp/received")
 
     os.mkdir("/tmp/no-permissions")
@@ -45,6 +45,16 @@ def prepare_files(files: typing.Dict, symlinks: typing.Dict):
 
         os.makedirs(os.path.dirname(symlink_fullpath), exist_ok=True)
         os.symlink(target_fullpath, symlink_fullpath)
+
+    os.mkdir("/tmp/db")
+    for name in dbfiles:
+        contents: bytes = dbfiles[name]
+
+        path = f"/tmp/db/{name}"
+
+        f = open(path, "wb")
+        f.write(contents)
+        f.close()
 
 
 def cleanup_files(files: typing.Dict):
@@ -91,14 +101,13 @@ async def main():
         "received/symtest-dir": "this-dir-does-not-exists",
     }
 
-    prepare_files(config.FILES, symlinks)
+    prepare_files(config.FILES, symlinks, config.DBFILES)
 
     drop = ffi.Drop(lib, ffi.KeysCtx(runner))
     logger.info(f"NordDrop version: {drop.version}")
-    drop.start(addr, runner)
 
     try:
-        await script.run(runner, drop)
+        await script.run(runner, drop, addr)
         logger.info("Action completed properly")
         cleanup_files(config.FILES)
         sys.exit(0)
