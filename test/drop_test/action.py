@@ -32,7 +32,7 @@ def compare_json_struct(expected: dict, actual: dict):
             for i in range(len(expected_value)):
                 compare_json_struct(expected_value[i], actual_value[i])
         else:
-            # '*' is a special value that means that we don't care about the value
+            # '*' is a special value that means that we don't care about the actual value of the output, just that it exists
             if expected_value == "*" and actual_value is not None:
                 continue
 
