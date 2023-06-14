@@ -77,7 +77,7 @@ impl Service {
         let task = || {
             let state = Arc::new(State {
                 event_tx,
-                transfer_manager: Mutex::new(TransferManager::new(logger.clone(), storage.clone())),
+                transfer_manager: Mutex::default(),
                 moose: moose.clone(),
                 config,
                 auth: auth.clone(),
@@ -144,12 +144,21 @@ impl Service {
             .map_err(|_| Error::StorageError)
     }
 
-    pub fn send_request(&mut self, xfer: crate::Transfer) {
+    pub async fn send_request(&mut self, xfer: crate::Transfer) {
         self.state.moose.service_quality_transfer_batch(
             drop_analytics::Phase::Start,
             xfer.id().to_string(),
             xfer.info(),
         );
+
+        if let Err(err) = self
+            .state
+            .storage
+            .insert_transfer(&xfer.storage_info())
+            .await
+        {
+            error!(self.logger, "Failed to insert transfer into storage: {err}",);
+        }
 
         let stop_job = {
             let state = self.state.clone();

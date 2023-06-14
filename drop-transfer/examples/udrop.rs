@@ -382,7 +382,7 @@ async fn main() -> anyhow::Result<()> {
 
     if let Some(xfer) = xfer {
         info!("Transfer:\n{xfer:#?}");
-        service.send_request(xfer);
+        service.send_request(xfer).await;
     }
 
     info!("Listening...");

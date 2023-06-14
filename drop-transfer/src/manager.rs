@@ -5,8 +5,6 @@ use std::{
     sync::Arc,
 };
 
-use drop_storage::Storage;
-use slog::Logger;
 use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 
@@ -31,10 +29,9 @@ pub struct TransferState {
 
 /// Transfer manager is responsible for keeping track of all ongoing or pending
 /// transfers and their status
+#[derive(Default)]
 pub(crate) struct TransferManager {
     transfers: HashMap<Uuid, TransferState>,
-    storage: Arc<Storage>,
-    logger: Logger,
 }
 
 impl TransferState {
@@ -48,14 +45,6 @@ impl TransferState {
 }
 
 impl TransferManager {
-    pub(crate) fn new(logger: Logger, storage: Arc<Storage>) -> TransferManager {
-        TransferManager {
-            transfers: HashMap::new(),
-            storage,
-            logger,
-        }
-    }
-
     /// Cancel ALL of the ongoing file transfers for a given transfer ID    
     pub(crate) fn cancel_transfer(&mut self, transfer_id: Uuid) -> Result<(), Error> {
         self.transfers
@@ -65,7 +54,7 @@ impl TransferManager {
         Ok(())
     }
 
-    pub(crate) async fn insert_transfer(
+    pub(crate) fn insert_transfer(
         &mut self,
         xfer: Transfer,
         connection: TransferConnection,
@@ -73,14 +62,6 @@ impl TransferManager {
         match self.transfers.entry(xfer.id()) {
             Entry::Occupied(_) => Err(Error::BadTransferState("Transfer already exists".into())),
             Entry::Vacant(entry) => {
-                if let Err(err) = self.storage.insert_transfer(&xfer.storage_info()).await {
-                    slog::error!(
-                        self.logger,
-                        "Failed to insert transfer into storage: {}",
-                        err
-                    );
-                }
-
                 entry.insert(TransferState::new(xfer, connection));
                 Ok(())
             }
