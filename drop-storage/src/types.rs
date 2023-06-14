@@ -131,7 +131,7 @@ pub struct TransferActiveState {
 pub struct TransferCancelState {
     #[serde(skip_serializing)]
     pub transfer_id: TransferId,
-    pub by_peer: i64,
+    pub by_peer: bool,
     pub created_at: i64,
 }
 
@@ -179,7 +179,7 @@ pub struct OutgoingPathStartedState {
 pub struct OutgoingPathCancelState {
     #[serde(skip_serializing)]
     pub path_id: i64,
-    pub by_peer: i64,
+    pub by_peer: bool,
     pub bytes_sent: i64,
     pub created_at: i64,
 }
@@ -236,7 +236,7 @@ pub struct IncomingPathStartedState {
 pub struct IncomingPathCancelState {
     #[serde(skip_serializing)]
     pub path_id: i64,
-    pub by_peer: i64,
+    pub by_peer: bool,
     pub bytes_received: i64,
     pub created_at: i64,
 }

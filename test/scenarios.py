@@ -46,7 +46,7 @@ scenarios = [
                         "active_states": [],
                         "cancel_states": [
                             {
-                                "by_peer": 1,
+                                "by_peer": true,
                                 "created_at": "*"
                             }
                         ],
@@ -128,7 +128,7 @@ scenarios = [
                         "active_states": [],
                         "cancel_states": [
                             {
-                                "by_peer": 0,
+                                "by_peer": false,
                                 "created_at": "*"
                             }
                         ],
@@ -226,7 +226,7 @@ scenarios = [
                         "active_states": [],
                         "cancel_states": [
                             {
-                                "by_peer": 1,
+                                "by_peer": true,
                                 "created_at": "*"
                             }
                         ],
@@ -266,7 +266,7 @@ scenarios = [
                         "cancel_states": [
                             {
                                 "created_at": "*",
-                                "by_peer": 1
+                                "by_peer": true
                             }
                         ],
                         "failed_states": [],
@@ -375,7 +375,7 @@ scenarios = [
                         "cancel_states": [
                             {
                                 "created_at": "*",
-                                "by_peer": 0
+                                "by_peer": false
                             }
                         ],
                         "failed_states": [],
@@ -414,7 +414,7 @@ scenarios = [
                         "cancel_states": [
                             {
                                 "created_at": "*",
-                                "by_peer": 0
+                                "by_peer": false
                             }
                         ],
                         "failed_states": [],
@@ -3199,7 +3199,7 @@ scenarios = [
                         "cancel_states": [
                             {
                                 "created_at": "*",
-                                "by_peer": 1
+                                "by_peer": true
                             }
                         ],
                         "failed_states": [],
@@ -3276,7 +3276,7 @@ scenarios = [
                         "cancel_states": [
                             {
                                 "created_at": "*",
-                                "by_peer": 0
+                                "by_peer": false
                             }
                         ],
                         "failed_states": [],
