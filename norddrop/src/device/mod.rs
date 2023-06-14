@@ -562,19 +562,12 @@ async fn open_database(
     logger: &slog::Logger,
 ) -> Result<drop_storage::Storage> {
     // Try opening the DB 3 times
-    let mut i = 0;
-    let openerr = loop {
+    for i in 1..=3 {
         match drop_storage::Storage::new(logger.clone(), dbpath).await {
             Ok(storage) => return Ok(storage),
-            Err(err) => {
-                i += 1;
-                warn!(logger, "Failed to open DB: {err}, already tried {i} times",);
-                if i >= 3 {
-                    break err;
-                }
-            }
+            Err(err) => warn!(logger, "Failed to open DB: {err}, already tried {i} times",),
         }
-    };
+    }
 
     // Still problems? Let's try to delete the file
     warn!(logger, "Removing old DB file");
@@ -586,8 +579,8 @@ async fn open_database(
         return Err(ffi::types::NORDDROP_RES_DB_ERROR);
     } else {
         // Inform app that we wiped the old DB file
-        events.dispatch(types::Event::DbLost {
-            context: format!("Failed to open DB file: {openerr}"),
+        events.dispatch(types::Event::RuntimeError {
+            status: drop_core::Status::DbLost,
         });
     };
 
