@@ -451,6 +451,13 @@ name = "drop-config"
 version = "1.0.0"
 
 [[package]]
+name = "drop-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "drop-storage"
 version = "1.0.0"
 dependencies = [
@@ -475,6 +482,7 @@ dependencies = [
  "drop-analytics",
  "drop-auth",
  "drop-config",
+ "drop-core",
  "drop-storage",
  "futures",
  "futures-util",
@@ -1140,6 +1148,7 @@ dependencies = [
  "drop-analytics",
  "drop-auth",
  "drop-config",
+ "drop-core",
  "drop-storage",
  "drop-transfer",
  "libc",
