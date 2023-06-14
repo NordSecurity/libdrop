@@ -361,7 +361,8 @@ impl NordDropFFI {
                 .await
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
-                .send_request(xfer);
+                .send_request(xfer)
+                .await;
 
             Result::Ok(())
         })?;

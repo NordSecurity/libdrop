@@ -316,7 +316,6 @@ async fn handle_client(
             .lock()
             .await
             .insert_transfer(xfer.clone(), TransferConnection::Server(req_send))
-            .await
         {
             error!(logger, "Failed to insert a new trasfer: {}", err);
 
@@ -330,6 +329,10 @@ async fn handle_client(
 
             return;
         } else {
+            if let Err(err) = state.storage.insert_transfer(&xfer.storage_info()).await {
+                error!(logger, "Failed to insert transfer into storage: {err}",);
+            }
+
             state
                 .event_tx
                 .send(Event::RequestReceived(xfer.clone()))
