@@ -373,6 +373,41 @@ pub extern "C" fn norddrop_new(
     });
 
     let result = panic::catch_unwind(move || {
+        {
+            let logger = logger.clone();
+            use log::{Level, LevelFilter, Metadata, Record};
+
+            struct SimpleLogger {
+                logger: Logger,
+            }
+
+            impl log::Log for SimpleLogger {
+                fn enabled(&self, metadata: &Metadata) -> bool {
+                    metadata.level() <= Level::Info
+                }
+
+                fn log(&self, record: &Record) {
+                    if self.enabled(record.metadata()) {
+                        match record.level() {
+                            Level::Error => slog::error!(self.logger, "{}", record.args()),
+                            Level::Warn => slog::warn!(self.logger, "{}", record.args()),
+                            Level::Info => slog::info!(self.logger, "{}", record.args()),
+                            Level::Debug => slog::debug!(self.logger, "{}", record.args()),
+                            Level::Trace => slog::trace!(self.logger, "{}", record.args()),
+                        }
+                    }
+                }
+                fn flush(&self) {}
+            }
+
+            log::set_boxed_logger(Box::new(SimpleLogger {
+                logger: logger.clone(),
+            }))
+            .expect("Failed to set logger");
+
+            log::set_max_level(LevelFilter::Trace);
+        }
+
         if privkey.is_null() {
             return norddrop_result::NORDDROP_RES_INVALID_PRIVKEY;
         }

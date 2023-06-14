@@ -3,7 +3,7 @@ pub mod types;
 
 use std::str::FromStr;
 
-use slog::{debug, info, trace, warn, Logger};
+use slog::{info, Logger};
 use sqlx::{sqlite::SqliteConnectOptions, SqliteConnection, SqlitePool};
 use types::{
     DbTransferType, IncomingPath, IncomingPathCancelState, IncomingPathCompletedState,
@@ -27,14 +27,12 @@ pub struct Storage {
 
 impl Storage {
     pub async fn new(logger: Logger, path: &str) -> Result<Self> {
-        let options = SqliteConnectOptions::from_str(path)?.create_if_missing(true);
-        let conn = SqlitePool::connect_with(options).await?;
+        use sqlx::ConnectOptions;
 
-        slog::warn!(logger, "*** warn Storage::new ***");
-        slog::debug!(logger, "*** debug Storage::new ***");
-        slog::error!(logger, "*** error Storage::new ***");
-        slog::info!(logger, "*** info Storage::new ***");
-        slog::trace!(logger, "*** trace Storage::new ***");
+        let options = SqliteConnectOptions::from_str(path)?
+            .create_if_missing(true)
+            .log_statements(log::LevelFilter::Info);
+        let conn = SqlitePool::connect_with(options.clone()).await?;
 
         sqlx::migrate!("./migrations")
             .run(&mut conn.acquire().await?)
@@ -82,6 +80,8 @@ impl Storage {
 
         match &transfer.files {
             TransferFiles::Incoming(files) => {
+                info!(self._logger, "incoming files len {}", files.len());
+
                 for file in files {
                     info!(
                         self._logger,
@@ -95,6 +95,8 @@ impl Storage {
                 }
             }
             TransferFiles::Outgoing(files) => {
+                info!(self._logger, "outgoing files len {}", files.len());
+
                 for file in files {
                     info!(
                         self._logger,
