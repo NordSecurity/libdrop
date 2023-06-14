@@ -100,6 +100,9 @@ pub enum Event {
         #[serde(flatten)]
         data: FinishEvent,
     },
+    RuntimeError {
+        status: drop_core::Status,
+    },
 }
 
 #[derive(Deserialize, Clone, Debug)]

@@ -4538,4 +4538,18 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario26",
+        "Test if the instance can recover on database corruption",
+        {
+            "ren": ActionList(
+                [
+                    action.Wait(event.RuntimeError(Error.DB_LOST)),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+        dbpath="/tmp/db/26-corrupted.sqlite",
+    ),
 ]

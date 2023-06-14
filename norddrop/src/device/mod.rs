@@ -128,14 +128,11 @@ impl NordDropFFI {
 
         let (tx, mut rx) = mpsc::channel::<drop_transfer::Event>(16);
 
-        let storage = Arc::new(self.rt.block_on(async {
-            drop_storage::Storage::new(self.logger.clone(), &self.config.drop.storage_path)
-                .await
-                .map_err(|e| {
-                    error!(self.logger, "Failed to prepare storage: {}", e);
-                    ffi::types::NORDDROP_RES_DB_ERROR
-                })
-        })?);
+        let storage = Arc::new(self.rt.block_on(open_database(
+            &self.config.drop.storage_path,
+            &self.event_dispatcher,
+            &self.logger,
+        ))?);
 
         // Spawn a task grabbing events from the inner service and dispatch them
         // to the host app
@@ -557,4 +554,42 @@ fn prepare_transfer_files(
     }
 
     Ok(files)
+}
+
+async fn open_database(
+    dbpath: &str,
+    events: &EventDispatcher,
+    logger: &slog::Logger,
+) -> Result<drop_storage::Storage> {
+    // Try opening the DB 3 times
+    for i in 1..=3 {
+        match drop_storage::Storage::new(logger.clone(), dbpath).await {
+            Ok(storage) => return Ok(storage),
+            Err(err) => warn!(logger, "Failed to open DB: {err}, already tried {i} times",),
+        }
+    }
+
+    // Still problems? Let's try to delete the file
+    warn!(logger, "Removing old DB file");
+    if let Err(err) = std::fs::remove_file(dbpath) {
+        error!(
+            logger,
+            "Failed to opend DB and failed to remove it's file: {err}"
+        );
+        return Err(ffi::types::NORDDROP_RES_DB_ERROR);
+    } else {
+        // Inform app that we wiped the old DB file
+        events.dispatch(types::Event::RuntimeError {
+            status: drop_core::Status::DbLost,
+        });
+    };
+
+    // Final try after cleaning up old DB file
+    match drop_storage::Storage::new(logger.clone(), dbpath).await {
+        Ok(storage) => Ok(storage),
+        Err(err) => {
+            error!(logger, "Failed to prepare storage: {err}");
+            Err(ffi::types::NORDDROP_RES_DB_ERROR)
+        }
+    }
 }

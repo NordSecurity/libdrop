@@ -22,6 +22,7 @@ base64 = { workspace = true }
 drop-analytics = { version = "1.0.0", path = "../drop-analytics" }
 drop-config = { version = "1.0.0", path = "../drop-config" }
 drop-auth = { path = "../drop-auth" }
+drop-core = { path = "../drop-core" }
 drop-storage = { version = "1.0.0", path = "../drop-storage" }
 futures = "0.3"
 futures-util = "0.3"
