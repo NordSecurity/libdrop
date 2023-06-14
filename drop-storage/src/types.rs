@@ -97,8 +97,11 @@ pub enum Event {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(tag = "type", content = "paths")]
 pub enum DbTransferType {
+    #[serde(rename = "incoming")]
     Incoming(Vec<IncomingPath>),
+    #[serde(rename = "outgoing")]
     Outgoing(Vec<OutgoingPath>),
 }
 
@@ -113,6 +116,7 @@ pub struct Transfer {
     #[serde(skip_serializing)]
     pub id: TransferId,
     pub peer_id: String,
+    #[serde(flatten)]
     pub transfer_type: DbTransferType,
     pub created_at: i64,
     pub active_states: Vec<TransferActiveState>,
