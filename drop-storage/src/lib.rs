@@ -575,9 +575,10 @@ impl Storage {
 
             transfer.states.extend(
                 sqlx::query!(
-                "SELECT status_code, created_at FROM transfer_failed_states WHERE transfer_id = ?1",
-                tid
-            )
+                    "SELECT status_code, created_at FROM transfer_failed_states WHERE transfer_id \
+                     = ?1",
+                    tid
+                )
                 .fetch_all(&mut *conn)
                 .await
                 .map_err(error::Error::DBError)?
