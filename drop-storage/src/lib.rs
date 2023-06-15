@@ -47,19 +47,12 @@ impl Storage {
             TransferFiles::Outgoing(_) => TransferType::Outgoing as u32,
         };
 
+        let tid = transfer.id.hyphenated();
+
         let mut conn = self.conn.begin().await?;
 
         sqlx::query!(
-            "INSERT OR IGNORE INTO peers (id) VALUES (?1)",
-            transfer.peer
-        )
-        .execute(&mut *conn)
-        .await?;
-
-        let tid = transfer.id.hyphenated();
-
-        sqlx::query!(
-            "INSERT OR IGNORE INTO transfers (id, peer_id, is_outgoing) VALUES (?1, ?2, ?3)",
+            "INSERT OR IGNORE INTO transfers (id, peer, is_outgoing) VALUES (?1, ?2, ?3)",
             tid,
             transfer.peer,
             transfer_type_int,
@@ -511,7 +504,7 @@ impl Storage {
 
         let mut transfers = sqlx::query!(
             r#"
-            SELECT id as "id: Hyphenated", peer_id, created_at, is_outgoing FROM transfers
+            SELECT id as "id: Hyphenated", peer, created_at, is_outgoing FROM transfers
             WHERE created_at >= datetime(?1, 'unixepoch')
             "#,
             since_timestamp
@@ -528,7 +521,7 @@ impl Storage {
 
             Transfer {
                 id: t.id.into_uuid(),
-                peer_id: t.peer_id,
+                peer_id: t.peer,
                 transfer_type,
                 created_at: t.created_at.timestamp_millis(),
                 active_states: vec![],
