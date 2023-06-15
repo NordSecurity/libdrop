@@ -1,15 +1,9 @@
-CREATE TABLE IF NOT EXISTS peers (
-  id TEXT PRIMARY KEY UNIQUE NOT NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'))
-);
-
 --- outgoing transfers
 CREATE TABLE IF NOT EXISTS transfers (
   id TEXT PRIMARY KEY UNIQUE NOT NULL,
-  peer_id TEXT NOT NULL, 
+  peer TEXT NOT NULL, 
   is_outgoing INTEGER NOT NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
-  FOREIGN KEY(peer_id) REFERENCES peers(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'))
   CHECK(is_outgoing = 0 OR is_outgoing = 1)
 );
 
