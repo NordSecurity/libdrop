@@ -307,7 +307,8 @@ async fn handle_client(
     mut handler: impl handler::HandlerInit,
     xfer: crate::Transfer,
 ) {
-    let _guard = TransferGuard::new(state.clone(), xfer.id());
+    let xfer_id = xfer.id();
+    let xfer_guard = TransferGuard::new(state.clone(), xfer_id);
     let (req_send, mut req_rx) = mpsc::unbounded_channel();
 
     {
@@ -460,6 +461,8 @@ async fn handle_client(
         } else {
             debug!(logger, "WS client disconnected");
         }
+
+        xfer_guard.gracefull_close().await
     }
 }
 
