@@ -211,18 +211,15 @@ impl Service {
         let fetch_xfer = async {
             let mut lock = self.state.transfer_manager.lock().await;
 
-            let chann = lock.connection(uuid).ok_or(Error::BadTransfer)?;
-            let chann = match chann {
+            let state = lock.state_mut(uuid).ok_or(Error::BadTransfer)?;
+            let chann = match &state.connection {
                 TransferConnection::Server(chann) => chann.clone(),
                 _ => return Err(Error::BadTransfer),
             };
 
-            let mapped_file_path =
-                parent_dir.join(lock.apply_dir_mapping(uuid, parent_dir, file_id)?);
+            let mapped_file_path = parent_dir.join(state.apply_dir_mapping(parent_dir, file_id)?);
 
-            let xfer = lock.transfer(&uuid).ok_or(Error::BadTransfer)?.clone();
-
-            Ok((xfer, chann, mapped_file_path))
+            Ok((state.xfer.clone(), chann, mapped_file_path))
         };
 
         let (xfer, channel, absolute_path) =
@@ -295,9 +292,9 @@ impl Service {
     pub async fn cancel(&mut self, xfer_uuid: Uuid, file: FileId) -> crate::Result<()> {
         let lock = self.state.transfer_manager.lock().await;
 
-        let conn = lock.connection(xfer_uuid).ok_or(Error::BadTransfer)?;
+        let state = lock.state(xfer_uuid).ok_or(Error::BadTransfer)?;
 
-        match conn {
+        match &state.connection {
             TransferConnection::Client(conn) => {
                 conn.send(ClientReq::Cancel { file })
                     .map_err(|err| Error::BadTransferState(err.to_string()))?;
@@ -315,28 +312,25 @@ impl Service {
     pub async fn cancel_all(&mut self, transfer_id: Uuid) -> crate::Result<()> {
         let mut lock = self.state.transfer_manager.lock().await;
 
-        {
-            let xfer = lock.transfer(&transfer_id).ok_or(Error::BadTransfer)?;
+        let state = lock
+            .cancel_transfer(transfer_id)
+            .ok_or(Error::BadTransfer)?;
 
-            xfer.files().values().for_each(|file| {
-                let status: u32 = From::from(&Error::Canceled);
+        let xfer = &state.xfer;
 
-                self.state.moose.service_quality_transfer_file(
-                    Err(status as _),
-                    drop_analytics::Phase::End,
-                    xfer.id().to_string(),
-                    0,
-                    file.info(),
-                )
-            });
-        }
+        xfer.files().values().for_each(|file| {
+            let status: u32 = From::from(&Error::Canceled);
 
-        if let Err(e) = lock.cancel_transfer(transfer_id) {
-            error!(
-                self.logger,
-                "Could not cancel transfer(client): {}. xfer: {}", e, transfer_id,
-            );
-        }
+            self.state.moose.service_quality_transfer_file(
+                Err(status as _),
+                drop_analytics::Phase::End,
+                xfer.id().to_string(),
+                0,
+                file.info(),
+            )
+        });
+
+        state.rm_all_marker_files();
 
         Ok(())
     }
