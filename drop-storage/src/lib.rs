@@ -6,8 +6,9 @@ use std::str::FromStr;
 use slog::Logger;
 use sqlx::{sqlite::SqliteConnectOptions, SqliteConnection, SqlitePool};
 use types::{
-    DbTransferType, IncomingPath, OutgoingPath, PathStateEvent, PathStateEventData, Transfer,
-    TransferFiles, TransferIncomingPath, TransferOutgoingPath, TransferStateEvent,
+    DbTransferType, IncomingPath, IncomingPathStateEvent, IncomingPathStateEventData, OutgoingPath,
+    OutgoingPathStateEvent, OutgoingPathStateEventData, Transfer, TransferFiles,
+    TransferIncomingPath, TransferOutgoingPath, TransferStateEvent,
 };
 use uuid::{fmt::Hyphenated, Uuid};
 
@@ -168,8 +169,7 @@ impl Storage {
             tid,
         )
         .execute(&mut *conn)
-        .await
-        .map_err(error::Error::DBError)?;
+        .await?;
 
         Ok(())
     }
@@ -185,8 +185,7 @@ impl Storage {
             error,
         )
         .execute(&mut *conn)
-        .await
-        .map_err(error::Error::DBError)?;
+        .await?;
 
         Ok(())
     }
@@ -206,8 +205,7 @@ impl Storage {
             by_peer,
         )
         .execute(&mut *conn)
-        .await
-        .map_err(error::Error::DBError)?;
+        .await?;
 
         Ok(())
     }
@@ -230,8 +228,7 @@ impl Storage {
             file_id
         )
         .execute(&mut *conn)
-        .await
-        .map_err(error::Error::DBError)?;
+        .await?;
 
         Ok(())
     }
@@ -252,8 +249,7 @@ impl Storage {
             file_id,
         )
         .execute(&mut *conn)
-        .await
-        .map_err(error::Error::DBError)?;
+        .await?;
 
         Ok(())
     }
@@ -275,8 +271,7 @@ impl Storage {
             0
         )
         .execute(&mut *conn)
-        .await
-        .map_err(error::Error::DBError)?;
+        .await?;
 
         Ok(())
     }
@@ -300,8 +295,7 @@ impl Storage {
             0
         )
         .execute(&mut *conn)
-        .await
-        .map_err(error::Error::DBError)?;
+        .await?;
 
         Ok(())
     }
@@ -326,8 +320,7 @@ impl Storage {
             bytes_sent
         )
         .execute(&mut *conn)
-        .await
-        .map_err(error::Error::DBError)?;
+        .await?;
 
         Ok(())
     }
@@ -352,8 +345,7 @@ impl Storage {
             bytes_received
         )
         .execute(&mut *conn)
-        .await
-        .map_err(error::Error::DBError)?;
+        .await?;
 
         Ok(())
     }
@@ -379,8 +371,7 @@ impl Storage {
             bytes_received
         )
         .execute(&mut *conn)
-        .await
-        .map_err(error::Error::DBError)?;
+        .await?;
 
         Ok(())
     }
@@ -405,8 +396,7 @@ impl Storage {
             bytes_sent
         )
         .execute(&mut *conn)
-        .await
-        .map_err(error::Error::DBError)?;
+        .await?;
 
         Ok(())
     }
@@ -427,8 +417,7 @@ impl Storage {
             path_id,
         )
         .execute(&mut *conn)
-        .await
-        .map_err(error::Error::DBError)?;
+        .await?;
 
         Ok(())
     }
@@ -451,8 +440,7 @@ impl Storage {
             final_path
         )
         .execute(&mut *conn)
-        .await
-        .map_err(error::Error::DBError)?;
+        .await?;
 
         Ok(())
     }
@@ -465,9 +453,9 @@ impl Storage {
             until_timestamp
         )
         .execute(&mut *conn)
-        .await
-        .map_err(error::Error::DBError)
-        .map(|_| ())
+        .await?;
+
+        Ok(())
     }
 
     /// From the FAQ:
@@ -482,9 +470,9 @@ impl Storage {
 
         sqlx::query!("DELETE FROM transfers WHERE id = $1", transfer_id)
             .execute(&mut *conn)
-            .await
-            .map_err(error::Error::DBError)
-            .map(|_| ())
+            .await?;
+
+        Ok(())
     }
 
     pub async fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<()> {
@@ -519,7 +507,7 @@ impl Storage {
                 id: t.id.into_uuid(),
                 peer_id: t.peer,
                 transfer_type,
-                created_at: t.created_at.timestamp_millis(),
+                created_at: t.created_at,
                 states: vec![],
             }
         })
@@ -545,12 +533,11 @@ impl Storage {
                     tid
                 )
                 .fetch_all(&mut *conn)
-                .await
-                .map_err(error::Error::DBError)?
+                .await?
                 .iter()
                 .map(|s| TransferStateEvent {
                     transfer_id: transfer.id,
-                    created_at: s.created_at.timestamp_millis(),
+                    created_at: s.created_at,
                     data: types::TransferStateEventData::Active,
                 }),
             );
@@ -561,12 +548,11 @@ impl Storage {
                     tid
                 )
                 .fetch_all(&mut *conn)
-                .await
-                .map_err(error::Error::DBError)?
+                .await?
                 .iter()
                 .map(|s| TransferStateEvent {
                     transfer_id: transfer.id,
-                    created_at: s.created_at.timestamp_millis(),
+                    created_at: s.created_at,
                     data: types::TransferStateEventData::Cancel {
                         by_peer: s.by_peer != 0,
                     },
@@ -580,12 +566,11 @@ impl Storage {
                     tid
                 )
                 .fetch_all(&mut *conn)
-                .await
-                .map_err(error::Error::DBError)?
+                .await?
                 .iter()
                 .map(|s| TransferStateEvent {
                     transfer_id: transfer.id,
-                    created_at: s.created_at.timestamp_millis(),
+                    created_at: s.created_at,
                     data: types::TransferStateEventData::Failed {
                         status_code: s.status_code,
                     },
@@ -619,7 +604,7 @@ impl Storage {
             relative_path: p.relative_path,
             file_id: p.path_hash,
             bytes: p.bytes,
-            created_at: p.created_at.timestamp_millis(),
+            created_at: p.created_at,
             states: vec![],
         })
         .collect::<Vec<_>>();
@@ -631,13 +616,12 @@ impl Storage {
                     path.id
                 )
                 .fetch_all(&mut *conn)
-                .await
-                .map_err(error::Error::DBError)?
+                .await?
                 .iter()
-                .map(|s| PathStateEvent {
+                .map(|s| OutgoingPathStateEvent {
                     path_id: s.path_id,
-                    created_at: s.created_at.timestamp_millis(),
-                    data: PathStateEventData::OutgoingPending,
+                    created_at: s.created_at,
+                    data: OutgoingPathStateEventData::Pending,
                 }),
             );
 
@@ -647,13 +631,12 @@ impl Storage {
                     path.id
                 )
                 .fetch_all(&mut *conn)
-                .await
-                .map_err(error::Error::DBError)?
+                .await?
                 .iter()
-                .map(|s| PathStateEvent {
+                .map(|s| OutgoingPathStateEvent {
                     path_id: s.path_id,
-                    created_at: s.created_at.timestamp_millis(),
-                    data: PathStateEventData::OutgoingStarted {
+                    created_at: s.created_at,
+                    data: OutgoingPathStateEventData::Started {
                         bytes_sent: s.bytes_sent,
                     },
                 }),
@@ -665,13 +648,12 @@ impl Storage {
                     path.id
                 )
                 .fetch_all(&mut *conn)
-                .await
-                .map_err(error::Error::DBError)?
+                .await?
                 .iter()
-                .map(|s| PathStateEvent {
+                .map(|s| OutgoingPathStateEvent {
                     path_id: s.path_id,
-                    created_at: s.created_at.timestamp_millis(),
-                    data: PathStateEventData::OutgoingCancel {
+                    created_at: s.created_at,
+                    data: OutgoingPathStateEventData::Cancel {
                         by_peer: s.by_peer != 0,
                         bytes_sent: s.bytes_sent,
                     },
@@ -684,13 +666,12 @@ impl Storage {
                     path.id
                 )
                 .fetch_all(&mut *conn)
-                .await
-                .map_err(error::Error::DBError)?
+                .await?
                 .iter()
-                .map(|s| PathStateEvent {
+                .map(|s| OutgoingPathStateEvent {
                     path_id: s.path_id,
-                    created_at: s.created_at.timestamp_millis(),
-                    data: PathStateEventData::OutgoingFailed {
+                    created_at: s.created_at,
+                    data: OutgoingPathStateEventData::Failed {
                         status_code: s.status_code,
                         bytes_sent: s.bytes_sent,
                     },
@@ -703,13 +684,12 @@ impl Storage {
                     path.id
                 )
                 .fetch_all(&mut *conn)
-                .await
-                .map_err(error::Error::DBError)?
+                .await?
                 .iter()
-                .map(|s| PathStateEvent {
+                .map(|s| OutgoingPathStateEvent {
                     path_id: s.path_id,
-                    created_at: s.created_at.timestamp_millis(),
-                    data: PathStateEventData::OutgoingCompleted,
+                    created_at: s.created_at,
+                    data: OutgoingPathStateEventData::Completed,
                 }),
             );
 
@@ -737,7 +717,7 @@ impl Storage {
             relative_path: p.relative_path,
             file_id: p.path_hash,
             bytes: p.bytes,
-            created_at: p.created_at.timestamp_millis(),
+            created_at: p.created_at,
             states: vec![],
         })
         .collect::<Vec<_>>();
@@ -749,13 +729,12 @@ impl Storage {
                     path.id
                 )
                 .fetch_all(&mut *conn)
-                .await
-                .map_err(error::Error::DBError)?
+                .await?
                 .iter()
-                .map(|s| PathStateEvent {
+                .map(|s| IncomingPathStateEvent {
                     path_id: s.path_id,
-                    created_at: s.created_at.timestamp_millis(),
-                    data: PathStateEventData::IncomingPending,
+                    created_at: s.created_at,
+                    data: IncomingPathStateEventData::Pending,
                 }),
             );
 
@@ -765,14 +744,13 @@ impl Storage {
                     path.id
                 )
                 .fetch_all(&mut *conn)
-                .await
-                .map_err(error::Error::DBError)?
-                .iter()
-                .map(|s| PathStateEvent {
+                .await?
+                .into_iter()
+                .map(|s| IncomingPathStateEvent {
                     path_id: s.path_id,
-                    created_at: s.created_at.timestamp_millis(),
-                    data: PathStateEventData::IncomingStarted {
-                        base_dir: s.base_dir.clone(),
+                    created_at: s.created_at,
+                    data: IncomingPathStateEventData::Started {
+                        base_dir: s.base_dir,
                         bytes_received: s.bytes_received,
                     },
                 }),
@@ -784,13 +762,12 @@ impl Storage {
                     path.id
                 )
                 .fetch_all(&mut *conn)
-                .await
-                .map_err(error::Error::DBError)?
+                .await?
                 .iter()
-                .map(|s| PathStateEvent {
+                .map(|s| IncomingPathStateEvent {
                     path_id: s.path_id,
-                    created_at: s.created_at.timestamp_millis(),
-                    data: PathStateEventData::IncomingCancel {
+                    created_at: s.created_at,
+                    data: IncomingPathStateEventData::Cancel {
                         by_peer: s.by_peer != 0,
                         bytes_received: s.bytes_received,
                     },
@@ -803,13 +780,12 @@ impl Storage {
                     path.id
                 )
                 .fetch_all(&mut *conn)
-                .await
-                .map_err(error::Error::DBError)?
+                .await?
                 .iter()
-                .map(|s| PathStateEvent {
+                .map(|s| IncomingPathStateEvent {
                     path_id: s.path_id,
-                    created_at: s.created_at.timestamp_millis(),
-                    data: PathStateEventData::IncomingFailed {
+                    created_at: s.created_at,
+                    data: IncomingPathStateEventData::Failed {
                         status_code: s.status_code,
                         bytes_received: s.bytes_received,
                     },
@@ -822,14 +798,13 @@ impl Storage {
                     path.id
                 )
                 .fetch_all(&mut *conn)
-                .await
-                .map_err(error::Error::DBError)?
-                .iter()
-                .map(|s| PathStateEvent {
+                .await?
+                .into_iter()
+                .map(|s| IncomingPathStateEvent {
                     path_id: s.path_id,
-                    created_at: s.created_at.timestamp_millis(),
-                    data: PathStateEventData::IncomingCompleted {
-                        final_path: s.final_path.clone(),
+                    created_at: s.created_at,
+                    data: IncomingPathStateEventData::Completed {
+                        final_path: s.final_path,
                     },
                 }),
             );

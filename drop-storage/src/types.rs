@@ -1,46 +1,70 @@
 use serde::Serialize;
+use sqlx::types::chrono::NaiveDateTime;
 
 type TransferId = uuid::Uuid;
 type FileId = String;
 
+fn serialize_datetime<S>(timestamp: &NaiveDateTime, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::ser::Serializer,
+{
+    serializer.serialize_i64(timestamp.timestamp_millis())
+}
+
 #[derive(Debug, Serialize)]
 #[serde(tag = "state")]
-pub enum PathStateEventData {
+pub enum OutgoingPathStateEventData {
     #[serde(rename = "pending")]
-    OutgoingPending,
+    Pending,
     #[serde(rename = "started")]
-    OutgoingStarted { bytes_sent: i64 },
+    Started { bytes_sent: i64 },
     #[serde(rename = "cancel")]
-    OutgoingCancel { by_peer: bool, bytes_sent: i64 },
+    Cancel { by_peer: bool, bytes_sent: i64 },
     #[serde(rename = "failed")]
-    OutgoingFailed { status_code: i64, bytes_sent: i64 },
+    Failed { status_code: i64, bytes_sent: i64 },
     #[serde(rename = "completed")]
-    OutgoingCompleted,
+    Completed,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "state")]
+pub enum IncomingPathStateEventData {
     #[serde(rename = "pending")]
-    IncomingPending,
+    Pending,
     #[serde(rename = "started")]
-    IncomingStarted {
+    Started {
         base_dir: String,
         bytes_received: i64,
     },
     #[serde(rename = "cancel")]
-    IncomingCancel { by_peer: bool, bytes_received: i64 },
+    Cancel { by_peer: bool, bytes_received: i64 },
     #[serde(rename = "failed")]
-    IncomingFailed {
+    Failed {
         status_code: i64,
         bytes_received: i64,
     },
     #[serde(rename = "completed")]
-    IncomingCompleted { final_path: String },
+    Completed { final_path: String },
 }
 
 #[derive(Debug, Serialize)]
-pub struct PathStateEvent {
+pub struct OutgoingPathStateEvent {
     #[serde(skip_serializing)]
     pub path_id: i64,
-    pub created_at: i64,
+    #[serde(serialize_with = "serialize_datetime")]
+    pub created_at: NaiveDateTime,
     #[serde(flatten)]
-    pub data: PathStateEventData,
+    pub data: OutgoingPathStateEventData,
+}
+
+#[derive(Debug, Serialize)]
+pub struct IncomingPathStateEvent {
+    #[serde(skip_serializing)]
+    pub path_id: i64,
+    #[serde(serialize_with = "serialize_datetime")]
+    pub created_at: NaiveDateTime,
+    #[serde(flatten)]
+    pub data: IncomingPathStateEventData,
 }
 
 #[derive(Debug, Serialize)]
@@ -58,7 +82,8 @@ pub enum TransferStateEventData {
 pub struct TransferStateEvent {
     #[serde(skip_serializing)]
     pub transfer_id: TransferId,
-    pub created_at: i64,
+    #[serde(serialize_with = "serialize_datetime")]
+    pub created_at: NaiveDateTime,
     #[serde(flatten)]
     pub data: TransferStateEventData,
 }
@@ -168,13 +193,15 @@ pub enum DbTransferType {
 #[derive(Debug, Serialize)]
 pub struct Peer {
     pub id: Option<String>,
-    pub created_at: i64,
+    #[serde(serialize_with = "serialize_datetime")]
+    pub created_at: NaiveDateTime,
 }
 
 #[derive(Debug, Serialize)]
 pub struct Transfer {
     pub id: TransferId,
-    pub created_at: i64,
+    #[serde(serialize_with = "serialize_datetime")]
+    pub created_at: NaiveDateTime,
     pub peer_id: String,
     pub states: Vec<TransferStateEvent>,
     #[serde(flatten)]
@@ -185,23 +212,25 @@ pub struct Transfer {
 pub struct OutgoingPath {
     #[serde(skip_serializing)]
     pub id: i64,
-    pub created_at: i64,
+    #[serde(serialize_with = "serialize_datetime")]
+    pub created_at: NaiveDateTime,
     pub transfer_id: TransferId,
     pub base_path: String,
     pub relative_path: String,
     pub file_id: String,
     pub bytes: i64,
-    pub states: Vec<PathStateEvent>,
+    pub states: Vec<OutgoingPathStateEvent>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct IncomingPath {
     #[serde(skip_serializing)]
     pub id: i64,
-    pub created_at: i64,
+    #[serde(serialize_with = "serialize_datetime")]
+    pub created_at: NaiveDateTime,
     pub transfer_id: TransferId,
     pub relative_path: String,
     pub file_id: String,
     pub bytes: i64,
-    pub states: Vec<PathStateEvent>,
+    pub states: Vec<IncomingPathStateEvent>,
 }
