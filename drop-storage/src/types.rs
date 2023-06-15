@@ -1,7 +1,92 @@
 use serde::Serialize;
+use sqlx::types::chrono::NaiveDateTime;
 
 type TransferId = uuid::Uuid;
 type FileId = String;
+
+fn serialize_datetime<S>(timestamp: &NaiveDateTime, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::ser::Serializer,
+{
+    serializer.serialize_i64(timestamp.timestamp_millis())
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "state")]
+pub enum OutgoingPathStateEventData {
+    #[serde(rename = "pending")]
+    Pending,
+    #[serde(rename = "started")]
+    Started { bytes_sent: i64 },
+    #[serde(rename = "cancel")]
+    Cancel { by_peer: bool, bytes_sent: i64 },
+    #[serde(rename = "failed")]
+    Failed { status_code: i64, bytes_sent: i64 },
+    #[serde(rename = "completed")]
+    Completed,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "state")]
+pub enum IncomingPathStateEventData {
+    #[serde(rename = "pending")]
+    Pending,
+    #[serde(rename = "started")]
+    Started {
+        base_dir: String,
+        bytes_received: i64,
+    },
+    #[serde(rename = "cancel")]
+    Cancel { by_peer: bool, bytes_received: i64 },
+    #[serde(rename = "failed")]
+    Failed {
+        status_code: i64,
+        bytes_received: i64,
+    },
+    #[serde(rename = "completed")]
+    Completed { final_path: String },
+}
+
+#[derive(Debug, Serialize)]
+pub struct OutgoingPathStateEvent {
+    #[serde(skip_serializing)]
+    pub path_id: i64,
+    #[serde(serialize_with = "serialize_datetime")]
+    pub created_at: NaiveDateTime,
+    #[serde(flatten)]
+    pub data: OutgoingPathStateEventData,
+}
+
+#[derive(Debug, Serialize)]
+pub struct IncomingPathStateEvent {
+    #[serde(skip_serializing)]
+    pub path_id: i64,
+    #[serde(serialize_with = "serialize_datetime")]
+    pub created_at: NaiveDateTime,
+    #[serde(flatten)]
+    pub data: IncomingPathStateEventData,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "state")]
+pub enum TransferStateEventData {
+    #[serde(rename = "active")]
+    Active,
+    #[serde(rename = "cancel")]
+    Cancel { by_peer: bool },
+    #[serde(rename = "failed")]
+    Failed { status_code: i64 },
+}
+
+#[derive(Debug, Serialize)]
+pub struct TransferStateEvent {
+    #[serde(skip_serializing)]
+    pub transfer_id: TransferId,
+    #[serde(serialize_with = "serialize_datetime")]
+    pub created_at: NaiveDateTime,
+    #[serde(flatten)]
+    pub data: TransferStateEventData,
+}
 
 #[derive(Debug, Copy, Clone)]
 #[repr(u32)]
@@ -108,155 +193,44 @@ pub enum DbTransferType {
 #[derive(Debug, Serialize)]
 pub struct Peer {
     pub id: Option<String>,
-    pub created_at: i64,
+    #[serde(serialize_with = "serialize_datetime")]
+    pub created_at: NaiveDateTime,
 }
 
 #[derive(Debug, Serialize)]
 pub struct Transfer {
     pub id: TransferId,
+    #[serde(serialize_with = "serialize_datetime")]
+    pub created_at: NaiveDateTime,
     pub peer_id: String,
+    pub states: Vec<TransferStateEvent>,
     #[serde(flatten)]
     pub transfer_type: DbTransferType,
-    pub created_at: i64,
-    pub active_states: Vec<TransferActiveState>,
-    pub cancel_states: Vec<TransferCancelState>,
-    pub failed_states: Vec<TransferFailedState>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct TransferActiveState {
-    #[serde(skip_serializing)]
-    pub transfer_id: TransferId,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct TransferCancelState {
-    #[serde(skip_serializing)]
-    pub transfer_id: TransferId,
-    pub by_peer: bool,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct TransferFailedState {
-    #[serde(skip_serializing)]
-    pub transfer_id: TransferId,
-    pub status_code: i64,
-    pub created_at: i64,
 }
 
 #[derive(Debug, Serialize)]
 pub struct OutgoingPath {
     #[serde(skip_serializing)]
     pub id: i64,
+    #[serde(serialize_with = "serialize_datetime")]
+    pub created_at: NaiveDateTime,
     pub transfer_id: TransferId,
     pub base_path: String,
     pub relative_path: String,
     pub file_id: String,
     pub bytes: i64,
-    pub created_at: i64,
-    pub pending_states: Vec<OutgoingPathPendingState>,
-    pub started_states: Vec<OutgoingPathStartedState>,
-    pub cancel_states: Vec<OutgoingPathCancelState>,
-    pub failed_states: Vec<OutgoingPathFailedState>,
-    pub completed_states: Vec<OutgoingPathCompletedState>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct OutgoingPathPendingState {
-    #[serde(skip_serializing)]
-    pub path_id: i64,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct OutgoingPathStartedState {
-    #[serde(skip_serializing)]
-    pub path_id: i64,
-    pub bytes_sent: i64,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct OutgoingPathCancelState {
-    #[serde(skip_serializing)]
-    pub path_id: i64,
-    pub by_peer: bool,
-    pub bytes_sent: i64,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct OutgoingPathFailedState {
-    #[serde(skip_serializing)]
-    pub path_id: i64,
-    pub status_code: i64,
-    pub bytes_sent: i64,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct OutgoingPathCompletedState {
-    #[serde(skip_serializing)]
-    pub path_id: i64,
-    pub created_at: i64,
+    pub states: Vec<OutgoingPathStateEvent>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct IncomingPath {
     #[serde(skip_serializing)]
     pub id: i64,
+    #[serde(serialize_with = "serialize_datetime")]
+    pub created_at: NaiveDateTime,
     pub transfer_id: TransferId,
     pub relative_path: String,
     pub file_id: String,
     pub bytes: i64,
-    pub created_at: i64,
-    pub pending_states: Vec<IncomingPathPendingState>,
-    pub started_states: Vec<IncomingPathStartedState>,
-    pub cancel_states: Vec<IncomingPathCancelState>,
-    pub failed_states: Vec<IncomingPathFailedState>,
-    pub completed_states: Vec<IncomingPathCompletedState>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct IncomingPathPendingState {
-    #[serde(skip_serializing)]
-    pub path_id: i64,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct IncomingPathStartedState {
-    #[serde(skip_serializing)]
-    pub path_id: i64,
-    pub base_dir: String,
-    pub bytes_received: i64,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct IncomingPathCancelState {
-    #[serde(skip_serializing)]
-    pub path_id: i64,
-    pub by_peer: bool,
-    pub bytes_received: i64,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct IncomingPathFailedState {
-    #[serde(skip_serializing)]
-    pub path_id: i64,
-    pub status_code: i64,
-    pub bytes_received: i64,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct IncomingPathCompletedState {
-    #[serde(skip_serializing)]
-    pub path_id: i64,
-    pub final_path: String,
-    pub created_at: i64,
+    pub states: Vec<IncomingPathStateEvent>,
 }
