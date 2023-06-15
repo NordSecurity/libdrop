@@ -36,6 +36,7 @@ pub enum PathStateEventData {
 
 #[derive(Debug, Serialize)]
 pub struct PathStateEvent {
+    #[serde(skip_serializing)]
     pub path_id: i64,
     pub created_at: i64,
     #[serde(flatten)]
@@ -55,6 +56,7 @@ pub enum TransferStateEventData {
 
 #[derive(Debug, Serialize)]
 pub struct TransferStateEvent {
+    #[serde(skip_serializing)]
     pub transfer_id: TransferId,
     pub created_at: i64,
     #[serde(flatten)]
