@@ -113,7 +113,6 @@ pub struct Peer {
 
 #[derive(Debug, Serialize)]
 pub struct Transfer {
-    #[serde(skip_serializing)]
     pub id: TransferId,
     pub peer_id: String,
     #[serde(flatten)]
