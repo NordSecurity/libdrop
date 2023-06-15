@@ -41,38 +41,35 @@ scenarios = [
                     action.AssertTransfers(
                         [
                             """{
+                        "id": "*",
                         "peer_id": "172.20.0.15",
                         "created_at": "*",
-                        "active_states": [],
-                        "cancel_states": [
+                        "states": [
                             {
-                                "by_peer": true,
-                                "created_at": "*"
+                                "created_at": "*",
+                                "state": "cancel",
+                                "by_peer": true
                             }
                         ],
-                        "failed_states": [],
                         "type": "outgoing",
                         "paths": [
                             {
                                 "relative_path": "testfile-big",
                                 "base_path": "/tmp",
                                 "bytes": 10485760,
-                                "pending_states": [
+                                "states": [
                                     {
-                                        "created_at": "*"
-                                    }
-                                ],
-                                "started_states": [
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    },
                                     {
-                                        "bytes_sent": 0,
-                                        "created_at": "*"
-                                    }
-                                ],
-                                "cancel_states": [],
-                                "failed_states": [],
-                                "completed_states": [
+                                        "created_at": "*",
+                                        "state": "started",
+                                        "bytes_sent": 0
+                                    },
                                     {
-                                        "created_at": "*"
+                                        "created_at": "*",
+                                        "state": "completed"
                                     }
                                 ]
                             }
@@ -122,38 +119,35 @@ scenarios = [
                     action.AssertTransfers(
                         [
                             """{
+                        "id": "*",
                         "peer_id": "172.20.0.5",
                         "created_at": "*",
-                        "active_states": [],
-                        "cancel_states": [
+                        "states": [
                             {
-                                "by_peer": false,
-                                "created_at": "*"
+                                "created_at": "*",
+                                "state": "cancel",
+                                "by_peer": false
                             }
                         ],
-                        "failed_states": [],
                         "type": "incoming",
                         "paths": [
                             {
                                 "relative_path": "testfile-big",
                                 "bytes": 10485760,
-                                "pending_states": [
-                                    {
-                                        "created_at": "*"
-                                    }
-                                ],
-                                "started_states": [
+                                "states": [
                                     {
                                         "created_at": "*",
+                                        "state": "pending"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "started",
                                         "bytes_received": 0,
                                         "base_dir": "/tmp/received"
-                                    }
-                                ],
-                                "cancel_states": [],
-                                "failed_states": [],
-                                "completed_states": [
+                                    },
                                     {
-                                        "created_at": "*"
+                                        "created_at": "*",
+                                        "state": "completed"
                                     }
                                 ]
                             }
@@ -219,76 +213,70 @@ scenarios = [
                     action.AssertTransfers(
                         [
                             """{
+                        "id": "*",
                         "peer_id": "172.20.0.15",
                         "created_at": "*",
-                        "active_states": [],
-                        "cancel_states": [
+                        "states": [
                             {
-                                "by_peer": true,
-                                "created_at": "*"
+                                "created_at": "*",
+                                "state": "cancel",
+                                "by_peer": true
                             }
                         ],
-                        "failed_states": [],
                         "type": "outgoing",
                         "paths": [
                             {
                                 "relative_path": "testfile-small",
                                 "base_path": "/tmp",
                                 "bytes": 1048576,
-                                "pending_states": [
-                                    {
-                                        "created_at": "*"
-                                    }
-                                ],
-                                "started_states": [
+                                "states": [
                                     {
                                         "created_at": "*",
-                                        "bytes_sent": 0
-                                    }
-                                ],
-                                "cancel_states": [],
-                                "failed_states": [],
-                                "completed_states": [
+                                        "state": "pending"
+                                    },
                                     {
-                                        "created_at": "*"
+                                        "created_at": "*",
+                                        "state": "started",
+                                        "bytes_sent": 0
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "completed"
                                     }
                                 ]
                             }
                         ]
                     }""",
                             """{
+                        "id": "*",
                         "peer_id": "172.20.0.15",
                         "created_at": "*",
-                        "active_states": [],
-                        "cancel_states": [
+                        "states": [
                             {
                                 "created_at": "*",
+                                "state": "cancel",
                                 "by_peer": true
                             }
                         ],
-                        "failed_states": [],
                         "type": "outgoing",
                         "paths": [
                             {
                                 "relative_path": "testfile-big",
                                 "base_path": "/tmp",
                                 "bytes": 10485760,
-                                "pending_states": [
-                                    {
-                                        "created_at": "*"
-                                    }
-                                ],
-                                "started_states": [
+                                "states": [
                                     {
                                         "created_at": "*",
-                                        "bytes_sent": 0
-                                    }
-                                ],
-                                "cancel_states": [],
-                                "failed_states": [],
-                                "completed_states": [
+                                        "state": "pending"
+                                    },
                                     {
-                                        "created_at": "*"
+                                        "created_at": "*",
+                                        "state": "started",
+                                        "bytes_sent": 0
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "completed"
                                     }
                                 ]
                             }
@@ -365,75 +353,70 @@ scenarios = [
                     action.AssertTransfers(
                         [
                             """{
+                        "id": "*",
                         "peer_id": "172.20.0.5",
                         "created_at": "*",
-                        "active_states": [],
-                        "cancel_states": [
+                        "states": [
                             {
                                 "created_at": "*",
+                                "state": "cancel",
                                 "by_peer": false
                             }
                         ],
-                        "failed_states": [],
                         "type": "incoming",
                         "paths": [
                             {
                                 "relative_path": "testfile-small",
                                 "bytes": 1048576,
-                                "pending_states": [
-                                    {   
-                                        "created_at": "*"
-                                    }
-                                ],
-                                "started_states": [
+                                "states": [
                                     {
                                         "created_at": "*",
+                                        "state": "pending"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "started",
                                         "bytes_received": 0,
                                         "base_dir": "/tmp/received"
-                                    }
-                                ],
-                                "cancel_states": [],
-                                "failed_states": [],
-                                "completed_states": [
+                                    },
                                     {
-                                        "created_at": "*"
+                                        "created_at": "*",
+                                        "state": "completed"
                                     }
                                 ]
                             }
                         ]
                     }""",
                             """{
+                        "id": "*",
                         "peer_id": "172.20.0.5",
                         "created_at": "*",
-                        "active_states": [],
-                        "cancel_states": [
+                        "states": [
                             {
                                 "created_at": "*",
+                                "state": "cancel",
                                 "by_peer": false
                             }
                         ],
-                        "failed_states": [],
                         "type": "incoming",
                         "paths": [
                             {
                                 "relative_path": "testfile-big",
                                 "bytes": 10485760,
-                                "pending_states": [
-                                    {
-                                        "created_at": "*"
-                                    }
-                                ],
-                                "started_states": [
+                                "states": [
                                     {
                                         "created_at": "*",
-                                        "bytes_received": 0
-                                    }
-                                ],
-                                "cancel_states": [],
-                                "failed_states": [],
-                                "completed_states": [
+                                        "state": "pending"
+                                    },
                                     {
-                                        "created_at": "*"
+                                        "created_at": "*",
+                                        "state": "started",
+                                        "bytes_received": 0,
+                                        "base_dir": "/tmp/received"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "completed"
                                     }
                                 ]
                             }
@@ -3187,41 +3170,38 @@ scenarios = [
                     action.AssertTransfers(
                         [
                             """{
+                        "id": "*",
                         "peer_id": "172.20.0.15",
                         "created_at": "*",
-                        "active_states": [],
-                        "cancel_states": [
+                        "states": [
                             {
                                 "created_at": "*",
+                                "state": "cancel",
                                 "by_peer": true
                             }
                         ],
-                        "failed_states": [],
                         "type": "outgoing",
                         "paths": [
                             {
                                 "relative_path": "testfile-big",
                                 "base_path": "/tmp",
                                 "bytes": 10485760,
-                                "pending_states": [
-                                    {
-                                        "created_at": "*"
-                                    }
-                                ],
-                                "started_states": [
+                                "states": [
                                     {
                                         "created_at": "*",
+                                        "state": "pending"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "started",
                                         "bytes_sent": 0
-                                    }
-                                ],
-                                "cancel_states": [],
-                                "failed_states": [
+                                    },
                                     {
                                         "created_at": "*",
+                                        "state": "failed",
                                         "status_code": 28
                                     }
-                                ],
-                                "completed_states": []
+                                ]
                             }
                         ]
                     }"""
@@ -3263,41 +3243,38 @@ scenarios = [
                     action.AssertTransfers(
                         [
                             """{
+                        "id": "*",
                         "peer_id": "172.20.0.5",
                         "created_at": "*",
-                        "active_states": [],
-                        "cancel_states": [
+                        "states": [
                             {
                                 "created_at": "*",
+                                "state": "cancel",
                                 "by_peer": false
                             }
                         ],
-                        "failed_states": [],
                         "type": "incoming",
                         "paths": [
                             {
                                 "relative_path": "testfile-big",
                                 "bytes": 10485760,
-                                "pending_states": [
-                                    {
-                                        "created_at": "*"
-                                    }
-                                ],
-                                "started_states": [
+                                "states": [
                                     {
                                         "created_at": "*",
+                                        "state": "pending"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "started",
                                         "bytes_received": 0,
                                         "base_dir": "/tmp/received"
-                                    }
-                                ],
-                                "cancel_states": [],
-                                "failed_states": [
+                                    },
                                     {
                                         "created_at": "*",
+                                        "state": "failed",
                                         "status_code": 8
                                     }
-                                ],
-                                "completed_states": []
+                                ]
                             }
                         ]
                     }"""
