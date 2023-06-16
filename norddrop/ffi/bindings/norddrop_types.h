@@ -68,6 +68,9 @@ typedef enum norddrop_result {
    * Invalid private key provided
    */
   NORDDROP_RES_INVALID_PRIVKEY = 10,
+  /**
+   * Database error
+   */
   NORDDROP_RES_DB_ERROR = 11,
 } norddrop_result;
 
