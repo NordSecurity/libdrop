@@ -59,41 +59,26 @@ struct norddrop {};
         norddrop_destroy($self);
     }
 
-    // Start drop server. Listens for incoming connections. Allows files and responses to be received
     enum norddrop_result start(const char *listen_addr, const char* config_json);
 
-    // Stop drop server. Will not be reachable for peers
     enum norddrop_result stop();
         
-    // Cancel the whole the transfer request
     enum norddrop_result cancel_transfer(const char* txid);
 
-    // Cancel a single file in a request
     enum norddrop_result cancel_file(const char* txid, const char* fid);
 
-    // Download a file to a destination path
     enum norddrop_result download(const char* txid, const char* fid, const char* dst_path);
 
     %newobject new_transfer;
-    // Create a new transfer for the given descriptor(s). Returns transfer id(xfid)
     char* new_transfer(const char* peer, const char* descriptors);
 
-    // Purge transfers with the given id(s) from the database, accepts a JSON
-    // array of strings
     enum norddrop_result purge_transfers(const char *txids);
 
-    // Purge all transfers that are older than the given timestamp from the
-    // database. Accepts a UNIX timestamp in seconds with values between
-    // -210866760000 and 253402300799 inclusive
     enum norddrop_result purge_transfers_until(long long until_timestamp);
 
     %newobject get_transfers_since;
-    // Get all transfers since the given timestamp from the database.
-    // Accepts a UNIX timestamp in seconds with values between
-    // -210866760000 and 253402300799 inclusive
     char *get_transfers_since(long long since_timestamp);
 
-    // Returns current version of the library
     static char* version();
 };
 
