@@ -318,7 +318,11 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
         self.state
             .event_tx
-            .send(crate::Event::TransferCanceled(self.xfer.clone(), by_peer))
+            .send(crate::Event::TransferCanceled(
+                self.xfer.clone(),
+                true,
+                by_peer,
+            ))
             .await
             .expect("Could not send a transfer cancelled event, channel closed");
     }
@@ -400,7 +404,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
         self.state
             .event_tx
-            .send(crate::Event::TransferFailed(self.xfer.clone(), err))
+            .send(crate::Event::TransferFailed(self.xfer.clone(), err, false))
             .await
             .expect("Event channel should always be open");
     }

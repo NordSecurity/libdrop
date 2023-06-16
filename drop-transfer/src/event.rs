@@ -14,7 +14,7 @@ pub enum Event {
     RequestQueued(Transfer),
 
     FileUploadStarted(Transfer, FileId),
-    FileDownloadStarted(Transfer, FileId),
+    FileDownloadStarted(Transfer, FileId, String),
 
     FileUploadProgress(Transfer, FileId, u64),
     FileDownloadProgress(Transfer, FileId, u64),
@@ -28,7 +28,7 @@ pub enum Event {
     FileUploadFailed(Transfer, FileId, Error),
     FileDownloadFailed(Transfer, FileId, Error),
 
-    TransferCanceled(Transfer, bool),
+    TransferCanceled(Transfer, bool, bool),
 
-    TransferFailed(Transfer, Error),
+    TransferFailed(Transfer, Error, bool),
 }

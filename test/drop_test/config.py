@@ -110,3 +110,5 @@ FILES = {
         size=20 * 1024, id="Jr2sHMHPjPP5Y19bGJMf17GeT3B4Jrs1ozB1UnFcRzo"
     ),
 }
+
+DBFILES = {"26-corrupted.sqlite": b"this is a corrupted sqlite file"}

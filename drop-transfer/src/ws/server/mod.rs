@@ -58,8 +58,9 @@ pub enum ServerReq {
 
 pub struct FileXferTask {
     pub file: crate::File,
-    pub location: Hidden<PathBuf>,
+    pub absolute_path: Hidden<PathBuf>,
     pub xfer: crate::Transfer,
+    pub base_dir: Hidden<PathBuf>,
 }
 
 struct TmpFileState {
@@ -281,7 +282,7 @@ impl RunContext<'_> {
 
             self.state
                 .event_tx
-                .send(Event::TransferFailed(xfer.clone(), Error::Canceled))
+                .send(Event::TransferFailed(xfer.clone(), Error::Canceled, true))
                 .await
                 .expect("Failed to send TransferFailed event");
         };
@@ -328,6 +329,10 @@ async fn handle_client(
 
             return;
         } else {
+            if let Err(err) = state.storage.insert_transfer(&xfer.storage_info()).await {
+                error!(logger, "Failed to insert transfer into storage: {err}",);
+            }
+
             state
                 .event_tx
                 .send(Event::RequestReceived(xfer.clone()))
@@ -336,9 +341,15 @@ async fn handle_client(
         }
     }
 
-    let (send_tx, mut send_rx) = mpsc::channel(2);
     let mut ping = hander.pinger();
-    let mut handler = hander.upgrade(send_tx, xfer);
+
+    let (send_tx, mut send_rx) = mpsc::channel(2);
+    let mut handler = if let Some(handler) = hander.upgrade(&mut socket, send_tx, xfer).await {
+        handler
+    } else {
+        let _ = socket.close().await;
+        return;
+    };
 
     let task = async {
         loop {
@@ -405,11 +416,17 @@ async fn handle_client(
 }
 
 impl FileXferTask {
-    pub fn new(file: crate::File, xfer: crate::Transfer, location: PathBuf) -> crate::Result<Self> {
+    pub fn new(
+        file: crate::File,
+        xfer: crate::Transfer,
+        absolute_path: PathBuf,
+        base_dir: PathBuf,
+    ) -> crate::Result<Self> {
         Ok(Self {
             file,
             xfer,
-            location: Hidden(location),
+            absolute_path: Hidden(absolute_path),
+            base_dir: Hidden(base_dir),
         })
     }
 
@@ -421,7 +438,7 @@ impl FileXferTask {
         let mut opts = fs::OpenOptions::new();
         opts.write(true).create_new(true);
 
-        let mut iter = crate::utils::filepath_variants(&self.location.0)?;
+        let mut iter = crate::utils::filepath_variants(&self.absolute_path.0)?;
         let dst_location = loop {
             let path = iter.next().expect("File paths iterator should never end");
 
@@ -547,7 +564,8 @@ impl FileXferTask {
             Err(err) => {
                 error!(
                     logger,
-                    "Could not rename temporary file {:?} after downloading: {err}", self.location,
+                    "Could not rename temporary file {:?} after downloading: {err}",
+                    self.absolute_path,
                 );
                 return Err(err);
             }
@@ -607,6 +625,7 @@ impl FileXferTask {
                     .start(crate::Event::FileDownloadStarted(
                         self.xfer.clone(),
                         self.file.id().clone(),
+                        self.base_dir.to_string_lossy().to_string(),
                     ))
                     .await;
 

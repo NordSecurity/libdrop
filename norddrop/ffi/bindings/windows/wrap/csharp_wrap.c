@@ -454,6 +454,49 @@ SWIGEXPORT char * SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_NewTransfer___(vo
 }
 
 
+SWIGEXPORT int SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_PurgeTransfers___(void * jarg1, char * jarg2) {
+  int jresult ;
+  struct norddrop *arg1 = (struct norddrop *) 0 ;
+  char *arg2 = (char *) 0 ;
+  enum norddrop_result result;
+  
+  arg1 = (struct norddrop *)jarg1; 
+  arg2 = (char *)jarg2; 
+  result = (enum norddrop_result)norddrop_purge_transfers(arg1,(char const *)arg2);
+  jresult = (int)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT int SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_PurgeTransfersUntil___(void * jarg1, long long jarg2) {
+  int jresult ;
+  struct norddrop *arg1 = (struct norddrop *) 0 ;
+  long long arg2 ;
+  enum norddrop_result result;
+  
+  arg1 = (struct norddrop *)jarg1; 
+  arg2 = (long long)jarg2; 
+  result = (enum norddrop_result)norddrop_purge_transfers_until(arg1,arg2);
+  jresult = (int)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT char * SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_GetTransfersSince___(void * jarg1, long long jarg2) {
+  char * jresult ;
+  struct norddrop *arg1 = (struct norddrop *) 0 ;
+  long long arg2 ;
+  char *result = 0 ;
+  
+  arg1 = (struct norddrop *)jarg1; 
+  arg2 = (long long)jarg2; 
+  result = (char *)norddrop_get_transfers_since(arg1,arg2);
+  jresult = SWIG_csharp_string_callback((const char *)result); 
+  free(result);
+  return jresult;
+}
+
+
 SWIGEXPORT char * SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_Version___() {
   char * jresult ;
   char *result = 0 ;

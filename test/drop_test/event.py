@@ -23,6 +23,19 @@ def print_uuid(slot: int) -> str:
     return f"{uuid} (slot: {slot})"
 
 
+def get_uuid(slot: int) -> str:
+    uuid: str = "MISSING"
+
+    UUIDS_LOCK.acquire()
+
+    if slot < len(UUIDS):
+        uuid = UUIDS[slot]
+
+    UUIDS_LOCK.release()
+
+    return uuid
+
+
 class Event:
     def __init__(self):
         raise Exception("Base Event class should not be initialized")
@@ -291,3 +304,18 @@ class Panic(Event):
 
     def __str__(self):
         return f"Panic(info={self._info})"
+
+
+class RuntimeError(Event):
+    def __init__(self, status: int):
+        self._status = status
+
+    def __eq__(self, rhs):
+        if not isinstance(rhs, RuntimeError):
+            return False
+        if self._status != rhs._status:
+            return False
+        return True
+
+    def __str__(self):
+        return f"RuntimeError(status={self._status})"

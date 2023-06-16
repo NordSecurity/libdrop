@@ -1,4 +1,5 @@
 use std::{
+    cmp::Ordering,
     collections::HashMap,
     fs,
     net::IpAddr,
@@ -9,6 +10,7 @@ use std::{
 };
 
 use anyhow::Context;
+use async_cell::sync::AsyncCell;
 use drop_config::DropConfig;
 use futures::{SinkExt, StreamExt};
 use slog::{debug, error, info, warn};
@@ -36,6 +38,7 @@ pub struct HandlerLoop<'a> {
     xfer: crate::Transfer,
     last_recv: Instant,
     jobs: HashMap<FileId, FileTask>,
+    checksums: HashMap<FileId, Arc<AsyncCell<[u8; 32]>>>,
 }
 
 struct Downloader {
@@ -43,6 +46,7 @@ struct Downloader {
     file_id: FileId,
     msg_tx: Sender<Message>,
     csum_rx: mpsc::Receiver<v4::ReportChsum>,
+    full_csum: Arc<AsyncCell<[u8; 32]>>,
     offset: u64,
 }
 
@@ -96,21 +100,91 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
         Ok(())
     }
 
-    fn upgrade(self, msg_tx: Sender<Message>, xfer: crate::Transfer) -> Self::Loop {
+    async fn upgrade(
+        mut self,
+        ws: &mut WebSocket,
+        msg_tx: Sender<Message>,
+        xfer: crate::Transfer,
+    ) -> Option<Self::Loop> {
+        let task = async {
+            let checksums = self
+                .state
+                .storage
+                .fetch_checksums(xfer.id())
+                .await
+                .context("Failed to fetch fileche chsums from DB")?;
+
+            let mut checksum_map = HashMap::new();
+            let mut to_fetch = Vec::new();
+
+            for (xfile, csum_bytes) in checksums.into_iter().filter_map(|csum| {
+                let xfile = xfer.files().get(&csum.file_id)?;
+                Some((xfile, csum.checksum))
+            }) {
+                let acell = checksum_map
+                    .entry(xfile.id().clone())
+                    .or_insert_with(AsyncCell::shared);
+
+                match csum_bytes {
+                    Some(csbytes) => acell.set(
+                        csbytes
+                            .try_into()
+                            .ok()
+                            .context("Invalid length checksum stored in the DB")?,
+                    ),
+                    None => to_fetch.push(xfile.id().clone()),
+                }
+            }
+
+            Ok((to_fetch, checksum_map))
+        };
+
+        let (to_fetch, checksums) = match task.await {
+            Ok(res) => res,
+            Err(err) => {
+                error!(self.logger, "Failed to prepare checksum info: {err}");
+
+                let _ = self.on_error(ws, err).await;
+                return None;
+            }
+        };
+
         let Self {
             peer: _,
             state,
             logger,
         } = self;
 
-        HandlerLoop {
+        // task responsible for requesting the checksum
+        let req_file_checksums = {
+            let msg_tx = msg_tx.clone();
+            let logger = logger.clone();
+            let xfer = xfer.clone();
+
+            async move {
+                for xfile in to_fetch.into_iter().filter_map(|id| xfer.files().get(&id)) {
+                    let msg = v4::ReqChsum {
+                        file: xfile.file_id.clone(),
+                        limit: xfile.size(),
+                    };
+                    let msg = v4::ServerMsg::ReqChsum(msg);
+                    if let Err(err) = msg_tx.send((&msg).into()).await {
+                        warn!(logger, "Failed to request checksum: {err}");
+                    }
+                }
+            }
+        };
+        tokio::spawn(req_file_checksums);
+
+        Some(HandlerLoop {
             state,
             msg_tx,
             xfer,
             last_recv: Instant::now(),
             jobs: HashMap::new(),
             logger,
-        }
+            checksums,
+        })
     }
 
     fn pinger(&mut self) -> Self::Pinger {
@@ -133,11 +207,18 @@ impl HandlerLoop<'_> {
             return Ok(());
         }
 
+        let full_csum_cell = self
+            .checksums
+            .get(task.file.id())
+            .context("Missing file checksum cell")?
+            .clone();
+
         let file_id = task.file.id().clone();
         let state = FileTask::start(
             self.msg_tx.clone(),
             self.state.clone(),
             task,
+            full_csum_cell,
             self.logger.clone(),
         );
 
@@ -253,7 +334,33 @@ impl HandlerLoop<'_> {
     }
 
     async fn on_checksum(&mut self, report: v4::ReportChsum) {
-        if let Some(job) = self.jobs.get_mut(&report.file) {
+        let xfile = match self.xfer.files().get(&report.file) {
+            Some(file) => file,
+            None => return,
+        };
+
+        // Full checksum requsted at the begining of the transfer
+        if report.limit == xfile.size() {
+            self.checksums
+                .get(&report.file)
+                .expect("Missing file")
+                .or_set(report.checksum);
+
+            let storage = self.state.storage.clone();
+            let transfer_id = self.xfer.id();
+            let file_id = report.file.clone();
+            let logger = self.logger.clone();
+
+            tokio::spawn(async move {
+                if let Err(err) = storage
+                    .save_checksum(transfer_id, file_id.as_ref(), &report.checksum)
+                    .await
+                {
+                    error!(logger, "Failed to save checksum into DB: {err}");
+                }
+            });
+        // Requests made by the download task
+        } else if let Some(job) = self.jobs.get_mut(&report.file) {
             if job.csum_tx.send(report).await.is_err() {
                 warn!(
                     self.logger,
@@ -300,7 +407,11 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
         self.state
             .event_tx
-            .send(crate::Event::TransferCanceled(self.xfer.clone(), by_peer))
+            .send(crate::Event::TransferCanceled(
+                self.xfer.clone(),
+                false,
+                by_peer,
+            ))
             .await
             .expect("Could not send a file cancelled event, channel closed");
     }
@@ -371,7 +482,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
         self.state
             .event_tx
-            .send(crate::Event::TransferFailed(self.xfer.clone(), err))
+            .send(crate::Event::TransferFailed(self.xfer.clone(), err, true))
             .await
             .expect("Event channel should always be open");
     }
@@ -418,7 +529,7 @@ impl Downloader {
 impl handler::Downloader for Downloader {
     async fn init(&mut self, task: &super::FileXferTask) -> crate::Result<handler::DownloadInit> {
         let filename_len = task
-            .location
+            .absolute_path
             .file_name()
             .expect("Cannot extract file name")
             .len();
@@ -427,11 +538,18 @@ impl handler::Downloader for Downloader {
             return Err(crate::Error::FilenameTooLong);
         }
 
-        let tmp_location: Hidden<PathBuf> = Hidden(
-            task.location
-                .0
-                .with_file_name(format!("{}.dropdl-part", task.file.id().to_string())),
-        );
+        let tmp_filename = if cfg!(target_os = "android") {
+            format!(
+                "{}-{}.dropdl-part",
+                task.xfer.id().as_simple(),
+                task.file.id()
+            )
+        } else {
+            format!("{}.dropdl-part", task.file.id())
+        };
+
+        let tmp_location: Hidden<PathBuf> =
+            Hidden(task.absolute_path.0.with_file_name(tmp_filename));
 
         // Check if we can resume the temporary file
         match tokio::task::block_in_place(|| super::TmpFileState::load(&tmp_location.0)) {
@@ -442,17 +560,46 @@ impl handler::Downloader for Downloader {
                     meta.len()
                 );
 
-                let report = self.request_csum(meta.len()).await?;
+                self.offset = match meta.len().cmp(&task.file.size()) {
+                    Ordering::Less => {
+                        let report = self.request_csum(meta.len()).await?;
 
-                if report.limit == meta.len() && report.checksum == csum {
-                    // All matches, we can continue with temp file
-                    self.offset = meta.len();
-                } else {
-                    info!(
-                        self.logger,
-                        "Found missmatch in partially downloaded file, overwriting"
-                    );
-                }
+                        if report.limit == meta.len() && report.checksum == csum {
+                            // All matches, we can continue with temp file
+                            meta.len()
+                        } else {
+                            info!(
+                                self.logger,
+                                "Found missmatch in partially downloaded file, overwriting"
+                            );
+
+                            0
+                        }
+                    }
+                    Ordering::Equal => {
+                        if self.full_csum.get().await == csum {
+                            // All matches the temp file is actually the full file
+                            meta.len()
+                        } else {
+                            info!(
+                                self.logger,
+                                "The partially downloaded file has the same size as the target \
+                                 file but the checksum does not match, overwriting"
+                            );
+
+                            0
+                        }
+                    }
+                    Ordering::Greater => {
+                        info!(
+                            self.logger,
+                            "The partially downloaded file is bigger then the target file, \
+                             overwriting"
+                        );
+
+                        0
+                    }
+                };
             }
             Err(err) => {
                 debug!(self.logger, "Failed to load temporary file info: {err}");
@@ -511,6 +658,7 @@ impl FileTask {
         msg_tx: Sender<Message>,
         state: Arc<State>,
         task: super::FileXferTask,
+        full_csum: Arc<AsyncCell<[u8; 32]>>,
         logger: slog::Logger,
     ) -> Self {
         let events = Arc::new(FileEventTx::new(&state));
@@ -522,6 +670,7 @@ impl FileTask {
             msg_tx,
             logger: logger.clone(),
             csum_rx,
+            full_csum,
             offset: 0,
         };
         let job = tokio::spawn(task.run(state, Arc::clone(&events), downloader, chunks_rx, logger));

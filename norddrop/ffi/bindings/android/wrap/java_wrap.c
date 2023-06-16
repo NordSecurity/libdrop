@@ -860,6 +860,63 @@ SWIGEXPORT jstring JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1ne
 }
 
 
+SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1purgeTransfers(JNIEnv *jenv, jclass jcls, jlong jarg1, jobject jarg1_, jstring jarg2) {
+  jint jresult = 0 ;
+  struct norddrop *arg1 = (struct norddrop *) 0 ;
+  char *arg2 = (char *) 0 ;
+  enum norddrop_result result;
+  
+  (void)jenv;
+  (void)jcls;
+  (void)jarg1_;
+  arg1 = *(struct norddrop **)&jarg1; 
+  arg2 = 0;
+  if (jarg2) {
+    arg2 = (char *)(*jenv)->GetStringUTFChars(jenv, jarg2, 0);
+    if (!arg2) return 0;
+  }
+  result = (enum norddrop_result)norddrop_purge_transfers(arg1,(char const *)arg2);
+  jresult = (jint)result; 
+  if (arg2) (*jenv)->ReleaseStringUTFChars(jenv, jarg2, (const char *)arg2);
+  return jresult;
+}
+
+
+SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1purgeTransfersUntil(JNIEnv *jenv, jclass jcls, jlong jarg1, jobject jarg1_, jlong jarg2) {
+  jint jresult = 0 ;
+  struct norddrop *arg1 = (struct norddrop *) 0 ;
+  long long arg2 ;
+  enum norddrop_result result;
+  
+  (void)jenv;
+  (void)jcls;
+  (void)jarg1_;
+  arg1 = *(struct norddrop **)&jarg1; 
+  arg2 = (long long)jarg2; 
+  result = (enum norddrop_result)norddrop_purge_transfers_until(arg1,arg2);
+  jresult = (jint)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT jstring JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1getTransfersSince(JNIEnv *jenv, jclass jcls, jlong jarg1, jobject jarg1_, jlong jarg2) {
+  jstring jresult = 0 ;
+  struct norddrop *arg1 = (struct norddrop *) 0 ;
+  long long arg2 ;
+  char *result = 0 ;
+  
+  (void)jenv;
+  (void)jcls;
+  (void)jarg1_;
+  arg1 = *(struct norddrop **)&jarg1; 
+  arg2 = (long long)jarg2; 
+  result = (char *)norddrop_get_transfers_since(arg1,arg2);
+  if (result) jresult = (*jenv)->NewStringUTF(jenv, (const char *)result);
+  free(result);
+  return jresult;
+}
+
+
 SWIGEXPORT jstring JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1version(JNIEnv *jenv, jclass jcls) {
   jstring jresult = 0 ;
   char *result = 0 ;

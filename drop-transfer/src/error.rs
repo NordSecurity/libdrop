@@ -72,28 +72,30 @@ impl Error {
 
 impl From<&Error> for u32 {
     fn from(err: &Error) -> Self {
+        use drop_core::Status;
+
         match err {
-            Error::Canceled => 1,
-            Error::BadPath(_) => 2,
-            Error::BadFile => 3,
-            Error::ServiceStop => 6,
-            Error::BadTransfer => 7,
-            Error::BadTransferState(_) => 8,
-            Error::BadFileId => 9,
-            Error::Io(_) => 15,
-            Error::DirectoryNotExpected => 17,
-            Error::TransferLimitsExceeded => 20,
-            Error::MismatchedSize => 21,
-            Error::UnexpectedData => 22,
-            Error::InvalidArgument => 23,
-            Error::TransferTimeout => 24,
-            Error::WsServer(_) => 25,
-            Error::WsClient(_) => 26,
-            Error::AddrInUse => 27,
-            Error::FileModified => 28,
-            Error::FilenameTooLong => 29,
-            Error::AuthenticationFailed => 30,
-            Error::StorageError => 31,
+            Error::Canceled => Status::Canceled as _,
+            Error::BadPath(_) => Status::BadPath as _,
+            Error::BadFile => Status::BadFile as _,
+            Error::ServiceStop => Status::ServiceStop as _,
+            Error::BadTransfer => Status::BadTransfer as _,
+            Error::BadTransferState(_) => Status::BadTransferState as _,
+            Error::BadFileId => Status::BadFileId as _,
+            Error::Io(_) => Status::Io as _,
+            Error::DirectoryNotExpected => Status::DirectoryNotExpected as _,
+            Error::TransferLimitsExceeded => Status::TransferLimitsExceeded as _,
+            Error::MismatchedSize => Status::MismatchedSize as _,
+            Error::UnexpectedData => Status::UnexpectedData as _,
+            Error::InvalidArgument => Status::InvalidArgument as _,
+            Error::TransferTimeout => Status::TransferTimeout as _,
+            Error::WsServer(_) => Status::WsServer as _,
+            Error::WsClient(_) => Status::WsClient as _,
+            Error::AddrInUse => Status::AddrInUse as _,
+            Error::FileModified => Status::FileModified as _,
+            Error::FilenameTooLong => Status::FilenameTooLong as _,
+            Error::AuthenticationFailed => Status::AuthenticationFailed as _,
+            Error::StorageError => Status::StorageError as _,
         }
     }
 }
@@ -116,6 +118,6 @@ impl From<walkdir::Error> for Error {
         value
             .into_io_error()
             .map(Into::into)
-            .unwrap_or(Error::BadPath("Filesystem loop detected".into()))
+            .unwrap_or_else(|| Error::BadPath("Filesystem loop detected".into()))
     }
 }

@@ -6,6 +6,7 @@ mod manager;
 mod protocol;
 mod quarantine;
 pub mod service;
+mod storage_dispatch;
 pub mod transfer;
 pub mod utils;
 mod ws;
@@ -16,6 +17,7 @@ pub use crate::{
     event::Event,
     file::{File, FileId},
     service::Service,
+    storage_dispatch::StorageDispatch,
     transfer::Transfer,
 };
 

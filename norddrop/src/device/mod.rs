@@ -16,6 +16,9 @@ use crate::{device::types::FinishEvent, ffi, ffi::types as ffi_types};
 
 pub type Result<T = ()> = std::result::Result<T, ffi::types::norddrop_result>;
 
+const SQLITE_TIMESTAMP_MIN: i64 = -210866760000;
+const SQLITE_TIMESTAMP_MAX: i64 = 253402300799;
+
 pub(super) struct NordDropFFI {
     rt: tokio::runtime::Runtime,
     pub logger: Logger,
@@ -125,13 +128,27 @@ impl NordDropFFI {
 
         let (tx, mut rx) = mpsc::channel::<drop_transfer::Event>(16);
 
+        let storage = Arc::new(self.rt.block_on(open_database(
+            &self.config.drop.storage_path,
+            &self.event_dispatcher,
+            &self.logger,
+        ))?);
+
         // Spawn a task grabbing events from the inner service and dispatch them
         // to the host app
         let ed = self.event_dispatcher.clone();
         let event_logger = self.logger.clone();
+        let event_storage = storage.clone();
+
         self.rt.spawn(async move {
+            let mut dispatch = drop_transfer::StorageDispatch::new(&event_storage);
+
             while let Some(e) = rx.recv().await {
                 debug!(event_logger, "emitting event: {:#?}", e);
+
+                if let Err(err) = dispatch.handle_event(&e).await {
+                    error!(event_logger, "Failed to handle database event: {err}");
+                }
 
                 // Android team reported problems with the event ordering.
                 // The events where dispatched in different order than where emitted.
@@ -142,14 +159,6 @@ impl NordDropFFI {
         });
 
         self.rt.block_on(async {
-            let storage =
-                drop_storage::Storage::new(self.logger.clone(), &self.config.drop.storage_path)
-                    .await
-                    .map_err(|e| {
-                        error!(self.logger, "Failed to prepare storage: {}", e);
-                        ffi::types::NORDDROP_RES_DB_ERROR
-                    })?;
-
             let service = match Service::start(
                 addr,
                 storage,
@@ -192,6 +201,107 @@ impl NordDropFFI {
                 .await
                 .map_err(|_| ffi::types::NORDDROP_RES_INSTANCE_STOP)
         })
+    }
+
+    pub(super) fn purge_transfers(&mut self, transfer_ids: &str) -> Result<()> {
+        trace!(
+            self.logger,
+            "norddrop_purge_transfers() : {:?}",
+            transfer_ids
+        );
+
+        let transfer_ids: Vec<String> =
+            serde_json::from_str(transfer_ids).map_err(|_| ffi::types::NORDDROP_RES_JSON_PARSE)?;
+
+        self.rt.block_on(async {
+            self.instance
+                .lock()
+                .await
+                .as_mut()
+                .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+                .purge_transfers(transfer_ids)
+                .await
+                .map_err(|err| {
+                    error!(self.logger, "Failed to purge transfers: {:?}", err);
+                    match err {
+                        drop_transfer::Error::StorageError => ffi::types::NORDDROP_RES_DB_ERROR,
+                        _ => ffi::types::NORDDROP_RES_DB_ERROR,
+                    }
+                })
+        })
+    }
+
+    pub(super) fn purge_transfers_until(&mut self, until_timestamp: i64) -> Result<()> {
+        trace!(
+            self.logger,
+            "norddrop_purge_transfers_until() : {:?}",
+            until_timestamp
+        );
+
+        if !(SQLITE_TIMESTAMP_MIN..=SQLITE_TIMESTAMP_MAX).contains(&until_timestamp) {
+            error!(
+                self.logger,
+                "Invalid timestamp: {until_timestamp}, the value must be between \
+                 {SQLITE_TIMESTAMP_MIN} and {SQLITE_TIMESTAMP_MAX}"
+            );
+            return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
+        }
+
+        self.rt.block_on(async {
+            self.instance
+                .lock()
+                .await
+                .as_mut()
+                .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+                .purge_transfers_until(until_timestamp)
+                .await
+                .map_err(|err| {
+                    error!(self.logger, "Failed to purge transfers: {:?}", err);
+                    match err {
+                        drop_transfer::Error::StorageError => ffi::types::NORDDROP_RES_DB_ERROR,
+                        _ => ffi::types::NORDDROP_RES_DB_ERROR,
+                    }
+                })
+        })
+    }
+
+    pub(super) fn transfers_since(&mut self, since_timestamp: i64) -> Result<String> {
+        trace!(
+            self.logger,
+            "norddrop_get_transfers_since() since_timestamp: {:?}",
+            since_timestamp
+        );
+
+        if !(SQLITE_TIMESTAMP_MIN..=SQLITE_TIMESTAMP_MAX).contains(&since_timestamp) {
+            error!(
+                self.logger,
+                "Invalid timestamp: {since_timestamp}, the value must be between \
+                 {SQLITE_TIMESTAMP_MIN} and {SQLITE_TIMESTAMP_MAX}"
+            );
+            return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
+        }
+
+        let result = self.rt.block_on(async {
+            self.instance
+                .lock()
+                .await
+                .as_mut()
+                .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+                .transfers_since(since_timestamp)
+                .await
+                .map_err(|err| {
+                    error!(self.logger, "Failed to get transfers: {:?}", err);
+                    match err {
+                        drop_transfer::Error::StorageError => ffi::types::NORDDROP_RES_DB_ERROR,
+                        _ => ffi::types::NORDDROP_RES_DB_ERROR,
+                    }
+                })
+        })?;
+
+        let result =
+            serde_json::to_string(&result).map_err(|_| ffi::types::NORDDROP_RES_JSON_PARSE)?;
+
+        Ok(result)
     }
 
     pub(super) fn new_transfer(&mut self, peer: &str, descriptors: &str) -> Result<uuid::Uuid> {
@@ -248,7 +358,8 @@ impl NordDropFFI {
                 .await
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
-                .send_request(xfer);
+                .send_request(xfer)
+                .await;
 
             Result::Ok(())
         })?;
@@ -444,4 +555,42 @@ fn prepare_transfer_files(
     }
 
     Ok(files)
+}
+
+async fn open_database(
+    dbpath: &str,
+    events: &EventDispatcher,
+    logger: &slog::Logger,
+) -> Result<drop_storage::Storage> {
+    // Try opening the DB 3 times
+    for i in 1..=3 {
+        match drop_storage::Storage::new(logger.clone(), dbpath).await {
+            Ok(storage) => return Ok(storage),
+            Err(err) => warn!(logger, "Failed to open DB: {err}, already tried {i} times",),
+        }
+    }
+
+    // Still problems? Let's try to delete the file
+    warn!(logger, "Removing old DB file");
+    if let Err(err) = std::fs::remove_file(dbpath) {
+        error!(
+            logger,
+            "Failed to opend DB and failed to remove it's file: {err}"
+        );
+        return Err(ffi::types::NORDDROP_RES_DB_ERROR);
+    } else {
+        // Inform app that we wiped the old DB file
+        events.dispatch(types::Event::RuntimeError {
+            status: drop_core::Status::DbLost,
+        });
+    };
+
+    // Final try after cleaning up old DB file
+    match drop_storage::Storage::new(logger.clone(), dbpath).await {
+        Ok(storage) => Ok(storage),
+        Err(err) => {
+            error!(logger, "Failed to prepare storage: {err}");
+            Err(ffi::types::NORDDROP_RES_DB_ERROR)
+        }
+    }
 }
