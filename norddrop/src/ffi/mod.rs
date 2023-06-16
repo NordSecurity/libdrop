@@ -260,6 +260,78 @@ pub extern "C" fn norddrop_stop(dev: &norddrop) -> norddrop_result {
     result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
 }
 
+/// Purge transfers with the given id(s) from the database, accepts a JSON array
+/// of strings
+#[no_mangle]
+pub extern "C" fn norddrop_purge_transfers(
+    dev: &norddrop,
+    txids: *const c_char,
+) -> norddrop_result {
+    let result = panic::catch_unwind(move || {
+        let mut dev = match dev.0.lock() {
+            Ok(inst) => inst,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        let txids = {
+            if txids.is_null() {
+                return norddrop_result::NORDDROP_RES_INVALID_STRING;
+            }
+
+            ffi_try!(unsafe { CStr::from_ptr(txids) }.to_str())
+        };
+
+        dev.purge_transfers(txids)
+            .norddrop_log_result(&dev.logger, "norddrop_purge_transfers")
+    });
+
+    result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
+}
+
+/// Purge all transfers that are older than the given timestamp from the
+/// database. Accepts a UNIX timestamp in seconds
+#[no_mangle]
+pub extern "C" fn norddrop_purge_transfers_until(
+    dev: &norddrop,
+    until_timestamp: std::ffi::c_longlong,
+) -> norddrop_result {
+    let result = panic::catch_unwind(move || {
+        let mut dev = match dev.0.lock() {
+            Ok(inst) => inst,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        dev.purge_transfers_until(until_timestamp)
+            .norddrop_log_result(&dev.logger, "norddrop_purge_transfers_until")
+    });
+
+    result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
+}
+
+/// Get all transfers since the given timestamp from the database. Accepts a
+/// UNIX timestamp in seconds
+#[no_mangle]
+pub extern "C" fn norddrop_get_transfers_since(
+    dev: &norddrop,
+    since_timestamp: std::ffi::c_longlong,
+) -> *mut c_char {
+    let res = panic::catch_unwind(move || {
+        let mut dev = match dev.0.lock() {
+            Ok(inst) => inst,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        let transfers = dev.transfers_since(since_timestamp)?;
+
+        Ok::<Vec<u8>, norddrop_result>(transfers.into_bytes())
+    });
+
+    match res {
+        Ok(Ok(transfers)) => new_unmanaged_str(&transfers),
+        _ => std::ptr::null_mut(),
+    }
+}
+
 /// Create a new instance of norddrop. This is a required step to work with API
 /// further
 #[no_mangle]

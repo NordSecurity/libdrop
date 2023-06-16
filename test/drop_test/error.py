@@ -31,3 +31,6 @@ class Error(IntEnum):
     ADDR_IN_USE = (27,)
     FILE_MODIFIED = (28,)
     FILENAME_TOO_LONG = (29,)
+    AUTHENTICATION_FAILED = (30,)
+    STORAGE_ERROR = (31,)
+    DB_LOST = (32,)

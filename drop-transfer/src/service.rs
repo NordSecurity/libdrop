@@ -7,6 +7,7 @@ use std::{
 
 use drop_analytics::Moose;
 use drop_config::DropConfig;
+use drop_storage::Storage;
 use slog::{debug, error, warn, Logger};
 use tokio::{
     sync::{mpsc, Mutex},
@@ -33,6 +34,7 @@ pub(super) struct State {
     pub(crate) moose: Arc<dyn Moose>,
     pub(crate) auth: Arc<auth::Context>,
     pub(crate) config: Arc<DropConfig>,
+    pub(crate) storage: Arc<Storage>,
 }
 
 pub struct Service {
@@ -65,7 +67,7 @@ macro_rules! moose_try_file {
 impl Service {
     pub fn start(
         addr: IpAddr,
-        storage: drop_storage::Storage,
+        storage: Arc<Storage>,
         event_tx: mpsc::Sender<Event>,
         logger: Logger,
         config: Arc<DropConfig>,
@@ -75,10 +77,11 @@ impl Service {
         let task = || {
             let state = Arc::new(State {
                 event_tx,
-                transfer_manager: Mutex::new(TransferManager::new(storage)),
+                transfer_manager: Mutex::default(),
                 moose: moose.clone(),
                 config,
                 auth: auth.clone(),
+                storage,
             });
 
             let stop = CancellationToken::new();
@@ -114,12 +117,48 @@ impl Service {
         res
     }
 
-    pub fn send_request(&mut self, xfer: crate::Transfer) {
+    pub async fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<(), Error> {
+        self.state
+            .storage
+            .purge_transfers(transfer_ids)
+            .await
+            .map_err(|_| Error::StorageError)
+    }
+
+    pub async fn purge_transfers_until(&self, until_timestamp: i64) -> Result<(), Error> {
+        self.state
+            .storage
+            .purge_transfers_until(until_timestamp)
+            .await
+            .map_err(|_| Error::StorageError)
+    }
+
+    pub async fn transfers_since(
+        &self,
+        since_timestamp: i64,
+    ) -> Result<Vec<drop_storage::types::Transfer>, Error> {
+        self.state
+            .storage
+            .transfers_since(since_timestamp)
+            .await
+            .map_err(|_| Error::StorageError)
+    }
+
+    pub async fn send_request(&mut self, xfer: crate::Transfer) {
         self.state.moose.service_quality_transfer_batch(
             drop_analytics::Phase::Start,
             xfer.id().to_string(),
             xfer.info(),
         );
+
+        if let Err(err) = self
+            .state
+            .storage
+            .insert_transfer(&xfer.storage_info())
+            .await
+        {
+            error!(self.logger, "Failed to insert transfer into storage: {err}",);
+        }
 
         let stop_job = {
             let state = self.state.clone();
@@ -132,7 +171,7 @@ impl Service {
 
                 state
                     .event_tx
-                    .send(Event::TransferFailed(xfer, crate::Error::Canceled))
+                    .send(Event::TransferFailed(xfer, crate::Error::Canceled, true))
                     .await
                     .expect("Failed to send TransferFailed event");
             }
@@ -184,7 +223,7 @@ impl Service {
             Ok((xfer, chann, mapped_file_path))
         };
 
-        let (xfer, channel, location) =
+        let (xfer, channel, absolute_path) =
             moose_try_file!(self.state.moose, fetch_xfer.await, uuid, None);
 
         let file = moose_try_file!(
@@ -198,7 +237,10 @@ impl Service {
         let file_info = file.info();
 
         // Path validation
-        if location.components().any(|x| x == Component::ParentDir) {
+        if absolute_path
+            .components()
+            .any(|x| x == Component::ParentDir)
+        {
             let err = Err(Error::BadPath(
                 "Path should not contain a reference to parrent directory".into(),
             ));
@@ -207,7 +249,7 @@ impl Service {
 
         let parent_location = moose_try_file!(
             self.state.moose,
-            location
+            absolute_path
                 .parent()
                 .ok_or_else(|| Error::BadPath("Missing parent path".into())),
             uuid,
@@ -239,7 +281,7 @@ impl Service {
 
         let task = moose_try_file!(
             self.state.moose,
-            FileXferTask::new(file, xfer, location),
+            FileXferTask::new(file, xfer, absolute_path, parent_dir.into()),
             uuid,
             file_info
         );

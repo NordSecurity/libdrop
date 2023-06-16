@@ -64,6 +64,18 @@ public class NordDrop {
     return libnorddropJNI.NordDrop_newTransfer(swigCPtr, this, peer, descriptors);
   }
 
+  public NorddropResult purgeTransfers(String txids) {
+    return NorddropResult.swigToEnum(libnorddropJNI.NordDrop_purgeTransfers(swigCPtr, this, txids));
+  }
+
+  public NorddropResult purgeTransfersUntil(long untilTimestamp) {
+    return NorddropResult.swigToEnum(libnorddropJNI.NordDrop_purgeTransfersUntil(swigCPtr, this, untilTimestamp));
+  }
+
+  public String getTransfersSince(long sinceTimestamp) {
+    return libnorddropJNI.NordDrop_getTransfersSince(swigCPtr, this, sinceTimestamp);
+  }
+
   public static String version() {
     return libnorddropJNI.NordDrop_version();
   }

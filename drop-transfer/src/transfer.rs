@@ -2,10 +2,11 @@ use std::{collections::HashMap, net::IpAddr};
 
 use drop_analytics::TransferInfo;
 use drop_config::DropConfig;
+use drop_storage::TransferInfo as StorageInfo;
 use uuid::Uuid;
 
 use crate::{
-    file::{FileId, FileSubPath},
+    file::{FileId, FileKind, FileSource, FileSubPath},
     Error, File,
 };
 
@@ -83,6 +84,64 @@ impl Transfer {
                 .join(","),
             transfer_size_kb: size_list.iter().sum(),
             file_count: info_list.len() as i32,
+        }
+    }
+
+    pub fn storage_info(&self) -> StorageInfo {
+        // TODO(msz): this insane check wouldn't be needed if we had two different
+        // `Transfer` types
+        let is_incoming = match self.files.values().next() {
+            Some(files) => matches!(files.kind, FileKind::FileToRecv { .. }),
+            None => true, // TODO(msz): Arbitrarily chosen, there is no way to differentiate here
+        };
+
+        let files = if is_incoming {
+            let files = self
+                .files
+                .values()
+                .map(|f| drop_storage::types::TransferIncomingPath {
+                    file_id: f.file_id.to_string(),
+                    relative_path: f.subpath.to_string(),
+                    size: f.size() as _,
+                })
+                .collect();
+
+            drop_storage::types::TransferFiles::Incoming(files)
+        } else {
+            let files = self
+                .files
+                .values()
+                .filter_map(|f| {
+                    let base_path = match &f.kind {
+                        FileKind::FileToSend { source, .. } => match source {
+                            FileSource::Path(fullpath) => fullpath
+                                .ancestors()
+                                .nth(f.subpath.iter().count())?
+                                .to_str()?,
+                            #[cfg(unix)]
+                            FileSource::Fd(_) => ".", /* Let's pretend the files are in the
+                                                       * working dir. The FDs are only used on
+                                                       * Android, */
+                        },
+                        _ => return None,
+                    };
+
+                    Some(drop_storage::types::TransferOutgoingPath {
+                        file_id: f.file_id.to_string(),
+                        relative_path: f.subpath.to_string(),
+                        base_path: base_path.to_string(),
+                        size: f.size() as _,
+                    })
+                })
+                .collect();
+
+            drop_storage::types::TransferFiles::Outgoing(files)
+        };
+
+        StorageInfo {
+            id: self.id(),
+            peer: self.peer().to_string(),
+            files,
         }
     }
 

@@ -100,6 +100,9 @@ pub enum Event {
         #[serde(flatten)]
         data: FinishEvent,
     },
+    RuntimeError {
+        status: drop_core::Status,
+    },
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -139,7 +142,7 @@ impl From<drop_transfer::Event> for Event {
                     file: fid.to_string(),
                 })
             }
-            drop_transfer::Event::FileDownloadStarted(tx, fid) => {
+            drop_transfer::Event::FileDownloadStarted(tx, fid, _) => {
                 Event::TransferStarted(StartEvent {
                     transfer: tx.id().to_string(),
                     file: fid.to_string(),
@@ -204,11 +207,11 @@ impl From<drop_transfer::Event> for Event {
                     status: From::from(&status),
                 },
             },
-            drop_transfer::Event::TransferCanceled(tx, by_peer) => Event::TransferFinished {
+            drop_transfer::Event::TransferCanceled(tx, _, by_peer) => Event::TransferFinished {
                 transfer: tx.id().to_string(),
                 data: FinishEvent::TransferCanceled { by_peer },
             },
-            drop_transfer::Event::TransferFailed(tx, status) => Event::TransferFinished {
+            drop_transfer::Event::TransferFailed(tx, status, _) => Event::TransferFinished {
                 transfer: tx.id().to_string(),
                 data: FinishEvent::TransferFailed {
                     status: From::from(&status),

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM transfers WHERE created_at < datetime(?1, 'unixepoch')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "5ec61dee21ec948c3ed56b1da2a87a467d54d3688270f28d005035620973735a"
+}

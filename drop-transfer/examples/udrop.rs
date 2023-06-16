@@ -12,9 +12,10 @@ use anyhow::Context;
 use clap::{arg, command, value_parser, ArgAction, Command};
 use drop_auth::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
 use drop_config::DropConfig;
+use drop_storage::Storage;
 use drop_transfer::{auth, Event, File, Service, Transfer};
 use slog::{o, Drain, Logger};
-use slog_scope::{info, warn};
+use slog_scope::{error, info, warn};
 use tokio::sync::{mpsc, watch, Mutex};
 use uuid::Uuid;
 
@@ -29,6 +30,7 @@ const PUB_KEY: [u8; PUBLIC_KEY_LENGTH] = [
 
 async fn listen(
     service: &Mutex<Service>,
+    storage: Arc<Storage>,
     xfers: watch::Sender<BTreeSet<Uuid>>,
     rx: &mut mpsc::Receiver<Event>,
     out_dir: &Path,
@@ -53,7 +55,12 @@ async fn listen(
         anyhow::Ok(())
     };
 
+    let mut storage = drop_transfer::StorageDispatch::new(&storage);
+
     while let Some(ev) = rx.recv().await {
+        if let Err(e) = storage.handle_event(&ev).await {
+            error!("Failed to handle storage event: {e}");
+        }
         match ev {
             Event::RequestReceived(xfer) => {
                 let xfid = xfer.id();
@@ -94,11 +101,12 @@ async fn listen(
                     });
                 }
             }
-            Event::FileDownloadStarted(xfer, file) => {
+            Event::FileDownloadStarted(xfer, file, base_dir) => {
                 info!(
-                    "[EVENT] [{}] FileDownloadStarted {:?} transfer started",
+                    "[EVENT] [{}] FileDownloadStarted {:?} transfer started, to {:?}",
                     xfer.id(),
                     file,
+                    base_dir
                 );
             }
 
@@ -194,7 +202,7 @@ async fn listen(
                     }
                 }
             }
-            Event::TransferCanceled(xfer, by_peer) => {
+            Event::TransferCanceled(xfer, _, by_peer) => {
                 info!(
                     "[EVENT] TransferCanceled {}, by peer? {}",
                     xfer.id(),
@@ -206,8 +214,13 @@ async fn listen(
                     xfers.remove(&xfer.id());
                 });
             }
-            Event::TransferFailed(xfer, err) => {
-                info!("[EVENT] TransferFailed {}, status: {}", xfer.id(), err);
+            Event::TransferFailed(xfer, err, by_peer) => {
+                info!(
+                    "[EVENT] TransferFailed {}, status: {}, by peer? {}",
+                    xfer.id(),
+                    err,
+                    by_peer
+                );
 
                 active_file_downloads.remove(&xfer.id());
                 xfers.send_modify(|xfers| {
@@ -294,6 +307,12 @@ async fn main() -> anyhow::Result<()> {
                 .required(true)
                 .value_parser(value_parser!(PathBuf)),
         )
+        .arg(
+            arg!(-s --storage <FILE> "Storage file name")
+                .required(false)
+                .default_value(":memory:")
+                .value_parser(value_parser!(String)),
+        )
         .subcommand(
             Command::new("transfer")
                 .arg(
@@ -347,13 +366,12 @@ async fn main() -> anyhow::Result<()> {
         auth::Context::new(drop_auth::SecretKey::from(PRIV_KEY), move |_| Some(pubkey))
     };
 
-    let storage = drop_storage::Storage::new(logger.clone(), ":memory:")
-        .await
-        .unwrap();
+    let storage_file = matches.get_one::<String>("storage").unwrap();
+    let storage = Arc::new(Storage::new(logger.clone(), storage_file).await.unwrap());
 
     let mut service = Service::start(
         addr,
-        storage,
+        storage.clone(),
         tx,
         logger,
         config,
@@ -364,7 +382,7 @@ async fn main() -> anyhow::Result<()> {
 
     if let Some(xfer) = xfer {
         info!("Transfer:\n{xfer:#?}");
-        service.send_request(xfer);
+        service.send_request(xfer).await;
     }
 
     info!("Listening...");
@@ -374,7 +392,7 @@ async fn main() -> anyhow::Result<()> {
 
     let task_result = tokio::select! {
         r = handle_stop(&service, xfers_rx) => r,
-        r = listen(&service, xfers_tx, &mut rx, out_dir) => r,
+        r = listen(&service, storage, xfers_tx, &mut rx, out_dir) => r,
     };
 
     info!("Stopping the service");
