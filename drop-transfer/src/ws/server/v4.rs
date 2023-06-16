@@ -538,11 +538,18 @@ impl handler::Downloader for Downloader {
             return Err(crate::Error::FilenameTooLong);
         }
 
-        let tmp_location: Hidden<PathBuf> = Hidden(
-            task.absolute_path
-                .0
-                .with_file_name(format!("{}.dropdl-part", task.file.id())),
-        );
+        let tmp_filename = if cfg!(target_os = "android") {
+            format!(
+                "{}-{}.dropdl-part",
+                task.xfer.id().as_simple(),
+                task.file.id()
+            )
+        } else {
+            format!("{}.dropdl-part", task.file.id())
+        };
+
+        let tmp_location: Hidden<PathBuf> =
+            Hidden(task.absolute_path.0.with_file_name(tmp_filename));
 
         // Check if we can resume the temporary file
         match tokio::task::block_in_place(|| super::TmpFileState::load(&tmp_location.0)) {
