@@ -58,7 +58,6 @@ pub enum ServerReq {
 
 pub struct FileXferTask {
     pub file: crate::File,
-    pub absolute_path: Hidden<PathBuf>,
     pub xfer: crate::Transfer,
     pub base_dir: Hidden<PathBuf>,
 }
@@ -66,6 +65,14 @@ pub struct FileXferTask {
 struct TmpFileState {
     meta: fs::Metadata,
     csum: [u8; 32],
+}
+
+struct StreamCtx<'a> {
+    logger: &'a Logger,
+    state: &'a State,
+    tmp_loc: &'a Hidden<PathBuf>,
+    stream: &'a mut UnboundedReceiver<Vec<u8>>,
+    events: &'a FileEventTx,
 }
 
 pub(crate) fn start(
@@ -370,9 +377,7 @@ async fn handle_client(
                         subpath: From::from(&file.subpath),
                         kind: crate::file::FileKind::FileToRecv { size: file.size },
                     };
-                    let fullpath = PathBuf::from(&file.basepath).join(file.subpath);
-                    let task =
-                        FileXferTask::new(xfile, xfer.clone(), fullpath, file.basepath.into());
+                    let task = FileXferTask::new(xfile, xfer.clone(), file.basepath.into());
 
                     let _ = req_send.send(ServerReq::Download {
                         task: Box::new(task),
@@ -467,79 +472,32 @@ async fn handle_client(
 }
 
 impl FileXferTask {
-    pub fn new(
-        file: crate::File,
-        xfer: crate::Transfer,
-        absolute_path: PathBuf,
-        base_dir: PathBuf,
-    ) -> Self {
+    pub fn new(file: crate::File, xfer: crate::Transfer, base_dir: PathBuf) -> Self {
         Self {
             file,
             xfer,
-            absolute_path: Hidden(absolute_path),
             base_dir: Hidden(base_dir),
         }
     }
 
-    fn move_tmp_to_dst(
-        &self,
-        tmp_location: &Hidden<PathBuf>,
-        logger: &Logger,
-    ) -> crate::Result<PathBuf> {
-        let mut opts = fs::OpenOptions::new();
-        opts.write(true).create_new(true);
-
-        let mut iter = crate::utils::filepath_variants(&self.absolute_path.0)?;
-        let dst_location = loop {
-            let path = iter.next().expect("File paths iterator should never end");
-
-            match opts.open(&path) {
-                Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
-                    continue;
-                }
-                Err(err) => {
-                    error!(logger, "Failed to crate destination file: {err}");
-                    return Err(err.into());
-                }
-                Ok(file) => {
-                    drop(file); // Close the file
-                    break path;
-                }
-            }
-        };
-
-        if let Err(err) = fs::rename(&tmp_location.0, &dst_location) {
-            if let Err(err) = fs::remove_file(&dst_location) {
-                warn!(
-                    logger,
-                    "Failed to remove touched destination file on move error: {err}"
-                );
-            }
-            return Err(err.into());
-        }
-
-        if let Err(err) = dst_location.quarantine() {
-            error!(logger, "Failed to quarantine downloaded file: {err}");
-        }
-
-        Ok(dst_location)
-    }
-
     async fn stream_file(
         &mut self,
-        logger: &slog::Logger,
+        StreamCtx {
+            logger,
+            state,
+            tmp_loc,
+            stream,
+            events,
+        }: StreamCtx<'_>,
         downloader: &mut impl Downloader,
-        tmp_location: &Hidden<PathBuf>,
-        stream: &mut UnboundedReceiver<Vec<u8>>,
-        events: &FileEventTx,
         offset: u64,
     ) -> crate::Result<PathBuf> {
-        let mut out_file = match downloader.open(tmp_location).await {
+        let mut out_file = match downloader.open(tmp_loc).await {
             Ok(out_file) => out_file,
             Err(err) => {
                 error!(
                     logger,
-                    "Could not create {tmp_location:?} for downloading: {err}"
+                    "Could not create {tmp_loc:?} for downloading: {err}"
                 );
 
                 return Err(err);
@@ -597,11 +555,10 @@ impl FileXferTask {
         let bytes_received = match consume_file_chunks.await {
             Ok(br) => br,
             Err(err) => {
-                if let Err(ioerr) = fs::remove_file(&tmp_location.0) {
+                if let Err(ioerr) = fs::remove_file(&tmp_loc.0) {
                     error!(
                         logger,
-                        "Could not remove temporary file {tmp_location:?} after failed download: \
-                         {}",
+                        "Could not remove temporary file {tmp_loc:?} after failed download: {}",
                         ioerr
                     );
                 }
@@ -610,19 +567,48 @@ impl FileXferTask {
             }
         };
 
-        let dst = match self.move_tmp_to_dst(tmp_location, logger) {
+        let dst = match self.place_file_into_dest(state, logger, tmp_loc).await {
             Ok(dst) => dst,
             Err(err) => {
                 error!(
                     logger,
-                    "Could not rename temporary file {:?} after downloading: {err}",
-                    self.absolute_path,
+                    "Could not rename temporary file of {} after downloading: {err}",
+                    self.file.id(),
                 );
                 return Err(err);
             }
         };
 
         downloader.done(bytes_received).await?;
+
+        Ok(dst)
+    }
+
+    async fn prepare_abs_path(&self, state: &State) -> crate::Result<PathBuf> {
+        let mut lock = state.transfer_manager.lock().await;
+
+        let mapping = lock
+            .state_mut(self.xfer.id())
+            .ok_or(crate::Error::Canceled)?
+            .apply_dir_mapping(&self.base_dir, self.file.subpath())?;
+
+        drop(lock);
+
+        Ok(self.base_dir.join(mapping))
+    }
+
+    async fn place_file_into_dest(
+        &self,
+        state: &State,
+        logger: &Logger,
+        tmp_location: &Hidden<PathBuf>,
+    ) -> crate::Result<PathBuf> {
+        let abs_path = self.prepare_abs_path(state).await?;
+        if let Some(parent) = abs_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let dst = move_tmp_to_dst(tmp_location, Hidden(&abs_path), logger)?;
 
         Ok(dst)
     }
@@ -682,11 +668,14 @@ impl FileXferTask {
 
                 let result = self
                     .stream_file(
-                        &logger,
+                        StreamCtx {
+                            logger: &logger,
+                            state: &state,
+                            tmp_loc: &tmp_location,
+                            stream: &mut stream,
+                            events: &events,
+                        },
                         &mut downloader,
-                        &tmp_location,
-                        &mut stream,
-                        &events,
                         offset,
                     )
                     .await;
@@ -748,4 +737,48 @@ fn validate_tmp_location_path(tmp_location: &Hidden<PathBuf>) -> crate::Result<(
     }
 
     Ok(())
+}
+
+fn move_tmp_to_dst(
+    tmp_location: &Hidden<PathBuf>,
+    absolute_path: Hidden<&Path>,
+    logger: &Logger,
+) -> crate::Result<PathBuf> {
+    let mut opts = fs::OpenOptions::new();
+    opts.write(true).create_new(true);
+
+    let mut iter = crate::utils::filepath_variants(absolute_path.0)?;
+    let dst_location = loop {
+        let path = iter.next().expect("File paths iterator should never end");
+
+        match opts.open(&path) {
+            Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+                continue;
+            }
+            Err(err) => {
+                error!(logger, "Failed to crate destination file: {err}");
+                return Err(err.into());
+            }
+            Ok(file) => {
+                drop(file); // Close the file
+                break path;
+            }
+        }
+    };
+
+    if let Err(err) = fs::rename(&tmp_location.0, &dst_location) {
+        if let Err(err) = fs::remove_file(&dst_location) {
+            warn!(
+                logger,
+                "Failed to remove touched destination file on move error: {err}"
+            );
+        }
+        return Err(err.into());
+    }
+
+    if let Err(err) = dst_location.quarantine() {
+        error!(logger, "Failed to quarantine downloaded file: {err}");
+    }
+
+    Ok(dst_location)
 }

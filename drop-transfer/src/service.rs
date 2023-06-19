@@ -217,73 +217,42 @@ impl Service {
                 _ => return Err(Error::BadTransfer),
             };
 
-            let mapped_file_path = parent_dir.join(state.apply_dir_mapping(parent_dir, file_id)?);
+            let file = state.xfer.files().get(file_id).ok_or(Error::BadFileId)?;
 
-            Ok((state.xfer.clone(), chann, mapped_file_path))
+            Ok((state.xfer.clone(), file.clone(), chann))
         };
 
-        let (xfer, channel, absolute_path) =
-            moose_try_file!(self.state.moose, fetch_xfer.await, uuid, None);
-
-        let file = moose_try_file!(
-            self.state.moose,
-            xfer.files().get(file_id).ok_or(Error::BadFileId),
-            uuid,
-            None
-        )
-        .clone();
-
+        let (xfer, file, channel) = moose_try_file!(self.state.moose, fetch_xfer.await, uuid, None);
         let file_info = file.info();
 
-        // Path validation
-        if absolute_path
-            .components()
-            .any(|x| x == Component::ParentDir)
-        {
-            let err = Err(Error::BadPath(
-                "Path should not contain a reference to parrent directory".into(),
-            ));
-            moose_try_file!(self.state.moose, err, uuid, file_info);
-        }
+        let dispatch_task = || {
+            // Path validation
+            if parent_dir.components().any(|x| x == Component::ParentDir) {
+                return Err(Error::BadPath(
+                    "Path should not contain a reference to parrent directory".into(),
+                ));
+            }
 
-        let parent_location = moose_try_file!(
-            self.state.moose,
-            absolute_path
-                .parent()
-                .ok_or_else(|| Error::BadPath("Missing parent path".into())),
-            uuid,
-            file_info
-        );
+            // Check if target directory is a symlink
+            if parent_dir.ancestors().any(Path::is_symlink) {
+                return Err(Error::BadPath(
+                    "Destination should not contain directory symlinks".into(),
+                ));
+            }
 
-        // Check if target directory is a symlink
-        if parent_location.ancestors().any(Path::is_symlink) {
-            error!(
-                self.logger,
-                "Destination should not contain directory symlinks"
-            );
-            moose_try_file!(
-                self.state.moose,
-                Err(Error::BadPath(
-                    "Destination should not contain directory symlinks".into()
-                )),
-                uuid,
-                file_info
-            );
-        }
+            fs::create_dir_all(parent_dir).map_err(|ioerr| Error::BadPath(ioerr.to_string()))?;
 
-        moose_try_file!(
-            self.state.moose,
-            fs::create_dir_all(parent_location).map_err(|ioerr| Error::BadPath(ioerr.to_string())),
-            uuid,
-            file_info
-        );
+            let task = FileXferTask::new(file, xfer, parent_dir.into());
+            channel
+                .send(ServerReq::Download {
+                    task: Box::new(task),
+                })
+                .map_err(|err| Error::BadTransferState(err.to_string()))?;
 
-        let task = FileXferTask::new(file, xfer, absolute_path, parent_dir.into());
-        channel
-            .send(ServerReq::Download {
-                task: Box::new(task),
-            })
-            .map_err(|err| Error::BadTransferState(err.to_string()))?;
+            Ok(())
+        };
+
+        moose_try_file!(self.state.moose, dispatch_task(), uuid, file_info);
 
         Ok(())
     }
