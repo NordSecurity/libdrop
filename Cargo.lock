@@ -1041,7 +1041,6 @@ version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "afc22eff61b133b115c6e8c74e818c628d6d5e7a502afea6f64dee076dd94326"
 dependencies = [
- "cc",
  "pkg-config",
  "vcpkg",
 ]
@@ -1623,7 +1622,7 @@ dependencies = [
 [[package]]
 name = "sqlx"
 version = "0.7.0-alpha.3"
-source = "git+https://github.com/NordSecurity/sqlx.git?branch=libdrop-compat#892b96e015c2d6b93839977d1e8ee894ba568466"
+source = "git+https://github.com/NordSecurity/sqlx.git?branch=libdrop-compat-dyn#fa1f2de253e26d3006c4461c6334928d6faa289c"
 dependencies = [
  "sqlx-core",
  "sqlx-macros",
@@ -1634,7 +1633,7 @@ dependencies = [
 [[package]]
 name = "sqlx-core"
 version = "0.7.0-alpha.3"
-source = "git+https://github.com/NordSecurity/sqlx.git?branch=libdrop-compat#892b96e015c2d6b93839977d1e8ee894ba568466"
+source = "git+https://github.com/NordSecurity/sqlx.git?branch=libdrop-compat-dyn#fa1f2de253e26d3006c4461c6334928d6faa289c"
 dependencies = [
  "ahash",
  "atoi",
@@ -1676,7 +1675,7 @@ dependencies = [
 [[package]]
 name = "sqlx-macros"
 version = "0.7.0-alpha.3"
-source = "git+https://github.com/NordSecurity/sqlx.git?branch=libdrop-compat#892b96e015c2d6b93839977d1e8ee894ba568466"
+source = "git+https://github.com/NordSecurity/sqlx.git?branch=libdrop-compat-dyn#fa1f2de253e26d3006c4461c6334928d6faa289c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1688,7 +1687,7 @@ dependencies = [
 [[package]]
 name = "sqlx-macros-core"
 version = "0.7.0-alpha.3"
-source = "git+https://github.com/NordSecurity/sqlx.git?branch=libdrop-compat#892b96e015c2d6b93839977d1e8ee894ba568466"
+source = "git+https://github.com/NordSecurity/sqlx.git?branch=libdrop-compat-dyn#fa1f2de253e26d3006c4461c6334928d6faa289c"
 dependencies = [
  "dotenvy",
  "either",
@@ -1712,7 +1711,7 @@ dependencies = [
 [[package]]
 name = "sqlx-postgres"
 version = "0.7.0-alpha.3"
-source = "git+https://github.com/NordSecurity/sqlx.git?branch=libdrop-compat#892b96e015c2d6b93839977d1e8ee894ba568466"
+source = "git+https://github.com/NordSecurity/sqlx.git?branch=libdrop-compat-dyn#fa1f2de253e26d3006c4461c6334928d6faa289c"
 dependencies = [
  "atoi",
  "base64 0.21.0",
@@ -1752,7 +1751,7 @@ dependencies = [
 [[package]]
 name = "sqlx-sqlite"
 version = "0.7.0-alpha.3"
-source = "git+https://github.com/NordSecurity/sqlx.git?branch=libdrop-compat#892b96e015c2d6b93839977d1e8ee894ba568466"
+source = "git+https://github.com/NordSecurity/sqlx.git?branch=libdrop-compat-dyn#fa1f2de253e26d3006c4461c6334928d6faa289c"
 dependencies = [
  "atoi",
  "bitflags",
