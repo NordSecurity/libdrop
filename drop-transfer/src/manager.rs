@@ -14,7 +14,7 @@ use crate::{
     service::State,
     utils::Hidden,
     ws::{client::ClientReq, server::ServerReq},
-    Error, FileId, Transfer,
+    Error, Transfer,
 };
 
 #[derive(Clone)]
@@ -103,15 +103,9 @@ impl TransferState {
     pub(crate) fn apply_dir_mapping(
         &mut self,
         dest_dir: &Path,
-        file_id: &FileId,
+        file_subpath: &FileSubPath,
     ) -> crate::Result<PathBuf> {
-        let file = self
-            .xfer
-            .files()
-            .get(file_id)
-            .ok_or(crate::Error::BadFileId)?;
-
-        let mut iter = file.subpath().iter().map(crate::utils::normalize_filename);
+        let mut iter = file_subpath.iter().map(crate::utils::normalize_filename);
 
         let probe = iter.next().ok_or_else(|| {
             crate::Error::BadPath("Path should contain at least one component".into())
