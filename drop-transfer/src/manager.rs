@@ -1,15 +1,18 @@
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     io,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
+use slog::{debug, warn};
 use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 
 use crate::{
+    file::FileSubPath,
     service::State,
+    utils::Hidden,
     ws::{client::ClientReq, server::ServerReq},
     Error, FileId, Transfer,
 };
@@ -47,13 +50,53 @@ impl TransferState {
         }
     }
 
-    pub fn rm_all_marker_files(&self) {
-        for (full_original, mapping) in &self.dir_mappings {
-            let marker_file = full_original
-                .with_file_name(mapping)
-                .join(&self.dir_maker_file_name);
+    pub(crate) async fn rm_all_marker_files(&self, state: &State, logger: &slog::Logger) {
+        let mut markers = HashSet::new();
 
-            let _ = std::fs::remove_file(&marker_file);
+        // Files we know about from the mappings
+        let iter = self.dir_mappings.iter().map(|(full_original, mapping)| {
+            full_original
+                .with_file_name(mapping)
+                .join(&self.dir_maker_file_name)
+        });
+
+        markers.extend(iter);
+
+        // Files from database, should cover all the cases
+        match state.storage.finished_incoming_files(self.xfer.id()).await {
+            Ok(files) => {
+                let iter = files.into_iter().filter_map(|file| {
+                    let full = PathBuf::from(file.final_path);
+                    let rel_dir_count = FileSubPath::from(&file.relative_path).iter().count();
+
+                    if rel_dir_count > 1 {
+                        Some(
+                            full.ancestors()
+                                .nth(rel_dir_count - 1)?
+                                .to_path_buf()
+                                .join(&self.dir_maker_file_name),
+                        )
+                    } else {
+                        None
+                    }
+                });
+
+                markers.extend(iter);
+            }
+            Err(err) => {
+                warn!(logger, "Failed to fetch all finished files from DB: {err}");
+            }
+        }
+
+        for marker in markers {
+            debug!(logger, "Removing marker file: {marker:?}");
+            if let Err(err) = std::fs::remove_file(&marker) {
+                warn!(
+                    logger,
+                    "Failed to remove marker file {:?}: {err}",
+                    Hidden(&marker)
+                );
+            }
         }
     }
 
@@ -165,15 +208,15 @@ impl TransferGuard {
         }
     }
 
-    pub(crate) async fn gracefull_close(mut self) {
+    pub(crate) async fn gracefull_close(mut self, logger: &slog::Logger) {
         let state = self
             .state
             .take()
             .expect("State should be present in method calls");
 
         let mut lock = state.transfer_manager.lock().await;
-        if let Some(state) = lock.cancel_transfer(self.id) {
-            state.rm_all_marker_files();
+        if let Some(xfer_state) = lock.cancel_transfer(self.id) {
+            xfer_state.rm_all_marker_files(&state, logger).await;
         }
     }
 }

@@ -330,7 +330,7 @@ impl Service {
             )
         });
 
-        state.rm_all_marker_files();
+        state.rm_all_marker_files(&self.state, &self.logger).await;
 
         Ok(())
     }

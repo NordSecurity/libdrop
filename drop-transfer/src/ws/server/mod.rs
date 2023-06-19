@@ -462,7 +462,7 @@ async fn handle_client(
             debug!(logger, "WS client disconnected");
         }
 
-        xfer_guard.gracefull_close().await
+        xfer_guard.gracefull_close(logger).await
     }
 }
 
