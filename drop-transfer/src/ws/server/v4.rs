@@ -267,22 +267,20 @@ impl HandlerLoop<'_> {
     }
 
     async fn on_cancel(&mut self, file_id: FileId, by_peer: bool) {
-        if let Some(FileTask {
-            job: task,
-            events,
-            chunks_tx: _,
-            csum_tx: _,
-        }) = self.jobs.remove(&file_id)
+        let file = if let Some(file) = self.xfer.files().get(&file_id) {
+            file
+        } else {
+            return;
+        };
+
+        match self
+            .state
+            .transfer_manager
+            .lock()
+            .await
+            .cancel_file(self.xfer.id(), file_id.clone())
         {
-            if !task.is_finished() {
-                task.abort();
-
-                let file = self
-                    .xfer
-                    .files()
-                    .get(&file_id)
-                    .expect("File should exists since we have a transfer task running");
-
+            Ok(()) => {
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
                     drop_analytics::Phase::End,
@@ -291,14 +289,31 @@ impl HandlerLoop<'_> {
                     file.info(),
                 );
 
-                events
-                    .stop(crate::Event::FileDownloadCancelled(
+                if let Some(FileTask {
+                    job: task,
+                    events,
+                    chunks_tx: _,
+                    csum_tx: _,
+                }) = self.jobs.remove(&file_id)
+                {
+                    if !task.is_finished() {
+                        task.abort();
+                    }
+                    events.stop_silent().await;
+                }
+
+                self.state
+                    .event_tx
+                    .send(crate::Event::FileDownloadCancelled(
                         self.xfer.clone(),
                         file_id,
                         by_peer,
                     ))
-                    .await;
+                    .await
+                    .expect("Event channel shouldn't be closed");
             }
+            Err(crate::Error::FileCancelled) => (),
+            Err(err) => warn!(self.logger, "Failed to set file as cancelled: {err}"),
         }
     }
 

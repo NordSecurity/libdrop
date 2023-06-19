@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     mem::ManuallyDrop,
     path::{Path, PathBuf},
     sync::Arc,
@@ -25,6 +25,8 @@ pub struct TransferState {
     pub(crate) connection: TransferConnection,
     // Used for mapping directories inside the destination
     dir_mappings: HashMap<PathBuf, String>,
+
+    cancelled: HashSet<FileId>,
 }
 
 /// Transfer manager is responsible for keeping track of all ongoing or pending
@@ -40,6 +42,7 @@ impl TransferState {
             xfer,
             connection,
             dir_mappings: HashMap::new(),
+            cancelled: HashSet::new(),
         }
     }
 }
@@ -74,6 +77,27 @@ impl TransferManager {
 
     pub(crate) fn connection(&self, id: Uuid) -> Option<&TransferConnection> {
         self.transfers.get(&id).map(|state| &state.connection)
+    }
+
+    pub(crate) fn is_file_cancelled(&self, id: Uuid, file: &FileId) -> crate::Result<bool> {
+        let xstate = self.transfers.get(&id).ok_or(crate::Error::BadTransfer)?;
+        Ok(xstate.cancelled.contains(file))
+    }
+
+    pub(crate) fn cancel_file(&mut self, id: Uuid, file: FileId) -> crate::Result<()> {
+        let xstate = self
+            .transfers
+            .get_mut(&id)
+            .ok_or(crate::Error::BadTransfer)?;
+        if !xstate.xfer.files().contains_key(&file) {
+            return Err(crate::Error::BadFileId);
+        }
+
+        if !xstate.cancelled.insert(file) {
+            return Err(crate::Error::FileCancelled);
+        }
+
+        Ok(())
     }
 
     pub(crate) fn apply_dir_mapping(

@@ -93,16 +93,20 @@ impl HandlerLoop<'_> {
     }
 
     async fn on_cancel(&mut self, file_id: FileId, by_peer: bool) {
-        if let Some(task) = self.tasks.remove(&file_id) {
-            if !task.job.is_finished() {
-                task.job.abort();
+        let file = if let Some(file) = self.xfer.files().get(&file_id) {
+            file
+        } else {
+            return;
+        };
 
-                let file = self
-                    .xfer
-                    .files()
-                    .get(&file_id)
-                    .expect("File should exists since we have a transfer task running");
-
+        match self
+            .state
+            .transfer_manager
+            .lock()
+            .await
+            .cancel_file(self.xfer.id(), file_id.clone())
+        {
+            Ok(()) => {
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
                     drop_analytics::Phase::End,
@@ -111,14 +115,26 @@ impl HandlerLoop<'_> {
                     file.info(),
                 );
 
-                task.events
-                    .stop(crate::Event::FileUploadCancelled(
+                if let Some(task) = self.tasks.remove(&file_id) {
+                    if !task.job.is_finished() {
+                        task.job.abort();
+                    }
+
+                    task.events.stop_silent().await;
+                }
+
+                self.state
+                    .event_tx
+                    .send(crate::Event::FileUploadCancelled(
                         self.xfer.clone(),
-                        file.id().clone(),
+                        file_id,
                         by_peer,
                     ))
-                    .await;
+                    .await
+                    .expect("Event channel shouldn't be closed");
             }
+            Err(crate::Error::FileCancelled) => (),
+            Err(err) => warn!(self.logger, "Failed to set file as cancelled: {err}"),
         }
     }
 
@@ -198,6 +214,13 @@ impl HandlerLoop<'_> {
         offset: u64,
     ) -> anyhow::Result<()> {
         let start = async {
+            let lock = self.state.transfer_manager.lock().await;
+            anyhow::ensure!(
+                !lock.is_file_cancelled(self.xfer.id(), &file_id)?,
+                "File was marked as cancelled"
+            );
+            drop(lock);
+
             match self.tasks.entry(file_id.clone()) {
                 Entry::Occupied(o) => {
                     let task = o.into_mut();

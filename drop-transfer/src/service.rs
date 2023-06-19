@@ -209,6 +209,10 @@ impl Service {
         let fetch_xfer = async {
             let mut lock = self.state.transfer_manager.lock().await;
 
+            if lock.is_file_cancelled(uuid, file_id)? {
+                return Err(crate::Error::FileCancelled);
+            }
+
             let chann = lock.connection(uuid).ok_or(Error::BadTransfer)?;
             let chann = match chann {
                 TransferConnection::Server(chann) => chann.clone(),
@@ -296,8 +300,12 @@ impl Service {
     }
 
     /// Cancel a single file in a transfer
-    pub async fn cancel(&mut self, xfer_uuid: Uuid, file: FileId) -> crate::Result<()> {
+    pub async fn cancel(&self, xfer_uuid: Uuid, file: FileId) -> crate::Result<()> {
         let lock = self.state.transfer_manager.lock().await;
+
+        if lock.is_file_cancelled(xfer_uuid, &file)? {
+            return Err(crate::Error::FileCancelled);
+        }
 
         let conn = lock.connection(xfer_uuid).ok_or(Error::BadTransfer)?;
 
