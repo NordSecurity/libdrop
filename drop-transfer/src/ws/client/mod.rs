@@ -412,7 +412,7 @@ impl RunContext<'_> {
                 debug!(self.logger, "WS client disconnected");
             }
 
-            xfer_guard.gracefull_close().await;
+            xfer_guard.gracefull_close(self.logger).await;
             ControlFlow::Break(())
         }
     }
