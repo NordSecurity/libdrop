@@ -4,8 +4,7 @@ WAN is also an option.
 
 # Releasing
 - We follow the semver.
-- After changes are introduced it might need security review.
-- After major version increase we need to do release candidates in the form of `v1.2.3-rc1` to ensure that the final major version upgrade contains as litle broken things as possible
+- After changes are introduced it might need security review. This is especially true if major semver component is increased.
 - Before releasing `changelog.md` must be updated with the version name being released.
 - After the release the `main` branch should be merged into the `dev` branch
 
