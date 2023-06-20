@@ -34,3 +34,4 @@ class Error(IntEnum):
     AUTHENTICATION_FAILED = (30,)
     STORAGE_ERROR = (31,)
     DB_LOST = (32,)
+    FILE_CANCELLED = (33,)

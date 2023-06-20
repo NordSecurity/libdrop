@@ -792,6 +792,9 @@ scenarios = [
                             },
                         )
                     ),
+                    action.Wait(
+                        event.FinishFileCanceled(0, FILES["testfile-big"].id, True)
+                    ),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
@@ -814,6 +817,9 @@ scenarios = [
                     action.CancelTransferFile(
                         0,
                         FILES["testfile-big"].id,
+                    ),
+                    action.Wait(
+                        event.FinishFileCanceled(0, FILES["testfile-big"].id, False)
                     ),
                     action.NoEvent(),
                     action.CancelTransferRequest(0),
@@ -954,7 +960,7 @@ scenarios = [
     ),
     Scenario(
         "scenario4-8",
-        "Send one file, the receiver downloads it fully, both sides receive TransferDownloaded/TransferUploaded, then receiver issues cancel_file() - expect nothing to happen",
+        "Send one file, the receiver downloads it fully, both sides receive TransferDownloaded/TransferUploaded, then receiver issues cancel_file() - expect even on both peers",
         {
             "ren": ActionList(
                 [
@@ -979,6 +985,9 @@ scenarios = [
                             0,
                             FILES["testfile-small"].id,
                         )
+                    ),
+                    action.Wait(
+                        event.FinishFileCanceled(0, FILES["testfile-small"].id, True)
                     ),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
@@ -1020,6 +1029,9 @@ scenarios = [
                         ],
                     ),
                     action.CancelTransferFile(0, FILES["testfile-small"].id),
+                    action.Wait(
+                        event.FinishFileCanceled(0, FILES["testfile-small"].id, False)
+                    ),
                     action.NoEvent(),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
@@ -1031,7 +1043,7 @@ scenarios = [
     ),
     Scenario(
         "scenario4-9",
-        "Send one file, the receiver downloads it fully, both sides receive TransferDownloaded/TransferUploaded, then sender issues cancel_file() - expect nothing to happen",
+        "Send one file, the receiver downloads it fully, both sides receive TransferDownloaded/TransferUploaded, then sender issues cancel_file() - expect event on both peers",
         {
             "ren": ActionList(
                 [
@@ -1057,6 +1069,9 @@ scenarios = [
                         )
                     ),
                     action.CancelTransferFile(0, FILES["testfile-small"].id),
+                    action.Wait(
+                        event.FinishFileCanceled(0, FILES["testfile-small"].id, False)
+                    ),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
@@ -1094,6 +1109,9 @@ scenarios = [
                         [
                             action.File("/tmp/received/testfile-small", 1024 * 1024),
                         ],
+                    ),
+                    action.Wait(
+                        event.FinishFileCanceled(0, FILES["testfile-small"].id, True)
                     ),
                     action.NoEvent(),
                     action.CancelTransferRequest(0),
@@ -1199,6 +1217,72 @@ scenarios = [
                             False,
                         ),
                     ),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario4-11",
+        "Try to redownload cancelled file. Expect an error",
+        {
+            "ren": ActionList(
+                [
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1024 * 1024,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(
+                        event.FinishFileCanceled(0, FILES["testfile-small"].id, True)
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1024 * 1024,
+                                ),
+                            },
+                        )
+                    ),
+                    action.CancelTransferFile(0, FILES["testfile-small"].id),
+                    action.Wait(
+                        event.FinishFileCanceled(0, FILES["testfile-small"].id, False)
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-small"].id,
+                        "/tmp/received",
+                    ),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0, FILES["testfile-small"].id, Error.FILE_CANCELLED
+                        )
+                    ),
+                    action.NoEvent(),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
