@@ -161,12 +161,22 @@ impl<'a> StorageDispatch<'a> {
             }
 
             Event::Reject {
+                transfer_type,
                 transfer_id,
                 file_id,
                 by_peer,
-            } => {
-                todo!("msz: insert rejection into DB");
-            }
+            } => match transfer_type {
+                TransferType::Incoming => {
+                    self.storage
+                        .insert_incoming_path_reject_state(transfer_id, &file_id, by_peer)
+                        .await?
+                }
+                TransferType::Outgoing => {
+                    self.storage
+                        .insert_outgoing_path_reject_state(transfer_id, &file_id, by_peer)
+                        .await?
+                }
+            },
         }
 
         Ok(())
@@ -266,9 +276,24 @@ impl From<&crate::Event> for Event {
                 file_id: file.to_string(),
                 progress: *progress as i64,
             },
-            crate::Event::FileRejected(transfer, file, by_peer) => Event::Reject {
-                transfer_id: transfer.id(),
-                file_id: file.to_string(),
+            crate::Event::FileDownloadRejected {
+                transfer_id,
+                file_id,
+                by_peer,
+            } => Event::Reject {
+                transfer_type: TransferType::Incoming,
+                transfer_id: *transfer_id,
+                file_id: file_id.to_string(),
+                by_peer: *by_peer,
+            },
+            crate::Event::FileUploadRejected {
+                transfer_id,
+                file_id,
+                by_peer,
+            } => Event::Reject {
+                transfer_type: TransferType::Outgoing,
+                transfer_id: *transfer_id,
+                file_id: file_id.to_string(),
                 by_peer: *by_peer,
             },
         }

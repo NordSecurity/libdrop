@@ -221,10 +221,25 @@ impl From<drop_transfer::Event> for Event {
                     status: From::from(&status),
                 },
             },
-            drop_transfer::Event::FileRejected(tx, fid, by_peer) => Event::TransferFinished {
-                transfer: tx.id().to_string(),
+            drop_transfer::Event::FileDownloadRejected {
+                transfer_id,
+                file_id,
+                by_peer,
+            } => Event::TransferFinished {
+                transfer: transfer_id.to_string(),
                 data: FinishEvent::FileRejected {
-                    file: fid.to_string(),
+                    file: file_id.to_string(),
+                    by_peer,
+                },
+            },
+            drop_transfer::Event::FileUploadRejected {
+                transfer_id,
+                file_id,
+                by_peer,
+            } => Event::TransferFinished {
+                transfer: transfer_id.to_string(),
+                data: FinishEvent::FileRejected {
+                    file: file_id.to_string(),
                     by_peer,
                 },
             },
