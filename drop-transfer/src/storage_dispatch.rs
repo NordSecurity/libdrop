@@ -159,6 +159,14 @@ impl<'a> StorageDispatch<'a> {
                     .entry((transfer_id, file_id))
                     .or_default() = progress;
             }
+
+            Event::Reject {
+                transfer_id,
+                file_id,
+                by_peer,
+            } => {
+                todo!("msz: insert rejection into DB");
+            }
         }
 
         Ok(())
@@ -257,6 +265,11 @@ impl From<&crate::Event> for Event {
                 transfer_id: transfer.id(),
                 file_id: file.to_string(),
                 progress: *progress as i64,
+            },
+            crate::Event::FileRejected(transfer, file, by_peer) => Event::Reject {
+                transfer_id: transfer.id(),
+                file_id: file.to_string(),
+                by_peer: *by_peer,
             },
         }
     }

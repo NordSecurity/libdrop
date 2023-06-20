@@ -28,6 +28,8 @@ pub enum Event {
     FileUploadFailed(Transfer, FileId, Error),
     FileDownloadFailed(Transfer, FileId, Error),
 
+    FileRejected(Transfer, FileId, bool),
+
     TransferCanceled(Transfer, bool, bool),
 
     TransferFailed(Transfer, Error, bool),

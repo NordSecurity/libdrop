@@ -227,6 +227,12 @@ async fn listen(
                     xfers.remove(&xfer.id());
                 });
             }
+            Event::FileRejected(xfer, file, by_peer) => {
+                info!(
+                    "[EVENT] FileRejected {}: {file}, by_peer?: {by_peer}",
+                    xfer.id(),
+                );
+            }
         }
     }
 

@@ -179,6 +179,11 @@ pub enum Event {
         file_id: FileId,
         progress: i64,
     },
+    Reject {
+        transfer_id: TransferId,
+        file_id: FileId,
+        by_peer: bool,
+    },
 }
 
 #[derive(Debug, Serialize)]
