@@ -4090,7 +4090,6 @@ scenarios = [
                         ]
                     ),
                     action.Wait(event.FinishTransferCanceled(0, True)),
-                    action.WaitForAnotherPeer(),
                     # new transfer
                     action.NewTransfer("172.20.0.15", ["/tmp/nested"]),
                     action.Wait(
