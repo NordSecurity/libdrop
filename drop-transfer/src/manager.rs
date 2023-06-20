@@ -28,7 +28,7 @@ pub struct TransferState {
     pub(crate) connection: TransferConnection,
     // Used for mapping directories inside the destination
     dir_mappings: HashMap<PathBuf, String>,
-    dir_maker_file_name: String,
+    dir_marker_file_name: String,
 }
 
 /// Transfer manager is responsible for keeping track of all ongoing or pending
@@ -40,13 +40,13 @@ pub(crate) struct TransferManager {
 
 impl TransferState {
     fn new(xfer: Transfer, connection: TransferConnection) -> Self {
-        let dir_maker_file_name = format!(".{}.drop-dir", xfer.id());
+        let dir_marker_file_name = format!(".{}.drop-dir", xfer.id());
 
         Self {
             xfer,
             connection,
             dir_mappings: HashMap::new(),
-            dir_maker_file_name,
+            dir_marker_file_name,
         }
     }
 
@@ -57,7 +57,7 @@ impl TransferState {
         let iter = self.dir_mappings.iter().map(|(full_original, mapping)| {
             full_original
                 .with_file_name(mapping)
-                .join(&self.dir_maker_file_name)
+                .join(&self.dir_marker_file_name)
         });
 
         markers.extend(iter);
@@ -74,7 +74,7 @@ impl TransferState {
                             full.ancestors()
                                 .nth(rel_dir_count - 1)?
                                 .to_path_buf()
-                                .join(&self.dir_maker_file_name),
+                                .join(&self.dir_marker_file_name),
                         )
                     } else {
                         None
@@ -126,7 +126,7 @@ impl TransferState {
                                 // the `symlink_metadata()` ensures we can catch that.
                                 matches!(dst_location.symlink_metadata() , Err(err) if err.kind() == io::ErrorKind::NotFound) ||
                                 // Or it might be our dir created by the same transfer (as this can be a resume)
-                                dst_location.join(&self.dir_maker_file_name).symlink_metadata().is_ok()
+                                dst_location.join(&self.dir_marker_file_name).symlink_metadata().is_ok()
                             })
                             .expect("The filepath variants iterator should never end");
 
@@ -141,7 +141,7 @@ impl TransferState {
 
                         // Create marker file
                         std::fs::create_dir_all(&mapped)?;
-                        let marker_path = mapped.join(&self.dir_maker_file_name);
+                        let marker_path = mapped.join(&self.dir_marker_file_name);
                         std::fs::File::create(marker_path)?;
 
                         value.clone()
