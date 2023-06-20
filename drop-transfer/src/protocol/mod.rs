@@ -3,6 +3,7 @@ pub mod v2 {
     pub use super::v1::*;
 }
 pub mod v4;
+pub mod v5;
 
 #[derive(Copy, Clone, strum::Display, strum::EnumString)]
 pub enum Version {

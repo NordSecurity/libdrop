@@ -94,7 +94,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
     }
 
     async fn on_error(&mut self, ws: &mut WebSocket, err: anyhow::Error) -> anyhow::Result<()> {
-        let msg = v4::ServerMsg::<FileId>::Error(v4::Error {
+        let msg = v4::ServerMsg::Error(v4::Error {
             file: None,
             msg: err.to_string(),
         });
