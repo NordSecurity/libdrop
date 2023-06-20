@@ -274,6 +274,9 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         match req {
             ServerReq::Download { task } => self.issue_download(ws, *task)?,
             ServerReq::Cancel { file } => self.issue_cancel(ws, file).await?,
+            ServerReq::Reject { .. } => {
+                todo!("(msz): need to handle it in a backwards complatible manner")
+            }
         }
 
         Ok(())

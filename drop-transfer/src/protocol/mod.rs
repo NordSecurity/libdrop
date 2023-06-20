@@ -15,4 +15,6 @@ pub enum Version {
     // security flaw. It should never be added back.
     #[strum(serialize = "v4")]
     V4,
+    #[strum(serialize = "v5")]
+    V5,
 }
