@@ -241,6 +241,9 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     async fn on_req(&mut self, socket: &mut WebSocket, req: ClientReq) -> anyhow::Result<()> {
         match req {
             ClientReq::Cancel { file } => self.issue_cancel(socket, file).await,
+            ClientReq::Reject { .. } => {
+                todo!("(msz): need to handle it in a backwards complatible manner")
+            }
         }
     }
 
