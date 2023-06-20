@@ -180,6 +180,7 @@ pub enum Event {
         progress: i64,
     },
     Reject {
+        transfer_type: TransferType,
         transfer_id: TransferId,
         file_id: FileId,
         by_peer: bool,

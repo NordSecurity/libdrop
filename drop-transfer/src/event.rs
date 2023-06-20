@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use uuid::Uuid;
+
 use crate::{file::FileId, utils::Hidden, Error, Transfer};
 
 #[derive(Debug)]
@@ -28,7 +30,16 @@ pub enum Event {
     FileUploadFailed(Transfer, FileId, Error),
     FileDownloadFailed(Transfer, FileId, Error),
 
-    FileRejected(Transfer, FileId, bool),
+    FileUploadRejected {
+        transfer_id: Uuid,
+        file_id: FileId,
+        by_peer: bool,
+    },
+    FileDownloadRejected {
+        transfer_id: Uuid,
+        file_id: FileId,
+        by_peer: bool,
+    },
 
     TransferCanceled(Transfer, bool, bool),
 
