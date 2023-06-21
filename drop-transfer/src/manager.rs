@@ -85,6 +85,27 @@ impl TransferManager {
         Ok(xstate.rejected.insert(file))
     }
 
+    pub(crate) fn ensure_file_not_rejected(
+        &self,
+        transfer_id: Uuid,
+        file: &FileId,
+    ) -> crate::Result<()> {
+        let xstate = self
+            .transfers
+            .get(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        if !xstate.xfer.files().contains_key(file) {
+            return Err(crate::Error::BadFileId);
+        }
+
+        if xstate.rejected.contains(file) {
+            Err(Error::Rejected)
+        } else {
+            Ok(())
+        }
+    }
+
     pub(crate) fn transfer(&self, id: &Uuid) -> Option<&Transfer> {
         self.transfers.get(id).map(|state| &state.xfer)
     }

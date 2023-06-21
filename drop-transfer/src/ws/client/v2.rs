@@ -214,6 +214,14 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
 
     async fn on_download(&mut self, file_id: FileSubPath) {
         let start = async {
+            if let Some(file) = self.xfer.file_by_subpath(&file_id) {
+                self.state
+                    .transfer_manager
+                    .lock()
+                    .await
+                    .ensure_file_not_rejected(self.xfer.id(), file.id())?;
+            }
+
             match self.tasks.entry(file_id.clone()) {
                 Entry::Occupied(o) => {
                     let task = o.into_mut();
