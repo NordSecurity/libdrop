@@ -242,6 +242,61 @@ impl HandlerLoop<'_> {
         Ok(())
     }
 
+    async fn issue_reject(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+    ) -> anyhow::Result<()> {
+        debug!(self.logger, "ServerHandler::issue_cancel");
+
+        let msg = v4::ServerMsg::Cancel(v4::Cancel {
+            file: file_id.clone(),
+        });
+        socket.send(Message::from(&msg)).await?;
+
+        if let Some(FileTask {
+            job: task,
+            events,
+            chunks_tx: _,
+            csum_tx: _,
+        }) = self.jobs.remove(&file_id)
+        {
+            if !task.is_finished() {
+                task.abort();
+
+                events
+                    .stop(crate::Event::FileDownloadCancelled(
+                        self.xfer.clone(),
+                        file_id.clone(),
+                        false,
+                    ))
+                    .await;
+            }
+        }
+
+        if let Some(file) = self.xfer.files().get(&file_id) {
+            self.state.moose.service_quality_transfer_file(
+                Err(drop_core::Status::FileRejected as i32),
+                drop_analytics::Phase::End,
+                self.xfer.id().to_string(),
+                0,
+                file.info(),
+            );
+
+            self.state
+                .event_tx
+                .send(crate::Event::FileDownloadRejected {
+                    transfer_id: self.xfer.id(),
+                    file_id,
+                    by_peer: false,
+                })
+                .await
+                .expect("Event channel should be open");
+        }
+
+        Ok(())
+    }
+
     async fn on_chunk(
         &mut self,
         socket: &mut WebSocket,
@@ -375,9 +430,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         match req {
             ServerReq::Download { task } => self.issue_download(ws, *task)?,
             ServerReq::Cancel { file } => self.issue_cancel(ws, file).await?,
-            ServerReq::Reject { .. } => {
-                todo!("(msz): need to handle it in a backwards complatible manner")
-            }
+            ServerReq::Reject { file } => self.issue_reject(ws, file).await?,
         }
 
         Ok(())
