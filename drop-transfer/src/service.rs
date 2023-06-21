@@ -65,7 +65,7 @@ macro_rules! moose_try_file {
 
 // todo: better name to reduce confusion
 impl Service {
-    pub fn start(
+    pub async fn start(
         addr: IpAddr,
         storage: Arc<Storage>,
         event_tx: mpsc::Sender<Event>,
@@ -74,7 +74,7 @@ impl Service {
         moose: Arc<dyn Moose>,
         auth: Arc<auth::Context>,
     ) -> Result<Self, Error> {
-        let task = || {
+        let task = async {
             let state = Arc::new(State {
                 event_tx,
                 transfer_manager: Mutex::default(),
@@ -88,6 +88,8 @@ impl Service {
             let join_handle =
                 ws::server::start(addr, stop.clone(), state.clone(), auth, logger.clone())?;
 
+            ws::client::resume(&state, &stop, &logger).await;
+
             Ok(Self {
                 state,
                 join_handle,
@@ -96,7 +98,7 @@ impl Service {
             })
         };
 
-        let res = task();
+        let res = task.await;
         moose.service_quality_initialization_init(res.to_status(), drop_analytics::Phase::Start);
 
         res
@@ -279,13 +281,7 @@ impl Service {
             file_info
         );
 
-        let task = moose_try_file!(
-            self.state.moose,
-            FileXferTask::new(file, xfer, absolute_path, parent_dir.into()),
-            uuid,
-            file_info
-        );
-
+        let task = FileXferTask::new(file, xfer, absolute_path, parent_dir.into());
         channel
             .send(ServerReq::Download {
                 task: Box::new(task),

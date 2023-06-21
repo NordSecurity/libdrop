@@ -109,7 +109,6 @@ pub enum Event {
 pub struct Config {
     pub dir_depth_limit: usize,
     pub transfer_file_limit: usize,
-    pub req_connection_timeout_ms: u64,
     #[serde(default = "default_connection_max_retry_interval_ms")]
     pub connection_max_retry_interval_ms: u64,
     pub transfer_idle_lifetime_ms: u64,
@@ -264,7 +263,6 @@ impl From<Config> for drop_config::Config {
         let Config {
             dir_depth_limit,
             transfer_file_limit,
-            req_connection_timeout_ms,
             connection_max_retry_interval_ms,
             transfer_idle_lifetime_ms,
             moose_event_path,
@@ -276,7 +274,6 @@ impl From<Config> for drop_config::Config {
             drop: drop_config::DropConfig {
                 dir_depth_limit,
                 transfer_file_limit,
-                req_connection_timeout: Duration::from_millis(req_connection_timeout_ms),
                 connection_max_retry_interval: Duration::from_millis(
                     connection_max_retry_interval_ms,
                 ),
@@ -333,7 +330,6 @@ mod tests {
                 drop_config::DropConfig {
                     dir_depth_limit,
                     transfer_file_limit,
-                    req_connection_timeout,
                     transfer_idle_lifetime,
                     connection_max_retry_interval,
                     storage_path,
@@ -343,7 +339,6 @@ mod tests {
 
         assert_eq!(dir_depth_limit, 10);
         assert_eq!(transfer_file_limit, 100);
-        assert_eq!(req_connection_timeout, Duration::from_millis(1000));
         assert_eq!(connection_max_retry_interval, Duration::from_millis(500));
         assert_eq!(transfer_idle_lifetime, Duration::from_millis(2000));
         assert_eq!(event_path, "test/path");
