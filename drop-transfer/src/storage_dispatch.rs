@@ -149,7 +149,7 @@ impl<'a> StorageDispatch<'a> {
                 }
             }
 
-            Event::Progress {
+            Event::FileProgress {
                 transfer_id,
                 file_id,
                 progress,
@@ -160,7 +160,7 @@ impl<'a> StorageDispatch<'a> {
                     .or_default() = progress;
             }
 
-            Event::Reject {
+            Event::FileReject {
                 transfer_type,
                 transfer_id,
                 file_id,
@@ -266,12 +266,12 @@ impl From<&crate::Event> for Event {
                     error_code: error.into(),
                 }
             }
-            crate::Event::FileDownloadProgress(transfer, file, progress) => Event::Progress {
+            crate::Event::FileDownloadProgress(transfer, file, progress) => Event::FileProgress {
                 transfer_id: transfer.id(),
                 file_id: file.to_string(),
                 progress: *progress as i64,
             },
-            crate::Event::FileUploadProgress(transfer, file, progress) => Event::Progress {
+            crate::Event::FileUploadProgress(transfer, file, progress) => Event::FileProgress {
                 transfer_id: transfer.id(),
                 file_id: file.to_string(),
                 progress: *progress as i64,
@@ -280,7 +280,7 @@ impl From<&crate::Event> for Event {
                 transfer_id,
                 file_id,
                 by_peer,
-            } => Event::Reject {
+            } => Event::FileReject {
                 transfer_type: TransferType::Incoming,
                 transfer_id: *transfer_id,
                 file_id: file_id.to_string(),
@@ -290,7 +290,7 @@ impl From<&crate::Event> for Event {
                 transfer_id,
                 file_id,
                 by_peer,
-            } => Event::Reject {
+            } => Event::FileReject {
                 transfer_type: TransferType::Outgoing,
                 transfer_id: *transfer_id,
                 file_id: file_id.to_string(),

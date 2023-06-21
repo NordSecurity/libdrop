@@ -174,12 +174,12 @@ pub enum Event {
         file_id: FileId,
         final_path: String,
     },
-    Progress {
+    FileProgress {
         transfer_id: TransferId,
         file_id: FileId,
         progress: i64,
     },
-    Reject {
+    FileReject {
         transfer_type: TransferType,
         transfer_id: TransferId,
         file_id: FileId,
