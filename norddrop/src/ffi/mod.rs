@@ -245,11 +245,61 @@ pub extern "C" fn norddrop_cancel_file(
             ffi_try!(str_fid
                 .parse()
                 .map_err(|_| norddrop_result::NORDDROP_RES_BAD_INPUT)),
-        )
-        .norddrop_log_result(&dev.logger, "norddrop_cancel_file")
+        );
+
+        norddrop_result::NORDDROP_RES_OK
     });
 
     result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
+}
+
+/// @brief  Reject a file from either side
+///
+/// @param dev   Pointer to the instance
+/// @param xfid  Transfer ID
+/// @param fid   File ID
+/// @return enum norddrop_result   Result of the operation
+#[no_mangle]
+pub unsafe extern "C" fn norddrop_reject_file(
+    dev: &norddrop,
+    xfid: *const c_char,
+    fid: *const c_char,
+) -> norddrop_result {
+    let result = panic::catch_unwind(|| {
+        let xfid = {
+            if xfid.is_null() {
+                return Err(norddrop_result::NORDDROP_RES_INVALID_STRING);
+            }
+
+            CStr::from_ptr(xfid)
+                .to_str()?
+                .parse()
+                .map_err(|_| norddrop_result::NORDDROP_RES_BAD_INPUT)?
+        };
+
+        let fid = {
+            if fid.is_null() {
+                return Err(norddrop_result::NORDDROP_RES_INVALID_STRING);
+            }
+
+            CStr::from_ptr(fid).to_str()?.to_owned()
+        };
+
+        let dev = dev
+            .0
+            .lock()
+            .map_err(|_| norddrop_result::NORDDROP_RES_ERROR)?;
+
+        dev.reject_file(xfid, fid)?;
+
+        Ok(())
+    });
+
+    match result {
+        Ok(Ok(())) => norddrop_result::NORDDROP_RES_OK,
+        Ok(Err(err)) => err,
+        Err(_) => norddrop_result::NORDDROP_RES_ERROR,
+    }
 }
 
 /// @brief   Start libdrop

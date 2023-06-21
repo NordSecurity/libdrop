@@ -71,11 +71,6 @@ impl TransferManager {
         }
     }
 
-    pub(crate) fn is_file_rejected(&self, id: Uuid, file: &FileId) -> crate::Result<bool> {
-        let xstate = self.transfers.get(&id).ok_or(crate::Error::BadTransfer)?;
-        Ok(xstate.rejected.contains(file))
-    }
-
     /// Returns `true` if file was sucesfully marked as rejected and `false` if
     /// it was already marked as such
     pub(crate) fn reject_file(&mut self, id: Uuid, file: FileId) -> crate::Result<bool> {
