@@ -210,6 +210,18 @@ enum norddrop_result norddrop_cancel_file(const struct norddrop *dev,
                                           const char *fid);
 
 /**
+ * @brief  Reject a file from either side
+ *
+ * @param dev   Pointer to the instance
+ * @param xfid  Transfer ID
+ * @param fid   File ID
+ * @return enum norddrop_result   Result of the operation
+ */
+enum norddrop_result norddrop_reject_file(const struct norddrop *dev,
+                                          const char *xfid,
+                                          const char *fid);
+
+/**
  * @brief   Start libdrop
  *
  * @param dev   Pointer to the instance
