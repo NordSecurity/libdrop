@@ -92,6 +92,53 @@ impl HandlerLoop<'_> {
         Ok(())
     }
 
+    async fn issue_reject(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+    ) -> anyhow::Result<()> {
+        let msg = v4::ClientMsg::Cancel(v4::Cancel {
+            file: file_id.clone(),
+        });
+        socket.send(Message::from(&msg)).await?;
+
+        if let Some(task) = self.tasks.remove(&file_id) {
+            if !task.job.is_finished() {
+                task.job.abort();
+
+                task.events
+                    .stop(crate::Event::FileUploadCancelled(
+                        self.xfer.clone(),
+                        file_id.clone(),
+                        false,
+                    ))
+                    .await;
+            }
+        }
+
+        if let Some(file) = self.xfer.files().get(&file_id) {
+            self.state.moose.service_quality_transfer_file(
+                Err(drop_core::Status::FileRejected as i32),
+                drop_analytics::Phase::End,
+                self.xfer.id().to_string(),
+                0,
+                file.info(),
+            );
+
+            self.state
+                .event_tx
+                .send(crate::Event::FileUploadRejected {
+                    transfer_id: self.xfer.id(),
+                    file_id,
+                    by_peer: false,
+                })
+                .await
+                .expect("Event channel should be open");
+        }
+
+        Ok(())
+    }
+
     async fn on_cancel(&mut self, file_id: FileId, by_peer: bool) {
         if let Some(task) = self.tasks.remove(&file_id) {
             if !task.job.is_finished() {
@@ -290,9 +337,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
     async fn on_req(&mut self, socket: &mut WebSocket, req: ClientReq) -> anyhow::Result<()> {
         match req {
             ClientReq::Cancel { file } => self.issue_cancel(socket, file).await,
-            ClientReq::Reject { .. } => {
-                todo!("(msz): need to handle it in a backwards complatible manner")
-            }
+            ClientReq::Reject { file } => self.issue_reject(socket, file).await,
         }
     }
 

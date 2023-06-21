@@ -96,6 +96,60 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         Ok(())
     }
 
+    async fn issue_reject(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+    ) -> anyhow::Result<()> {
+        let file_subpath = if let Some(file) = self.xfer.files().get(&file_id) {
+            file.subpath().clone()
+        } else {
+            warn!(self.logger, "Missing file with ID: {file_id:?}");
+            return Ok(());
+        };
+
+        let msg = v2::ClientMsg::Cancel(v2::Download {
+            file: file_subpath.clone(),
+        });
+        socket.send(Message::from(&msg)).await?;
+
+        if let Some(task) = self.tasks.remove(&file_subpath) {
+            if !task.job.is_finished() {
+                task.job.abort();
+
+                task.events
+                    .stop(crate::Event::FileUploadCancelled(
+                        self.xfer.clone(),
+                        file_id.clone(),
+                        false,
+                    ))
+                    .await;
+            }
+        }
+
+        if let Some(file) = self.xfer.files().get(&file_id) {
+            self.state.moose.service_quality_transfer_file(
+                Err(drop_core::Status::FileRejected as i32),
+                drop_analytics::Phase::End,
+                self.xfer.id().to_string(),
+                0,
+                file.info(),
+            );
+
+            self.state
+                .event_tx
+                .send(crate::Event::FileUploadRejected {
+                    transfer_id: self.xfer.id(),
+                    file_id,
+                    by_peer: false,
+                })
+                .await
+                .expect("Event channel should be open");
+        }
+
+        Ok(())
+    }
+
     async fn on_cancel(&mut self, file: FileSubPath, by_peer: bool) {
         if let Some(task) = self.tasks.remove(&file) {
             if !task.job.is_finished() {
@@ -241,9 +295,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     async fn on_req(&mut self, socket: &mut WebSocket, req: ClientReq) -> anyhow::Result<()> {
         match req {
             ClientReq::Cancel { file } => self.issue_cancel(socket, file).await,
-            ClientReq::Reject { .. } => {
-                todo!("(msz): need to handle it in a backwards complatible manner")
-            }
+            ClientReq::Reject { file } => self.issue_reject(socket, file).await,
         }
     }
 
