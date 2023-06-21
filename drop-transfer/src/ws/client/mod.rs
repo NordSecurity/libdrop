@@ -3,8 +3,10 @@ mod v2;
 mod v4;
 
 use std::{
-    io,
+    fs, io,
     net::IpAddr,
+    ops::ControlFlow,
+    path::Path,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -22,6 +24,7 @@ use tokio_tungstenite::{
     tungstenite::{self, client::IntoClientRequest, protocol::Role, Message},
     WebSocketStream,
 };
+use tokio_util::sync::CancellationToken;
 
 use self::handler::{HandlerInit, HandlerLoop, Uploader};
 use super::events::FileEventTx;
@@ -44,43 +47,130 @@ pub enum ClientReq {
 
 struct RunContext<'a> {
     logger: &'a slog::Logger,
-    state: Arc<State>,
+    state: &'a Arc<State>,
     socket: WebSocket,
-    xfer: crate::Transfer,
+    xfer: &'a crate::Transfer,
 }
 
 pub(crate) async fn run(state: Arc<State>, xfer: crate::Transfer, logger: Logger) {
-    let (socket, ver) = match establish_ws_conn(&state, xfer.peer(), &logger).await {
+    loop {
+        let cf = connect_to_peer(&state, &xfer, &logger).await;
+        if cf.is_break() {
+            return;
+        }
+    }
+}
+
+pub(crate) async fn resume(state: &Arc<State>, stop: &CancellationToken, logger: &Logger) {
+    let transfers = match state.storage.transfers_to_retry().await {
+        Ok(transfers) => transfers,
+        Err(err) => {
+            error!(logger, "Failed to restore pedning transfers form DB: {err}");
+            return;
+        }
+    };
+
+    for transfer in transfers {
+        let task = {
+            let state = state.clone();
+            let logger = logger.clone();
+
+            async move {
+                let restore_transfer = || {
+                    let files = transfer
+                        .files
+                        .into_iter()
+                        .map(|dbfile| {
+                            let fullpath = Path::new(&dbfile.basepath).join(&dbfile.subpath);
+                            let meta = fs::symlink_metadata(&fullpath).with_context(|| {
+                                format!("Failed to load file: {}", dbfile.file_id)
+                            })?;
+                            anyhow::ensure!(!meta.is_dir(), "Invalid file type");
+
+                            let file_id: FileId = dbfile.file_id.into();
+                            crate::File::new_to_send(
+                                dbfile.subpath.into(),
+                                fullpath,
+                                meta,
+                                file_id.clone(),
+                            )
+                            .with_context(|| format!("Failed to restore file {file_id} from DB"))
+                        })
+                        .collect::<Result<_, _>>()?;
+
+                    let xfer = crate::Transfer::new_with_uuid(
+                        transfer.peer.parse().context("Failed to parse peer IP")?,
+                        files,
+                        transfer.uuid,
+                        &state.config,
+                    )
+                    .context("Failed to create transfer")?;
+
+                    anyhow::Ok(xfer)
+                };
+
+                let xfer = match restore_transfer() {
+                    Ok(xfer) => xfer,
+                    Err(err) => {
+                        error!(logger, "Failed to restore transfer: {err}");
+                        return;
+                    }
+                };
+
+                run(state, xfer, logger).await
+            }
+        };
+
+        let logger = logger.clone();
+        let stop = stop.clone();
+
+        tokio::spawn(async move {
+            tokio::select! {
+                biased;
+
+                _ = stop.cancelled() => {
+                    warn!(logger, "Aborting transfer resume");
+                },
+                _ = task => (),
+            }
+        });
+    }
+}
+
+async fn connect_to_peer(
+    state: &Arc<State>,
+    xfer: &crate::Transfer,
+    logger: &Logger,
+) -> ControlFlow<()> {
+    let (socket, ver) = match establish_ws_conn(state, xfer.peer(), logger).await {
         Ok(res) => res,
         Err(err) => {
             error!(logger, "Could not connect to peer {}: {}", xfer.id(), err);
 
             state
                 .event_tx
-                .send(Event::TransferFailed(xfer, err, false))
+                .send(Event::TransferFailed(xfer.clone(), err, false))
                 .await
                 .expect("Failed to send TransferFailed event");
 
-            return;
+            return ControlFlow::Break(());
         }
     };
 
     info!(logger, "Client connected, using version: {ver}");
 
     let ctx = RunContext {
-        logger: &logger,
-        state: state.clone(),
+        logger,
+        state,
         socket,
         xfer,
     };
 
+    use protocol::Version;
     match ver {
-        protocol::Version::V1 => {
-            ctx.run(v2::HandlerInit::<false>::new(&state, &logger))
-                .await
-        }
-        protocol::Version::V2 => ctx.run(v2::HandlerInit::<true>::new(&state, &logger)).await,
-        protocol::Version::V4 => ctx.run(v4::HandlerInit::new(state, &logger)).await,
+        Version::V1 => ctx.run(v2::HandlerInit::<false>::new(state, logger)).await,
+        Version::V2 => ctx.run(v2::HandlerInit::<true>::new(state, logger)).await,
+        Version::V4 => ctx.run(v4::HandlerInit::new(state, logger)).await,
     }
 }
 
@@ -89,12 +179,7 @@ async fn establish_ws_conn(
     ip: IpAddr,
     logger: &Logger,
 ) -> crate::Result<(WebSocket, protocol::Version)> {
-    let mut socket = tokio::time::timeout(
-        state.config.req_connection_timeout,
-        tcp_connect(state, ip, logger),
-    )
-    .await
-    .map_err(|err| io::Error::new(io::ErrorKind::TimedOut, err))?;
+    let mut socket = tcp_connect(state, ip, logger).await;
 
     let mut versions_to_try = [
         protocol::Version::V4,
@@ -218,7 +303,7 @@ impl RunContext<'_> {
         &mut self,
         handler: &mut impl HandlerInit,
     ) -> crate::Result<UnboundedReceiver<ClientReq>> {
-        handler.start(&mut self.socket, &self.xfer).await?;
+        handler.start(&mut self.socket, self.xfer).await?;
 
         let (tx, rx) = mpsc::unbounded_channel();
 
@@ -237,7 +322,7 @@ impl RunContext<'_> {
         Ok(rx)
     }
 
-    async fn run(mut self, mut handler: impl HandlerInit) {
+    async fn run(mut self, mut handler: impl HandlerInit) -> ControlFlow<()> {
         let _guard = TransferGuard::new(self.state.clone(), self.xfer.id());
 
         let mut api_req_rx = match self.start(&mut handler).await {
@@ -256,13 +341,13 @@ impl RunContext<'_> {
                     .await
                     .expect("Failed to send TransferFailed event");
 
-                return;
+                return ControlFlow::Continue(());
             }
         };
 
         let (upload_tx, mut upload_rx) = mpsc::channel(2);
         let mut ping = handler.pinger();
-        let mut handler = handler.upgrade(upload_tx, self.xfer);
+        let mut handler = handler.upgrade(upload_tx, self.xfer.clone());
 
         let task = async {
             loop {
@@ -310,6 +395,7 @@ impl RunContext<'_> {
 
         if let Err(err) = result {
             handler.finalize_failure(err).await;
+            ControlFlow::Continue(())
         } else {
             let task = async {
                 // Drain messages
@@ -325,6 +411,8 @@ impl RunContext<'_> {
             } else {
                 debug!(self.logger, "WS client disconnected");
             }
+
+            ControlFlow::Break(())
         }
     }
 }

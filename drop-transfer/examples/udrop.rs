@@ -1,11 +1,11 @@
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet, HashSet},
+    collections::{btree_map::Entry, BTreeMap, HashSet},
     env,
     io::Write,
     net::IpAddr,
     path::{Path, PathBuf},
     sync::Arc,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use anyhow::Context;
@@ -15,9 +15,8 @@ use drop_config::DropConfig;
 use drop_storage::Storage;
 use drop_transfer::{auth, Event, File, Service, Transfer};
 use slog::{o, Drain, Logger};
-use slog_scope::{error, info, warn};
-use tokio::sync::{mpsc, watch, Mutex};
-use uuid::Uuid;
+use slog_scope::{error, info};
+use tokio::sync::mpsc;
 
 const PRIV_KEY: [u8; SECRET_KEY_LENGTH] = [
     0x15, 0xc6, 0xe3, 0x45, 0x08, 0xf8, 0x3e, 0x4d, 0x3a, 0x28, 0x9d, 0xd4, 0xa4, 0x05, 0x95, 0x8d,
@@ -29,32 +28,14 @@ const PUB_KEY: [u8; PUBLIC_KEY_LENGTH] = [
 ];
 
 async fn listen(
-    service: &Mutex<Service>,
+    service: &mut Service,
     storage: Arc<Storage>,
-    xfers: watch::Sender<BTreeSet<Uuid>>,
     rx: &mut mpsc::Receiver<Event>,
     out_dir: &Path,
 ) -> anyhow::Result<()> {
     info!("Awaiting events…");
 
     let mut active_file_downloads = BTreeMap::new();
-
-    let xfers = &xfers;
-    let cancel_xfer = |xfid| async move {
-        service
-            .lock()
-            .await
-            .cancel_all(xfid)
-            .await
-            .context("Failed to cancled transfer")?;
-
-        xfers.send_modify(|xfers| {
-            xfers.remove(&xfid);
-        });
-
-        anyhow::Ok(())
-    };
-
     let mut storage = drop_transfer::StorageDispatch::new(&storage);
 
     while let Some(ev) = rx.recv().await {
@@ -68,37 +49,18 @@ async fn listen(
 
                 info!("[EVENT] RequestReceived {}: {:?}", xfid, files);
 
-                xfers.send_modify(|xfers| {
-                    xfers.insert(xfid);
-                });
-
-                let file_set = active_file_downloads
-                    .entry(xfid)
-                    .or_insert_with(HashSet::new);
-
-                for file in xfer.files().values() {
+                if files.is_empty() {
                     service
-                        .lock()
-                        .await
-                        .download(xfid, file.id(), out_dir)
-                        .await
-                        .context("Cannot issue download call")?;
-
-                    file_set.insert(file.id().clone());
-                }
-
-                if file_set.is_empty() {
-                    service
-                        .lock()
-                        .await
                         .cancel_all(xfid)
                         .await
                         .context("Failed to cancled transfer")?;
+                }
 
-                    active_file_downloads.remove(&xfid);
-                    xfers.send_modify(|xfers| {
-                        xfers.remove(&xfid);
-                    });
+                for file in xfer.files().values() {
+                    service
+                        .download(xfid, file.id(), out_dir)
+                        .await
+                        .context("Cannot issue download call")?;
                 }
             }
             Event::FileDownloadStarted(xfer, file, base_dir) => {
@@ -108,6 +70,11 @@ async fn listen(
                     file,
                     base_dir
                 );
+
+                active_file_downloads
+                    .entry(xfer.id())
+                    .or_insert_with(HashSet::new)
+                    .insert(file);
             }
 
             Event::FileUploadProgress(xfer, file, byte_count) => {
@@ -129,7 +96,10 @@ async fn listen(
                 if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
                     occ.get_mut().remove(&info.id);
                     if occ.get().is_empty() {
-                        cancel_xfer(xfid).await?;
+                        service
+                            .cancel_all(xfid)
+                            .await
+                            .context("Failed to cancled transfer")?;
                         occ.remove_entry();
                     }
                 }
@@ -139,10 +109,6 @@ async fn listen(
             }
             Event::RequestQueued(xfer) => {
                 info!("[EVENT] RequestQueued {}: {:?}", xfer.id(), xfer.files(),);
-
-                xfers.send_modify(|xfers| {
-                    xfers.insert(xfer.id());
-                });
             }
             Event::FileUploadStarted(xfer, file) => {
                 info!("[EVENT] FileUploadStarted {}: {:?}", xfer.id(), file,);
@@ -154,6 +120,11 @@ async fn listen(
                     file,
                     progress
                 );
+
+                active_file_downloads
+                    .entry(xfer.id())
+                    .or_insert_with(HashSet::new)
+                    .insert(file);
             }
             Event::FileUploadCancelled(xfer, file, by_peer) => {
                 info!(
@@ -173,7 +144,10 @@ async fn listen(
                 if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
                     occ.get_mut().remove(&file);
                     if occ.get().is_empty() {
-                        cancel_xfer(xfid).await?;
+                        service
+                            .cancel_all(xfid)
+                            .await
+                            .context("Failed to cancled transfer")?;
                         occ.remove_entry();
                     }
                 }
@@ -193,14 +167,6 @@ async fn listen(
                     "[EVENT] FileDownloadFailed {}: {:?}, {:?}",
                     xfid, file, status
                 );
-
-                if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
-                    occ.get_mut().remove(&file);
-                    if occ.get().is_empty() {
-                        cancel_xfer(xfid).await?;
-                        occ.remove_entry();
-                    }
-                }
             }
             Event::TransferCanceled(xfer, _, by_peer) => {
                 info!(
@@ -210,9 +176,6 @@ async fn listen(
                 );
 
                 active_file_downloads.remove(&xfer.id());
-                xfers.send_modify(|xfers| {
-                    xfers.remove(&xfer.id());
-                });
             }
             Event::TransferFailed(xfer, err, by_peer) => {
                 info!(
@@ -221,46 +184,8 @@ async fn listen(
                     err,
                     by_peer
                 );
-
-                active_file_downloads.remove(&xfer.id());
-                xfers.send_modify(|xfers| {
-                    xfers.remove(&xfer.id());
-                });
             }
         }
-    }
-
-    Ok(())
-}
-
-async fn handle_stop(
-    service: &Mutex<Service>,
-    mut xfers: watch::Receiver<BTreeSet<Uuid>>,
-) -> anyhow::Result<()> {
-    tokio::signal::ctrl_c()
-        .await
-        .context("Failed to handle CTRL+C signal")?;
-
-    loop {
-        {
-            let set = xfers.borrow();
-
-            if set.is_empty() {
-                break;
-            }
-
-            let mut service = service.lock().await;
-            for &uuid in set.iter() {
-                if let Err(err) = service.cancel_all(uuid).await {
-                    warn!("Failed to cancel transfer {uuid}: {err:?}");
-                }
-            }
-        }
-
-        xfers
-            .changed()
-            .await
-            .context("Failed to wait for xfers change")?;
     }
 
     Ok(())
@@ -325,7 +250,6 @@ async fn main() -> anyhow::Result<()> {
         .get_matches();
 
     let config = Arc::new(DropConfig {
-        req_connection_timeout: Duration::from_secs(10),
         ..Default::default()
     });
 
@@ -378,6 +302,7 @@ async fn main() -> anyhow::Result<()> {
         drop_analytics::moose_mock(),
         Arc::new(auth),
     )
+    .await
     .context("Failed to start service")?;
 
     if let Some(xfer) = xfer {
@@ -387,17 +312,10 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Listening...");
 
-    let service = Mutex::new(service);
-    let (xfers_tx, xfers_rx) = watch::channel(BTreeSet::new());
-
-    let task_result = tokio::select! {
-        r = handle_stop(&service, xfers_rx) => r,
-        r = listen(&service, storage, xfers_tx, &mut rx, out_dir) => r,
-    };
-
+    let task_result = listen(&mut service, storage, &mut rx, out_dir).await;
     info!("Stopping the service");
 
-    let stop_result = service.into_inner().stop().await.context("Failed to stop");
+    let stop_result = service.stop().await.context("Failed to stop");
 
     // Drain events
     while rx.recv().await.is_some() {}
