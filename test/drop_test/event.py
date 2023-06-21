@@ -230,6 +230,28 @@ class FinishFileCanceled(Event):
         return f"FinishFileCanceled(transfer={print_uuid(self._uuid_slot)}, file={self._file}, by_peer={self._by_peer})"
 
 
+class FinishFileRejected(Event):
+    def __init__(self, uuid_slot: int, file: str, by_peer: bool):
+        self._uuid_slot = uuid_slot
+        self._file = file
+        self._by_peer = by_peer
+
+    def __eq__(self, rhs):
+        if not isinstance(rhs, FinishFileRejected):
+            return False
+        if self._uuid_slot != rhs._uuid_slot:
+            return False
+        if self._file != rhs._file:
+            return False
+        if self._by_peer != rhs._by_peer:
+            return False
+
+        return True
+
+    def __str__(self):
+        return f"FinishFileRejected(transfer={print_uuid(self._uuid_slot)}, file={self._file}, by_peer={self._by_peer})"
+
+
 class FinishFileFailed(Event):
     def __init__(
         self,
