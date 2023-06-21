@@ -58,4 +58,5 @@ pub trait Downloader {
     async fn progress(&mut self, bytes: u64) -> crate::Result<()>;
     async fn done(&mut self, bytes: u64) -> crate::Result<()>;
     async fn error(&mut self, msg: String) -> crate::Result<()>;
+    async fn validate(&mut self, location: &Hidden<PathBuf>) -> crate::Result<()>;
 }

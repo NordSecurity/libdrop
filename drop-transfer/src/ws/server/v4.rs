@@ -1,7 +1,7 @@
 use std::{
     cmp::Ordering,
     collections::HashMap,
-    fs,
+    fs, io,
     net::IpAddr,
     ops::ControlFlow,
     path::PathBuf,
@@ -22,7 +22,12 @@ use warp::ws::{Message, WebSocket};
 
 use super::{handler, ServerReq};
 use crate::{
-    file::FileKind, protocol::v4, service::State, utils::Hidden, ws::events::FileEventTx, FileId,
+    file::{self, FileKind},
+    protocol::v4,
+    service::State,
+    utils::Hidden,
+    ws::events::FileEventTx,
+    FileId,
 };
 
 pub struct HandlerInit<'a> {
@@ -650,6 +655,20 @@ impl handler::Downloader for Downloader {
             msg,
         }))
         .await
+    }
+
+    async fn validate(&mut self, path: &Hidden<PathBuf>) -> crate::Result<()> {
+        let csum = tokio::task::block_in_place(|| {
+            let file = std::fs::File::open(&path.0)?;
+            let csum = file::checksum(&mut io::BufReader::new(file))?;
+            crate::Result::Ok(csum)
+        })?;
+
+        if self.full_csum.get().await != csum {
+            return Err(crate::Error::ChecksumMismatch);
+        }
+
+        Ok(())
     }
 }
 

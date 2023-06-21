@@ -485,6 +485,10 @@ impl handler::Downloader for Downloader {
         }))
         .await
     }
+
+    async fn validate(&mut self, _: &Hidden<PathBuf>) -> crate::Result<()> {
+        Ok(())
+    }
 }
 
 impl FileTask {
