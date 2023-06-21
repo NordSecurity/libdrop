@@ -203,7 +203,15 @@ impl HandlerLoop<'_> {
         file_id: FileId,
         limit: u64,
     ) -> anyhow::Result<()> {
-        let f = || {
+        let f = async {
+            {
+                self.state
+                    .transfer_manager
+                    .lock()
+                    .await
+                    .ensure_file_not_rejected(self.xfer.id(), &file_id)?;
+            }
+
             let xfile = self.xfer.files().get(&file_id).context("File not found")?;
             let checksum = tokio::task::block_in_place(|| xfile.checksum(limit))?;
 
@@ -214,7 +222,7 @@ impl HandlerLoop<'_> {
             })
         };
 
-        match f() {
+        match f.await {
             Ok(report) => {
                 socket
                     .send(Message::from(&v4::ClientMsg::ReportChsum(report)))
@@ -245,6 +253,14 @@ impl HandlerLoop<'_> {
         offset: u64,
     ) -> anyhow::Result<()> {
         let start = async {
+            {
+                self.state
+                    .transfer_manager
+                    .lock()
+                    .await
+                    .ensure_file_not_rejected(self.xfer.id(), &file_id)?;
+            }
+
             match self.tasks.entry(file_id.clone()) {
                 Entry::Occupied(o) => {
                     let task = o.into_mut();

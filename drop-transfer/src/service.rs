@@ -208,6 +208,7 @@ impl Service {
 
         let fetch_xfer = async {
             let mut lock = self.state.transfer_manager.lock().await;
+            lock.ensure_file_not_rejected(uuid, file_id)?;
 
             let chann = lock.connection(uuid).ok_or(Error::BadTransfer)?;
             let chann = match chann {
@@ -298,6 +299,7 @@ impl Service {
     /// Cancel a single file in a transfer
     pub async fn cancel(&mut self, xfer_uuid: Uuid, file: FileId) -> crate::Result<()> {
         let lock = self.state.transfer_manager.lock().await;
+        lock.ensure_file_not_rejected(xfer_uuid, &file)?;
 
         let conn = lock.connection(xfer_uuid).ok_or(Error::BadTransfer)?;
 
