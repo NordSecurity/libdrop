@@ -318,51 +318,58 @@ async fn handle_client(
     let _guard = TransferGuard::new(state.clone(), xfer_id);
     let (req_send, mut req_rx) = mpsc::unbounded_channel();
 
-    {
-        if let Err(err) = state
+    let task = async {
+        state
             .transfer_manager
             .lock()
             .await
             .insert_transfer(xfer.clone(), TransferConnection::Server(req_send.clone()))
-        {
-            error!(logger, "Failed to insert a new trasfer: {}", err);
+            .context("Failed to insert a new transfer")?;
 
-            let _ = handler
-                .on_error(
-                    &mut socket,
-                    anyhow::anyhow!("Failed to init transfer: {err}"),
-                )
-                .await;
-            let _ = socket.close().await;
-
-            return;
-        }
-    }
-
-    let mode = match state.storage.insert_transfer(&xfer.storage_info()).await {
-        Ok(mode) => mode,
-        Err(err) => {
-            error!(logger, "Failed to insert transfer into storage: {err}",);
-            drop_storage::TransferIncomingMode::New
-        }
-    };
-
-    match mode {
-        drop_storage::TransferIncomingMode::New => {
-            state
-                .event_tx
-                .send(Event::RequestReceived(xfer.clone()))
-                .await
-                .expect("Failed to notify receiving peer!");
-        }
-        drop_storage::TransferIncomingMode::Resume => {
-            let task = async {
-                info!(
+        let existing_info = match state.storage.incoming_transfer_info(xfer.id()).await {
+            Ok(info) => info,
+            Err(err) => {
+                error!(
                     logger,
-                    "Transfer {} resume. Resuming started files",
-                    xfer.id()
+                    "DB failed upon checking if transfer is a resume: {err:?}",
                 );
+                // Fall back to treating it as a new one
+                None
+            }
+        };
 
+        let current_info = xfer.storage_info();
+        if let Some(mut existing_info) = existing_info {
+            // Check if the transfer matches
+            anyhow::ensure!(
+                current_info.peer == existing_info.peer,
+                "Transfer {} resume. Peers do not match",
+                xfer.id()
+            );
+
+            match current_info.files {
+                drop_storage::types::TransferFiles::Incoming(mut files) => {
+                    files.sort();
+                    existing_info.files.sort();
+
+                    anyhow::ensure!(
+                        files == existing_info.files,
+                        "Transfer {} resume. Files do not match",
+                        xfer.id()
+                    );
+                }
+                drop_storage::types::TransferFiles::Outgoing(_) => {
+                    panic!("Transfer handled by the server cannot be outgoing")
+                }
+            }
+
+            info!(
+                logger,
+                "Transfer {} resume. Resuming started files",
+                xfer.id()
+            );
+
+            let task = async {
                 let files = state
                     .storage
                     .incoming_files_to_resume(xfer.id())
@@ -390,8 +397,27 @@ async fn handle_client(
             if let Err(err) = task.await {
                 warn!(logger, "Failed to resume started files: {err:?}");
             }
+        } else {
+            if let Err(err) = state.storage.insert_transfer(&current_info).await {
+                error!(logger, "Failed to insert transfer into the DB: {err:?}");
+            }
+
+            state
+                .event_tx
+                .send(Event::RequestReceived(xfer.clone()))
+                .await
+                .expect("Failed to notify receiving peer!");
         }
+
+        anyhow::Ok(())
     };
+
+    if let Err(err) = task.await {
+        error!(logger, "Failed to init trasfer: {err:?}");
+        let _ = handler.on_error(&mut socket, err).await;
+        let _ = socket.close().await;
+        return;
+    }
 
     drop(req_send); // We need to drop in for transfer cancelation to work
 
