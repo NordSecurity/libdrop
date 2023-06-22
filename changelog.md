@@ -1,3 +1,11 @@
+### v5.0.0
+### **Broken Records**
+---
+* Persist transfers across libdrop shutdowns. Automatically restart the transfer as soon as the connection can be established.
+
+---
+<br>
+
 ### v4.0.0
 ### **Relentless Records**
 ---
