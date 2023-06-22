@@ -537,10 +537,11 @@ impl FileXferTask {
             }
 
             if bytes_received > self.file.size() {
-                Err(crate::Error::UnexpectedData)
-            } else {
-                Ok(bytes_received)
+                return Err(crate::Error::UnexpectedData);
             }
+
+            downloader.validate(tmp_location).await?;
+            Ok(bytes_received)
         };
 
         let bytes_received = match consume_file_chunks.await {
