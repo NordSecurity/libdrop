@@ -86,6 +86,10 @@ pub enum FinishEvent {
         #[serde(flatten)]
         status: Status,
     },
+    FileRejected {
+        file: String,
+        by_peer: bool,
+    },
 }
 
 #[derive(serde::Serialize)]
@@ -215,6 +219,28 @@ impl From<drop_transfer::Event> for Event {
                 transfer: tx.id().to_string(),
                 data: FinishEvent::TransferFailed {
                     status: From::from(&status),
+                },
+            },
+            drop_transfer::Event::FileDownloadRejected {
+                transfer_id,
+                file_id,
+                by_peer,
+            } => Event::TransferFinished {
+                transfer: transfer_id.to_string(),
+                data: FinishEvent::FileRejected {
+                    file: file_id.to_string(),
+                    by_peer,
+                },
+            },
+            drop_transfer::Event::FileUploadRejected {
+                transfer_id,
+                file_id,
+                by_peer,
+            } => Event::TransferFinished {
+                transfer: transfer_id.to_string(),
+                data: FinishEvent::FileRejected {
+                    file: file_id.to_string(),
+                    by_peer,
                 },
             },
         }

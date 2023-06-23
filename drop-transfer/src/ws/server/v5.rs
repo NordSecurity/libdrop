@@ -21,7 +21,14 @@ use tokio::{
 use warp::ws::{Message, WebSocket};
 
 use super::{handler, ServerReq};
-use crate::{file, protocol::v4, service::State, utils::Hidden, ws::events::FileEventTx, FileId};
+use crate::{
+    file::{self, FileKind},
+    protocol::v5 as prot,
+    service::State,
+    utils::Hidden,
+    ws::events::FileEventTx,
+    FileId,
+};
 
 pub struct HandlerInit<'a> {
     peer: IpAddr,
@@ -43,7 +50,7 @@ struct Downloader {
     logger: slog::Logger,
     file_id: FileId,
     msg_tx: Sender<Message>,
-    csum_rx: mpsc::Receiver<v4::ReportChsum>,
+    csum_rx: mpsc::Receiver<prot::ReportChsum>,
     full_csum: Arc<AsyncCell<[u8; 32]>>,
     offset: u64,
 }
@@ -52,7 +59,7 @@ struct FileTask {
     job: JoinHandle<()>,
     chunks_tx: UnboundedSender<Vec<u8>>,
     events: Arc<FileEventTx>,
-    csum_tx: mpsc::Sender<v4::ReportChsum>,
+    csum_tx: mpsc::Sender<prot::ReportChsum>,
 }
 
 impl<'a> HandlerInit<'a> {
@@ -67,7 +74,7 @@ impl<'a> HandlerInit<'a> {
 
 #[async_trait::async_trait]
 impl<'a> handler::HandlerInit for HandlerInit<'a> {
-    type Request = (v4::TransferRequest, IpAddr, Arc<DropConfig>);
+    type Request = (prot::TransferRequest, IpAddr, Arc<DropConfig>);
     type Loop = HandlerLoop<'a>;
     type Pinger = tokio::time::Interval;
 
@@ -87,7 +94,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
     }
 
     async fn on_error(&mut self, ws: &mut WebSocket, err: anyhow::Error) -> anyhow::Result<()> {
-        let msg = v4::ServerMsg::Error(v4::Error {
+        let msg = prot::ServerMsg::Error(prot::Error {
             file: None,
             msg: err.to_string(),
         });
@@ -161,11 +168,11 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
 
             async move {
                 for xfile in to_fetch.into_iter().filter_map(|id| xfer.files().get(&id)) {
-                    let msg = v4::ReqChsum {
+                    let msg = prot::ReqChsum {
                         file: xfile.file_id.clone(),
                         limit: xfile.size(),
                     };
-                    let msg = v4::ServerMsg::ReqChsum(msg);
+                    let msg = prot::ServerMsg::ReqChsum(msg);
                     if let Err(err) = msg_tx.send((&msg).into()).await {
                         warn!(logger, "Failed to request checksum: {err}");
                     }
@@ -232,7 +239,7 @@ impl HandlerLoop<'_> {
     ) -> anyhow::Result<()> {
         debug!(self.logger, "ServerHandler::issue_cancel");
 
-        let msg = v4::ServerMsg::Cancel(v4::Cancel {
+        let msg = prot::ServerMsg::Cancel(prot::Cancel {
             file: file_id.clone(),
         });
         socket.send(Message::from(&msg)).await?;
@@ -247,52 +254,12 @@ impl HandlerLoop<'_> {
         socket: &mut WebSocket,
         file_id: FileId,
     ) -> anyhow::Result<()> {
-        debug!(self.logger, "ServerHandler::issue_cancel");
-
-        let msg = v4::ServerMsg::Cancel(v4::Cancel {
+        let msg = prot::ServerMsg::Reject(prot::Reject {
             file: file_id.clone(),
         });
         socket.send(Message::from(&msg)).await?;
 
-        if let Some(FileTask {
-            job: task,
-            events,
-            chunks_tx: _,
-            csum_tx: _,
-        }) = self.jobs.remove(&file_id)
-        {
-            if !task.is_finished() {
-                task.abort();
-
-                events
-                    .stop(crate::Event::FileDownloadCancelled(
-                        self.xfer.clone(),
-                        file_id.clone(),
-                        false,
-                    ))
-                    .await;
-            }
-        }
-
-        if let Some(file) = self.xfer.files().get(&file_id) {
-            self.state.moose.service_quality_transfer_file(
-                Err(drop_core::Status::FileRejected as i32),
-                drop_analytics::Phase::End,
-                self.xfer.id().to_string(),
-                0,
-                file.info(),
-            );
-
-            self.state
-                .event_tx
-                .send(crate::Event::FileDownloadRejected {
-                    transfer_id: self.xfer.id(),
-                    file_id,
-                    by_peer: false,
-                })
-                .await
-                .expect("Event channel should be open");
-        }
+        self.on_reject(file_id, false).await;
 
         Ok(())
     }
@@ -305,13 +272,13 @@ impl HandlerLoop<'_> {
     ) -> anyhow::Result<()> {
         if let Some(task) = self.jobs.get(&file_id) {
             if let Err(err) = task.chunks_tx.send(chunk) {
-                let msg = v4::Error {
+                let msg = prot::Error {
                     msg: format!("Failed to consume chunk for file: {file_id:?}, msg: {err}",),
                     file: Some(file_id),
                 };
 
                 socket
-                    .send(Message::from(&v4::ServerMsg::Error(msg)))
+                    .send(Message::from(&prot::ServerMsg::Error(msg)))
                     .await?;
             }
         }
@@ -355,6 +322,73 @@ impl HandlerLoop<'_> {
         }
     }
 
+    async fn on_reject(&mut self, file_id: FileId, by_peer: bool) {
+        if by_peer {
+            match self
+                .state
+                .transfer_manager
+                .lock()
+                .await
+                .reject_file(self.xfer.id(), file_id.clone())
+            {
+                Ok(true) => (),
+                res => {
+                    debug!(
+                        self.logger,
+                        "Failed to run rejection procedure on peers request: {res:?}"
+                    );
+                    return;
+                }
+            }
+        }
+
+        info!(self.logger, "Rejecting file {file_id}, by_peer?: {by_peer}");
+
+        if let Some(FileTask {
+            job: task,
+            events,
+            chunks_tx: _,
+            csum_tx: _,
+        }) = self.jobs.remove(&file_id)
+        {
+            if !task.is_finished() {
+                task.abort();
+
+                events
+                    .stop(crate::Event::FileDownloadCancelled(
+                        self.xfer.clone(),
+                        file_id.clone(),
+                        by_peer,
+                    ))
+                    .await;
+            }
+        }
+
+        let file = self
+            .xfer
+            .files()
+            .get(&file_id)
+            .expect("File should exists since we have a transfer task running");
+
+        self.state.moose.service_quality_transfer_file(
+            Err(drop_core::Status::FileRejected as i32),
+            drop_analytics::Phase::End,
+            self.xfer.id().to_string(),
+            0,
+            file.info(),
+        );
+
+        self.state
+            .event_tx
+            .send(crate::Event::FileDownloadRejected {
+                transfer_id: self.xfer.id(),
+                file_id,
+                by_peer,
+            })
+            .await
+            .expect("Event channel should be open");
+    }
+
     async fn on_error(&mut self, file_id: Option<FileId>, msg: String) {
         error!(
             self.logger,
@@ -386,7 +420,7 @@ impl HandlerLoop<'_> {
         }
     }
 
-    async fn on_checksum(&mut self, report: v4::ReportChsum) {
+    async fn on_checksum(&mut self, report: prot::ReportChsum) {
         let xfile = match self.xfer.files().get(&report.file) {
             Some(file) => file,
             None => return,
@@ -480,17 +514,18 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         if let Ok(json) = msg.to_str() {
             debug!(self.logger, "Received:\n\t{json}");
 
-            let msg: v4::ClientMsg =
+            let msg: prot::ClientMsg =
                 serde_json::from_str(json).context("Failed to deserialize json")?;
 
             match msg {
-                v4::ClientMsg::Error(v4::Error { file, msg }) => self.on_error(file, msg).await,
-                v4::ClientMsg::Cancel(v4::Cancel { file }) => self.on_cancel(file, true).await,
-                v4::ClientMsg::ReportChsum(report) => self.on_checksum(report).await,
+                prot::ClientMsg::Error(prot::Error { file, msg }) => self.on_error(file, msg).await,
+                prot::ClientMsg::Cancel(prot::Cancel { file }) => self.on_cancel(file, true).await,
+                prot::ClientMsg::ReportChsum(report) => self.on_checksum(report).await,
+                prot::ClientMsg::Reject(prot::Reject { file }) => self.on_reject(file, true).await,
             }
         } else if msg.is_binary() {
-            let v4::Chunk { file, data } =
-                v4::Chunk::decode(msg.into_bytes()).context("Failed to decode file chunk")?;
+            let prot::Chunk { file, data } =
+                prot::Chunk::decode(msg.into_bytes()).context("Failed to decode file chunk")?;
 
             self.on_chunk(ws, file, data).await?;
         } else if msg.is_close() {
@@ -566,8 +601,8 @@ impl Downloader {
             .map_err(|_| crate::Error::Canceled)
     }
 
-    async fn request_csum(&mut self, limit: u64) -> crate::Result<v4::ReportChsum> {
-        let msg = v4::ServerMsg::ReqChsum(v4::ReqChsum {
+    async fn request_csum(&mut self, limit: u64) -> crate::Result<prot::ReportChsum> {
+        let msg = prot::ServerMsg::ReqChsum(prot::ReqChsum {
             file: self.file_id.clone(),
             limit,
         });
@@ -660,7 +695,7 @@ impl handler::Downloader for Downloader {
             }
         };
 
-        let msg = v4::ServerMsg::Start(v4::Start {
+        let msg = prot::ServerMsg::Start(prot::Start {
             file: self.file_id.clone(),
             offset: self.offset,
         });
@@ -683,7 +718,7 @@ impl handler::Downloader for Downloader {
     }
 
     async fn progress(&mut self, bytes: u64) -> crate::Result<()> {
-        self.send(&v4::ServerMsg::Progress(v4::Progress {
+        self.send(&prot::ServerMsg::Progress(prot::Progress {
             file: self.file_id.clone(),
             bytes_transfered: bytes,
         }))
@@ -691,7 +726,7 @@ impl handler::Downloader for Downloader {
     }
 
     async fn done(&mut self, bytes: u64) -> crate::Result<()> {
-        self.send(&v4::ServerMsg::Done(v4::Done {
+        self.send(&prot::ServerMsg::Done(prot::Done {
             file: self.file_id.clone(),
             bytes_transfered: bytes,
         }))
@@ -699,7 +734,7 @@ impl handler::Downloader for Downloader {
     }
 
     async fn error(&mut self, msg: String) -> crate::Result<()> {
-        self.send(&v4::ServerMsg::Error(v4::Error {
+        self.send(&prot::ServerMsg::Error(prot::Error {
             file: Some(self.file_id.clone()),
             msg,
         }))
@@ -749,5 +784,22 @@ impl FileTask {
             events,
             csum_tx,
         }
+    }
+}
+
+impl handler::Request for (prot::TransferRequest, IpAddr, Arc<DropConfig>) {
+    fn parse(self) -> anyhow::Result<crate::Transfer> {
+        let (prot::TransferRequest { files, id }, peer, config) = self;
+
+        let files = files
+            .into_iter()
+            .map(|f| crate::File {
+                file_id: f.id,
+                subpath: f.path,
+                kind: FileKind::FileToRecv { size: f.size },
+            })
+            .collect();
+
+        crate::Transfer::new_with_uuid(peer, files, id, &config).context("Failed to crate transfer")
     }
 }

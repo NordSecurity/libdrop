@@ -227,6 +227,21 @@ async fn listen(
                     xfers.remove(&xfer.id());
                 });
             }
+            Event::FileDownloadRejected {
+                transfer_id,
+                file_id,
+                by_peer,
+            } => {
+                info!("[EVENT] FileDownloadRejected {transfer_id}: {file_id}, by_peer?: {by_peer}")
+            }
+
+            Event::FileUploadRejected {
+                transfer_id,
+                file_id,
+                by_peer,
+            } => {
+                info!("[EVENT] FileUploadRejected {transfer_id}: {file_id}, by_peer?: {by_peer}")
+            }
         }
     }
 

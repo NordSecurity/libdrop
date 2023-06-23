@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     mem::ManuallyDrop,
     path::{Path, PathBuf},
     sync::Arc,
@@ -25,6 +25,8 @@ pub struct TransferState {
     pub(crate) connection: TransferConnection,
     // Used for mapping directories inside the destination
     dir_mappings: HashMap<PathBuf, String>,
+
+    rejected: HashSet<FileId>,
 }
 
 /// Transfer manager is responsible for keeping track of all ongoing or pending
@@ -40,6 +42,7 @@ impl TransferState {
             xfer,
             connection,
             dir_mappings: HashMap::new(),
+            rejected: HashSet::new(),
         }
     }
 }
@@ -65,6 +68,41 @@ impl TransferManager {
                 entry.insert(TransferState::new(xfer, connection));
                 Ok(())
             }
+        }
+    }
+
+    /// Returns `true` if file was sucesfully marked as rejected and `false` if
+    /// it was already marked as such
+    pub(crate) fn reject_file(&mut self, id: Uuid, file: FileId) -> crate::Result<bool> {
+        let xstate = self
+            .transfers
+            .get_mut(&id)
+            .ok_or(crate::Error::BadTransfer)?;
+        if !xstate.xfer.files().contains_key(&file) {
+            return Err(crate::Error::BadFileId);
+        }
+
+        Ok(xstate.rejected.insert(file))
+    }
+
+    pub(crate) fn ensure_file_not_rejected(
+        &self,
+        transfer_id: Uuid,
+        file: &FileId,
+    ) -> crate::Result<()> {
+        let xstate = self
+            .transfers
+            .get(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        if !xstate.xfer.files().contains_key(file) {
+            return Err(crate::Error::BadFileId);
+        }
+
+        if xstate.rejected.contains(file) {
+            Err(Error::Rejected)
+        } else {
+            Ok(())
         }
     }
 

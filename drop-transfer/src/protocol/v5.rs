@@ -16,13 +16,81 @@
 //! This message indicate that the file is downloaded. Can be sent without
 //! `Start` in case the downloaded file is already there
 //! * server (receiver) ->   client (sender): `Done (file)`
+//!
+//! There is also a posibility to delete file from the transfer (reject)
+//! * server (receiver) ->   client (sender): `Reject (file)`
+//! This can also be send by the client
+//! * client (receiver) ->   server (sender): `Reject (file)`
+//! The operation cannot be undone and subsequest downloads of this file
+//! will result in error
 
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
-pub use super::v5::{
-    Cancel, Chunk, Done, Error, File, Progress, ReportChsum, ReqChsum, Start, TransferRequest,
-};
-use crate::FileId;
+use crate::{file::FileSubPath, FileId};
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct File {
+    pub path: FileSubPath,
+    pub id: FileId,
+    pub size: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct TransferRequest {
+    pub files: Vec<File>,
+    pub id: uuid::Uuid,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct ReqChsum {
+    pub file: FileId,
+    // Up to which point calculate checksum
+    pub limit: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct ReportChsum {
+    pub file: FileId,
+    pub limit: u64,
+    #[serde(serialize_with = "hex::serialize")]
+    #[serde(deserialize_with = "hex::deserialize")]
+    pub checksum: [u8; 32],
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct Progress<T = FileId> {
+    pub file: T,
+    pub bytes_transfered: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct Done {
+    pub file: FileId,
+    pub bytes_transfered: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct Error<T = FileId> {
+    pub file: Option<T>,
+    pub msg: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct Start {
+    pub file: FileId,
+    pub offset: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct Cancel {
+    pub file: FileId,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct Reject {
+    pub file: FileId,
+}
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(tag = "type")]
@@ -33,6 +101,7 @@ pub enum ServerMsg {
     ReqChsum(ReqChsum),
     Start(Start),
     Cancel(Cancel),
+    Reject(Reject),
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -41,6 +110,13 @@ pub enum ClientMsg {
     ReportChsum(ReportChsum),
     Error(Error<FileId>),
     Cancel(Cancel),
+    Reject(Reject),
+}
+
+#[derive(Clone)]
+pub struct Chunk<T = FileId> {
+    pub file: T,
+    pub data: Vec<u8>,
 }
 
 impl From<&ServerMsg> for warp::ws::Message {
@@ -57,11 +133,107 @@ impl From<&ClientMsg> for tokio_tungstenite::tungstenite::Message {
     }
 }
 
+impl<T> Chunk<T>
+where
+    T: From<String> + ToString,
+{
+    // Message structure:
+    // [u32 little endian file id length][file id][file chunk]
+
+    pub fn decode(mut msg: Vec<u8>) -> anyhow::Result<Self> {
+        const LEN_SIZE: usize = std::mem::size_of::<u32>();
+
+        anyhow::ensure!(msg.len() > LEN_SIZE, "Binary message too short");
+
+        let len =
+            u32::from_le_bytes(msg[..LEN_SIZE].try_into().expect("Invalid u32 size")) as usize;
+        let id_end = len + LEN_SIZE;
+
+        anyhow::ensure!(msg.len() > id_end, "Invalid file id length");
+
+        let drain = msg.drain(0..id_end).skip(LEN_SIZE);
+        let file = String::from_utf8(drain.collect())
+            .context("Invalid file id")?
+            .into();
+
+        Ok(Self { file, data: msg })
+    }
+
+    pub fn encode(self) -> Vec<u8> {
+        let Self { file, data } = self;
+
+        let file = file.to_string();
+
+        let len = file.len() as u32;
+        len.to_le_bytes()
+            .into_iter()
+            .chain(file.into_bytes())
+            .chain(data)
+            .collect()
+    }
+}
+
+impl<T> From<Chunk<T>> for tokio_tungstenite::tungstenite::Message
+where
+    T: From<String> + ToString,
+{
+    fn from(value: Chunk<T>) -> Self {
+        Self::Binary(value.encode())
+    }
+}
+
+impl From<&crate::Transfer> for TransferRequest {
+    fn from(value: &crate::Transfer) -> Self {
+        Self {
+            files: value
+                .files()
+                .values()
+                .map(|f| File {
+                    path: f.subpath().clone(),
+                    id: f.id().clone(),
+                    size: f.size(),
+                })
+                .collect(),
+            id: value.id(),
+        }
+    }
+}
+
+impl From<&TransferRequest> for tokio_tungstenite::tungstenite::Message {
+    fn from(value: &TransferRequest) -> Self {
+        let msg = serde_json::to_string(value).expect("Failed to serialize client message");
+        Self::Text(msg)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use serde::de::DeserializeOwned;
 
     use super::*;
+
+    #[test]
+    fn binary_serialization() {
+        const FILE_CONTNET: &[u8] = b"test file content";
+        const FILE_ID: &str = "ESDW8PFTBoD8UYaqxMSWp6FBCZN3SKnhyHFqlhrdMzU";
+
+        const CHUNK_MSG: &[u8] =
+            b"\x2B\x00\x00\x00ESDW8PFTBoD8UYaqxMSWp6FBCZN3SKnhyHFqlhrdMzUtest file content";
+
+        let msg = Chunk {
+            file: FileId::from(FILE_ID),
+            data: FILE_CONTNET.to_vec(),
+        }
+        .encode();
+
+        assert_eq!(msg, CHUNK_MSG);
+
+        let Chunk { file, data } =
+            Chunk::<FileId>::decode(CHUNK_MSG.to_vec()).expect("Failed to decode chunk");
+
+        assert_eq!(file, FileId::from(FILE_ID));
+        assert_eq!(data, FILE_CONTNET);
+    }
 
     fn test_json<T: Serialize + DeserializeOwned + Eq>(message: T, expected: &str) {
         let json_msg = serde_json::to_value(&message).expect("Failed to serialize");
@@ -167,6 +339,18 @@ mod tests {
             }
             "#,
         );
+
+        test_json(
+            ClientMsg::Reject(Reject {
+                file: FileId::from("TESTID"),
+            }),
+            r#"
+            {
+              "type": "Reject",
+              "file": "TESTID"
+            }
+            "#,
+        );
     }
 
     #[test]
@@ -258,6 +442,18 @@ mod tests {
               "type": "Cancel",
               "file": "TESTID"
             }"#,
+        );
+
+        test_json(
+            ServerMsg::Reject(Reject {
+                file: FileId::from("TESTID"),
+            }),
+            r#"
+            {
+              "type": "Reject",
+              "file": "TESTID"
+            }
+            "#,
         );
     }
 }

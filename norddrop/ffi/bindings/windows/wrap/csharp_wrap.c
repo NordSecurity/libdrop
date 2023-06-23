@@ -419,6 +419,22 @@ SWIGEXPORT int SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_CancelFile___(void *
 }
 
 
+SWIGEXPORT int SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_RejectFile___(void * jarg1, char * jarg2, char * jarg3) {
+  int jresult ;
+  struct norddrop *arg1 = (struct norddrop *) 0 ;
+  char *arg2 = (char *) 0 ;
+  char *arg3 = (char *) 0 ;
+  enum norddrop_result result;
+  
+  arg1 = (struct norddrop *)jarg1; 
+  arg2 = (char *)jarg2; 
+  arg3 = (char *)jarg3; 
+  result = (enum norddrop_result)norddrop_reject_file(arg1,(char const *)arg2,(char const *)arg3);
+  jresult = (int)result; 
+  return jresult;
+}
+
+
 SWIGEXPORT int SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_Download___(void * jarg1, char * jarg2, char * jarg3, char * jarg4) {
   int jresult ;
   struct norddrop *arg1 = (struct norddrop *) 0 ;
