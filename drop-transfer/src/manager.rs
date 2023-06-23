@@ -1,18 +1,17 @@
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap},
     io,
+    mem::ManuallyDrop,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
-use slog::{debug, warn};
 use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 
 use crate::{
     file::FileSubPath,
     service::State,
-    utils::Hidden,
     ws::{client::ClientReq, server::ServerReq},
     Error, Transfer,
 };
@@ -28,7 +27,6 @@ pub struct TransferState {
     pub(crate) connection: TransferConnection,
     // Used for mapping directories inside the destination
     dir_mappings: HashMap<PathBuf, String>,
-    dir_marker_file_name: String,
 }
 
 /// Transfer manager is responsible for keeping track of all ongoing or pending
@@ -40,63 +38,10 @@ pub(crate) struct TransferManager {
 
 impl TransferState {
     fn new(xfer: Transfer, connection: TransferConnection) -> Self {
-        let dir_marker_file_name = format!(".{}.drop-dir", xfer.id());
-
         Self {
             xfer,
             connection,
             dir_mappings: HashMap::new(),
-            dir_marker_file_name,
-        }
-    }
-
-    pub(crate) async fn rm_all_marker_files(&self, state: &State, logger: &slog::Logger) {
-        let mut markers = HashSet::new();
-
-        // Files we know about from the mappings
-        let iter = self.dir_mappings.iter().map(|(full_original, mapping)| {
-            full_original
-                .with_file_name(mapping)
-                .join(&self.dir_marker_file_name)
-        });
-
-        markers.extend(iter);
-
-        // Files from database, should cover all the cases
-        match state.storage.finished_incoming_files(self.xfer.id()).await {
-            Ok(files) => {
-                let iter = files.into_iter().filter_map(|file| {
-                    let full = PathBuf::from(file.final_path);
-                    let rel_dir_count = FileSubPath::from(&file.relative_path).iter().count();
-
-                    if rel_dir_count > 1 {
-                        Some(
-                            full.ancestors()
-                                .nth(rel_dir_count - 1)?
-                                .to_path_buf()
-                                .join(&self.dir_marker_file_name),
-                        )
-                    } else {
-                        None
-                    }
-                });
-
-                markers.extend(iter);
-            }
-            Err(err) => {
-                warn!(logger, "Failed to fetch all finished files from DB: {err}");
-            }
-        }
-
-        for marker in markers {
-            debug!(logger, "Removing marker file: {marker:?}");
-            if let Err(err) = std::fs::remove_file(&marker) {
-                warn!(
-                    logger,
-                    "Failed to remove marker file {:?}: {err}",
-                    Hidden(&marker)
-                );
-            }
         }
     }
 
@@ -106,16 +51,14 @@ impl TransferState {
     /// `dir1/dir2/.../filename`) it does a couple of things:
     ///
     /// * it checks if `dest_dir/dir1` already exists and if we created it
-    /// * if it doesn't then it creates the directory and places inside of it a
-    ///   marker file to indicate that it was created by us
+    /// * if it doesn't then it creates the directory
     /// * if it exists and is not created by us it keeps appending (1), (2), ...
     ///   suffix and repeats the prevoius step
     /// * finally appends the rest of subpath components into the final path
     ///  `dest_dir/<mapped dir1>/dir2/../filename`
     ///
-    /// The results are cached to speed this up but the marker file is created
-    /// anyway to store the information across restarts.
-    pub(crate) fn compose_and_mark_final_path(
+    /// The results are cached in RAM to speed this up
+    pub(crate) fn compose_final_path(
         &mut self,
         dest_dir: &Path,
         file_subpath: &FileSubPath,
@@ -139,9 +82,7 @@ impl TransferState {
                                 // Skip if there is already a file with the same name.
                                 // Additionaly there could be a dangling symlink with the same name,
                                 // the `symlink_metadata()` ensures we can catch that.
-                                matches!(dst_location.symlink_metadata() , Err(err) if err.kind() == io::ErrorKind::NotFound) ||
-                                // Or it might be our dir created by the same transfer (as this can be a resume)
-                                dst_location.join(&self.dir_marker_file_name).symlink_metadata().is_ok()
+                                matches!(dst_location.symlink_metadata() , Err(err) if err.kind() == io::ErrorKind::NotFound)
                             })
                             .expect("The filepath variants iterator should never end");
 
@@ -153,11 +94,6 @@ impl TransferState {
                                 .ok_or_else(|| crate::Error::BadPath("Invalid UTF8 path".into()))?
                                 .to_string(),
                         );
-
-                        // Create marker file
-                        std::fs::create_dir_all(&mapped)?;
-                        let marker_path = mapped.join(&self.dir_marker_file_name);
-                        std::fs::File::create(marker_path)?;
 
                         value.clone()
                     }
@@ -205,39 +141,27 @@ impl TransferManager {
 }
 
 pub(crate) struct TransferGuard {
-    state: Option<Arc<State>>,
+    state: ManuallyDrop<Arc<State>>,
     id: Uuid,
 }
 
 impl TransferGuard {
     pub(crate) fn new(state: Arc<State>, id: Uuid) -> Self {
         Self {
-            state: Some(state),
+            state: ManuallyDrop::new(state),
             id,
-        }
-    }
-
-    pub(crate) async fn gracefull_close(mut self, logger: &slog::Logger) {
-        let state = self
-            .state
-            .take()
-            .expect("State should be present in method calls");
-
-        let mut lock = state.transfer_manager.lock().await;
-        if let Some(xfer_state) = lock.cancel_transfer(self.id) {
-            xfer_state.rm_all_marker_files(&state, logger).await;
         }
     }
 }
 
 impl Drop for TransferGuard {
     fn drop(&mut self) {
-        if let Some(state) = self.state.take() {
-            let id = self.id;
-            tokio::spawn(async move {
-                let mut lock = state.transfer_manager.lock().await;
-                lock.cancel_transfer(id);
-            });
-        }
+        let state = unsafe { ManuallyDrop::take(&mut self.state) };
+        let id = self.id;
+
+        tokio::spawn(async move {
+            let mut lock = state.transfer_manager.lock().await;
+            let _ = lock.cancel_transfer(id);
+        });
     }
 }

@@ -315,7 +315,7 @@ async fn handle_client(
     xfer: crate::Transfer,
 ) {
     let xfer_id = xfer.id();
-    let xfer_guard = TransferGuard::new(state.clone(), xfer_id);
+    let _guard = TransferGuard::new(state.clone(), xfer_id);
     let (req_send, mut req_rx) = mpsc::unbounded_channel();
 
     {
@@ -466,8 +466,6 @@ async fn handle_client(
         } else {
             debug!(logger, "WS client disconnected");
         }
-
-        xfer_guard.gracefull_close(logger).await
     }
 }
 
@@ -590,7 +588,7 @@ impl FileXferTask {
         let mapping = lock
             .state_mut(self.xfer.id())
             .ok_or(crate::Error::Canceled)?
-            .compose_and_mark_final_path(&self.base_dir, self.file.subpath())?;
+            .compose_final_path(&self.base_dir, self.file.subpath())?;
 
         drop(lock);
 

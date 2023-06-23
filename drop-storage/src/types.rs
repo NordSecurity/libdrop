@@ -149,12 +149,6 @@ pub enum TransferIncomingMode {
 }
 
 #[derive(Debug)]
-pub struct FinishedFile {
-    pub relative_path: String,
-    pub final_path: String,
-}
-
-#[derive(Debug)]
 pub enum Event {
     Pending {
         transfer_info: TransferInfo,
