@@ -64,6 +64,10 @@ SQLX_OFFLINE_DIR="./.sqlx" DATABASE_URL=sqlite:///tmp/db.sqlite cargo sqlx prepa
 git add .sqlx
 ```
 To speed up the process `.env` file can be created in `drop-storage` with `DATABASE_URL` set up to always use it.
+
+## IPv6 format
+Whenever IPv6 is used in a text form e.g. it is stored in the DB, included in the event, or passed as a callback argument we use the [RFC 5952](https://tools.ietf.org/html/rfc5952) for unique text representation.
+
 # Contributing
 [CONTRIBUTING.md](CONTRIBUTING.md)
 
