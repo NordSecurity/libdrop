@@ -5,7 +5,7 @@ mod v5;
 
 use std::{
     io,
-    net::IpAddr,
+    net::{IpAddr, SocketAddr},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -142,7 +142,11 @@ async fn make_request(
     auth: &auth::Context,
     logger: &slog::Logger,
 ) -> Result<(), tungstenite::Error> {
-    let url = format!("ws://{ip}:{}/drop/{version}", drop_config::PORT);
+    let addr = SocketAddr::new(ip, drop_config::PORT);
+
+    let url = format!("ws://{addr}/drop/{version}",);
+
+    debug!(logger, "Making HTTP request: {url}");
 
     let err = match tokio_tungstenite::client_async(&url, &mut *socket).await {
         Ok(_) => {
@@ -166,6 +170,7 @@ async fn make_request(
                 auth.create_ticket_header_val(ip, val)
             };
 
+            debug!(logger, "Extracting peers ({ip}) public key");
             match extract_www_auth() {
                 Ok(auth_header) => {
                     debug!(logger, "Building 'authorization' request");
