@@ -323,7 +323,7 @@ impl RunContext<'_> {
     }
 
     async fn run(mut self, mut handler: impl HandlerInit) -> ControlFlow<()> {
-        let xfer_guard = TransferGuard::new(self.state.clone(), self.xfer.id());
+        let _guard = TransferGuard::new(self.state.clone(), self.xfer.id());
 
         let mut api_req_rx = match self.start(&mut handler).await {
             Ok(rx) => rx,
@@ -412,7 +412,6 @@ impl RunContext<'_> {
                 debug!(self.logger, "WS client disconnected");
             }
 
-            xfer_guard.gracefull_close(self.logger).await;
             ControlFlow::Break(())
         }
     }
