@@ -100,7 +100,22 @@ impl TransferState {
         }
     }
 
-    pub(crate) fn apply_dir_mapping(
+    /// This function composes the final path for the file.
+    /// For ordinary files (subpath contains only one element) it just joins
+    /// `dest_dir` with `file_subpath`. For directories (subpath of the form
+    /// `dir1/dir2/.../filename`) it does a couple of things:
+    ///
+    /// * it checks if `dest_dir/dir1` already exists and if we created it
+    /// * if it doesn't then it creates the directory and places inside of it a
+    ///   marker file to indicate that it was created by us
+    /// * if it exists and is not created by us it keeps appending (1), (2), ...
+    ///   suffix and repeats the prevoius step
+    /// * finally appends the rest of subpath components into the final path
+    ///  `dest_dir/<mapped dir1>/dir2/../filename`
+    ///
+    /// The results are cached to speed this up but the marker file is created
+    /// anyway to store the information across restarts.
+    pub(crate) fn compose_and_mark_final_path(
         &mut self,
         dest_dir: &Path,
         file_subpath: &FileSubPath,

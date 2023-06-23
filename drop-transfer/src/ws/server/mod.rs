@@ -590,7 +590,7 @@ impl FileXferTask {
         let mapping = lock
             .state_mut(self.xfer.id())
             .ok_or(crate::Error::Canceled)?
-            .apply_dir_mapping(&self.base_dir, self.file.subpath())?;
+            .compose_and_mark_final_path(&self.base_dir, self.file.subpath())?;
 
         drop(lock);
 
