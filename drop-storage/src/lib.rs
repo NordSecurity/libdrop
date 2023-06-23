@@ -445,6 +445,56 @@ impl Storage {
         Ok(())
     }
 
+    pub async fn insert_outgoing_path_reject_state(
+        &self,
+        transfer_id: Uuid,
+        path_id: &str,
+        by_peer: bool,
+    ) -> Result<()> {
+        let tid = transfer_id.hyphenated();
+
+        let mut conn = self.conn.acquire().await?;
+
+        sqlx::query!(
+            r#"
+            INSERT INTO outgoing_path_reject_states (path_id, by_peer)
+            SELECT id, ?3 FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2
+            "#,
+            tid,
+            path_id,
+            by_peer,
+        )
+        .execute(&mut *conn)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn insert_incoming_path_reject_state(
+        &self,
+        transfer_id: Uuid,
+        path_id: &str,
+        by_peer: bool,
+    ) -> Result<()> {
+        let tid = transfer_id.hyphenated();
+
+        let mut conn = self.conn.acquire().await?;
+
+        sqlx::query!(
+            r#"
+            INSERT INTO incoming_path_reject_states (path_id, by_peer)
+            SELECT id, ?3 FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
+            "#,
+            tid,
+            path_id,
+            by_peer,
+        )
+        .execute(&mut *conn)
+        .await?;
+
+        Ok(())
+    }
+
     pub async fn purge_transfers_until(&self, until_timestamp: i64) -> Result<()> {
         let mut conn = self.conn.acquire().await?;
 

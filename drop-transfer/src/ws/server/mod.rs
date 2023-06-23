@@ -1,6 +1,7 @@
 mod handler;
 mod v2;
 mod v4;
+mod v5;
 
 use std::{
     collections::HashMap,
@@ -54,6 +55,7 @@ const REPORT_PROGRESS_THRESHOLD: u64 = 1024 * 64;
 pub enum ServerReq {
     Download { task: Box<FileXferTask> },
     Cancel { file: FileId },
+    Reject { file: FileId },
 }
 
 pub struct FileXferTask {
@@ -135,7 +137,7 @@ pub(crate) fn start(
 
                         match version {
                             protocol::Version::V1 | protocol::Version::V2 => (),
-                            protocol::Version::V4 => {
+                            _ => {
                                 let auth_header = auth_header
                                     .ok_or_else(|| warp::reject::custom(MissingAuth(peer)))?;
 
@@ -181,6 +183,10 @@ pub(crate) fn start(
                             }
                             protocol::Version::V4 => {
                                 ctx.run(v4::HandlerInit::new(peer.ip(), state, &logger))
+                                    .await
+                            }
+                            protocol::Version::V5 => {
+                                ctx.run(v5::HandlerInit::new(peer.ip(), state, &logger))
                                     .await
                             }
                         }
