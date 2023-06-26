@@ -14,7 +14,7 @@ use uuid::{fmt::Hyphenated, Uuid};
 
 use crate::error::Error;
 pub use crate::types::{
-    FileChecksum, FileToRetry, TransferIncomingMode, TransferInfo, TransferToRetry, TransferType,
+    FileChecksum, FileToRetry, IncomingTransferInfo, TransferInfo, TransferToRetry, TransferType,
 };
 
 type Result<T> = std::result::Result<T, Error>;
@@ -40,7 +40,7 @@ impl Storage {
         })
     }
 
-    pub async fn insert_transfer(&self, transfer: &TransferInfo) -> Result<TransferIncomingMode> {
+    pub async fn insert_transfer(&self, transfer: &TransferInfo) -> Result<()> {
         let transfer_type_int = match &transfer.files {
             TransferFiles::Incoming(_) => TransferType::Incoming as u32,
             TransferFiles::Outgoing(_) => TransferType::Outgoing as u32,
@@ -50,21 +50,14 @@ impl Storage {
 
         let mut conn = self.conn.begin().await?;
 
-        let affected = sqlx::query!(
-            "INSERT OR IGNORE INTO transfers (id, peer, is_outgoing) VALUES (?1, ?2, ?3)",
+        sqlx::query!(
+            "INSERT INTO transfers (id, peer, is_outgoing) VALUES (?1, ?2, ?3)",
             tid,
             transfer.peer,
             transfer_type_int,
         )
         .execute(&mut *conn)
-        .await?
-        .rows_affected();
-
-        let mode = if affected == 0 {
-            TransferIncomingMode::Resume
-        } else {
-            TransferIncomingMode::New
-        };
+        .await?;
 
         match &transfer.files {
             TransferFiles::Incoming(files) => {
@@ -81,7 +74,44 @@ impl Storage {
 
         conn.commit().await?;
 
-        Ok(mode)
+        Ok(())
+    }
+
+    pub async fn incoming_transfer_info(
+        &self,
+        transfer_id: Uuid,
+    ) -> Result<Option<IncomingTransferInfo>> {
+        let tid = transfer_id.hyphenated();
+
+        let mut conn = self.conn.begin().await?;
+
+        let record = sqlx::query!(
+            "SELECT peer FROM transfers WHERE id = ?1 AND is_outgoing = ?2",
+            tid,
+            TransferType::Incoming as u32,
+        )
+        .fetch_optional(&mut *conn)
+        .await?;
+
+        let peer = if let Some(record) = record {
+            record.peer
+        } else {
+            return Ok(None);
+        };
+
+        let files = sqlx::query_as!(
+            TransferIncomingPath,
+            r#"
+            SELECT relative_path, path_hash as file_id, bytes as size 
+            FROM incoming_paths
+            WHERE transfer_id = ?1
+            "#,
+            tid
+        )
+        .fetch_all(&mut *conn)
+        .await?;
+
+        Ok(Some(IncomingTransferInfo { peer, files }))
     }
 
     async fn insert_incoming_path(

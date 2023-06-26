@@ -95,7 +95,7 @@ pub enum TransferType {
     Outgoing = 1,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, PartialOrd, Ord, Eq)]
 pub struct TransferIncomingPath {
     pub file_id: FileId,
     pub relative_path: String,
@@ -123,6 +123,12 @@ pub struct TransferInfo {
     pub files: TransferFiles,
 }
 
+#[derive(Debug, PartialEq, PartialOrd, Ord, Eq)]
+pub struct IncomingTransferInfo {
+    pub peer: String,
+    pub files: Vec<TransferIncomingPath>,
+}
+
 #[derive(Debug)]
 pub struct FileChecksum {
     pub file_id: FileId,
@@ -140,12 +146,6 @@ pub struct TransferToRetry {
     pub uuid: uuid::Uuid,
     pub peer: String,
     pub files: Vec<FileToRetry>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum TransferIncomingMode {
-    New,
-    Resume,
 }
 
 #[derive(Debug)]
