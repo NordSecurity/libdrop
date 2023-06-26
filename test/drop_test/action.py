@@ -279,7 +279,9 @@ class WaitRacy(Action):
         self._events: typing.List[Event] = events
 
     async def run(self, drop: ffi.Drop):
-        await drop._events.wait_racy(self._events)
+        await drop._events.wait_racy(
+            self._events, not any(isinstance(ev, event.Progress) for ev in self._events)
+        )
 
     def __str__(self):
         return f"WaitRacy({', '.join(str(e) for e in self._events)})"

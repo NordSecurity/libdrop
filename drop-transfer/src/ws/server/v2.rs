@@ -45,6 +45,7 @@ pub struct HandlerLoop<'a, const PING: bool> {
 }
 
 struct Downloader {
+    state: Arc<State>,
     file_id: FileSubPath,
     msg_tx: Sender<Message>,
     tmp_loc: Option<Hidden<PathBuf>>,
@@ -434,10 +435,12 @@ impl handler::Downloader for Downloader {
             .map(|b| format!("{:02x}", b))
             .collect();
 
+        let abs_path = task.prepare_abs_path(&self.state).await?;
+
         let tmp_location: Hidden<PathBuf> = Hidden(
             format!(
                 "{}.dropdl-{}",
-                task.absolute_path.display(),
+                abs_path.display(),
                 suffix.get(..8).unwrap_or(&suffix),
             )
             .into(),
@@ -458,6 +461,10 @@ impl handler::Downloader for Downloader {
     }
 
     async fn open(&mut self, path: &Hidden<PathBuf>) -> crate::Result<fs::File> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
         let file = fs::File::create(&path.0)?;
         Ok(file)
     }
@@ -498,6 +505,7 @@ impl FileTask {
         let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
 
         let downloader = Downloader {
+            state: state.clone(),
             file_id: task.file.subpath().clone(),
             msg_tx,
             tmp_loc: None,

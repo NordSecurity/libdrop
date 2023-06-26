@@ -4058,6 +4058,191 @@ scenarios = [
         },
     ),
     Scenario(
+        "scenario21-3",
+        "Cancel the directory transfer in flight, then resume transfer. Expect it to be resumed properly",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/nested"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["nested/big/testfile-01"].id,
+                                    "nested/big/testfile-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["nested/big/testfile-02"].id,
+                                    "nested/big/testfile-02",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(0, FILES["nested/big/testfile-01"].id),
+                            event.Start(0, FILES["nested/big/testfile-02"].id),
+                        ]
+                    ),
+                    action.Wait(event.FinishTransferCanceled(0, True)),
+                    # new transfer
+                    action.NewTransfer("172.20.0.15", ["/tmp/nested"]),
+                    action.Wait(
+                        event.Queued(
+                            1,
+                            {
+                                event.File(
+                                    FILES["nested/big/testfile-01"].id,
+                                    "nested/big/testfile-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["nested/big/testfile-02"].id,
+                                    "nested/big/testfile-02",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(1, FILES["nested/big/testfile-01"].id),
+                            event.Start(1, FILES["nested/big/testfile-02"].id),
+                            event.FinishFileUploaded(
+                                1, FILES["nested/big/testfile-01"].id
+                            ),
+                            event.FinishFileUploaded(
+                                1, FILES["nested/big/testfile-02"].id
+                            ),
+                        ]
+                    ),
+                    action.ExpectCancel([1], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["nested/big/testfile-01"].id,
+                                    "nested/big/testfile-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["nested/big/testfile-02"].id,
+                                    "nested/big/testfile-02",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["nested/big/testfile-01"].id,
+                        "/tmp/received/21-3",
+                    ),
+                    action.Download(
+                        0,
+                        FILES["nested/big/testfile-02"].id,
+                        "/tmp/received/21-3",
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(0, FILES["nested/big/testfile-01"].id),
+                            event.Start(0, FILES["nested/big/testfile-02"].id),
+                            # wait for the initial progress indicating that we start from the beginning
+                            event.Progress(0, FILES["nested/big/testfile-01"].id, 0),
+                            event.Progress(0, FILES["nested/big/testfile-02"].id, 0),
+                            # make sure we have received something, so that we have non-empty tmp file
+                            event.Progress(0, FILES["nested/big/testfile-01"].id),
+                            event.Progress(0, FILES["nested/big/testfile-02"].id),
+                        ]
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.Wait(event.FinishTransferCanceled(0, False)),
+                    # new transfer
+                    action.Wait(
+                        event.Receive(
+                            1,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["nested/big/testfile-01"].id,
+                                    "nested/big/testfile-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["nested/big/testfile-02"].id,
+                                    "nested/big/testfile-02",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        1,
+                        FILES["nested/big/testfile-01"].id,
+                        "/tmp/received/21-3",
+                    ),
+                    action.WaitForResume(
+                        1,
+                        FILES["nested/big/testfile-01"].id,
+                        f"/tmp/received/21-3/{FILES['nested/big/testfile-01'].id}.dropdl-part",
+                    ),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            1,
+                            FILES["nested/big/testfile-01"].id,
+                            "/tmp/received/21-3/nested/big/testfile-01",
+                        )
+                    ),
+                    action.Download(
+                        1,
+                        FILES["nested/big/testfile-02"].id,
+                        "/tmp/received/21-3",
+                    ),
+                    action.WaitForResume(
+                        1,
+                        FILES["nested/big/testfile-02"].id,
+                        f"/tmp/received/21-3/{FILES['nested/big/testfile-02'].id}.dropdl-part",
+                    ),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            1,
+                            FILES["nested/big/testfile-02"].id,
+                            "/tmp/received/21-3/nested/big/testfile-02",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File(
+                                "/tmp/received/21-3/nested/big/testfile-01", 10485760
+                            ),
+                            action.File(
+                                "/tmp/received/21-3/nested/big/testfile-02", 10485760
+                            ),
+                        ],
+                    ),
+                    action.CancelTransferRequest(1),
+                    action.ExpectCancel([1], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
         "scenario22",
         "Send one zero sized file to a peer, expect it to be transferred",
         {

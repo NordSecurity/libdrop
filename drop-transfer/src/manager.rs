@@ -1,5 +1,6 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
+    io,
     mem::ManuallyDrop,
     path::{Path, PathBuf},
     sync::Arc,
@@ -9,9 +10,10 @@ use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 
 use crate::{
+    file::FileSubPath,
     service::State,
     ws::{client::ClientReq, server::ServerReq},
-    Error, FileId, Transfer,
+    Error, Transfer,
 };
 
 #[derive(Clone)]
@@ -42,16 +44,77 @@ impl TransferState {
             dir_mappings: HashMap::new(),
         }
     }
+
+    /// This function composes the final path for the file.
+    /// For ordinary files (subpath contains only one element) it just joins
+    /// `dest_dir` with `file_subpath`. For directories (subpath of the form
+    /// `dir1/dir2/.../filename`) it does a couple of things:
+    ///
+    /// * it checks if `dest_dir/dir1` already exists and if we created it
+    /// * if it doesn't then it creates the directory
+    /// * if it exists and is not created by us it keeps appending (1), (2), ...
+    ///   suffix and repeats the prevoius step
+    /// * finally appends the rest of subpath components into the final path
+    ///  `dest_dir/<mapped dir1>/dir2/../filename`
+    ///
+    /// The results are cached in RAM to speed this up
+    pub(crate) fn compose_final_path(
+        &mut self,
+        dest_dir: &Path,
+        file_subpath: &FileSubPath,
+    ) -> crate::Result<PathBuf> {
+        let mut iter = file_subpath.iter().map(crate::utils::normalize_filename);
+
+        let probe = iter.next().ok_or_else(|| {
+            crate::Error::BadPath("Path should contain at least one component".into())
+        })?;
+        let next = iter.next();
+
+        let mapped = match next {
+            Some(next) => {
+                // Check if dir exists and is known to us
+                let name = match self.dir_mappings.entry(dest_dir.join(probe)) {
+                    // Dir is known, reuse
+                    Entry::Occupied(occ) => occ.get().clone(),
+                    // Dir in new, check if there is name conflict and add to known
+                    Entry::Vacant(vacc) => {
+                        let mapped = crate::utils::filepath_variants(vacc.key())?.find(|dst_location| {
+                                // Skip if there is already a file with the same name.
+                                // Additionaly there could be a dangling symlink with the same name,
+                                // the `symlink_metadata()` ensures we can catch that.
+                                matches!(dst_location.symlink_metadata() , Err(err) if err.kind() == io::ErrorKind::NotFound)
+                            })
+                            .expect("The filepath variants iterator should never end");
+
+                        let value = vacc.insert(
+                            mapped
+                                .file_name()
+                                .ok_or_else(|| crate::Error::BadPath("Missing file name".into()))?
+                                .to_str()
+                                .ok_or_else(|| crate::Error::BadPath("Invalid UTF8 path".into()))?
+                                .to_string(),
+                        );
+
+                        value.clone()
+                    }
+                };
+
+                [name, next].into_iter().chain(iter).collect()
+            }
+            None => {
+                // Ordinary file
+                probe.into()
+            }
+        };
+
+        Ok(mapped)
+    }
 }
 
 impl TransferManager {
     /// Cancel ALL of the ongoing file transfers for a given transfer ID    
-    pub(crate) fn cancel_transfer(&mut self, transfer_id: Uuid) -> Result<(), Error> {
-        self.transfers
-            .remove(&transfer_id)
-            .ok_or(Error::BadTransfer)?;
-
-        Ok(())
+    pub(crate) fn cancel_transfer(&mut self, transfer_id: Uuid) -> Option<TransferState> {
+        self.transfers.remove(&transfer_id)
     }
 
     pub(crate) fn insert_transfer(
@@ -68,67 +131,12 @@ impl TransferManager {
         }
     }
 
-    pub(crate) fn transfer(&self, id: &Uuid) -> Option<&Transfer> {
-        self.transfers.get(id).map(|state| &state.xfer)
+    pub(crate) fn state(&self, id: Uuid) -> Option<&TransferState> {
+        self.transfers.get(&id)
     }
 
-    pub(crate) fn connection(&self, id: Uuid) -> Option<&TransferConnection> {
-        self.transfers.get(&id).map(|state| &state.connection)
-    }
-
-    pub(crate) fn apply_dir_mapping(
-        &mut self,
-        id: Uuid,
-        dest_dir: &Path,
-        file_id: &FileId,
-    ) -> crate::Result<PathBuf> {
-        let state = self
-            .transfers
-            .get_mut(&id)
-            .ok_or(crate::Error::BadTransfer)?;
-
-        let file = state
-            .xfer
-            .files()
-            .get(file_id)
-            .ok_or(crate::Error::BadFileId)?;
-
-        let mut iter = file.subpath().iter().map(crate::utils::normalize_filename);
-
-        let probe = iter.next().ok_or_else(|| {
-            crate::Error::BadPath("Path should contain at least one component".into())
-        })?;
-        let next = iter.next();
-
-        let mapped = match next {
-            Some(next) => {
-                // Check if dir exists and is known to us
-                let name = match state.dir_mappings.entry(dest_dir.join(probe)) {
-                    // Dir is known, reuse
-                    Entry::Occupied(occ) => occ.get().clone(),
-                    // Dir in new, check if there is name conflict and add to known
-                    Entry::Vacant(vacc) => {
-                        let mapped = crate::utils::map_path_if_exists(vacc.key())?;
-                        vacc.insert(
-                            mapped
-                                .file_name()
-                                .ok_or_else(|| crate::Error::BadPath("Missing file name".into()))?
-                                .to_string_lossy()
-                                .to_string(),
-                        )
-                        .clone()
-                    }
-                };
-
-                [name, next].into_iter().chain(iter).collect()
-            }
-            None => {
-                // Ordinary file
-                probe.into()
-            }
-        };
-
-        Ok(mapped)
+    pub(crate) fn state_mut(&mut self, id: Uuid) -> Option<&mut TransferState> {
+        self.transfers.get_mut(&id)
     }
 }
 
