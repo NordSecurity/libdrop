@@ -56,6 +56,10 @@ public class NordDrop {
     return NorddropResult.swigToEnum(libnorddropJNI.NordDrop_cancelFile(swigCPtr, this, txid, fid));
   }
 
+  public NorddropResult rejectFile(String txid, String fid) {
+    return NorddropResult.swigToEnum(libnorddropJNI.NordDrop_rejectFile(swigCPtr, this, txid, fid));
+  }
+
   public NorddropResult download(String txid, String fid, String dstPath) {
     return NorddropResult.swigToEnum(libnorddropJNI.NordDrop_download(swigCPtr, this, txid, fid, dstPath));
   }

@@ -23,6 +23,8 @@ pub enum Status {
     AuthenticationFailed = 30,
     StorageError = 31,
     DbLost = 32,
+    FileChecksumMismatch = 33,
+    FileRejected = 34,
 }
 
 impl serde::Serialize for Status {

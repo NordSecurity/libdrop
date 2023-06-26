@@ -193,10 +193,16 @@ pub enum Event {
         file_id: FileId,
         final_path: String,
     },
-    Progress {
+    FileProgress {
         transfer_id: TransferId,
         file_id: FileId,
         progress: i64,
+    },
+    FileReject {
+        transfer_type: TransferType,
+        transfer_id: TransferId,
+        file_id: FileId,
+        by_peer: bool,
     },
 }
 

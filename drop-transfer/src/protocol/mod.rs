@@ -3,6 +3,7 @@ pub mod v2 {
     pub use super::v1::*;
 }
 pub mod v4;
+pub mod v5;
 
 #[derive(Copy, Clone, strum::Display, strum::EnumString)]
 pub enum Version {
@@ -14,4 +15,6 @@ pub enum Version {
     // security flaw. It should never be added back.
     #[strum(serialize = "v4")]
     V4,
+    #[strum(serialize = "v5")]
+    V5,
 }

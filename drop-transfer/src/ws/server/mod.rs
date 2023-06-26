@@ -1,6 +1,7 @@
 mod handler;
 mod v2;
 mod v4;
+mod v5;
 
 use std::{
     collections::HashMap,
@@ -54,6 +55,7 @@ const REPORT_PROGRESS_THRESHOLD: u64 = 1024 * 64;
 pub enum ServerReq {
     Download { task: Box<FileXferTask> },
     Cancel { file: FileId },
+    Reject { file: FileId },
 }
 
 pub struct FileXferTask {
@@ -142,7 +144,7 @@ pub(crate) fn start(
 
                         match version {
                             protocol::Version::V1 | protocol::Version::V2 => (),
-                            protocol::Version::V4 => {
+                            _ => {
                                 let auth_header = auth_header
                                     .ok_or_else(|| warp::reject::custom(MissingAuth(peer)))?;
 
@@ -190,6 +192,10 @@ pub(crate) fn start(
                                 ctx.run(v4::HandlerInit::new(peer.ip(), state, &logger))
                                     .await
                             }
+                            protocol::Version::V5 => {
+                                ctx.run(v5::HandlerInit::new(peer.ip(), state, &logger))
+                                    .await
+                            }
                         }
                     })
                 },
@@ -204,7 +210,10 @@ pub(crate) fn start(
         .try_bind_with_graceful_shutdown((addr, drop_config::PORT), async move {
             stop.cancelled().await
         }) {
-        Ok((_, future)) => future,
+        Ok((socket, future)) => {
+            debug!(logger, "WS server is bound to: {socket}");
+            future
+        }
         Err(err) => {
             // Check if this is IO error about address already in use
             if let Some(ioerr) = std::error::Error::source(&err)
@@ -476,10 +485,11 @@ impl FileXferTask {
             }
 
             if bytes_received > self.file.size() {
-                Err(crate::Error::UnexpectedData)
-            } else {
-                Ok(bytes_received)
+                return Err(crate::Error::UnexpectedData);
             }
+
+            downloader.validate(tmp_loc).await?;
+            Ok(bytes_received)
         };
 
         let bytes_received = match consume_file_chunks.await {

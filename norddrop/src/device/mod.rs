@@ -446,7 +446,7 @@ impl NordDropFFI {
         Ok(())
     }
 
-    pub(super) fn cancel_file(&mut self, xfid: uuid::Uuid, file: String) -> Result<()> {
+    pub(super) fn cancel_file(&mut self, xfid: uuid::Uuid, file: String) {
         let instance = self.instance.clone();
         let logger = self.logger.clone();
         let ed = self.event_dispatcher.clone();
@@ -478,6 +478,41 @@ impl NordDropFFI {
                         status: From::from(&e),
                     },
                 })
+            }
+        });
+    }
+
+    pub(super) fn reject_file(&self, xfid: uuid::Uuid, file: String) -> Result<()> {
+        trace!(
+            self.logger,
+            "norddrop_reject_file() for transfer {xfid}, file {file}",
+        );
+
+        let logger = self.logger.clone();
+        let evdisp = self.event_dispatcher.clone();
+
+        let inst = self.instance.clone().blocking_lock_owned();
+
+        if inst.is_none() {
+            return Err(ffi::types::NORDDROP_RES_NOT_STARTED);
+        }
+
+        self.rt.spawn(async move {
+            let inst = inst.as_ref().expect("Instance not initialized");
+
+            if let Err(err) = inst.reject(xfid, file.clone().into()).await {
+                error!(
+                    logger,
+                    "Failed to reject a file with xfid: {xfid}, file: {file}, error: {err:?}"
+                );
+
+                evdisp.dispatch(types::Event::TransferFinished {
+                    transfer: xfid.to_string(),
+                    data: FinishEvent::FileFailed {
+                        file,
+                        status: From::from(&err),
+                    },
+                });
             }
         });
 
