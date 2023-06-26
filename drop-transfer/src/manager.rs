@@ -134,6 +134,15 @@ impl TransferState {
 
         Ok(mapped)
     }
+
+    pub(crate) fn register_preexisting_final_path(
+        &mut self,
+        file_subpath: &FileSubPath,
+        full_path: impl AsRef<Path>,
+    ) {
+        self.dir_mappings
+            .extend(extract_directory_mapping(file_subpath, full_path.as_ref()));
+    }
 }
 
 impl TransferManager {
@@ -188,5 +197,44 @@ impl Drop for TransferGuard {
             let mut lock = state.transfer_manager.lock().await;
             let _ = lock.cancel_transfer(id);
         });
+    }
+}
+
+fn extract_directory_mapping(
+    file_subpath: &FileSubPath,
+    full_path: &Path,
+) -> Option<(PathBuf, String)> {
+    let mut iter = file_subpath.iter();
+    let first = iter.next()?;
+
+    let count = iter.count();
+
+    // Insert only directories
+    if count > 0 {
+        let ancestor = full_path.ancestors().nth(count)?;
+
+        let filename = ancestor.file_name()?.to_str()?.to_string();
+
+        let path = ancestor.with_file_name(first);
+        Some((path, filename))
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracting_dir_mapping() {
+        let (path, name) = extract_directory_mapping(
+            &FileSubPath::from_path("a/b/c.txt").unwrap(),
+            "/home/xyz/foo/bar/a(2)/b/c.txt".as_ref(),
+        )
+        .expect("Failed to read mapping");
+
+        assert_eq!(path, Path::new("/home/xyz/foo/bar/a"));
+        assert_eq!(name, "a(2)");
     }
 }

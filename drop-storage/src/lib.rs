@@ -14,7 +14,8 @@ use uuid::{fmt::Hyphenated, Uuid};
 
 use crate::error::Error;
 pub use crate::types::{
-    FileChecksum, FileToRetry, IncomingTransferInfo, TransferInfo, TransferToRetry, TransferType,
+    FileChecksum, FileToRetry, FinishedIncomingFile, IncomingTransferInfo, TransferInfo,
+    TransferToRetry, TransferType,
 };
 
 type Result<T> = std::result::Result<T, Error>;
@@ -669,6 +670,30 @@ impl Storage {
         conn.commit().await?;
 
         Ok(out)
+    }
+
+    pub async fn finished_incoming_files(
+        &self,
+        transfer_id: Uuid,
+    ) -> Result<Vec<FinishedIncomingFile>> {
+        let tid = transfer_id.hyphenated();
+
+        let mut conn = self.conn.acquire().await?;
+
+        let paths = sqlx::query_as!(
+            FinishedIncomingFile,
+            r#"
+            SELECT relative_path as subpath, final_path
+            FROM incoming_paths ip
+            INNER JOIN incoming_path_completed_states ipcs ON ip.id = ipcs.path_id
+            WHERE transfer_id = ?1
+            "#,
+            tid,
+        )
+        .fetch_all(&mut *conn)
+        .await?;
+
+        Ok(paths)
     }
 
     pub async fn transfers_since(&self, since_timestamp: i64) -> Result<Vec<Transfer>> {
