@@ -46,6 +46,10 @@ pub enum Error {
     AuthenticationFailed,
     #[error("Storage error")]
     StorageError,
+    #[error("Checksum validation failed")]
+    ChecksumMismatch,
+    #[error("File is rejected")]
+    Rejected,
 }
 
 impl Error {
@@ -96,6 +100,8 @@ impl From<&Error> for u32 {
             Error::FilenameTooLong => Status::FilenameTooLong as _,
             Error::AuthenticationFailed => Status::AuthenticationFailed as _,
             Error::StorageError => Status::StorageError as _,
+            Error::ChecksumMismatch => Status::FileChecksumMismatch as _,
+            Error::Rejected => Status::FileRejected as _,
         }
     }
 }

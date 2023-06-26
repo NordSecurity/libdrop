@@ -335,6 +335,17 @@ class Drop:
             err_type = LibResult(err).name
             raise Exception(f"cancel_file has failed with code: {err}({err_type})")
 
+    def reject_transfer_file(self, uuid: str, fid: str):
+        err = self._lib.norddrop_reject_file(
+            self._instance,
+            ctypes.create_string_buffer(bytes(uuid, "utf-8")),
+            ctypes.create_string_buffer(bytes(fid, "utf-8")),
+        )
+
+        if err != 0:
+            err_type = LibResult(err).name
+            raise Exception(f"cancel_file has failed with code: {err}({err_type})")
+
     def get_transfers_since(self, since_timestamp: int) -> str:
         transfers = self._lib.norddrop_get_transfers_since(
             self._instance,
@@ -368,7 +379,9 @@ class Drop:
             err_type = LibResult(err).name
             raise Exception(f"purge_transfers has failed with code: {err}({err_type})")
 
-    def start(self, addr: str, runner: str, dbpath: str):
+    def start(self, runner: str, dbpath: str):
+        addr = RUNNERS[runner].ip
+
         cfg = {
             "dir_depth_limit": 5,
             "transfer_file_limit": 1000,
@@ -502,6 +515,10 @@ def new_event(event_str: str) -> event.Event:
         elif reason == "FileFailed":
             return event.FinishFileFailed(
                 transfer_slot, data["file"], data["status"], data.get("os_error_code")
+            )
+        elif reason == "FileRejected":
+            return event.FinishFileRejected(
+                transfer_slot, data["file"], data["by_peer"]
             )
         else:
             raise ValueError(f"Unexpected reason of {reason} for TransferFinished")

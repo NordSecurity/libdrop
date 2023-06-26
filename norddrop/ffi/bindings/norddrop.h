@@ -156,7 +156,7 @@ extern void fortify_source(void);
  * Descriptors are provided as an array of JSON objects, with each object
  * containing a "path" and optionally a file descriptor "fd":
  *
- * ```
+ * ```json
  * [
  *   {
  *     "path": "/path/to/file",
@@ -169,7 +169,7 @@ extern void fortify_source(void);
  *
  * # On Android, due to limitations, we must also accept a file descriptor
  *
- * ```
+ * ```json
  * [
  *   {
  *    "path": "/path/to/file",
@@ -186,6 +186,9 @@ char *norddrop_new_transfer(const struct norddrop *dev, const char *peer, const 
  * # Arguments
  *
  * * `dev` - Pointer to the instance.
+ *
+ * # Safety
+ * This function creates a box with instance pointer and immediately drops it.
  */
 void norddrop_destroy(struct norddrop *dev);
 
@@ -224,6 +227,19 @@ enum norddrop_result norddrop_cancel_transfer(const struct norddrop *dev, const 
  * * `fid`: File ID
  */
 enum norddrop_result norddrop_cancel_file(const struct norddrop *dev,
+                                          const char *xfid,
+                                          const char *fid);
+
+/**
+ * Reject a file from either side
+ *
+ * # Arguments
+ *
+ * * `dev`: Pointer to the instance
+ * * `xfid`: Transfer ID
+ * * `fid`: File ID
+ */
+enum norddrop_result norddrop_reject_file(const struct norddrop *dev,
                                           const char *xfid,
                                           const char *fid);
 
@@ -306,7 +322,7 @@ enum norddrop_result norddrop_purge_transfers_until(const struct norddrop *dev,
  * JSON formatted transfers
  *
  * # JSON example from the sender side
- *  ```
+ *  ```json
  * {
  *      "id": "b49fc2f8-ce2d-41ac-a081-96a4d760899e",
  *      "peer_id": "192.168.0.0",
@@ -348,7 +364,7 @@ enum norddrop_result norddrop_purge_transfers_until(const struct norddrop *dev,
  * ```
  *
  * # JSON example from the receiver side
- * ```
+ * ```json
  * {
  *     "id": "b49fc2f8-ce2d-41ac-a081-96a4d760899e",
  *     "peer_id": "172.17.0.1",

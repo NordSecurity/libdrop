@@ -1,10 +1,11 @@
 mod handler;
 mod v2;
 mod v4;
+mod v5;
 
 use std::{
     fs, io,
-    net::IpAddr,
+    net::{IpAddr, SocketAddr},
     ops::ControlFlow,
     path::Path,
     sync::Arc,
@@ -43,6 +44,7 @@ pub type WebSocket = WebSocketStream<TcpStream>;
 
 pub enum ClientReq {
     Cancel { file: FileId },
+    Reject { file: FileId },
 }
 
 struct RunContext<'a> {
@@ -171,6 +173,7 @@ async fn connect_to_peer(
         Version::V1 => ctx.run(v2::HandlerInit::<false>::new(state, logger)).await,
         Version::V2 => ctx.run(v2::HandlerInit::<true>::new(state, logger)).await,
         Version::V4 => ctx.run(v4::HandlerInit::new(state, logger)).await,
+        Version::V5 => ctx.run(v5::HandlerInit::new(state, logger)).await,
     }
 }
 
@@ -182,6 +185,7 @@ async fn establish_ws_conn(
     let mut socket = tcp_connect(state, ip, logger).await;
 
     let mut versions_to_try = [
+        protocol::Version::V5,
         protocol::Version::V4,
         protocol::Version::V2,
         protocol::Version::V1,
@@ -223,7 +227,11 @@ async fn make_request(
     auth: &auth::Context,
     logger: &slog::Logger,
 ) -> Result<(), tungstenite::Error> {
-    let url = format!("ws://{ip}:{}/drop/{version}", drop_config::PORT);
+    let addr = SocketAddr::new(ip, drop_config::PORT);
+
+    let url = format!("ws://{addr}/drop/{version}",);
+
+    debug!(logger, "Making HTTP request: {url}");
 
     let err = match tokio_tungstenite::client_async(&url, &mut *socket).await {
         Ok(_) => {
@@ -247,6 +255,7 @@ async fn make_request(
                 auth.create_ticket_header_val(ip, val)
             };
 
+            debug!(logger, "Extracting peers ({ip}) public key");
             match extract_www_auth() {
                 Ok(auth_header) => {
                     debug!(logger, "Building 'authorization' request");

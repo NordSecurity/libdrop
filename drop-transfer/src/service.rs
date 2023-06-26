@@ -212,6 +212,8 @@ impl Service {
             let mut lock = self.state.transfer_manager.lock().await;
 
             let state = lock.state_mut(uuid).ok_or(Error::BadTransfer)?;
+            state.ensure_file_not_rejected(file_id)?;
+
             let chann = match &state.connection {
                 TransferConnection::Server(chann) => chann.clone(),
                 _ => return Err(Error::BadTransfer),
@@ -262,6 +264,7 @@ impl Service {
         let lock = self.state.transfer_manager.lock().await;
 
         let state = lock.state(xfer_uuid).ok_or(Error::BadTransfer)?;
+        state.ensure_file_not_rejected(&file)?;
 
         match &state.connection {
             TransferConnection::Client(conn) => {
@@ -270,6 +273,30 @@ impl Service {
             }
             TransferConnection::Server(conn) => {
                 conn.send(ServerReq::Cancel { file })
+                    .map_err(|err| Error::BadTransferState(err.to_string()))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Reject a single file in a transfer. After rejection the file can no
+    /// logner be transfered
+    pub async fn reject(&self, transfer_id: Uuid, file: FileId) -> crate::Result<()> {
+        let mut lock = self.state.transfer_manager.lock().await;
+        let state = lock.state_mut(transfer_id).ok_or(Error::BadTransfer)?;
+
+        if !state.reject_file(file.clone())? {
+            return Err(crate::Error::Rejected);
+        }
+
+        match &state.connection {
+            TransferConnection::Client(conn) => {
+                conn.send(ClientReq::Reject { file })
+                    .map_err(|err| Error::BadTransferState(err.to_string()))?;
+            }
+            TransferConnection::Server(conn) => {
+                conn.send(ServerReq::Reject { file })
                     .map_err(|err| Error::BadTransferState(err.to_string()))?;
             }
         }

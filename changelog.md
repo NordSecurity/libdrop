@@ -6,6 +6,15 @@
 ---
 <br>
 
+### v4.1.0
+### **UNRELEASED**
+---
+* Add IPv6 support
+* Add file rejections via `norddrop_reject_file()`
+
+---
+<br>
+
 ### v4.0.0
 ### **Relentless Records**
 ---

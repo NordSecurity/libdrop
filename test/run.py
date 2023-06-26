@@ -77,14 +77,12 @@ async def main():
     parser = argparse.ArgumentParser(description="Run drop instance")
     parser.add_argument("--runner", required=True, help="peer name for the scenario")
     parser.add_argument("--scenario", required=True, help="scenario name")
-    parser.add_argument("--addr", default="0.0.0.0", help="address to listen on")
     parser.add_argument("--lib", required=True, help="path to library")
 
     args = parser.parse_args()
 
     runner = args.runner
     scenario = args.scenario
-    addr = args.addr
     lib = args.lib
 
     script = None
@@ -107,7 +105,7 @@ async def main():
     logger.info(f"NordDrop version: {drop.version}")
 
     try:
-        await script.run(runner, drop, addr)
+        await script.run(runner, drop)
         logger.info("Action completed properly")
         cleanup_files(config.FILES)
         sys.exit(0)

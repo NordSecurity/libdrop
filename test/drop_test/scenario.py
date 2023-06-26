@@ -32,11 +32,11 @@ class Scenario:
     def id(self):
         return self._id
 
-    async def run(self, runner: str, drop: ffi.Drop, addr: str):
+    async def run(self, runner: str, drop: ffi.Drop):
         logger.info(f'Scenario: "{self._desc}"')
 
         try:
-            drop.start(addr, runner, self._dbpath)
+            drop.start(runner, self._dbpath)
 
             await self._action_list[runner].run(drop)
             os.seteuid(0)  # restore privileges, they might have been changed

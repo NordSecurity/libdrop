@@ -7,12 +7,12 @@ use std::{
 
 use anyhow::Context;
 use futures::SinkExt;
-use slog::{debug, error, warn};
+use slog::{debug, error, info, warn};
 use tokio::{sync::mpsc::Sender, task::JoinHandle};
 use tokio_tungstenite::tungstenite::{self, Message};
 
 use super::{handler, ClientReq, WebSocket};
-use crate::{protocol::v4, service::State, ws, FileId};
+use crate::{protocol::v5 as prot, service::State, ws, FileId};
 
 pub struct HandlerInit<'a> {
     state: &'a Arc<State>,
@@ -52,7 +52,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
     type Loop = HandlerLoop<'a>;
 
     async fn start(&mut self, socket: &mut WebSocket, xfer: &crate::Transfer) -> crate::Result<()> {
-        let req = v4::TransferRequest::from(xfer);
+        let req = prot::TransferRequest::from(xfer);
         socket.send(Message::from(&req)).await?;
         Ok(())
     }
@@ -82,7 +82,7 @@ impl HandlerLoop<'_> {
         socket: &mut WebSocket,
         file_id: FileId,
     ) -> anyhow::Result<()> {
-        let msg = v4::ClientMsg::Cancel(v4::Cancel {
+        let msg = prot::ClientMsg::Cancel(prot::Cancel {
             file: file_id.clone(),
         });
         socket.send(Message::from(&msg)).await?;
@@ -97,44 +97,12 @@ impl HandlerLoop<'_> {
         socket: &mut WebSocket,
         file_id: FileId,
     ) -> anyhow::Result<()> {
-        let msg = v4::ClientMsg::Cancel(v4::Cancel {
+        let msg = prot::ClientMsg::Reject(prot::Reject {
             file: file_id.clone(),
         });
         socket.send(Message::from(&msg)).await?;
 
-        if let Some(task) = self.tasks.remove(&file_id) {
-            if !task.job.is_finished() {
-                task.job.abort();
-
-                task.events
-                    .stop(crate::Event::FileUploadCancelled(
-                        self.xfer.clone(),
-                        file_id.clone(),
-                        false,
-                    ))
-                    .await;
-            }
-        }
-
-        if let Some(file) = self.xfer.files().get(&file_id) {
-            self.state.moose.service_quality_transfer_file(
-                Err(drop_core::Status::FileRejected as i32),
-                drop_analytics::Phase::End,
-                self.xfer.id().to_string(),
-                0,
-                file.info(),
-            );
-
-            self.state
-                .event_tx
-                .send(crate::Event::FileUploadRejected {
-                    transfer_id: self.xfer.id(),
-                    file_id,
-                    by_peer: false,
-                })
-                .await
-                .expect("Event channel should be open");
-        }
+        self.on_reject(file_id, false).await;
 
         Ok(())
     }
@@ -167,6 +135,69 @@ impl HandlerLoop<'_> {
                     .await;
             }
         }
+    }
+
+    async fn on_reject(&mut self, file_id: FileId, by_peer: bool) {
+        if by_peer {
+            if let Some(xstate) = self
+                .state
+                .transfer_manager
+                .lock()
+                .await
+                .state_mut(self.xfer.id())
+            {
+                match xstate.reject_file(file_id.clone()) {
+                    Ok(true) => (),
+                    res => {
+                        debug!(
+                            self.logger,
+                            "Failed to run rejection procedure on peers request: {res:?}"
+                        );
+                        return;
+                    }
+                }
+            }
+        }
+
+        info!(self.logger, "Rejecting file {file_id}, by_peer?: {by_peer}");
+
+        if let Some(task) = self.tasks.remove(&file_id) {
+            if !task.job.is_finished() {
+                task.job.abort();
+
+                task.events
+                    .stop(crate::Event::FileUploadCancelled(
+                        self.xfer.clone(),
+                        file_id.clone(),
+                        by_peer,
+                    ))
+                    .await;
+            }
+        }
+
+        let file = self
+            .xfer
+            .files()
+            .get(&file_id)
+            .expect("The file is correct since manager was able to reject the file");
+
+        self.state.moose.service_quality_transfer_file(
+            Err(drop_core::Status::FileRejected as i32),
+            drop_analytics::Phase::End,
+            self.xfer.id().to_string(),
+            0,
+            file.info(),
+        );
+
+        self.state
+            .event_tx
+            .send(crate::Event::FileUploadRejected {
+                transfer_id: self.xfer.id(),
+                file_id,
+                by_peer,
+            })
+            .await
+            .expect("Event channel should be open");
     }
 
     async fn on_progress(&self, file_id: FileId, transfered: u64) {
@@ -217,7 +248,7 @@ impl HandlerLoop<'_> {
             let xfile = self.xfer.files().get(&file_id).context("File not found")?;
             let checksum = tokio::task::block_in_place(|| xfile.checksum(limit))?;
 
-            anyhow::Ok(v4::ReportChsum {
+            anyhow::Ok(prot::ReportChsum {
                 file: file_id.clone(),
                 limit,
                 checksum,
@@ -227,19 +258,19 @@ impl HandlerLoop<'_> {
         match f.await {
             Ok(report) => {
                 socket
-                    .send(Message::from(&v4::ClientMsg::ReportChsum(report)))
+                    .send(Message::from(&prot::ClientMsg::ReportChsum(report)))
                     .await
                     .context("Failed to send checksum report")?;
             }
             Err(err) => {
                 error!(self.logger, "Failed to report checksum: {:?}", err);
 
-                let msg = v4::Error {
+                let msg = prot::Error {
                     file: Some(file_id),
                     msg: err.to_string(),
                 };
                 socket
-                    .send(Message::from(&v4::ClientMsg::Error(msg)))
+                    .send(Message::from(&prot::ClientMsg::Error(msg)))
                     .await
                     .context("Failed to report error")?;
             }
@@ -305,12 +336,12 @@ impl HandlerLoop<'_> {
         if let Err(err) = start.await {
             error!(self.logger, "Failed to start upload: {:?}", err);
 
-            let msg = v4::Error {
+            let msg = prot::Error {
                 file: Some(file_id),
                 msg: err.to_string(),
             };
             socket
-                .send(Message::from(&v4::ClientMsg::Error(msg)))
+                .send(Message::from(&prot::ClientMsg::Error(msg)))
                 .await
                 .context("Failed to report error")?;
         }
@@ -406,26 +437,33 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             Message::Text(json) => {
                 debug!(self.logger, "Received:\n\t{json}");
 
-                let msg: v4::ServerMsg =
+                let msg: prot::ServerMsg =
                     serde_json::from_str(&json).context("Failed to deserialize server message")?;
 
                 match msg {
-                    v4::ServerMsg::Progress(v4::Progress {
+                    prot::ServerMsg::Progress(prot::Progress {
                         file,
                         bytes_transfered,
                     }) => self.on_progress(file, bytes_transfered).await,
-                    v4::ServerMsg::Done(v4::Done {
+                    prot::ServerMsg::Done(prot::Done {
                         file,
                         bytes_transfered: _,
                     }) => self.on_done(file).await,
-                    v4::ServerMsg::Error(v4::Error { file, msg }) => self.on_error(file, msg).await,
-                    v4::ServerMsg::ReqChsum(v4::ReqChsum { file, limit }) => {
+                    prot::ServerMsg::Error(prot::Error { file, msg }) => {
+                        self.on_error(file, msg).await
+                    }
+                    prot::ServerMsg::ReqChsum(prot::ReqChsum { file, limit }) => {
                         self.on_checksum(socket, file, limit).await?
                     }
-                    v4::ServerMsg::Start(v4::Start { file, offset }) => {
+                    prot::ServerMsg::Start(prot::Start { file, offset }) => {
                         self.on_start(socket, file, offset).await?
                     }
-                    v4::ServerMsg::Cancel(v4::Cancel { file }) => self.on_cancel(file, true).await,
+                    prot::ServerMsg::Cancel(prot::Cancel { file }) => {
+                        self.on_cancel(file, true).await
+                    }
+                    prot::ServerMsg::Reject(prot::Reject { file }) => {
+                        self.on_reject(file, true).await
+                    }
                 }
             }
             Message::Close(_) => {
@@ -496,7 +534,7 @@ impl Drop for HandlerLoop<'_> {
 #[async_trait::async_trait]
 impl handler::Uploader for Uploader {
     async fn chunk(&mut self, chunk: &[u8]) -> Result<(), crate::Error> {
-        let msg = v4::Chunk {
+        let msg = prot::Chunk {
             file: self.file_id.clone(),
             data: chunk.to_vec(),
         };
@@ -510,7 +548,7 @@ impl handler::Uploader for Uploader {
     }
 
     async fn error(&mut self, msg: String) {
-        let msg = v4::ClientMsg::Error(v4::Error {
+        let msg = prot::ClientMsg::Error(prot::Error {
             file: Some(self.file_id.clone()),
             msg,
         });
