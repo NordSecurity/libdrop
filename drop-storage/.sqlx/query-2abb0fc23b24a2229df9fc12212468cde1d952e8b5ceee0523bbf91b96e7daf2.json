@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT relative_path, path_hash as file_id, bytes as size \n            FROM incoming_paths\n            WHERE transfer_id = ?1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "relative_path",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "file_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "size",
+        "ordinal": 2,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2abb0fc23b24a2229df9fc12212468cde1d952e8b5ceee0523bbf91b96e7daf2"
+}

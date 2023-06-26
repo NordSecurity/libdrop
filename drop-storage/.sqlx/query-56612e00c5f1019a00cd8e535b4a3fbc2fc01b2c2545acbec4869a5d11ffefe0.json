@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT peer FROM transfers WHERE id = ?1 AND is_outgoing = ?2",
+  "describe": {
+    "columns": [
+      {
+        "name": "peer",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "56612e00c5f1019a00cd8e535b4a3fbc2fc01b2c2545acbec4869a5d11ffefe0"
+}
