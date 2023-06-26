@@ -37,7 +37,7 @@ use crate::{
     auth,
     error::ResultExt,
     event::DownloadSuccess,
-    file,
+    file::{self, FileSubPath},
     manager::{TransferConnection, TransferGuard},
     protocol,
     quarantine::PathExt,
@@ -759,6 +759,8 @@ async fn init_client_handler(
             xfer.id()
         );
 
+        register_finished_paths(state, xfer, logger).await;
+
         if let Err(err) = resume_transfer_files(state, xfer, &req_send, logger).await {
             warn!(logger, "Failed to resume started files: {err:?}");
         }
@@ -784,7 +786,7 @@ fn ensure_resume_matches_existing_transfer(
     // Check if the transfer matches
     anyhow::ensure!(
         current_info.peer == existing_info.peer,
-        " Peers do not match",
+        "Peers do not match",
     );
 
     match current_info.files {
@@ -829,4 +831,23 @@ async fn resume_transfer_files(
     }
 
     Ok(())
+}
+
+async fn register_finished_paths(state: &State, xfer: &crate::Transfer, logger: &Logger) {
+    let paths = match state.storage.finished_incoming_files(xfer.id()).await {
+        Ok(paths) => paths,
+        Err(err) => {
+            warn!(logger, "Failed to fetch finished paths: {err:?}");
+            return;
+        }
+    };
+
+    let mut lock = state.transfer_manager.lock().await;
+
+    if let Some(xstate) = lock.state_mut(xfer.id()) {
+        for path in paths {
+            let subpath = FileSubPath::from(path.subpath);
+            xstate.register_preexisting_final_path(&subpath, &path.final_path);
+        }
+    }
 }
