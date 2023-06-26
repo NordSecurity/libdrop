@@ -35,6 +35,29 @@ services:
       interneciux:
         ipv4_address: 172.20.0.25
 
+  ren-v6:
+    <<: *peer-common
+    hostname: ren-v6
+    networks:
+      interneciux-v6:
+        ipv6_address: fd3e:0e6d:45fe:b0c2::5
+  
+  stimpy-v6:
+    <<: *peer-common
+    hostname: stimpy-v6
+    networks:
+      interneciux-v6:
+        ipv6_address: fd3e:0e6d:45fe:b0c2::15
+  
+
+  george-v6:
+    <<: *peer-common
+    hostname: george-v6
+    networks:
+      interneciux-v6:
+        ipv6_address: fd3e:0e6d:45fe:b0c2::25
+
+
 networks:
   interneciux:
     driver: bridge
@@ -42,3 +65,12 @@ networks:
       driver: default
       config:
         - subnet: 172.20.0.0/16
+
+  interneciux-v6:
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      driver: default
+      config:
+        - subnet: fd3e:0e6d:45fe:b0c2::/64
+          gateway: fd3e:0e6d:45fe:b0c2::1

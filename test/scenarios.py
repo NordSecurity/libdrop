@@ -4889,4 +4889,161 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario28",
+        "Send one file to a peer overt the IPv6 network, expect it to be transferred",
+        {
+            "ren-v6": ActionList(
+                [
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer(
+                        "fd3e:e6d:45fe:b0c2::15", ["/tmp/testfile-small"]
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-small"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "fd3e:e6d:45fe:b0c2::15",
+                        "created_at": "*",
+                        "states": [
+                            {
+                                "created_at": "*",
+                                "state": "cancel",
+                                "by_peer": true
+                            }
+                        ],
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "base_path": "/tmp",
+                                "bytes": 1048576,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "started",
+                                        "bytes_sent": 0
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "completed"
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                    action.PurgeTransfers([0]),
+                    action.AssertTransfers([]),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy-v6": ActionList(
+                [
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "fd3e:e6d:45fe:b0c2::5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-small"].id,
+                        "/tmp/received/28",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-small"].id,
+                            "/tmp/received/28/testfile-small",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/28/testfile-small", 1048576),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "fd3e:e6d:45fe:b0c2::5",
+                        "created_at": "*",
+                        "states": [
+                            {
+                                "created_at": "*",
+                                "state": "cancel",
+                                "by_peer": false
+                            }
+                        ],
+                        "type": "incoming",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "bytes": 1048576,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "started",
+                                        "bytes_received": 0,
+                                        "base_dir": "/tmp/received/28"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "completed"
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                    action.PurgeTransfers([0]),
+                    action.AssertTransfers([]),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]

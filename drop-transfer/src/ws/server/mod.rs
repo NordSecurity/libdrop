@@ -203,7 +203,10 @@ pub(crate) fn start(
         .try_bind_with_graceful_shutdown((addr, drop_config::PORT), async move {
             stop.cancelled().await
         }) {
-        Ok((_, future)) => future,
+        Ok((socket, future)) => {
+            debug!(logger, "WS server is bound to: {socket}");
+            future
+        }
         Err(err) => {
             // Check if this is IO error about address already in use
             if let Some(ioerr) = std::error::Error::source(&err)
