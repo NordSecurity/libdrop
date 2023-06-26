@@ -528,11 +528,7 @@ impl Downloader {
 #[async_trait::async_trait]
 impl handler::Downloader for Downloader {
     async fn init(&mut self, task: &super::FileXferTask) -> crate::Result<handler::DownloadInit> {
-        let filename_len = task
-            .absolute_path
-            .file_name()
-            .expect("Cannot extract file name")
-            .len();
+        let filename_len = task.file.subpath.name().len();
 
         if filename_len + super::MAX_FILE_SUFFIX_LEN > super::MAX_FILENAME_LENGTH {
             return Err(crate::Error::FilenameTooLong);
@@ -548,8 +544,7 @@ impl handler::Downloader for Downloader {
             format!("{}.dropdl-part", task.file.id())
         };
 
-        let tmp_location: Hidden<PathBuf> =
-            Hidden(task.absolute_path.0.with_file_name(tmp_filename));
+        let tmp_location: Hidden<PathBuf> = Hidden(task.base_dir.join(tmp_filename));
 
         // Check if we can resume the temporary file
         match tokio::task::block_in_place(|| super::TmpFileState::load(&tmp_location.0)) {
