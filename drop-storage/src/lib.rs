@@ -637,16 +637,18 @@ impl Storage {
                 MAX(strt.created_at) as last_start,
                 MAX(canc.created_at) as last_cancel,
                 MAX(fail.created_at) as last_fail,
-                MAX(comp.created_at) as last_complete
+                MAX(comp.created_at) as last_complete,
+                COUNT(rej.created_at) as rej_count
             FROM incoming_paths p
             INNER JOIN incoming_path_started_states strt ON p.id = strt.path_id
             LEFT JOIN incoming_path_cancel_states canc ON p.id = canc.path_id
             LEFT JOIN incoming_path_failed_states fail ON p.id = fail.path_id
             LEFT JOIN incoming_path_completed_states comp ON p.id = comp.path_id
+            LEFT JOIN incoming_path_reject_states rej ON p.id = rej.path_id
             WHERE transfer_id = ?1
             GROUP BY p.id
             HAVING 
-                last_start IS NOT NULL
+                rej_count = 0
                 AND (last_cancel IS NULL OR last_start > last_cancel)
                 AND (last_fail IS NULL OR last_start > last_fail)
                 AND (last_complete IS NULL OR last_start > last_complete)
