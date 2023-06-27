@@ -315,6 +315,8 @@ async fn main() -> anyhow::Result<()> {
         config,
         drop_analytics::moose_mock(),
         Arc::new(auth),
+        #[cfg(unix)]
+        None,
     )
     .await
     .context("Failed to start service")?;

@@ -1,5 +1,7 @@
 pub mod types;
 
+#[cfg(unix)]
+use std::os::fd::RawFd;
 use std::{
     net::{IpAddr, ToSocketAddrs},
     sync::Arc,
@@ -26,6 +28,8 @@ pub(super) struct NordDropFFI {
     event_dispatcher: Arc<EventDispatcher>,
     keys: Arc<auth::Context>,
     config: Config,
+    #[cfg(unix)]
+    fdresolv: Option<Arc<drop_transfer::file::FdResolver>>,
 }
 
 struct EventDispatcher {
@@ -73,6 +77,8 @@ impl NordDropFFI {
             }),
             config: Config::default(),
             keys: Arc::new(crate_key_context(logger, privkey, pubkey_cb)),
+            #[cfg(unix)]
+            fdresolv: None,
         })
     }
 
@@ -168,6 +174,8 @@ impl NordDropFFI {
                 Arc::new(self.config.drop.clone()),
                 moose,
                 self.keys.clone(),
+                #[cfg(unix)]
+                self.fdresolv.clone(),
             )
             .await
             {
@@ -516,6 +524,27 @@ impl NordDropFFI {
 
         Ok(())
     }
+
+    #[cfg(unix)]
+    pub(super) fn set_fd_resolver_callback(
+        &mut self,
+        callback: ffi_types::norddrop_fd_cb,
+    ) -> Result<()> {
+        trace!(self.logger, "norddrop_set_fd_resolver_callback()",);
+
+        let inst = self.instance.blocking_lock();
+        if inst.is_some() {
+            error!(
+                self.logger,
+                "Failed to set FD resolver callback. Instance is already started"
+            );
+            return Err(ffi::types::NORDDROP_RES_ERROR);
+        }
+        drop(inst);
+
+        self.fdresolv = Some(crate_fd_callback(self.logger.clone(), callback));
+        Ok(())
+    }
 }
 
 fn crate_key_context(
@@ -661,4 +690,32 @@ fn open_database(
             }
         }
     }
+}
+
+#[cfg(unix)]
+fn crate_fd_callback(
+    logger: slog::Logger,
+    fd_cb: ffi_types::norddrop_fd_cb,
+) -> Arc<drop_transfer::file::FdResolver> {
+    let fd_cb = std::sync::Mutex::new(fd_cb);
+
+    let func = move |uri: &str| {
+        let cstr_uri = format!("{uri}\0").into_bytes();
+
+        let guard = fd_cb.lock().expect("Failed to lock fd callback");
+        let res = unsafe { (guard.cb)(guard.ctx, cstr_uri.as_ptr() as _) };
+        drop(guard);
+
+        if res < 0 {
+            debug!(logger, "FD callback failed for {uri:?}");
+            None
+        } else {
+            Some(res)
+        }
+    };
+
+    // The callback may block the executor
+    let func = move |uri: &str| tokio::task::block_in_place(|| func(uri));
+
+    Arc::new(func)
 }
