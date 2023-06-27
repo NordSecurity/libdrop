@@ -77,8 +77,11 @@ pub struct norddrop(Mutex<NordDropFFI>);
 ///   }
 /// ]
 /// ```
+///
+/// # Safety
+/// The pointers provided must be valid
 #[no_mangle]
-pub extern "C" fn norddrop_new_transfer(
+pub unsafe extern "C" fn norddrop_new_transfer(
     dev: &norddrop,
     peer: *const c_char,
     descriptors: *const c_char,
@@ -90,13 +93,13 @@ pub extern "C" fn norddrop_new_transfer(
             return Err(norddrop_result::NORDDROP_RES_INVALID_STRING);
         }
 
-        let peer = unsafe { CStr::from_ptr(peer) }.to_str()?;
+        let peer = CStr::from_ptr(peer).to_str()?;
 
         if descriptors.is_null() {
             return Err(norddrop_result::NORDDROP_RES_INVALID_STRING);
         }
 
-        let descriptors = unsafe { CStr::from_ptr(descriptors) }.to_str()?;
+        let descriptors = CStr::from_ptr(descriptors).to_str()?;
 
         let xfid = dev.new_transfer(peer, descriptors)?;
 
@@ -133,8 +136,11 @@ pub unsafe extern "C" fn norddrop_destroy(dev: *mut norddrop) {
 /// * `xfid` - Transfer ID
 /// * `fid` - File ID
 /// * `dst` - Destination path
+///
+/// # Safety
+/// The pointers provided must be valid
 #[no_mangle]
-pub extern "C" fn norddrop_download(
+pub unsafe extern "C" fn norddrop_download(
     dev: &norddrop,
     xfid: *const c_char,
     fid: *const c_char,
@@ -150,7 +156,7 @@ pub extern "C" fn norddrop_download(
             if xfid.is_null() {
                 return norddrop_result::NORDDROP_RES_INVALID_STRING;
             }
-            let cstr_xfid = unsafe { CStr::from_ptr(xfid) };
+            let cstr_xfid = CStr::from_ptr(xfid);
             ffi_try!(cstr_xfid.to_str())
         };
 
@@ -158,7 +164,7 @@ pub extern "C" fn norddrop_download(
             if fid.is_null() {
                 return norddrop_result::NORDDROP_RES_INVALID_STRING;
             }
-            let cstr_fid = unsafe { CStr::from_ptr(fid) };
+            let cstr_fid = CStr::from_ptr(fid);
             ffi_try!(cstr_fid.to_str())
         };
 
@@ -166,7 +172,7 @@ pub extern "C" fn norddrop_download(
             if dst.is_null() {
                 return norddrop_result::NORDDROP_RES_INVALID_STRING;
             }
-            let cstr_dst = unsafe { CStr::from_ptr(dst) };
+            let cstr_dst = CStr::from_ptr(dst);
             ffi_try!(cstr_dst.to_str())
         };
 
@@ -193,14 +199,20 @@ pub extern "C" fn norddrop_download(
 ///
 /// * `dev`: Pointer to the instance
 /// * `xfid`: Transfer ID
+///
+/// # Safety
+/// The pointers provided must be valid
 #[no_mangle]
-pub extern "C" fn norddrop_cancel_transfer(dev: &norddrop, xfid: *const c_char) -> norddrop_result {
+pub unsafe extern "C" fn norddrop_cancel_transfer(
+    dev: &norddrop,
+    xfid: *const c_char,
+) -> norddrop_result {
     let result = panic::catch_unwind(move || {
         let str_xfid = {
             if xfid.is_null() {
                 return norddrop_result::NORDDROP_RES_INVALID_STRING;
             }
-            let cstr_xfid = unsafe { CStr::from_ptr(xfid) };
+            let cstr_xfid = CStr::from_ptr(xfid);
             ffi_try!(cstr_xfid.to_str())
         };
 
@@ -229,8 +241,11 @@ pub extern "C" fn norddrop_cancel_transfer(dev: &norddrop, xfid: *const c_char) 
 /// * `dev`: Pointer to the instance
 /// * `xfid`: Transfer ID
 /// * `fid`: File ID
+///
+/// # Safety
+/// The pointers provided must be valid
 #[no_mangle]
-pub extern "C" fn norddrop_cancel_file(
+pub unsafe extern "C" fn norddrop_cancel_file(
     dev: &norddrop,
     xfid: *const c_char,
     fid: *const c_char,
@@ -240,7 +255,7 @@ pub extern "C" fn norddrop_cancel_file(
             if xfid.is_null() {
                 return norddrop_result::NORDDROP_RES_INVALID_STRING;
             }
-            let cstr_xfid = unsafe { CStr::from_ptr(xfid) };
+            let cstr_xfid = CStr::from_ptr(xfid);
             ffi_try!(cstr_xfid.to_str())
         };
 
@@ -249,7 +264,7 @@ pub extern "C" fn norddrop_cancel_file(
                 return norddrop_result::NORDDROP_RES_INVALID_STRING;
             }
 
-            let cstr_fid = unsafe { CStr::from_ptr(fid) };
+            let cstr_fid = CStr::from_ptr(fid);
             ffi_try!(cstr_fid.to_str())
         };
 
@@ -357,8 +372,11 @@ pub unsafe extern "C" fn norddrop_reject_file(
 /// * `moose_event_path` - moose database path.
 ///
 /// * `storage_path` - storage path for persistence engine.
+///
+/// # Safety
+/// The pointers provided must be valid
 #[no_mangle]
-pub extern "C" fn norddrop_start(
+pub unsafe extern "C" fn norddrop_start(
     dev: &norddrop,
     listen_addr: *const c_char,
     config: *const c_char,
@@ -369,7 +387,7 @@ pub extern "C" fn norddrop_start(
                 return norddrop_result::NORDDROP_RES_INVALID_STRING;
             }
 
-            ffi_try!(unsafe { CStr::from_ptr(listen_addr) }.to_str())
+            ffi_try!(CStr::from_ptr(listen_addr).to_str())
         };
 
         let config = {
@@ -377,7 +395,7 @@ pub extern "C" fn norddrop_start(
                 return norddrop_result::NORDDROP_RES_INVALID_STRING;
             }
 
-            ffi_try!(unsafe { CStr::from_ptr(config) }.to_str())
+            ffi_try!(CStr::from_ptr(config).to_str())
         };
 
         let mut dev = ffi_try!(dev
@@ -417,8 +435,11 @@ pub extern "C" fn norddrop_stop(dev: &norddrop) -> norddrop_result {
 ///
 /// * `dev` - Pointer to the instance
 /// * `txids` - JSON array of transfer IDs
+///
+/// # Safety
+/// The pointers provided must be valid
 #[no_mangle]
-pub extern "C" fn norddrop_purge_transfers(
+pub unsafe extern "C" fn norddrop_purge_transfers(
     dev: &norddrop,
     txids: *const c_char,
 ) -> norddrop_result {
@@ -433,7 +454,7 @@ pub extern "C" fn norddrop_purge_transfers(
                 return norddrop_result::NORDDROP_RES_INVALID_STRING;
             }
 
-            ffi_try!(unsafe { CStr::from_ptr(txids) }.to_str())
+            ffi_try!(CStr::from_ptr(txids).to_str())
         };
 
         dev.purge_transfers(txids)
@@ -605,8 +626,11 @@ pub extern "C" fn norddrop_get_transfers_since(
 /// provided. Note that it’s not BASE64, it must be decoded if it is beforehand.
 /// * `privkey` - 32bytes private key. Note that it’s not BASE64, it must
 /// be decoded if it is beforehand.
+///
+/// # Safety
+/// The pointers provided must be valid as well as callback functions
 #[no_mangle]
-pub extern "C" fn norddrop_new(
+pub unsafe extern "C" fn norddrop_new(
     dev: *mut *mut norddrop,
     event_cb: norddrop_event_cb,
     log_level: norddrop_log_level,
@@ -614,9 +638,7 @@ pub extern "C" fn norddrop_new(
     pubkey_cb: norddrop_pubkey_cb,
     privkey: *const c_char,
 ) -> norddrop_result {
-    unsafe {
-        fortify_source();
-    }
+    fortify_source();
 
     let logger = Logger::root(logger_cb.filter_level(log_level.into()).fuse(), o!());
 
@@ -632,12 +654,12 @@ pub extern "C" fn norddrop_new(
             );
 
             match res {
-                Ok(s) => unsafe {
+                Ok(s) => {
                     let callback = event_cb.callback();
                     let callback_data = event_cb.callback_data();
 
                     (callback)(callback_data, s.as_ptr())
-                },
+                }
                 Err(e) => warn!(logger, "Failed to create CString: {}", e),
             }
         }));
@@ -648,15 +670,14 @@ pub extern "C" fn norddrop_new(
             return norddrop_result::NORDDROP_RES_INVALID_PRIVKEY;
         }
         let mut privkey_bytes = [0u8; drop_auth::SECRET_KEY_LENGTH];
-        unsafe {
-            privkey_bytes
-                .as_mut_ptr()
-                .copy_from_nonoverlapping(privkey as *const _, drop_auth::SECRET_KEY_LENGTH);
-        }
+        privkey_bytes
+            .as_mut_ptr()
+            .copy_from_nonoverlapping(privkey as *const _, drop_auth::SECRET_KEY_LENGTH);
+
         let privkey = drop_auth::SecretKey::from(privkey_bytes);
 
         let drive = ffi_try!(NordDropFFI::new(event_cb, pubkey_cb, privkey, logger));
-        unsafe { *dev = Box::into_raw(Box::new(norddrop(Mutex::new(drive)))) };
+        *dev = Box::into_raw(Box::new(norddrop(Mutex::new(drive))));
 
         norddrop_result::NORDDROP_RES_OK
     });
