@@ -177,6 +177,9 @@ extern void fortify_source(void);
  *   }
  * ]
  * ```
+ *
+ * # Safety
+ * The pointers provided must be valid
  */
 char *norddrop_new_transfer(const struct norddrop *dev, const char *peer, const char *descriptors);
 
@@ -201,6 +204,9 @@ void norddrop_destroy(struct norddrop *dev);
  * * `xfid` - Transfer ID
  * * `fid` - File ID
  * * `dst` - Destination path
+ *
+ * # Safety
+ * The pointers provided must be valid
  */
 enum norddrop_result norddrop_download(const struct norddrop *dev,
                                        const char *xfid,
@@ -214,6 +220,9 @@ enum norddrop_result norddrop_download(const struct norddrop *dev,
  *
  * * `dev`: Pointer to the instance
  * * `xfid`: Transfer ID
+ *
+ * # Safety
+ * The pointers provided must be valid
  */
 enum norddrop_result norddrop_cancel_transfer(const struct norddrop *dev, const char *xfid);
 
@@ -225,6 +234,9 @@ enum norddrop_result norddrop_cancel_transfer(const struct norddrop *dev, const 
  * * `dev`: Pointer to the instance
  * * `xfid`: Transfer ID
  * * `fid`: File ID
+ *
+ * # Safety
+ * The pointers provided must be valid
  */
 enum norddrop_result norddrop_cancel_file(const struct norddrop *dev,
                                           const char *xfid,
@@ -238,6 +250,9 @@ enum norddrop_result norddrop_cancel_file(const struct norddrop *dev,
  * * `dev`: Pointer to the instance
  * * `xfid`: Transfer ID
  * * `fid`: File ID
+ *
+ * # Safety
+ * The pointers provided should be valid
  */
 enum norddrop_result norddrop_reject_file(const struct norddrop *dev,
                                           const char *xfid,
@@ -274,6 +289,9 @@ enum norddrop_result norddrop_reject_file(const struct norddrop *dev,
  * * `moose_event_path` - moose database path.
  *
  * * `storage_path` - storage path for persistence engine.
+ *
+ * # Safety
+ * The pointers provided must be valid
  */
 enum norddrop_result norddrop_start(const struct norddrop *dev,
                                     const char *listen_addr,
@@ -295,6 +313,9 @@ enum norddrop_result norddrop_stop(const struct norddrop *dev);
  *
  * * `dev` - Pointer to the instance
  * * `txids` - JSON array of transfer IDs
+ *
+ * # Safety
+ * The pointers provided must be valid
  */
 enum norddrop_result norddrop_purge_transfers(const struct norddrop *dev, const char *txids);
 
@@ -430,6 +451,9 @@ char *norddrop_get_transfers_since(const struct norddrop *dev, long long since_t
  * provided. Note that it’s not BASE64, it must be decoded if it is beforehand.
  * * `privkey` - 32bytes private key. Note that it’s not BASE64, it must
  * be decoded if it is beforehand.
+ *
+ * # Safety
+ * The pointers provided must be valid as well as callback functions
  */
 enum norddrop_result norddrop_new(struct norddrop **dev,
                                   struct norddrop_event_cb event_cb,
