@@ -281,6 +281,9 @@ pub extern "C" fn norddrop_cancel_file(
 /// * `dev`: Pointer to the instance
 /// * `xfid`: Transfer ID
 /// * `fid`: File ID
+///
+/// # Safety
+/// The pointers provided should be valid
 #[no_mangle]
 pub unsafe extern "C" fn norddrop_reject_file(
     dev: &norddrop,
