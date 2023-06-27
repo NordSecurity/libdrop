@@ -20,6 +20,9 @@ use walkdir::WalkDir;
 
 use crate::{utils::Hidden, Error};
 
+#[cfg(unix)]
+pub type FdResolver = dyn Fn(&str) -> Option<RawFd> + Send + Sync;
+
 const HEADER_SIZE: usize = 1024;
 
 #[allow(clippy::large_enum_variant)]

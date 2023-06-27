@@ -129,12 +129,35 @@ pub struct norddrop_pubkey_cb {
     pub cb: norddrop_pubkey_fn,
 }
 
+#[cfg(unix)]
+#[allow(non_camel_case_types)]
+/// Open FD based on provided content uri.
+/// Returns FD on success and -1 on failure
+pub type norddrop_fd_fn = unsafe extern "C" fn(*mut c_void, *const c_char) -> c_int;
+
+#[cfg(unix)]
+unsafe impl Send for norddrop_fd_cb {}
+
+#[cfg(unix)]
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Copy, Clone)]
+/// Fetch file descriptor by the content uri
+pub struct norddrop_fd_cb {
+    /// Context to pass to callback.
+    /// User must ensure safe access of this var from multitheaded context.
+    pub ctx: *mut c_void,
+    /// Function to be called
+    pub cb: norddrop_fd_fn,
+}
+
 #[no_mangle]
 pub extern "C" fn __norddrop_force_export(
     _: norddrop_result,
     _: norddrop_event_cb,
     _: norddrop_logger_cb,
     _: norddrop_pubkey_cb,
+    #[cfg(unix)] _: norddrop_fd_cb,
 ) {
 }
 

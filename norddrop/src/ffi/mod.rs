@@ -343,6 +343,36 @@ pub unsafe extern "C" fn norddrop_reject_file(
     }
 }
 
+/// Set FD resolver callback.
+/// The callback provides FDs based on URI
+///
+/// # Arguments
+///
+/// * `dev`: Pointer to the instance
+/// * `callback`: Callback structure
+#[cfg(unix)]
+#[no_mangle]
+pub extern "C" fn norddrop_set_fd_resolver_callback(
+    dev: &norddrop,
+    callback: types::norddrop_fd_cb,
+) -> norddrop_result {
+    let result = panic::catch_unwind(|| {
+        let mut dev = dev
+            .0
+            .lock()
+            .map_err(|_| norddrop_result::NORDDROP_RES_ERROR)?;
+
+        dev.set_fd_resolver_callback(callback)?;
+        Ok(())
+    });
+
+    match result {
+        Ok(Ok(())) => norddrop_result::NORDDROP_RES_OK,
+        Ok(Err(err)) => err,
+        Err(_) => norddrop_result::NORDDROP_RES_ERROR,
+    }
+}
+
 /// Start libdrop
 ///
 /// # Arguments
