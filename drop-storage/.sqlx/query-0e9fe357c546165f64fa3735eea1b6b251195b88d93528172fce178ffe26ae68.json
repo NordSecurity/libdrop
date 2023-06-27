@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT \n                path_hash as \"file_id!\",\n                relative_path as \"subpath!\",\n                bytes as \"size!\",\n                strt.base_dir as \"basedir!\",\n                MAX(strt.created_at) as last_start,\n                MAX(canc.created_at) as last_cancel,\n                MAX(fail.created_at) as last_fail,\n                MAX(comp.created_at) as last_complete,\n                COUNT(rej.created_at) as rej_count\n            FROM incoming_paths p\n            INNER JOIN incoming_path_started_states strt ON p.id = strt.path_id\n            LEFT JOIN incoming_path_cancel_states canc ON p.id = canc.path_id\n            LEFT JOIN incoming_path_failed_states fail ON p.id = fail.path_id\n            LEFT JOIN incoming_path_completed_states comp ON p.id = comp.path_id\n            LEFT JOIN incoming_path_reject_states rej ON p.id = rej.path_id\n            WHERE transfer_id = ?1\n            GROUP BY p.id\n            HAVING \n                rej_count = 0\n                AND (last_cancel IS NULL OR last_start > last_cancel)\n                AND (last_fail IS NULL OR last_start > last_fail)\n                AND (last_complete IS NULL OR last_start > last_complete)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "file_id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "subpath!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "size!",
+        "ordinal": 2,
+        "type_info": "Int64"
+      },
+      {
+        "name": "basedir!",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_start",
+        "ordinal": 4,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "last_cancel",
+        "ordinal": 5,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "last_fail",
+        "ordinal": 6,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "last_complete",
+        "ordinal": 7,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "rej_count",
+        "ordinal": 8,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "0e9fe357c546165f64fa3735eea1b6b251195b88d93528172fce178ffe26ae68"
+}
