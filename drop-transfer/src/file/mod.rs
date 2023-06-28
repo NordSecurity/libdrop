@@ -42,7 +42,10 @@ pub enum FileKind {
 pub enum FileSource {
     Path(Hidden<PathBuf>),
     #[cfg(unix)]
-    Fd(RawFd),
+    Fd {
+        fd: RawFd,
+        content_uri: url::Url,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -143,8 +146,29 @@ impl File {
     }
 
     #[cfg(unix)]
-    pub fn from_fd(path: impl AsRef<Path>, fd: RawFd, unique_id: usize) -> Result<Self, Error> {
+    pub fn from_fd(
+        path: impl AsRef<Path>,
+        content_uri: url::Url,
+        fd: RawFd,
+        unique_id: usize,
+    ) -> Result<Self, Error> {
         let subpath = FileSubPath::from_file_name(path.as_ref())?;
+
+        let mut hash = sha2::Sha256::new();
+        hash.update(path.as_ref().as_os_str().as_bytes());
+        hash.update(unique_id.to_ne_bytes());
+        let file_id = FileId::from(hash);
+
+        Self::new_from_fd(subpath, content_uri, fd, file_id)
+    }
+
+    #[cfg(unix)]
+    pub fn new_from_fd(
+        subpath: FileSubPath,
+        content_uri: url::Url,
+        fd: RawFd,
+        file_id: FileId,
+    ) -> Result<Self, Error> {
         let f = unsafe { fs::File::from_raw_fd(fd) };
 
         let create_file = || {
@@ -160,16 +184,12 @@ impl File {
                 .map_or("unknown", |t| t.mime_type())
                 .to_string();
 
-            let mut hash = sha2::Sha256::new();
-            hash.update(path.as_ref().as_os_str().as_bytes());
-            hash.update(unique_id.to_ne_bytes());
-
             Ok(Self {
-                file_id: FileId::from(hash),
+                file_id,
                 subpath,
                 kind: FileKind::FileToSend {
                     meta: Hidden(meta),
-                    source: FileSource::Fd(fd),
+                    source: FileSource::Fd { fd, content_uri },
                     mime_type: Some(Hidden(mime_type)),
                 },
             })
