@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use chrono::NaiveDateTime;
 use serde::Serialize;
 
@@ -106,7 +108,7 @@ pub struct TransferIncomingPath {
 pub struct TransferOutgoingPath {
     pub file_id: FileId,
     pub relative_path: String,
-    pub base_path: String,
+    pub uri: url::Url,
     pub size: i64,
 }
 
@@ -135,7 +137,7 @@ pub struct FileChecksum {
     pub checksum: Option<Vec<u8>>,
 }
 
-pub struct FileToRetry {
+pub struct IncomingFileToRetry {
     pub file_id: String,
     pub subpath: String,
     pub basepath: String,
@@ -147,10 +149,17 @@ pub struct FinishedIncomingFile {
     pub final_path: String,
 }
 
+pub struct OutgoingFileToRetry {
+    pub file_id: String,
+    pub subpath: String,
+    pub uri: url::Url,
+    pub size: i64,
+}
+
 pub struct TransferToRetry {
     pub uuid: uuid::Uuid,
     pub peer: String,
-    pub files: Vec<FileToRetry>,
+    pub files: Vec<OutgoingFileToRetry>,
 }
 
 #[derive(Debug)]
@@ -245,7 +254,10 @@ pub struct OutgoingPath {
     #[serde(serialize_with = "serialize_datetime")]
     pub created_at: NaiveDateTime,
     pub transfer_id: TransferId,
-    pub base_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_path: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_uri: Option<url::Url>,
     pub relative_path: String,
     pub file_id: String,
     pub bytes: i64,

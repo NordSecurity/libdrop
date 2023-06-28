@@ -1,14 +1,12 @@
 pub mod types;
 
-#[cfg(unix)]
-use std::os::fd::RawFd;
 use std::{
     net::{IpAddr, ToSocketAddrs},
     sync::Arc,
 };
 
 use drop_auth::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH};
-use drop_config::{Config, DropConfig};
+use drop_config::Config;
 use drop_transfer::{auth, utils::Hidden, File, Service, Transfer};
 use slog::{debug, error, trace, warn, Logger};
 use tokio::sync::{mpsc, Mutex};
@@ -341,7 +339,7 @@ impl NordDropFFI {
             .ok_or(ffi::types::NORDDROP_RES_BAD_INPUT)?;
 
         let xfer = {
-            let files = prepare_transfer_files(&self.logger, &descriptors, &self.config.drop)?;
+            let files = self.prepare_transfer_files(&descriptors)?;
             Transfer::new(peer.ip(), files, &self.config.drop).map_err(|e| {
                 error!(
                     self.logger,
@@ -545,6 +543,67 @@ impl NordDropFFI {
         self.fdresolv = Some(crate_fd_callback(self.logger.clone(), callback));
         Ok(())
     }
+
+    fn prepare_transfer_files(&self, descriptors: &[TransferDescriptor]) -> Result<Vec<File>> {
+        let mut files = Vec::new();
+
+        #[allow(unused_variables)]
+        for (i, desc) in descriptors.iter().enumerate() {
+            if let Some(content_uri) = &desc.content_uri {
+                #[cfg(target_os = "windows")]
+                {
+                    error!(
+                        self.logger,
+                        "Specifying file descriptors in transfers is not supported under Windows"
+                    );
+                    return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
+                }
+
+                #[cfg(not(target_os = "windows"))]
+                {
+                    let fdresolv = if let Some(fdresolv) = self.fdresolv.as_ref() {
+                        fdresolv
+                    } else {
+                        error!(
+                            self.logger,
+                            "Content URI provided but RD resolver callback is not set up"
+                        );
+                        return Err(ffi::types::NORDDROP_RES_TRANSFER_CREATE);
+                    };
+
+                    let fd = if let Some(fd) = fdresolv(content_uri.as_str()) {
+                        fd
+                    } else {
+                        error!(self.logger, "Failed to fetch FD for file: {content_uri}");
+                        return Err(ffi::types::NORDDROP_RES_TRANSFER_CREATE);
+                    };
+
+                    let file =
+                        File::from_fd(&desc.path.0, content_uri.clone(), fd, i).map_err(|e| {
+                            error!(
+                                self.logger,
+                                "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
+                            );
+                            ffi::types::NORDDROP_RES_TRANSFER_CREATE
+                        })?;
+
+                    files.push(file);
+                }
+            } else {
+                let batch = File::from_path(&desc.path.0, &self.config.drop).map_err(|e| {
+                    error!(
+                        self.logger,
+                        "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
+                    );
+                    ffi::types::NORDDROP_RES_TRANSFER_CREATE
+                })?;
+
+                files.extend(batch);
+            }
+        }
+
+        Ok(files)
+    }
 }
 
 fn crate_key_context(
@@ -572,53 +631,6 @@ fn crate_key_context(
     };
 
     auth::Context::new(privkey, public)
-}
-
-fn prepare_transfer_files(
-    logger: &slog::Logger,
-    descriptors: &[TransferDescriptor],
-    config: &DropConfig,
-) -> Result<Vec<File>> {
-    let mut files = Vec::new();
-
-    #[allow(unused_variables)]
-    for (i, desc) in descriptors.iter().enumerate() {
-        if let Some(fd) = desc.fd {
-            #[cfg(target_os = "windows")]
-            {
-                error!(
-                    logger,
-                    "Specifying file descriptors in transfers is not supported under Windows"
-                );
-                return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
-            }
-
-            #[cfg(not(target_os = "windows"))]
-            {
-                let file = File::from_fd(&desc.path.0, fd, i).map_err(|e| {
-                    error!(
-                        logger,
-                        "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
-                    );
-                    ffi::types::NORDDROP_RES_TRANSFER_CREATE
-                })?;
-
-                files.push(file);
-            }
-        } else {
-            let batch = File::from_path(&desc.path.0, config).map_err(|e| {
-                error!(
-                    logger,
-                    "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
-                );
-                ffi::types::NORDDROP_RES_TRANSFER_CREATE
-            })?;
-
-            files.extend(batch);
-        }
-    }
-
-    Ok(files)
 }
 
 fn open_database(
