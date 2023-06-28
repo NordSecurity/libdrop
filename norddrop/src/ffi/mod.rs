@@ -349,7 +349,6 @@ pub unsafe extern "C" fn norddrop_reject_file(
 /// * `dev` - Pointer to the instance
 /// * `listen_addr` - Address to listen on
 /// * `config` - JSON configuration
-/// * `tracker_context` - App trackers context
 ///
 /// # Configuration Parameters
 ///
@@ -373,6 +372,8 @@ pub unsafe extern "C" fn norddrop_reject_file(
 /// * `moose_event_path` - moose database path. It MUST NOT be the same as
 /// the path used for the app tracker.
 ///
+/// * `tracker_context` - App trackers context
+///
 /// * `storage_path` - storage path for persistence engine.
 ///
 /// # Safety
@@ -382,7 +383,6 @@ pub unsafe extern "C" fn norddrop_start(
     dev: &norddrop,
     listen_addr: *const c_char,
     config: *const c_char,
-    tracker_context: *const c_char,
 ) -> norddrop_result {
     let result = panic::catch_unwind(move || {
         let addr = {
@@ -401,20 +401,12 @@ pub unsafe extern "C" fn norddrop_start(
             ffi_try!(CStr::from_ptr(config).to_str())
         };
 
-        let tracker_context = {
-            if tracker_context.is_null() {
-                return norddrop_result::NORDDROP_RES_INVALID_STRING;
-            }
-
-            ffi_try!(CStr::from_ptr(tracker_context).to_str())
-        };
-
         let mut dev = ffi_try!(dev
             .0
             .lock()
             .map_err(|_| norddrop_result::NORDDROP_RES_ERROR));
 
-        dev.start(addr, config, tracker_context)
+        dev.start(addr, config)
             .norddrop_log_result(&dev.logger, "norddrop_start")
     });
 

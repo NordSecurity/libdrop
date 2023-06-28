@@ -40,8 +40,8 @@ public class NordDrop {
     this(libnorddropJNI.new_NordDrop(events, level.swigValue(), logger, pubkeyCb, privkey), true);
   }
 
-  public NorddropResult start(String listenAddr, String configJson, String trackerContext) {
-    return NorddropResult.swigToEnum(libnorddropJNI.NordDrop_start(swigCPtr, this, listenAddr, configJson, trackerContext));
+  public NorddropResult start(String listenAddr, String configJson) {
+    return NorddropResult.swigToEnum(libnorddropJNI.NordDrop_start(swigCPtr, this, listenAddr, configJson));
   }
 
   public NorddropResult stop() {

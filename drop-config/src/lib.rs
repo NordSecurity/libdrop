@@ -31,6 +31,7 @@ impl Default for DropConfig {
 pub struct MooseConfig {
     pub event_path: String,
     pub prod: bool,
+    pub tracker_context: String,
 }
 
 pub const PORT: u16 = 49111;

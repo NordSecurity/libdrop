@@ -361,19 +361,17 @@ SWIGEXPORT void SWIGSTDCALL CSharp_NordSecfNordDrop_delete_Norddrop___(void * ja
 }
 
 
-SWIGEXPORT int SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_Start___(void * jarg1, char * jarg2, char * jarg3, char * jarg4) {
+SWIGEXPORT int SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_Start___(void * jarg1, char * jarg2, char * jarg3) {
   int jresult ;
   struct norddrop *arg1 = (struct norddrop *) 0 ;
   char *arg2 = (char *) 0 ;
   char *arg3 = (char *) 0 ;
-  char *arg4 = (char *) 0 ;
   enum norddrop_result result;
   
   arg1 = (struct norddrop *)jarg1; 
   arg2 = (char *)jarg2; 
   arg3 = (char *)jarg3; 
-  arg4 = (char *)jarg4; 
-  result = (enum norddrop_result)norddrop_start(arg1,(char const *)arg2,(char const *)arg3,(char const *)arg4);
+  result = (enum norddrop_result)norddrop_start(arg1,(char const *)arg2,(char const *)arg3);
   jresult = (int)result; 
   return jresult;
 }

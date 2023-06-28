@@ -76,12 +76,7 @@ impl NordDropFFI {
         })
     }
 
-    pub(super) fn start(
-        &mut self,
-        listen_addr: &str,
-        config_json: &str,
-        tracker_context: &str,
-    ) -> Result<()> {
+    pub(super) fn start(&mut self, listen_addr: &str, config_json: &str) -> Result<()> {
         let logger = self.logger.clone();
 
         trace!(logger, "norddrop_start() listen address: {:?}", listen_addr,);
@@ -104,12 +99,17 @@ impl NordDropFFI {
             return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
         }
 
+        if self.config.moose.tracker_context.is_empty() {
+            error!(logger, "Moose tracker context cannot be empty");
+            return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
+        }
+
         let moose = match drop_analytics::init_moose(
             logger.clone(),
             self.config.moose.event_path.clone(),
             env!("DROP_VERSION").to_string(),
             self.config.moose.prod,
-            tracker_context,
+            &self.config.moose.tracker_context,
         ) {
             Ok(moose) => moose,
             Err(err) => {

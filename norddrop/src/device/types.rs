@@ -119,6 +119,7 @@ pub struct Config {
     pub moose_event_path: String,
     pub moose_prod: bool,
     pub storage_path: String,
+    pub tracker_context: String,
 }
 
 const fn default_connection_max_retry_interval_ms() -> u64 {
@@ -294,6 +295,7 @@ impl From<Config> for drop_config::Config {
             moose_event_path,
             moose_prod,
             storage_path,
+            tracker_context,
         } = val;
 
         drop_config::Config {
@@ -309,6 +311,7 @@ impl From<Config> for drop_config::Config {
             moose: drop_config::MooseConfig {
                 event_path: moose_event_path,
                 prod: moose_prod,
+                tracker_context,
             },
         }
     }
@@ -329,7 +332,8 @@ mod tests {
           "transfer_idle_lifetime_ms": 2000,
           "moose_event_path": "test/path",
           "moose_prod": true,
-          "storage_path": ":memory:"
+          "storage_path": ":memory:",
+          "tracker_context": "test"
         }
         "#;
 
@@ -345,7 +349,8 @@ mod tests {
           "connection_max_retry_interval_ms": 500,
           "moose_event_path": "test/path",
           "moose_prod": true,
-          "storage_path": ":memory:"
+          "storage_path": ":memory:",
+          "tracker_context": "test"
         }
         "#;
 
@@ -360,7 +365,12 @@ mod tests {
                     connection_max_retry_interval,
                     storage_path,
                 },
-            moose: drop_config::MooseConfig { event_path, prod },
+            moose:
+                drop_config::MooseConfig {
+                    event_path,
+                    prod,
+                    tracker_context,
+                },
         } = cfg.into();
 
         assert_eq!(dir_depth_limit, 10);
@@ -369,6 +379,7 @@ mod tests {
         assert_eq!(transfer_idle_lifetime, Duration::from_millis(2000));
         assert_eq!(event_path, "test/path");
         assert_eq!(storage_path, ":memory:");
+        assert_eq!(tracker_context, "test");
         assert!(prod);
     }
 }

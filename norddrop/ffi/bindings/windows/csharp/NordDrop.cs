@@ -82,8 +82,8 @@ public class Norddrop : global::System.IDisposable {
     if (libnorddropPINVOKE.SWIGPendingException.Pending) throw libnorddropPINVOKE.SWIGPendingException.Retrieve();
   }
 
-  public NorddropResult Start(string listenAddr, string configJson, string trackerContext) {
-    NorddropResult ret = (NorddropResult)libnorddropPINVOKE.Norddrop_Start(swigCPtr, listenAddr, configJson, trackerContext);
+  public NorddropResult Start(string listenAddr, string configJson) {
+    NorddropResult ret = (NorddropResult)libnorddropPINVOKE.Norddrop_Start(swigCPtr, listenAddr, configJson);
     return ret;
   }
 
@@ -332,7 +332,7 @@ class libnorddropPINVOKE {
   public static extern void delete_Norddrop(global::System.Runtime.InteropServices.HandleRef jarg1);
 
   [global::System.Runtime.InteropServices.DllImport("norddrop", EntryPoint="CSharp_NordSecfNordDrop_Norddrop_Start___")]
-  public static extern int Norddrop_Start(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2, string jarg3, string jarg4);
+  public static extern int Norddrop_Start(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2, string jarg3);
 
   [global::System.Runtime.InteropServices.DllImport("norddrop", EntryPoint="CSharp_NordSecfNordDrop_Norddrop_Stop___")]
   public static extern int Norddrop_Stop(global::System.Runtime.InteropServices.HandleRef jarg1);

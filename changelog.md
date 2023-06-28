@@ -12,7 +12,7 @@
 * Add IPv6 support
 * Add file rejections via `norddrop_reject_file()`
 * Do not allow the same moose path to be used for app and norddrop trackers
-* Pass app tracker context to `norddrop_start`
+* Pass app tracker context to config
 
 ---
 <br>

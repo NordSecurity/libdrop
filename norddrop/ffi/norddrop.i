@@ -59,7 +59,7 @@ struct norddrop {};
         norddrop_destroy($self);
     }
 
-    enum norddrop_result start(const char *listen_addr, const char* config_json, const char* tracker_context);
+    enum norddrop_result start(const char *listen_addr, const char* config_json);
 
     enum norddrop_result stop();
         

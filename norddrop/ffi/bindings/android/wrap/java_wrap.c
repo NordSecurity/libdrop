@@ -699,12 +699,11 @@ SWIGEXPORT void JNICALL Java_com_nordsec_norddrop_libnorddropJNI_delete_1NordDro
 }
 
 
-SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1start(JNIEnv *jenv, jclass jcls, jlong jarg1, jobject jarg1_, jstring jarg2, jstring jarg3, jstring jarg4) {
+SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1start(JNIEnv *jenv, jclass jcls, jlong jarg1, jobject jarg1_, jstring jarg2, jstring jarg3) {
   jint jresult = 0 ;
   struct norddrop *arg1 = (struct norddrop *) 0 ;
   char *arg2 = (char *) 0 ;
   char *arg3 = (char *) 0 ;
-  char *arg4 = (char *) 0 ;
   enum norddrop_result result;
   
   (void)jenv;
@@ -721,16 +720,10 @@ SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1start
     arg3 = (char *)(*jenv)->GetStringUTFChars(jenv, jarg3, 0);
     if (!arg3) return 0;
   }
-  arg4 = 0;
-  if (jarg4) {
-    arg4 = (char *)(*jenv)->GetStringUTFChars(jenv, jarg4, 0);
-    if (!arg4) return 0;
-  }
-  result = (enum norddrop_result)norddrop_start(arg1,(char const *)arg2,(char const *)arg3,(char const *)arg4);
+  result = (enum norddrop_result)norddrop_start(arg1,(char const *)arg2,(char const *)arg3);
   jresult = (jint)result; 
   if (arg2) (*jenv)->ReleaseStringUTFChars(jenv, jarg2, (const char *)arg2);
   if (arg3) (*jenv)->ReleaseStringUTFChars(jenv, jarg3, (const char *)arg3);
-  if (arg4) (*jenv)->ReleaseStringUTFChars(jenv, jarg4, (const char *)arg4);
   return jresult;
 }
 

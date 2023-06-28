@@ -212,7 +212,6 @@ class Drop:
             ctypes.c_void_p,
             ctypes.c_char_p,
             ctypes.c_char_p,
-            ctypes.c_char_p,
         )
         norddrop_lib.norddrop_new_transfer.argtypes = (
             ctypes.c_void_p,
@@ -392,13 +391,13 @@ class Drop:
             "moose_event_path": "/tmp/moose-events",
             "moose_prod": False,
             "storage_path": dbpath,
+            "tracker_context": "empty",
         }
 
         err = self._lib.norddrop_start(
             self._instance,
             ctypes.create_string_buffer(bytes(addr, "utf-8")),
             ctypes.create_string_buffer(bytes(json.dumps(cfg), "utf-8")),
-            ctypes.create_string_buffer(bytes("", "utf-8")),
         )
         if err != 0:
             err_type = LibResult(err).name
