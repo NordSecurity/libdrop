@@ -108,23 +108,19 @@ class NewTransferWithFD(Action):
     def __init__(self, peer: str, path: str):
         self._peer: str = peer
         self._path: str = path
-        self._fd: typing.Any = None
 
     async def run(self, drop: ffi.Drop):
-        # save to object in order to increase the lifetime of the file until GC collects it and closes the file
-        self._fd = open(self._path, "r")
-
-        fo = self._fd.fileno()
-
         UUIDS_LOCK.acquire()
 
-        xfid = drop.new_transfer_with_fd(self._peer, self._path, fo)
+        xfid = drop.new_transfer_with_fd(
+            self._peer, self._path, f"content://new{self._path}"
+        )
         UUIDS.append(xfid)
 
         UUIDS_LOCK.release()
 
     def __str__(self):
-        return f"NewTransferWithFD({self._peer}, {self._path}, {self._fd})"
+        return f"NewTransferWithFD({self._peer}, {self._path})"
 
 
 # Initiates multiple transfers with the same FD
@@ -135,23 +131,18 @@ class MultipleNewTransfersWithSameFD(Action):
         self._fd: typing.Any = None
 
     async def run(self, drop: ffi.Drop):
-        # save to object in order to increase the lifetime of the file until GC collects it and closes the file
-        self._fd = open(self._path, "r")
-
-        fo = self._fd.fileno()
-
         for peer in self._peers:
             UUIDS_LOCK.acquire()
 
-            xfid = drop.new_transfer_with_fd(peer, self._path, fo)
+            xfid = drop.new_transfer_with_fd(
+                peer, self._path, f"content://cached{self._path}"
+            )
             UUIDS.append(xfid)
 
             UUIDS_LOCK.release()
 
     def __str__(self):
-        return (
-            f"MultipleNewTransfersWithSameFD({self._peers}, {self._path}, {self._fd})"
-        )
+        return f"MultipleNewTransfersWithSameFD({self._peers}, {self._path})"
 
 
 class Download(Action):
