@@ -119,31 +119,37 @@ impl Service {
         res
     }
 
-    pub async fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<(), Error> {
-        self.state
-            .storage
-            .purge_transfers(transfer_ids)
-            .await
-            .map_err(|_| Error::StorageError)
+    pub fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<(), Error> {
+        if let Err(e) = self.state.storage.purge_transfers(transfer_ids) {
+            error!(self.logger, "Failed to purge transfers: {e}");
+            return Err(Error::StorageError);
+        }
+
+        Ok(())
     }
 
-    pub async fn purge_transfers_until(&self, until_timestamp: i64) -> Result<(), Error> {
-        self.state
-            .storage
-            .purge_transfers_until(until_timestamp)
-            .await
-            .map_err(|_| Error::StorageError)
+    pub fn purge_transfers_until(&self, until_timestamp: i64) -> Result<(), Error> {
+        if let Err(e) = self.state.storage.purge_transfers_until(until_timestamp) {
+            error!(self.logger, "Failed to purge transfers until: {e}");
+            return Err(Error::StorageError);
+        }
+
+        Ok(())
     }
 
-    pub async fn transfers_since(
+    pub fn transfers_since(
         &self,
         since_timestamp: i64,
     ) -> Result<Vec<drop_storage::types::Transfer>, Error> {
-        self.state
-            .storage
-            .transfers_since(since_timestamp)
-            .await
-            .map_err(|_| Error::StorageError)
+        let result = self.state.storage.transfers_since(since_timestamp);
+
+        match result {
+            Err(e) => {
+                error!(self.logger, "Failed to get transfers since: {e}");
+                Err(Error::StorageError)
+            }
+            Ok(transfers) => Ok(transfers),
+        }
     }
 
     pub async fn send_request(&mut self, xfer: crate::Transfer) {
@@ -153,12 +159,7 @@ impl Service {
             xfer.info(),
         );
 
-        if let Err(err) = self
-            .state
-            .storage
-            .insert_transfer(&xfer.storage_info())
-            .await
-        {
+        if let Err(err) = self.state.storage.insert_transfer(&xfer.storage_info()) {
             error!(self.logger, "Failed to insert transfer into storage: {err}",);
         }
 
