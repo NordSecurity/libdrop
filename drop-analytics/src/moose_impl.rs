@@ -83,6 +83,7 @@ impl MooseImpl {
         event_path: String,
         app_version: String,
         prod: bool,
+        tracker_context: &str,
     ) -> anyhow::Result<Self> {
         let (tx, rx) = sync_channel(1);
 
@@ -111,7 +112,7 @@ impl MooseImpl {
 
         anyhow::ensure!(res.is_ok(), "Failed to initialize moose: {:?}", res.err());
 
-        populate_context(&logger);
+        populate_context(&logger, tracker_context);
         let res = moose::flush_changes();
         moose_debug!(logger, res, "flush_changes");
         res.context("Failed to flush moose context")?;
@@ -200,7 +201,7 @@ impl From<super::Phase> for mooselibdropapp::LibdropappEventPhase {
     }
 }
 
-fn populate_context(logger: &Logger) {
+fn populate_context(logger: &Logger, context: &str) {
     macro_rules! set_context_fields {
         ( $( $func:ident, $field:expr );* ) => {
             $(
@@ -217,32 +218,23 @@ fn populate_context(logger: &Logger) {
         };
     }
 
-    let foreign_tracker_name = "nordvpnapp";
-
-    if let Ok(foreign_context) = moose::fetch_specific_context(foreign_tracker_name) {
-        let context = parse_foreign_context(&foreign_context);
-        set_context_fields!(
-            set_context_device_brand, context.brand;
-            set_context_device_type, context.x_type;
-            set_context_device_model, context.model;
-            set_context_device_fp, context.fp;
-            set_context_device_resolution, context.resolution;
-            set_context_device_os, context.os;
-            set_context_device_location_city, context.location.city;
-            set_context_device_location_country, context.location.country;
-            set_context_device_location_region, context.location.region;
-            set_context_device_timeZone, context.time_zone;
-            set_context_device_ram_module, context.ram.module;
-            set_context_device_ram_totalMemory, context.ram.total_memory;
-            set_context_device_ram_availableMemory, context.ram.total_memory;
-            set_context_device_storage_mediaType, context.storage.media_type
-        );
-    } else {
-        warn!(
-            logger,
-            "[Moose] Could not fetch {} tracker device context", foreign_tracker_name
-        );
-    }
+    let context = parse_foreign_context(&context);
+    set_context_fields!(
+        set_context_device_brand, context.brand;
+        set_context_device_type, context.x_type;
+        set_context_device_model, context.model;
+        set_context_device_fp, context.fp;
+        set_context_device_resolution, context.resolution;
+        set_context_device_os, context.os;
+        set_context_device_location_city, context.location.city;
+        set_context_device_location_country, context.location.country;
+        set_context_device_location_region, context.location.region;
+        set_context_device_timeZone, context.time_zone;
+        set_context_device_ram_module, context.ram.module;
+        set_context_device_ram_totalMemory, context.ram.total_memory;
+        set_context_device_ram_availableMemory, context.ram.total_memory;
+        set_context_device_storage_mediaType, context.storage.media_type
+    );
 }
 
 fn parse_foreign_context(foreign_context: &str) -> moose::LibdropappContextDevice {

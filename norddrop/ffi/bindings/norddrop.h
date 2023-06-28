@@ -266,6 +266,7 @@ enum norddrop_result norddrop_reject_file(const struct norddrop *dev,
  * * `dev` - Pointer to the instance
  * * `listen_addr` - Address to listen on
  * * `config` - JSON configuration
+ * * `tracker_context` - App trackers context
  *
  * # Configuration Parameters
  *
@@ -286,7 +287,8 @@ enum norddrop_result norddrop_reject_file(const struct norddrop *dev,
  * This timeout controls the amount of time we will wait for any action from
  * the peer and after that, we will fail the transfer.
  *
- * * `moose_event_path` - moose database path.
+ * * `moose_event_path` - moose database path. It MUST NOT be the same as
+ * the path used for the app tracker.
  *
  * * `storage_path` - storage path for persistence engine.
  *
@@ -295,7 +297,8 @@ enum norddrop_result norddrop_reject_file(const struct norddrop *dev,
  */
 enum norddrop_result norddrop_start(const struct norddrop *dev,
                                     const char *listen_addr,
-                                    const char *config);
+                                    const char *config,
+                                    const char *tracker_context);
 
 /**
  * Stop norddrop instance

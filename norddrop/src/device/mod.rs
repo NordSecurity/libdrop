@@ -76,7 +76,12 @@ impl NordDropFFI {
         })
     }
 
-    pub(super) fn start(&mut self, listen_addr: &str, config_json: &str) -> Result<()> {
+    pub(super) fn start(
+        &mut self,
+        listen_addr: &str,
+        config_json: &str,
+        tracker_context: &str,
+    ) -> Result<()> {
         let logger = self.logger.clone();
 
         trace!(logger, "norddrop_start() listen address: {:?}", listen_addr,);
@@ -104,6 +109,7 @@ impl NordDropFFI {
             self.config.moose.event_path.clone(),
             env!("DROP_VERSION").to_string(),
             self.config.moose.prod,
+            tracker_context,
         ) {
             Ok(moose) => moose,
             Err(err) => {

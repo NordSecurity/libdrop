@@ -49,10 +49,12 @@ fn create(
     event_path: String,
     app_version: String,
     prod: bool,
+    tracker_context: &str,
 ) -> anyhow::Result<Arc<dyn Moose>> {
     #[cfg(feature = "moose")]
     {
-        let moose = moose_impl::MooseImpl::new(logger, event_path, app_version, prod)?;
+        let moose =
+            moose_impl::MooseImpl::new(logger, event_path, app_version, prod, tracker_context)?;
         Ok(Arc::new(moose))
     }
 
@@ -67,13 +69,14 @@ pub fn init_moose(
     event_path: String,
     app_version: String,
     prod: bool,
+    tracker_context: &str,
 ) -> anyhow::Result<Arc<dyn Moose>> {
     let mut lock = INSTANCE.lock().expect("Moose lock is poisoned");
 
     if let Some(arc) = lock.as_ref().and_then(Weak::upgrade) {
         Ok(arc)
     } else {
-        let arc = create(logger, event_path, app_version, prod)?;
+        let arc = create(logger, event_path, app_version, prod, tracker_context)?;
 
         *lock = Some(Arc::downgrade(&arc));
 
