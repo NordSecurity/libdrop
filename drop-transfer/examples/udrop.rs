@@ -39,7 +39,7 @@ async fn listen(
     let mut storage = drop_transfer::StorageDispatch::new(&storage);
 
     while let Some(ev) = rx.recv().await {
-        if let Err(e) = storage.handle_event(&ev).await {
+        if let Err(e) = storage.handle_event(&ev) {
             error!("Failed to handle storage event: {e}");
         }
         match ev {
@@ -306,7 +306,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let storage_file = matches.get_one::<String>("storage").unwrap();
-    let storage = Arc::new(Storage::new(logger.clone(), storage_file).await.unwrap());
+    let storage = Arc::new(Storage::new(logger.clone(), storage_file).unwrap());
 
     let mut service = Service::start(
         addr,
