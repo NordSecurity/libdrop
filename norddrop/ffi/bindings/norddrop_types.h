@@ -130,6 +130,27 @@ typedef struct norddrop_pubkey_cb {
   norddrop_pubkey_fn cb;
 } norddrop_pubkey_cb;
 
+/**
+ * Open FD based on provided content uri.
+ * Returns FD on success and -1 on failure
+ */
+typedef int (*norddrop_fd_fn)(void*, const char*);
+
+/**
+ * Fetch file descriptor by the content uri
+ */
+typedef struct norddrop_fd_cb {
+  /**
+   * Context to pass to callback.
+   * User must ensure safe access of this var from multitheaded context.
+   */
+  void *ctx;
+  /**
+   * Function to be called
+   */
+  norddrop_fd_fn cb;
+} norddrop_fd_cb;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -137,7 +158,8 @@ extern "C" {
 void __norddrop_force_export(enum norddrop_result,
                              struct norddrop_event_cb,
                              struct norddrop_logger_cb,
-                             struct norddrop_pubkey_cb);
+                             struct norddrop_pubkey_cb,
+                             struct norddrop_fd_cb);
 
 #ifdef __cplusplus
 } // extern "C"
