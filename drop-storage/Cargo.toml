@@ -7,7 +7,13 @@ edition = "2021"
 
 [dependencies]
 thiserror = "*"
-sqlx = { git="https://github.com/NordSecurity/sqlx.git", branch="libdrop-compat", features = [ "sqlite", "chrono", "runtime-tokio", "uuid"] }
+chrono = { version = "0.4.26", features = ["serde"] }
+rusqlite = { version = "0.29.0", features = ["serde_json", "chrono"] }
+r2d2 = "0.8.10"
+r2d2_sqlite = "0.22.0"
+rusqlite_migration = { version = "1.1.0-alpha.2", features = ["from-directory"] }
+lazy_static = "1.4.0"
+include_dir = "0.7.3"
 slog = { workspace = true }
 serde = { workspace = true }
 uuid = { workspace = true }

@@ -338,7 +338,7 @@ async fn handle_client(
 
             return;
         } else {
-            if let Err(err) = state.storage.insert_transfer(&xfer.storage_info()).await {
+            if let Err(err) = state.storage.insert_transfer(&xfer.storage_info()) {
                 error!(logger, "Failed to insert transfer into storage: {err}",);
             }
 
