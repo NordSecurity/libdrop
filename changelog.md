@@ -11,6 +11,7 @@
 ---
 * Add IPv6 support
 * Add file rejections via `norddrop_reject_file()`
+* Switch to rusqlite for persistence
 
 ---
 <br>
