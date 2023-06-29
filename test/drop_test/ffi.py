@@ -379,9 +379,7 @@ class Drop:
             err_type = LibResult(err).name
             raise Exception(f"purge_transfers has failed with code: {err}({err_type})")
 
-    def start(self, runner: str, dbpath: str):
-        addr = RUNNERS[runner].ip
-
+    def start(self, addr: str, dbpath: str):
         cfg = {
             "dir_depth_limit": 5,
             "transfer_file_limit": 1000,
