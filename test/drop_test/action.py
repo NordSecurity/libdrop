@@ -490,3 +490,15 @@ class PurgeTransfers(Action):
 
     def __str__(self):
         return f"PurgeTransfers({self.uuid_indices})"
+
+
+class Start(Action):
+    def __init__(self, addr: str, dbpath: str = ":memory:"):
+        self._addr = addr
+        self._dbpath = dbpath
+
+    async def run(self, drop: ffi.Drop):
+        drop.start(self._addr, self._dbpath)
+
+    def __str__(self):
+        return f"Start(addr={self._addr}, dbpath={self._dbpath})"

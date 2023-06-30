@@ -36,8 +36,6 @@ class Scenario:
         logger.info(f'Scenario: "{self._desc}"')
 
         try:
-            drop.start(runner, self._dbpath)
-
             await self._action_list[runner].run(drop)
             os.seteuid(0)  # restore privileges, they might have been changed
         except Exception as e:
