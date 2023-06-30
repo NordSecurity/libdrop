@@ -115,10 +115,13 @@ pub extern "C" fn norddrop_new_transfer(
 /// # Arguments
 ///
 /// * `dev` - Pointer to the instance.
+///
+/// # Safety
+/// This function creates a box with instance pointer and immediately drops it.
 #[no_mangle]
-pub extern "C" fn norddrop_destroy(dev: *mut norddrop) {
+pub unsafe extern "C" fn norddrop_destroy(dev: *mut norddrop) {
     if !dev.is_null() {
-        unsafe { Box::from_raw(dev) };
+        let _ = Box::from_raw(dev);
     }
 }
 
@@ -275,9 +278,12 @@ pub extern "C" fn norddrop_cancel_file(
 ///
 /// # Arguments
 ///
-/// * `dev` -   Pointer to the instance
-/// * `xfid` -  Transfer ID
-/// * `fid` -   File ID
+/// * `dev`: Pointer to the instance
+/// * `xfid`: Transfer ID
+/// * `fid`: File ID
+///
+/// # Safety
+/// The pointers provided should be valid
 #[no_mangle]
 pub unsafe extern "C" fn norddrop_reject_file(
     dev: &norddrop,
