@@ -441,9 +441,11 @@ void __norddrop_force_export(enum norddrop_result,
                              struct norddrop_pubkey_cb);
 
 /**
- * @brief Get the version of the library
+ * Get the version of the library
  *
- * @return const char*
+ * # Returns
+ *
+ * Version string
  */
 const char *norddrop_version(void);
 
