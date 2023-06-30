@@ -5304,4 +5304,524 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario29-1",
+        "Send one file to a peer, stop the sender and then start back. Expect automatically restored transfer",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-1-ren.sqlite"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Stop(),
+                    action.Wait(event.FinishFailedTransfer(0, Error.CANCELED)),
+                    action.WaitForAnotherPeer(),
+                    # start the sender again
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-1-ren.sqlite"),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-big"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/29-1",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFailedTransfer(
+                            0,
+                            Error.WS_SERVER,
+                            ignore_os=True,
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-big"].id,
+                            "/tmp/received/29-1/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/29-1/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-2",
+        "Send one file to a peer, stop the receiver and then start back. Expect automatically restored transfer",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.5"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFailedTransfer(0, Error.WS_CLIENT, ignore_os=True)
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-big"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.15", dbpath="/tmp/db/29-2-stimpy.sqlite"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/29-2",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Stop(),
+                    action.Wait(event.FinishFailedTransfer(0, Error.CANCELED)),
+                    action.WaitForAnotherPeer(),
+                    # start the receiver again
+                    action.Start("172.20.0.15", dbpath="/tmp/db/29-2-stimpy.sqlite"),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-big"].id,
+                            "/tmp/received/29-2/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/29-2/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-3",
+        "Send three files to a peer, download one, reject one and do nothing with third one. Then stop the sender and then start back. Expect automatically restored transfer, without the rejected and stopped file",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-3-ren.sqlite"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        [
+                            "/tmp/testfile-big",
+                            "/tmp/testfile-bulk-01",
+                            "/tmp/testfile-bulk-02",
+                        ],
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-01"].id,
+                                    "testfile-bulk-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-02"].id,
+                                    "testfile-bulk-02",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-bulk-01"].id, True)
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Stop(),
+                    action.Wait(
+                        event.FinishFailedTransfer(
+                            0,
+                            Error.CANCELED,
+                            ignore_os=True,
+                        )
+                    ),
+                    action.WaitForAnotherPeer(),
+                    # start the sender again
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-3-ren.sqlite"),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-01"].id,
+                                    "testfile-bulk-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-02"].id,
+                                    "testfile-bulk-02",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-big"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-01"].id,
+                                    "testfile-bulk-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-02"].id,
+                                    "testfile-bulk-02",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.RejectTransferFile(0, FILES["testfile-bulk-01"].id),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-bulk-01"].id, False)
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/29-3",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFailedTransfer(
+                            0,
+                            Error.WS_SERVER,
+                            ignore_os=True,
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-big"].id,
+                            "/tmp/received/29-3/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/29-3/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-4",
+        "Send three files to a peer, download one, reject one and do nothing with third one. Then stop the receiver and then start back. Expect automatically restored transfer, without the rejected and stopped file",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.5"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        [
+                            "/tmp/testfile-big",
+                            "/tmp/testfile-bulk-01",
+                            "/tmp/testfile-bulk-02",
+                        ],
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-01"].id,
+                                    "testfile-bulk-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-02"].id,
+                                    "testfile-bulk-02",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-bulk-01"].id, True)
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFailedTransfer(0, Error.WS_CLIENT, ignore_os=True)
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-01"].id,
+                                    "testfile-bulk-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-02"].id,
+                                    "testfile-bulk-02",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-big"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.15", dbpath="/tmp/db/29-4-stimpy.sqlite"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-01"].id,
+                                    "testfile-bulk-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-02"].id,
+                                    "testfile-bulk-02",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.RejectTransferFile(0, FILES["testfile-bulk-01"].id),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-bulk-01"].id, False)
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/29-4",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Stop(),
+                    action.Wait(event.FinishFailedTransfer(0, Error.CANCELED)),
+                    action.WaitForAnotherPeer(),
+                    # start the receiver again
+                    action.Start("172.20.0.15", dbpath="/tmp/db/29-4-stimpy.sqlite"),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-big"].id,
+                            "/tmp/received/29-4/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/29-4/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]
