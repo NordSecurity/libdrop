@@ -274,7 +274,7 @@ pub extern "C" fn norddrop_cancel_file(
 /// Reject a file from either side
 ///
 /// # Arguments
-/// 
+///
 /// * `dev` -   Pointer to the instance
 /// * `xfid` -  Transfer ID
 /// * `fid` -   File ID
