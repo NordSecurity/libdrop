@@ -39,31 +39,47 @@ extern "C" {
 #[allow(non_camel_case_types)]
 pub struct norddrop(Mutex<NordDropFFI>);
 
-/// @brief Initialize a new transfer with the peer and descriptors provided and
-/// return the transfer ID
+/// Initialize a new transfer with the provided peer and descriptors
 ///
-/// @param dev   Pointer to the instance
-/// @param peer  Peer address
-/// @param descriptors   JSON descriptors
-/// @return char*  Transfer ID
+/// # Arguments
 ///
-/// descriptors format:
+/// * `dev` - A pointer to the instance.
+/// * `peer` - Peer address.
+/// * `descriptors` - JSON descriptors.
+///
+/// # Returns
+///
+/// A String containing the transfer ID.
+///
+/// # Descriptors format
+///
+/// Descriptors are provided as an array of JSON objects, with each object
+/// containing a "path" and optionally a file descriptor "fd":
+///
+/// ```json
 /// [
-///  {
-///    "path": "/path/to/file",
-///  },
-/// {
-///   "path": "/path/to/dir",
-/// }
+///   {
+///     "path": "/path/to/file",
+///   },
+///   {
+///     "path": "/path/to/dir",
+///   }
 /// ]
+/// ```
 ///
-/// On Android due to limitations we must also accept a file descriptor
-/// {
-///  [
-///  "path": "/path/to/file",
-///  "fd" 1234
-///  ]
-/// }
+/// # On Android, due to limitations, we must also accept a file descriptor
+///
+/// ```json
+/// [
+///   {
+///    "path": "/path/to/file",
+///    "fd": 1234
+///   }
+/// ]
+/// ```
+///
+/// # Safety
+/// The pointers provided must be valid
 #[no_mangle]
 pub extern "C" fn norddrop_new_transfer(
     dev: &norddrop,
@@ -97,9 +113,14 @@ pub extern "C" fn norddrop_new_transfer(
     }
 }
 
-/// @brief Destroy the libdrop instance
+/// Destroy the libdrop instance.
 ///
-/// @param dev   Pointer to the instance
+/// # Arguments
+///
+/// * `dev` - Pointer to the instance.
+///
+/// # Safety
+/// This function creates a box with instance pointer and immediately drops it.
 #[no_mangle]
 pub extern "C" fn norddrop_destroy(dev: *mut norddrop) {
     if !dev.is_null() {
@@ -107,13 +128,17 @@ pub extern "C" fn norddrop_destroy(dev: *mut norddrop) {
     }
 }
 
-/// @brief Download a file from the peer
+/// # Download a file from the peer
 ///
-/// @param dev   Pointer to the instance
-/// @param xfid  Transfer ID
-/// @param fid   File ID
-/// @param dst   Destination path
-/// @return enum norddrop_result   Result of the operation
+/// # Arguments
+///
+/// * `dev` - Pointer to the instance
+/// * `xfid` - Transfer ID
+/// * `fid` - File ID
+/// * `dst` - Destination path
+///
+/// # Safety
+/// The pointers provided must be valid
 #[no_mangle]
 pub extern "C" fn norddrop_download(
     dev: &norddrop,
@@ -168,11 +193,15 @@ pub extern "C" fn norddrop_download(
     result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
 }
 
-/// @brief  Cancel a transfer from either side
+/// # Cancel a transfer from either side
 ///
-/// @param dev   Pointer to the instance
-/// @param xfid  Transfer ID
-/// @return enum norddrop_result   Result of the operation
+/// # Arguments
+///
+/// * `dev`: Pointer to the instance
+/// * `xfid`: Transfer ID
+///
+/// # Safety
+/// The pointers provided must be valid
 #[no_mangle]
 pub extern "C" fn norddrop_cancel_transfer(dev: &norddrop, xfid: *const c_char) -> norddrop_result {
     let result = panic::catch_unwind(move || {
@@ -202,12 +231,16 @@ pub extern "C" fn norddrop_cancel_transfer(dev: &norddrop, xfid: *const c_char) 
     result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
 }
 
-/// @brief  Cancel a file from either side
+/// # Cancel a file from either side
 ///
-/// @param dev   Pointer to the instance
-/// @param xfid  Transfer ID
-/// @param fid   File ID
-/// @return enum norddrop_result   Result of the operation
+/// # Arguments
+///
+/// * `dev`: Pointer to the instance
+/// * `xfid`: Transfer ID
+/// * `fid`: File ID
+///
+/// # Safety
+/// The pointers provided must be valid
 #[no_mangle]
 pub extern "C" fn norddrop_cancel_file(
     dev: &norddrop,
@@ -253,12 +286,16 @@ pub extern "C" fn norddrop_cancel_file(
     result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
 }
 
-/// @brief  Reject a file from either side
+/// Reject a file from either side
 ///
-/// @param dev   Pointer to the instance
-/// @param xfid  Transfer ID
-/// @param fid   File ID
-/// @return enum norddrop_result   Result of the operation
+/// # Arguments
+///
+/// * `dev`: Pointer to the instance
+/// * `xfid`: Transfer ID
+/// * `fid`: File ID
+///
+/// # Safety
+/// The pointers provided should be valid
 #[no_mangle]
 pub unsafe extern "C" fn norddrop_reject_file(
     dev: &norddrop,
@@ -302,34 +339,39 @@ pub unsafe extern "C" fn norddrop_reject_file(
     }
 }
 
-/// @brief   Start libdrop
+/// Start libdrop
 ///
-/// @param dev   Pointer to the instance
-/// @param listen_addr   Address to listen on
-/// @param config  JSON configuration
-/// @return enum norddrop_result   Result of the operation
+/// # Arguments
 ///
-/// configuration parameters:
+/// * `dev` - Pointer to the instance
+/// * `listen_addr` - Address to listen on
+/// * `config` - JSON configuration
 ///
-/// dir_depth_limit - if the tree contains more levels then the error is
+/// # Configuration Parameters
+///
+/// * `dir_depth_limit` - if the tree contains more levels then the error is
 /// returned.
 ///
-/// transfer_file_limit - when aggregating files from the path, if this
+/// * `transfer_file_limit` - when aggregating files from the path, if this
 /// limit is reached, an error is returned.
 ///
-/// req_connection_timeout_ms - timeout value used in connecting to the peer.
+/// * `req_connection_timeout_ms` - timeout value used in connecting to the
+///   peer.
 /// The formula for retrying is: starting from 0.2 seconds we double it
 /// each time until we cap at req_connection_timeout_ms / 10. This is useful
 /// when the peer is not responding at all.
 ///
-/// transfer_idle_lifetime_ms - this timeout plays a role in an already
+/// * `transfer_idle_lifetime_ms` - this timeout plays a role in an already
 /// established transfer as sometimes one peer might go offline with no notice.
 /// This timeout controls the amount of time we will wait for any action from
 /// the peer and after that, we will fail the transfer.
 ///
-/// moose_event_path - moose database path.
+/// * `moose_event_path` - moose database path.
 ///
-/// storage_path - storage path for persistence engine.
+/// * `storage_path` - storage path for persistence engine.
+///
+/// # Safety
+/// The pointers provided must be valid
 #[no_mangle]
 pub extern "C" fn norddrop_start(
     dev: &norddrop,
@@ -365,10 +407,11 @@ pub extern "C" fn norddrop_start(
     result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
 }
 
-/// @brief Stop norddrop instance.
+/// Stop norddrop instance
 ///
-/// @param dev   Pointer to the instance
-/// @return enum norddrop_result   Result of the operation
+/// # Arguments
+///
+/// * `dev` - Pointer to the instance
 #[no_mangle]
 pub extern "C" fn norddrop_stop(dev: &norddrop) -> norddrop_result {
     let result = panic::catch_unwind(move || {
@@ -383,11 +426,15 @@ pub extern "C" fn norddrop_stop(dev: &norddrop) -> norddrop_result {
     result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
 }
 
-/// @brief Purge transfers from the database
+/// Purge transfers from the database
 ///
-/// @param dev   Pointer to the instance
-/// @param txids   JSON array of transfer IDs
-/// @return enum norddrop_result   Result of the operation
+/// # Arguments
+///
+/// * `dev` - Pointer to the instance
+/// * `txids` - JSON array of transfer IDs
+///
+/// # Safety
+/// The pointers provided must be valid
 #[no_mangle]
 pub extern "C" fn norddrop_purge_transfers(
     dev: &norddrop,
@@ -414,11 +461,12 @@ pub extern "C" fn norddrop_purge_transfers(
     result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
 }
 
-/// @brief Purge transfers from the database until the given timestamp
+/// Purge transfers from the database until the given timestamp
 ///
-/// @param dev   Pointer to the instance
-/// @param until_timestamp   Unix timestamp in seconds
-/// @return enum norddrop_result   Result of the operation
+///  # Arguments
+///
+/// * `dev` - Pointer to the instance
+/// * `until_timestamp` - Unix timestamp in seconds
 #[no_mangle]
 pub extern "C" fn norddrop_purge_transfers_until(
     dev: &norddrop,
@@ -437,14 +485,20 @@ pub extern "C" fn norddrop_purge_transfers_until(
     result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
 }
 
-/// @brief Get transfers from the database
+/// Get transfers from the database
 ///
-/// @param dev  Pointer to the instance
-/// @param since_timestamp   Timestamp in seconds
-/// @return char*  JSON array of transfers
+/// # Arguments
 ///
-/// JSON example from the sender side:
-///  {
+/// * `dev` - Pointer to the instance
+/// * `since_timestamp` - Timestamp in seconds
+///
+/// # Returns
+///
+/// JSON formatted transfers
+///
+/// # JSON example from the sender side
+///  ```json
+/// {
 ///      "id": "b49fc2f8-ce2d-41ac-a081-96a4d760899e",
 ///      "peer_id": "192.168.0.0",
 ///      "created_at": 1686651025988,
@@ -482,8 +536,10 @@ pub extern "C" fn norddrop_purge_transfers_until(
 ///          }
 ///      ]
 ///  }
-///
-/// JSON example from the receiver side:
+/// ```
+/// 
+/// # JSON example from the receiver side
+/// ```json
 /// {
 ///     "id": "b49fc2f8-ce2d-41ac-a081-96a4d760899e",
 ///     "peer_id": "172.17.0.1",
@@ -523,6 +579,7 @@ pub extern "C" fn norddrop_purge_transfers_until(
 ///         }
 ///     ]
 /// }
+/// ```
 #[no_mangle]
 pub extern "C" fn norddrop_get_transfers_since(
     dev: &norddrop,
@@ -545,16 +602,18 @@ pub extern "C" fn norddrop_get_transfers_since(
     }
 }
 
-/// @brief Create a new instance of norddrop. This is a required step to work
-/// with API further.
+/// Create a new instance of norddrop. This is a required step to work
+/// with API further
 ///
-/// @param dev  Pointer to the pointer to the instance. The pointer will be
-///             allocated by the function and should be freed by the caller
-///             using norddrop_destroy()
-/// @param event_cb     Event callback
-/// @param log_level    Log level
-/// @param logger_cb    Logger callback
-/// @param pubkey_cb    Fetch peer public key callback. It is used to request
+/// # Arguments
+///
+/// * `dev` - Pointer to the pointer to the instance. The pointer will be
+///   allocated by the function and should be freed by the caller using
+///   norddrop_destroy()
+/// * `event_cb` - Event callback
+/// * `log_level` - Log level
+/// * `logger_cb` - Logger callback
+/// * `pubkey_cb` - Fetch peer public key callback. It is used to request
 /// the app to provide the peer’s public key or the node itself. The callback
 /// provides two parameters, `const char *ip` which is a string
 /// representation of the peer’s IP address, and `char *pubkey` which is
@@ -562,9 +621,11 @@ pub extern "C" fn norddrop_get_transfers_since(
 /// key as bytes. The app returns the status of the callback call, 0 on
 /// success and a non-zero value to indicate that the key could not be
 /// provided. Note that it’s not BASE64, it must be decoded if it is beforehand.
-/// @param privkey     32bytes private key. Note that it’s not BASE64, it must
-/// be decoded if it is beforehand. @return NORDDROP_RES_OK on success, error
-/// code otherwise
+/// * `privkey` - 32bytes private key. Note that it’s not BASE64, it must
+/// be decoded if it is beforehand.
+///
+/// # Safety
+/// The pointers provided must be valid as well as callback functions
 #[no_mangle]
 pub extern "C" fn norddrop_new(
     dev: *mut *mut norddrop,
