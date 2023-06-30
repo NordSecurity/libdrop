@@ -128,11 +128,11 @@ impl NordDropFFI {
 
         let (tx, mut rx) = mpsc::channel::<drop_transfer::Event>(16);
 
-        let storage = Arc::new(self.rt.block_on(open_database(
+        let storage = Arc::new(open_database(
             &self.config.drop.storage_path,
             &self.event_dispatcher,
             &self.logger,
-        ))?);
+        )?);
 
         // Spawn a task grabbing events from the inner service and dispatch them
         // to the host app
@@ -146,7 +146,7 @@ impl NordDropFFI {
             while let Some(e) = rx.recv().await {
                 debug!(event_logger, "emitting event: {:#?}", e);
 
-                if let Err(err) = dispatch.handle_event(&e).await {
+                if let Err(err) = dispatch.handle_event(&e) {
                     error!(event_logger, "Failed to handle database event: {err}");
                 }
 
@@ -220,7 +220,6 @@ impl NordDropFFI {
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
                 .purge_transfers(transfer_ids)
-                .await
                 .map_err(|err| {
                     error!(self.logger, "Failed to purge transfers: {:?}", err);
                     match err {
@@ -254,7 +253,6 @@ impl NordDropFFI {
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
                 .purge_transfers_until(until_timestamp)
-                .await
                 .map_err(|err| {
                     error!(self.logger, "Failed to purge transfers: {:?}", err);
                     match err {
@@ -288,7 +286,6 @@ impl NordDropFFI {
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
                 .transfers_since(since_timestamp)
-                .await
                 .map_err(|err| {
                     error!(self.logger, "Failed to get transfers: {:?}", err);
                     match err {
@@ -592,14 +589,14 @@ fn prepare_transfer_files(
     Ok(files)
 }
 
-async fn open_database(
+fn open_database(
     dbpath: &str,
     events: &EventDispatcher,
     logger: &slog::Logger,
 ) -> Result<drop_storage::Storage> {
     // Try opening the DB 3 times
     for i in 1..=3 {
-        match drop_storage::Storage::new(logger.clone(), dbpath).await {
+        match drop_storage::Storage::new(logger.clone(), dbpath) {
             Ok(storage) => return Ok(storage),
             Err(err) => warn!(logger, "Failed to open DB: {err}, already tried {i} times",),
         }
@@ -621,7 +618,7 @@ async fn open_database(
     };
 
     // Final try after cleaning up old DB file
-    match drop_storage::Storage::new(logger.clone(), dbpath).await {
+    match drop_storage::Storage::new(logger.clone(), dbpath) {
         Ok(storage) => Ok(storage),
         Err(err) => {
             error!(logger, "Failed to prepare storage: {err}");

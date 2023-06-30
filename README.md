@@ -46,24 +46,6 @@ You can verify the transfer by checking the file system in the server container 
 ```bash
 echo -n "<absolute file path>" | sha256sum  | cut -d " " -f1 | xxd -ps -r | basenc --base64url | tr -d '='
 ```
-## Database development
-When developing the database there are two modes:
-- `online`: query live database for each query
-- `offline`: using pregenerated files in .sqlx to validate the queries
-
-SQLX has `offline` always enabled and based on `DATABASE_URL` env var decides which one to use. Env variable has precedence over .sqlx dir.
-
-For any query changes or new queries the database needs to be set-up. Make sure you're running the same version of `sqlx-cli` as the `drop-storage` dependency
-which you can build manually by checking out the repository:
-
-```
-touch /tmp/db.sqlite
-cd drop-storage
-cargo sqlx migrate run --database-url sqlite:///tmp/db.sqlite
-SQLX_OFFLINE_DIR="./.sqlx" DATABASE_URL=sqlite:///tmp/db.sqlite cargo sqlx prepare
-git add .sqlx
-```
-To speed up the process `.env` file can be created in `drop-storage` with `DATABASE_URL` set up to always use it.
 
 ## IPv6 format
 Whenever IPv6 is used in a text form e.g. it is stored in the DB, included in the event, or passed as a callback argument we use the [RFC 5952](https://tools.ietf.org/html/rfc5952) for unique text representation.

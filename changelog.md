@@ -11,6 +11,7 @@
 ### **Relentless Records**
 ---
 * Persist transfers to SQLite
+* Switch to rusqlite for persistence
 
 ---
 <br>
