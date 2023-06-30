@@ -1,5 +1,5 @@
+use chrono::NaiveDateTime;
 use serde::Serialize;
-use sqlx::types::chrono::NaiveDateTime;
 
 type TransferId = uuid::Uuid;
 type FileId = String;
