@@ -4,7 +4,6 @@ pub mod types;
 use std::vec;
 
 use include_dir::{include_dir, Dir};
-use lazy_static::lazy_static;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, Transaction};
@@ -28,12 +27,7 @@ pub struct Storage {
     pool: Pool<SqliteConnectionManager>,
 }
 
-static MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
-
-lazy_static! {
-    static ref MIGRATIONS: Migrations<'static> = Migrations::from_directory(&MIGRATIONS_DIR)
-        .expect("Failed to gather migrations from directory");
-}
+const MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
 impl Storage {
     pub fn new(logger: Logger, path: &str) -> Result<Self> {
@@ -44,7 +38,10 @@ impl Storage {
         let pool = Pool::new(manager)?;
 
         let mut conn = pool.get()?;
-        MIGRATIONS
+        Migrations::from_directory(&MIGRATIONS_DIR)
+            .map_err(|e| {
+                Error::InternalError(format!("Failed to gather migrations from directory: {e}"))
+            })?
             .to_latest(&mut conn)
             .map_err(|e| Error::InternalError(format!("Failed to run migrations: {e}")))?;
 
@@ -60,7 +57,7 @@ impl Storage {
             TransferFiles::Outgoing(_) => TransferType::Outgoing as u32,
         };
 
-        let tid = transfer.id.hyphenated().to_string();
+        let tid = transfer.id.to_string();
 
         let mut conn = self.pool.get()?;
         let conn = conn.transaction()?;
@@ -93,7 +90,7 @@ impl Storage {
         transfer_id: Uuid,
         path: &TransferIncomingPath,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         conn.execute(
             "INSERT INTO incoming_paths (transfer_id, relative_path, path_hash, bytes)
@@ -109,7 +106,7 @@ impl Storage {
         transfer_id: Uuid,
         path: &TransferOutgoingPath,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         conn.execute(
             "INSERT INTO outgoing_paths (transfer_id, relative_path, path_hash, bytes, base_path)
@@ -127,7 +124,7 @@ impl Storage {
     }
 
     pub fn save_checksum(&self, transfer_id: Uuid, file_id: &str, checksum: &[u8]) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -139,7 +136,7 @@ impl Storage {
     }
 
     pub fn fetch_checksums(&self, transfer_id: Uuid) -> Result<Vec<FileChecksum>> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         let out = conn
@@ -158,7 +155,7 @@ impl Storage {
     }
 
     pub fn insert_transfer_active_state(&self, transfer_id: Uuid) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -170,7 +167,7 @@ impl Storage {
     }
 
     pub fn insert_transfer_failed_state(&self, transfer_id: Uuid, error: u32) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -182,7 +179,7 @@ impl Storage {
     }
 
     pub fn insert_transfer_cancel_state(&self, transfer_id: Uuid, by_peer: bool) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -198,7 +195,7 @@ impl Storage {
         transfer_id: Uuid,
         file_id: &str,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -215,7 +212,7 @@ impl Storage {
         transfer_id: Uuid,
         file_id: &str,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -232,7 +229,7 @@ impl Storage {
         transfer_id: Uuid,
         path_id: &str,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -250,7 +247,7 @@ impl Storage {
         path_id: &str,
         base_dir: &str,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -269,7 +266,7 @@ impl Storage {
         by_peer: bool,
         bytes_sent: i64,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -288,7 +285,7 @@ impl Storage {
         by_peer: bool,
         bytes_received: i64,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -307,7 +304,7 @@ impl Storage {
         error: u32,
         bytes_received: i64,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -327,7 +324,7 @@ impl Storage {
         error: u32,
         bytes_sent: i64,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -344,7 +341,7 @@ impl Storage {
         transfer_id: Uuid,
         path_id: &str,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -362,7 +359,7 @@ impl Storage {
         path_id: &str,
         final_path: &str,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -380,7 +377,7 @@ impl Storage {
         path_id: &str,
         by_peer: bool,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -398,7 +395,7 @@ impl Storage {
         path_id: &str,
         by_peer: bool,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -475,7 +472,7 @@ impl Storage {
                 }
             }
 
-            let tid = transfer.id.hyphenated().to_string();
+            let tid = transfer.id.to_string();
 
             transfer.states.extend(
                 conn.prepare(
@@ -538,7 +535,7 @@ impl Storage {
     }
 
     fn get_outgoing_paths(&self, transfer_id: Uuid) -> Result<Vec<OutgoingPath>> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         let mut paths = conn
@@ -657,7 +654,7 @@ impl Storage {
     }
 
     fn get_incoming_paths(&self, transfer_id: Uuid) -> Result<Vec<IncomingPath>> {
-        let tid = transfer_id.hyphenated().to_string();
+        let tid = transfer_id.to_string();
 
         let conn = self.pool.get()?;
         let mut paths = conn

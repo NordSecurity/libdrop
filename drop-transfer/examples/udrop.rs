@@ -56,9 +56,8 @@ async fn listen(
     };
 
     let mut storage = drop_transfer::StorageDispatch::new(&storage);
-
     while let Some(ev) = rx.recv().await {
-        if let Err(e) = storage.handle_event(&ev) {
+        if let Err(e) = tokio::task::block_in_place(|| storage.handle_event(&ev)) {
             error!("Failed to handle storage event: {e}");
         }
         match ev {
