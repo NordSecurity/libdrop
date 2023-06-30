@@ -186,6 +186,9 @@ char *norddrop_new_transfer(const struct norddrop *dev, const char *peer, const 
  * # Arguments
  *
  * * `dev` - Pointer to the instance.
+ *
+ * # Safety
+ * This function creates a box with instance pointer and immediately drops it.
  */
 void norddrop_destroy(struct norddrop *dev);
 
@@ -232,9 +235,12 @@ enum norddrop_result norddrop_cancel_file(const struct norddrop *dev,
  *
  * # Arguments
  *
- * * `dev` -   Pointer to the instance
- * * `xfid` -  Transfer ID
- * * `fid` -   File ID
+ * * `dev`: Pointer to the instance
+ * * `xfid`: Transfer ID
+ * * `fid`: File ID
+ *
+ * # Safety
+ * The pointers provided should be valid
  */
 enum norddrop_result norddrop_reject_file(const struct norddrop *dev,
                                           const char *xfid,
