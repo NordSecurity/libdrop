@@ -142,6 +142,11 @@ pub struct FileToRetry {
     pub size: u64,
 }
 
+pub struct FinishedIncomingFile {
+    pub subpath: String,
+    pub final_path: String,
+}
+
 pub struct TransferToRetry {
     pub uuid: uuid::Uuid,
     pub peer: String,
