@@ -18,6 +18,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
                     action.Wait(
@@ -85,6 +86,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -169,6 +171,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -291,6 +294,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -438,6 +442,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
                     action.Wait(
@@ -490,6 +495,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.WaitRacy(
                         [
                             event.Receive(
@@ -569,6 +575,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     # Wait for another peer to appear
                     action.WaitForAnotherPeer(),
@@ -592,6 +599,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -623,6 +631,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     # Wait for another peer to appear
                     action.WaitForAnotherPeer(),
@@ -645,6 +654,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -672,6 +682,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     # Wait for another peer to appear
                     action.WaitForAnotherPeer(),
@@ -696,6 +707,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -730,6 +742,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     # Wait for another peer to appear
                     action.WaitForAnotherPeer(),
@@ -751,6 +764,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -779,6 +793,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
@@ -799,6 +814,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -830,6 +846,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
@@ -854,6 +871,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -894,6 +912,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
@@ -919,6 +938,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -958,6 +978,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
@@ -987,6 +1008,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -1035,6 +1057,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -1064,6 +1087,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -1110,6 +1134,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/nested/big"]),
@@ -1151,6 +1176,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -1211,6 +1237,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.NoEvent(),
                     action.Stop(),
@@ -1224,6 +1251,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/deep"]),
                     action.Wait(
@@ -1308,6 +1336,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -1434,6 +1463,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransferWithFD(
                         "172.20.0.15",
@@ -1466,6 +1496,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -1513,6 +1544,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -1559,6 +1591,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -1632,6 +1665,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer(
                         "172.20.0.15",
@@ -1704,6 +1738,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -1800,6 +1835,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/deep/path/file1.ext1"]),
                     action.Wait(
@@ -1842,6 +1878,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -1915,6 +1952,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
@@ -1941,6 +1979,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -1977,6 +2016,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
@@ -2000,6 +2040,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -2036,6 +2077,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(latency="10000ms"),
                     action.NewTransfer("172.20.0.100", ["/tmp/testfile-big"]),
                     action.Stop(),
@@ -2056,6 +2098,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     # fmt: off
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-01"]),
@@ -2124,6 +2167,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     # fmt: off
                     action.WaitRacy(
                         [
@@ -2204,6 +2248,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransferWithFD(
                         "172.20.0.15",
@@ -2259,6 +2304,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -2300,6 +2346,7 @@ scenarios = [
             ),
             "george": ActionList(
                 [
+                    action.Start("172.20.0.25"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -2347,6 +2394,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.MultipleNewTransfersWithSameFD(
                         [
@@ -2405,6 +2453,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -2448,6 +2497,7 @@ scenarios = [
             ),
             "george": ActionList(
                 [
+                    action.Start("172.20.0.25"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -2497,6 +2547,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -2527,6 +2578,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -2575,6 +2627,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -2596,6 +2649,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -2640,6 +2694,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -2670,6 +2725,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -2730,6 +2786,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransferFails("172.20.0.15", "/tmp/testfile-small-xd"),
                     action.NoEvent(duration=2),
@@ -2762,6 +2819,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -2810,6 +2868,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -2845,6 +2904,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -2904,6 +2964,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/deep/path"]),
                     action.Wait(
@@ -2988,6 +3049,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -3111,6 +3173,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
@@ -3180,6 +3243,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -3259,6 +3323,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -3286,6 +3351,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -3329,6 +3395,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     # Wait for another peer to appear
                     action.WaitForAnotherPeer(),
                     action.NewTransfer(
@@ -3417,6 +3484,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.WaitRacy(
                         [
                             event.Receive(
@@ -3488,6 +3556,7 @@ scenarios = [
             ),
             "george": ActionList(
                 [
+                    action.Start("172.20.0.25"),
                     action.WaitRacy(
                         [
                             event.Receive(
@@ -3566,6 +3635,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     # Wait for another peer to appear
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/with-illegal-char-\x0A-"]),
@@ -3595,6 +3665,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -3640,6 +3711,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer(
                         "172.20.0.15",
@@ -3715,6 +3787,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -3837,6 +3910,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
@@ -3879,6 +3953,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -3950,6 +4025,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
@@ -3992,6 +4068,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -4063,6 +4140,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/nested"]),
@@ -4128,6 +4206,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -4248,6 +4327,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/zero-sized-file"]),
                     action.Wait(
@@ -4274,6 +4354,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -4317,6 +4398,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer(
                         "172.20.0.15",
@@ -4360,6 +4442,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -4426,6 +4509,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer(
@@ -4470,6 +4554,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -4535,6 +4620,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -4562,6 +4648,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -4604,6 +4691,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
@@ -4632,6 +4720,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -4673,13 +4762,16 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start(
+                        "172.20.0.5",
+                        dbpath="/tmp/db/26-corrupted.sqlite",
+                    ),
                     action.Wait(event.RuntimeError(Error.DB_LOST)),
                     action.NoEvent(),
                     action.Stop(),
                 ]
             ),
         },
-        dbpath="/tmp/db/26-corrupted.sqlite",
     ),
     Scenario(
         "scenario27-1",
@@ -4687,6 +4779,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -4712,6 +4805,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -4742,6 +4836,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -4766,6 +4861,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -4797,6 +4893,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
@@ -4825,6 +4922,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -4859,6 +4957,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.ConfigureNetwork(),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
@@ -4886,6 +4985,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
@@ -4921,6 +5021,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -4946,6 +5047,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -4984,6 +5086,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -5008,6 +5111,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -5047,6 +5151,7 @@ scenarios = [
         {
             "ren-v6": ActionList(
                 [
+                    action.Start("fd3e:e6d:45fe:b0c2::5"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer(
                         "fd3e:e6d:45fe:b0c2::15", ["/tmp/testfile-small"]
@@ -5118,6 +5223,7 @@ scenarios = [
             ),
             "stimpy-v6": ActionList(
                 [
+                    action.Start("fd3e:e6d:45fe:b0c2::15"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -5192,6 +5298,526 @@ scenarios = [
                     ),
                     action.PurgeTransfers([0]),
                     action.AssertTransfers([]),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-1",
+        "Send one file to a peer, stop the sender and then start back. Expect automatically restored transfer",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-1-ren.sqlite"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Stop(),
+                    action.Wait(event.FinishFailedTransfer(0, Error.CANCELED)),
+                    action.WaitForAnotherPeer(),
+                    # start the sender again
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-1-ren.sqlite"),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-big"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/29-1",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFailedTransfer(
+                            0,
+                            Error.WS_SERVER,
+                            ignore_os=True,
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-big"].id,
+                            "/tmp/received/29-1/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/29-1/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-2",
+        "Send one file to a peer, stop the receiver and then start back. Expect automatically restored transfer",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.5"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFailedTransfer(0, Error.WS_CLIENT, ignore_os=True)
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-big"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.15", dbpath="/tmp/db/29-2-stimpy.sqlite"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/29-2",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Stop(),
+                    action.Wait(event.FinishFailedTransfer(0, Error.CANCELED)),
+                    action.WaitForAnotherPeer(),
+                    # start the receiver again
+                    action.Start("172.20.0.15", dbpath="/tmp/db/29-2-stimpy.sqlite"),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-big"].id,
+                            "/tmp/received/29-2/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/29-2/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-3",
+        "Send three files to a peer, download one, reject one and do nothing with third one. Then stop the sender and then start back. Expect automatically restored transfer, without the rejected and stopped file",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-3-ren.sqlite"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        [
+                            "/tmp/testfile-big",
+                            "/tmp/testfile-bulk-01",
+                            "/tmp/testfile-bulk-02",
+                        ],
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-01"].id,
+                                    "testfile-bulk-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-02"].id,
+                                    "testfile-bulk-02",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-bulk-01"].id, True)
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Stop(),
+                    action.Wait(
+                        event.FinishFailedTransfer(
+                            0,
+                            Error.CANCELED,
+                            ignore_os=True,
+                        )
+                    ),
+                    action.WaitForAnotherPeer(),
+                    # start the sender again
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-3-ren.sqlite"),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-01"].id,
+                                    "testfile-bulk-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-02"].id,
+                                    "testfile-bulk-02",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-big"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-01"].id,
+                                    "testfile-bulk-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-02"].id,
+                                    "testfile-bulk-02",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.RejectTransferFile(0, FILES["testfile-bulk-01"].id),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-bulk-01"].id, False)
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/29-3",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFailedTransfer(
+                            0,
+                            Error.WS_SERVER,
+                            ignore_os=True,
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-big"].id,
+                            "/tmp/received/29-3/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/29-3/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-4",
+        "Send three files to a peer, download one, reject one and do nothing with third one. Then stop the receiver and then start back. Expect automatically restored transfer, without the rejected and stopped file",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.5"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer(
+                        "172.20.0.15",
+                        [
+                            "/tmp/testfile-big",
+                            "/tmp/testfile-bulk-01",
+                            "/tmp/testfile-bulk-02",
+                        ],
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-01"].id,
+                                    "testfile-bulk-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-02"].id,
+                                    "testfile-bulk-02",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-bulk-01"].id, True)
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFailedTransfer(0, Error.WS_CLIENT, ignore_os=True)
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-01"].id,
+                                    "testfile-bulk-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-02"].id,
+                                    "testfile-bulk-02",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-big"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.15", dbpath="/tmp/db/29-4-stimpy.sqlite"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-01"].id,
+                                    "testfile-bulk-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-02"].id,
+                                    "testfile-bulk-02",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.RejectTransferFile(0, FILES["testfile-bulk-01"].id),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-bulk-01"].id, False)
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/29-4",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Stop(),
+                    action.Wait(event.FinishFailedTransfer(0, Error.CANCELED)),
+                    action.WaitForAnotherPeer(),
+                    # start the receiver again
+                    action.Start("172.20.0.15", dbpath="/tmp/db/29-4-stimpy.sqlite"),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-big"].id,
+                            "/tmp/received/29-4/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/29-4/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
