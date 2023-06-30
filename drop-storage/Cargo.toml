@@ -11,7 +11,6 @@ chrono = { version = "0.4.26", features = ["serde"] }
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.22.0"
 rusqlite_migration = { version = "1.1.0-alpha.2", features = ["from-directory"] }
-lazy_static = "1.4.0"
 include_dir = "0.7.3"
 slog = { workspace = true }
 serde = { workspace = true }

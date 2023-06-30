@@ -439,7 +439,6 @@ version = "1.0.0"
 dependencies = [
  "chrono",
  "include_dir",
- "lazy_static",
  "r2d2",
  "r2d2_sqlite",
  "rusqlite",
