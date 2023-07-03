@@ -709,10 +709,18 @@ fn crate_fd_callback(
     logger: slog::Logger,
     fd_cb: ffi_types::norddrop_fd_cb,
 ) -> Arc<drop_transfer::file::FdResolver> {
+    use std::ffi::CString;
+
     let fd_cb = std::sync::Mutex::new(fd_cb);
 
     let func = move |uri: &str| {
-        let cstr_uri = format!("{uri}\0").into_bytes();
+        let cstr_uri = match CString::new(uri) {
+            Ok(uri) => uri,
+            Err(err) => {
+                warn!(logger, "URI {uri} is invalid: {err}");
+                return None;
+            }
+        };
 
         let guard = fd_cb.lock().expect("Failed to lock fd callback");
         let res = unsafe { (guard.cb)(guard.ctx, cstr_uri.as_ptr() as _) };
