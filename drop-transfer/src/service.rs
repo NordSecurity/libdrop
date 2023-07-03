@@ -10,7 +10,7 @@ use drop_config::DropConfig;
 use drop_storage::Storage;
 use slog::{debug, error, warn, Logger};
 use tokio::{
-    sync::{mpsc, Mutex},
+    sync::{mpsc, Mutex, Semaphore},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
@@ -35,6 +35,7 @@ pub(super) struct State {
     pub(crate) auth: Arc<auth::Context>,
     pub(crate) config: Arc<DropConfig>,
     pub(crate) storage: Arc<Storage>,
+    pub(crate) throttle: Semaphore,
 }
 
 pub struct Service {
@@ -76,6 +77,7 @@ impl Service {
     ) -> Result<Self, Error> {
         let task = async {
             let state = Arc::new(State {
+                throttle: Semaphore::new(config.max_uploads_in_flight),
                 event_tx,
                 transfer_manager: Mutex::default(),
                 moose: moose.clone(),

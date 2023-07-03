@@ -18,7 +18,10 @@ use hyper::{http::HeaderValue, StatusCode};
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
     net::TcpStream,
-    sync::mpsc::{self, UnboundedReceiver},
+    sync::{
+        mpsc::{self, UnboundedReceiver},
+        Semaphore, SemaphorePermit, TryAcquireError,
+    },
     task::JoinHandle,
 };
 use tokio_tungstenite::{
@@ -456,6 +459,10 @@ async fn start_upload(
         );
 
         let send_file = async {
+            let _permit = acquire_throttle_permit(&logger, &state.throttle, &file_id)
+                .await
+                .ok_or(crate::Error::Canceled)?;
+
             let mut iofile = match xfile.open(uploader.offset()) {
                 Ok(f) => f,
                 Err(err) => {
@@ -503,4 +510,30 @@ async fn start_upload(
     };
 
     Ok(tokio::spawn(upload_job))
+}
+
+async fn acquire_throttle_permit<'a>(
+    logger: &slog::Logger,
+    throttle: &'a Semaphore,
+    file_id: &FileId,
+) -> Option<SemaphorePermit<'a>> {
+    match throttle.try_acquire() {
+        Err(TryAcquireError::NoPermits) => info!(logger, "Throttling file: {file_id}"),
+        Err(err) => {
+            error!(logger, "Throttle semaphore failed: {err}");
+            return None;
+        }
+        Ok(permit) => return Some(permit),
+    }
+
+    match throttle.acquire().await {
+        Ok(permit) => {
+            info!(logger, "Throttle permited file: {file_id}");
+            Some(permit)
+        }
+        Err(err) => {
+            error!(logger, "Throttle semaphore failed: {err}");
+            None
+        }
+    }
 }
