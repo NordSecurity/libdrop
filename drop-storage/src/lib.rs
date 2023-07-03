@@ -8,7 +8,7 @@ use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, Transaction};
 use rusqlite_migration::Migrations;
-use slog::Logger;
+use slog::{trace, Logger};
 use types::{
     DbTransferType, IncomingPath, IncomingPathStateEvent, IncomingPathStateEventData, OutgoingPath,
     OutgoingPathStateEvent, OutgoingPathStateEventData, Transfer, TransferFiles,
@@ -23,8 +23,8 @@ type Result<T> = std::result::Result<T, Error>;
 type QueryResult<T> = std::result::Result<T, rusqlite::Error>;
 // SQLite storage wrapper
 pub struct Storage {
-    _logger: Logger,
     pool: Pool<SqliteConnectionManager>,
+    logger: Logger,
 }
 
 const MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
@@ -45,10 +45,7 @@ impl Storage {
             .to_latest(&mut conn)
             .map_err(|e| Error::InternalError(format!("Failed to run migrations: {e}")))?;
 
-        Ok(Self {
-            _logger: logger,
-            pool,
-        })
+        Ok(Self { logger, pool })
     }
 
     pub fn insert_transfer(&self, transfer: &TransferInfo) -> Result<()> {
@@ -58,6 +55,12 @@ impl Storage {
         };
 
         let tid = transfer.id.to_string();
+        trace!(
+            self.logger,
+            "Inserting transfer";
+            "transfer_id" => &tid,
+            "transfer_type" => transfer_type_int,
+        );
 
         let mut conn = self.pool.get()?;
         let conn = conn.transaction()?;
@@ -69,11 +72,23 @@ impl Storage {
 
         match &transfer.files {
             TransferFiles::Incoming(files) => {
+                trace!(
+                    self.logger,
+                    "Inserting transfer::Incoming files len {}",
+                    files.len()
+                );
+
                 for file in files {
                     Self::insert_incoming_path(&conn, transfer.id, file)?;
                 }
             }
             TransferFiles::Outgoing(files) => {
+                trace!(
+                    self.logger,
+                    "Inserting transfer::Outgoing files len {}",
+                    files.len()
+                );
+
                 for file in files {
                     Self::insert_outgoing_path(&conn, transfer.id, file)?;
                 }
@@ -126,6 +141,13 @@ impl Storage {
     pub fn save_checksum(&self, transfer_id: Uuid, file_id: &str, checksum: &[u8]) -> Result<()> {
         let tid = transfer_id.to_string();
 
+        trace!(
+            self.logger,
+            "Saving checksum";
+            "transfer_id" => &tid,
+            "file_id" => file_id,
+        );
+
         let conn = self.pool.get()?;
         conn.execute(
             "UPDATE incoming_paths SET checksum = ?3 WHERE transfer_id = ?1 AND path_hash = ?2",
@@ -137,6 +159,10 @@ impl Storage {
 
     pub fn fetch_checksums(&self, transfer_id: Uuid) -> Result<Vec<FileChecksum>> {
         let tid = transfer_id.to_string();
+        trace!(
+            self.logger,
+            "Fetching checksums";
+            "transfer_id" => &tid);
 
         let conn = self.pool.get()?;
         let out = conn
@@ -157,6 +183,11 @@ impl Storage {
     pub fn insert_transfer_active_state(&self, transfer_id: Uuid) -> Result<()> {
         let tid = transfer_id.to_string();
 
+        trace!(
+            self.logger,
+            "Inserting transfer active state";
+            "transfer_id" => &tid);
+
         let conn = self.pool.get()?;
         conn.execute(
             "INSERT INTO transfer_active_states (transfer_id) VALUES (?1)",
@@ -169,6 +200,12 @@ impl Storage {
     pub fn insert_transfer_failed_state(&self, transfer_id: Uuid, error: u32) -> Result<()> {
         let tid = transfer_id.to_string();
 
+        trace!(
+            self.logger,
+            "Inserting transfer failed state";
+            "transfer_id" => &tid,
+            "error" => error);
+
         let conn = self.pool.get()?;
         conn.execute(
             "INSERT INTO transfer_failed_states (transfer_id, status_code) VALUES (?1, ?2)",
@@ -180,6 +217,12 @@ impl Storage {
 
     pub fn insert_transfer_cancel_state(&self, transfer_id: Uuid, by_peer: bool) -> Result<()> {
         let tid = transfer_id.to_string();
+
+        trace!(
+            self.logger,
+            "Inserting transfer cancel state";
+            "transfer_id" => &tid,
+            "by_peer" => by_peer);
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -196,6 +239,12 @@ impl Storage {
         file_id: &str,
     ) -> Result<()> {
         let tid = transfer_id.to_string();
+
+        trace!(
+            self.logger,
+            "Inserting outgoing path pending state";
+            "transfer_id" => &tid,
+            "file_id" => file_id);
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -214,6 +263,12 @@ impl Storage {
     ) -> Result<()> {
         let tid = transfer_id.to_string();
 
+        trace!(
+            self.logger,
+            "Inserting incoming path pending state";
+            "transfer_id" => &tid,
+            "file_id" => file_id);
+
         let conn = self.pool.get()?;
         conn.execute(
             "INSERT INTO incoming_path_pending_states (path_id) VALUES ((SELECT id FROM \
@@ -230,6 +285,12 @@ impl Storage {
         path_id: &str,
     ) -> Result<()> {
         let tid = transfer_id.to_string();
+
+        trace!(
+            self.logger,
+            "Inserting outgoing path started state";
+            "transfer_id" => &tid,
+            "path_id" => path_id);
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -248,6 +309,13 @@ impl Storage {
         base_dir: &str,
     ) -> Result<()> {
         let tid = transfer_id.to_string();
+
+        trace!(
+            self.logger,
+            "Inserting incoming path started state";
+            "transfer_id" => &tid,
+            "path_id" => path_id,
+            "base_dir" => base_dir);
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -268,6 +336,14 @@ impl Storage {
     ) -> Result<()> {
         let tid = transfer_id.to_string();
 
+        trace!(
+            self.logger,
+            "Inserting outgoing path cancel state";
+            "transfer_id" => &tid,
+            "path_id" => path_id,
+            "by_peer" => by_peer,
+            "bytes_sent" => bytes_sent);
+
         let conn = self.pool.get()?;
         conn.execute(
             "INSERT INTO outgoing_path_cancel_states (path_id, by_peer, bytes_sent) VALUES \
@@ -286,6 +362,14 @@ impl Storage {
         bytes_received: i64,
     ) -> Result<()> {
         let tid = transfer_id.to_string();
+
+        trace!(
+            self.logger,
+            "Inserting incoming path cancel state";
+            "transfer_id" => &tid,
+            "path_id" => path_id,
+            "by_peer" => by_peer,
+            "bytes_received" => bytes_received);
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -306,6 +390,14 @@ impl Storage {
     ) -> Result<()> {
         let tid = transfer_id.to_string();
 
+        trace!(
+            self.logger,
+            "Inserting incoming path failed state";
+            "transfer_id" => &tid,
+            "path_id" => path_id,
+            "error" => error,
+            "bytes_received" => bytes_received);
+
         let conn = self.pool.get()?;
         conn.execute(
             "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) \
@@ -325,6 +417,13 @@ impl Storage {
         bytes_sent: i64,
     ) -> Result<()> {
         let tid = transfer_id.to_string();
+        trace!(
+            self.logger,
+            "Inserting outgoing path failed state";
+            "transfer_id" => &tid,
+            "path_id" => path_id,
+            "error" => error,
+            "bytes_sent" => bytes_sent);
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -342,6 +441,11 @@ impl Storage {
         path_id: &str,
     ) -> Result<()> {
         let tid = transfer_id.to_string();
+        trace!(
+            self.logger,
+            "Inserting outgoing path completed state";
+            "transfer_id" => &tid,
+            "path_id" => path_id);
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -360,6 +464,12 @@ impl Storage {
         final_path: &str,
     ) -> Result<()> {
         let tid = transfer_id.to_string();
+        trace!(
+            self.logger,
+            "Inserting incoming path completed state";
+            "transfer_id" => &tid,
+            "path_id" => path_id,
+            "final_path" => final_path);
 
         let conn = self.pool.get()?;
         conn.execute(
@@ -409,6 +519,12 @@ impl Storage {
 
     pub fn purge_transfers_until(&self, until_timestamp: i64) -> Result<()> {
         let conn = self.pool.get()?;
+
+        trace!(
+            self.logger,
+            "Purging transfers until timestamp";
+            "until_timestamp" => until_timestamp);
+
         conn.execute(
             "DELETE FROM transfers WHERE created_at < datetime(?1, 'unixepoch')",
             params![until_timestamp],
@@ -419,12 +535,23 @@ impl Storage {
 
     fn purge_transfer(&self, transfer_id: String) -> Result<()> {
         let conn = self.pool.get()?;
+
+        trace!(
+            self.logger,
+            "Purging transfer";
+            "transfer_id" => transfer_id.clone());
+
         conn.execute("DELETE FROM transfers WHERE id = ?1", params![transfer_id])?;
 
         Ok(())
     }
 
     pub fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<()> {
+        trace!(
+            self.logger,
+            "Purging transfers";
+            "transfer_ids" => format!("{:?}", transfer_ids));
+
         for id in transfer_ids {
             self.purge_transfer(id)?;
         }
@@ -434,6 +561,12 @@ impl Storage {
 
     pub fn transfers_since(&self, since_timestamp: i64) -> Result<Vec<Transfer>> {
         let conn = self.pool.get()?;
+
+        trace!(
+            self.logger,
+            "Fetching transfers since timestamp";
+            "since_timestamp" => since_timestamp);
+
         let mut transfers = conn
             .prepare(
                 r#"
@@ -536,6 +669,12 @@ impl Storage {
 
     fn get_outgoing_paths(&self, transfer_id: Uuid) -> Result<Vec<OutgoingPath>> {
         let tid = transfer_id.to_string();
+
+        trace!(
+            self.logger,
+            "Fetching outgoing paths for transfer";
+            "transfer_id" => &tid
+        );
 
         let conn = self.pool.get()?;
         let mut paths = conn
@@ -655,6 +794,11 @@ impl Storage {
 
     fn get_incoming_paths(&self, transfer_id: Uuid) -> Result<Vec<IncomingPath>> {
         let tid = transfer_id.to_string();
+
+        trace!(
+            self.logger,
+            "Fetching incoming paths for transfer";
+            "transfer_id" => &tid);
 
         let conn = self.pool.get()?;
         let mut paths = conn
