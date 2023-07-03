@@ -598,31 +598,44 @@ fn open_database(
     for i in 1..=3 {
         match drop_storage::Storage::new(logger.clone(), dbpath) {
             Ok(storage) => return Ok(storage),
-            Err(err) => warn!(logger, "Failed to open DB: {err}, already tried {i} times",),
+            Err(err) => error!(
+                logger,
+                "Failed to open DB at \"{dbpath}\": {err}, already tried {i} times",
+            ),
         }
     }
 
-    // Still problems? Let's try to delete the file
-    warn!(logger, "Removing old DB file");
-    if let Err(err) = std::fs::remove_file(dbpath) {
-        error!(
-            logger,
-            "Failed to opend DB and failed to remove it's file: {err}"
-        );
+    // If we can't even open the DB in memory, there is nothing else left to do, throw an error
+    if dbpath == ":memory:" {
+        error!(logger, "Failed to open in-memory DB");
         return Err(ffi::types::NORDDROP_RES_DB_ERROR);
     } else {
-        // Inform app that we wiped the old DB file
-        events.dispatch(types::Event::RuntimeError {
-            status: drop_core::Status::DbLost,
-        });
-    };
+        // Still problems? Let's try to delete the file, provided it's not in memory
+        warn!(logger, "Removing old DB file");
+        if let Err(err) = std::fs::remove_file(dbpath) {
+            error!(
+                logger,
+                "Failed to opend DB and failed to remove it's file: {err}"
+            );
+            // Try to at least open db in memory if the path doesn't work
+            return open_database(":memory:", events, logger);
+        } else {
+            // Inform app that we wiped the old DB file
+            events.dispatch(types::Event::RuntimeError {
+                status: drop_core::Status::DbLost,
+            });
+        };
 
-    // Final try after cleaning up old DB file
-    match drop_storage::Storage::new(logger.clone(), dbpath) {
-        Ok(storage) => Ok(storage),
-        Err(err) => {
-            error!(logger, "Failed to prepare storage: {err}");
-            Err(ffi::types::NORDDROP_RES_DB_ERROR)
+        // Final try after cleaning up old DB file
+        match drop_storage::Storage::new(logger.clone(), dbpath) {
+            Ok(storage) => Ok(storage),
+            Err(err) => {
+                error!(
+                    logger,
+                    "Failed to open DB after cleaning up old file: {err}"
+                );
+                Err(ffi::types::NORDDROP_RES_DB_ERROR)
+            }
         }
     }
 }
