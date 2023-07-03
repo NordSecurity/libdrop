@@ -94,6 +94,10 @@ pub(crate) fn start(
     struct Unauthrorized;
     impl warp::reject::Reject for Unauthrorized {}
 
+    #[derive(Debug)]
+    struct ToManyReqs;
+    impl warp::reject::Reject for ToManyReqs {}
+
     async fn handle_rejection(
         nonces: &Mutex<HashMap<SocketAddr, Nonce>>,
         err: warp::Rejection,
@@ -111,6 +115,8 @@ pub(crate) fn start(
             )))
         } else if let Some(Unauthrorized) = err.find() {
             Ok(Box::new(StatusCode::UNAUTHORIZED))
+        } else if let Some(ToManyReqs) = err.find() {
+            Ok(Box::new(StatusCode::TOO_MANY_REQUESTS))
         } else {
             Err(err)
         }
@@ -120,6 +126,13 @@ pub(crate) fn start(
         let stop = stop.clone();
         let logger = logger.clone();
         let nonces = nonce_store.clone();
+        let rate_limiter = Arc::new(governor::RateLimiter::dashmap(governor::Quota::per_second(
+            state
+                .config
+                .max_reqs_per_sec
+                .try_into()
+                .map_err(|_| crate::Error::InvalidArgument)?,
+        )));
 
         warp::path("drop")
             .and(warp::path::param().and_then(|version: String| async move {
@@ -128,8 +141,16 @@ pub(crate) fn start(
                     .map_err(|_| warp::reject::not_found())
             }))
             .and(
-                warp::filters::addr::remote().then(|peer: Option<SocketAddr>| async move {
-                    peer.expect("Transport should use IP addresses")
+                warp::filters::addr::remote().and_then(move |peer: Option<SocketAddr>| {
+                    let peer = peer.expect("Transport should use IP addresses");
+                    let check = rate_limiter.check_key(&peer.ip());
+
+                    async move {
+                        match check {
+                            Ok(_) => Ok(peer),
+                            Err(_) => Err(warp::reject::custom(ToManyReqs)),
+                        }
+                    }
                 }),
             )
             .and(warp::filters::header::optional("authorization"))
