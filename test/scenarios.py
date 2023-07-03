@@ -2396,12 +2396,11 @@ scenarios = [
                 [
                     action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
-                    action.MultipleNewTransfersWithSameFD(
-                        [
-                            "172.20.0.15",
-                            "172.20.0.25",
-                        ],
-                        "/tmp/testfile-small",
+                    action.NewTransferWithFD(
+                        "172.20.0.15", "/tmp/testfile-small", cached=True
+                    ),
+                    action.NewTransferWithFD(
+                        "172.20.0.25", "/tmp/testfile-small", cached=True
                     ),
                     action.WaitRacy(
                         [

@@ -105,44 +105,25 @@ class NewTransfer(Action):
 # New transfer just with files preopened. Used to test Android. Android can't share directories
 # so this is limited to accept a single file
 class NewTransferWithFD(Action):
-    def __init__(self, peer: str, path: str):
+    def __init__(self, peer: str, path: str, cached: bool = False):
         self._peer: str = peer
         self._path: str = path
+
+        if cached:
+            self._uri = f"content://cached{path}"
+        else:
+            self._uri = f"content://new{path}"
 
     async def run(self, drop: ffi.Drop):
         UUIDS_LOCK.acquire()
 
-        xfid = drop.new_transfer_with_fd(
-            self._peer, self._path, f"content://new{self._path}"
-        )
+        xfid = drop.new_transfer_with_fd(self._peer, self._path, self._uri)
         UUIDS.append(xfid)
 
         UUIDS_LOCK.release()
 
     def __str__(self):
-        return f"NewTransferWithFD({self._peer}, {self._path})"
-
-
-# Initiates multiple transfers with the same FD
-class MultipleNewTransfersWithSameFD(Action):
-    def __init__(self, peers: typing.List[str], path: str):
-        self._peers = peers
-        self._path: str = path
-        self._fd: typing.Any = None
-
-    async def run(self, drop: ffi.Drop):
-        for peer in self._peers:
-            UUIDS_LOCK.acquire()
-
-            xfid = drop.new_transfer_with_fd(
-                peer, self._path, f"content://cached{self._path}"
-            )
-            UUIDS.append(xfid)
-
-            UUIDS_LOCK.release()
-
-    def __str__(self):
-        return f"MultipleNewTransfersWithSameFD({self._peers}, {self._path})"
+        return f"NewTransferWithFD({self._peer}, {self._uri})"
 
 
 class Download(Action):

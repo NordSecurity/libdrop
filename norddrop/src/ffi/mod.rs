@@ -344,7 +344,9 @@ pub unsafe extern "C" fn norddrop_reject_file(
 }
 
 /// Set FD resolver callback.
-/// The callback provides FDs based on URI
+/// The callback provides FDs based on URI.
+/// This function should be called before `norddrop_start()`, otherwise it will
+/// return an error.
 ///
 /// # Arguments
 ///
