@@ -13,6 +13,7 @@ pub struct DropConfig {
     pub connection_max_retry_interval: Duration,
     pub transfer_idle_lifetime: Duration,
     pub storage_path: String,
+    pub max_uploads_in_flight: usize,
 }
 
 impl Default for DropConfig {
@@ -23,6 +24,7 @@ impl Default for DropConfig {
             connection_max_retry_interval: Duration::from_secs(10),
             transfer_idle_lifetime: Duration::from_secs(60),
             storage_path: "libdrop.sqlite".to_string(),
+            max_uploads_in_flight: 4,
         }
     }
 }
