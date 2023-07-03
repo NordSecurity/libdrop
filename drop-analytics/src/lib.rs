@@ -41,6 +41,22 @@ pub trait Moose: Send + Sync {
         transfer_time: i32,
         info: Option<FileInfo>,
     );
+
+    /// Generic function for logging exceptions not related to specific transfers
+    ///
+    /// arbitrary_value - arbitrary value, if unavailable, use -1
+    /// code - error code, if unavailable, use -1
+    /// note - custom additional information
+    /// message - error message
+    /// name - name of the error
+    fn developer_exception(
+        &self,
+        arbitrary_value: i32,
+        code: i32,
+        note: String,
+        message: String,
+        name: String,
+    );
 }
 
 #[allow(unused_variables)]

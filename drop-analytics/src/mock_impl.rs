@@ -22,4 +22,14 @@ impl super::Moose for MockImpl {
         _info: Option<FileInfo>,
     ) {
     }
+
+    fn developer_exception(
+        &self,
+        _arbitrary_value: i32,
+        _code: i32,
+        _note: String,
+        _message: String,
+        _name: String,
+    ) {
+    }
 }
