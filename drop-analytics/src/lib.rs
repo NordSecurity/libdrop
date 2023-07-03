@@ -42,7 +42,8 @@ pub trait Moose: Send + Sync {
         info: Option<FileInfo>,
     );
 
-    /// Generic function for logging exceptions not related to specific transfers
+    /// Generic function for logging exceptions not related to specific
+    /// transfers
     ///
     /// arbitrary_value - arbitrary value, if unavailable, use -1
     /// code - error code, if unavailable, use -1

@@ -607,7 +607,8 @@ fn open_database(
         }
     }
 
-    // If we can't even open the DB in memory, there is nothing else left to do, throw an error
+    // If we can't even open the DB in memory, there is nothing else left to do,
+    // throw an error
     if dbpath == ":memory:" {
         let error = ffi::types::NORDDROP_RES_DB_ERROR;
         let error_msg = "Failed to open in-memory DB";
@@ -620,8 +621,15 @@ fn open_database(
         );
 
         error!(logger, "{}", error_msg);
-        return Err(error);
+        Err(error)
     } else {
+        moose.developer_exception(
+            -1,
+            ffi::types::NORDDROP_RES_DB_ERROR as i32,
+            "Initial DB open failed, recreating".to_string(),
+            "Failed to open database".to_string(),
+            "Database Error".to_string(),
+        );
         // Still problems? Let's try to delete the file, provided it's not in memory
         warn!(logger, "Removing old DB file");
         if let Err(err) = std::fs::remove_file(dbpath) {
