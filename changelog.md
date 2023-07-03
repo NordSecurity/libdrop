@@ -3,6 +3,7 @@
 ---
 * Persist transfers across libdrop shutdowns. Automatically restart the transfer as soon as the connection can be established.
 * Add `max_uploads_in_flight` config option to limit the number of files being concurrently uploaded
+* Add `norddrop_set_fd_resolver_callback()` function for providing the content URI callback for Android
 
 ---
 <br>
