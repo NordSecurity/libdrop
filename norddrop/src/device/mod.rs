@@ -132,6 +132,7 @@ impl NordDropFFI {
             &self.config.drop.storage_path,
             &self.event_dispatcher,
             &self.logger,
+            &moose,
         )?);
 
         // Spawn a task grabbing events from the inner service and dispatch them
@@ -593,36 +594,69 @@ fn open_database(
     dbpath: &str,
     events: &EventDispatcher,
     logger: &slog::Logger,
+    moose: &Arc<dyn drop_analytics::Moose>,
 ) -> Result<drop_storage::Storage> {
-    // Try opening the DB 3 times
-    for i in 1..=3 {
-        match drop_storage::Storage::new(logger.clone(), dbpath) {
-            Ok(storage) => return Ok(storage),
-            Err(err) => warn!(logger, "Failed to open DB: {err}, already tried {i} times",),
-        }
+    match drop_storage::Storage::new(logger.clone(), dbpath) {
+        Ok(storage) => return Ok(storage),
+        Err(err) => error!(logger, "Failed to open DB at \"{dbpath}\": {err}",),
     }
 
-    // Still problems? Let's try to delete the file
-    warn!(logger, "Removing old DB file");
-    if let Err(err) = std::fs::remove_file(dbpath) {
-        error!(
-            logger,
-            "Failed to opend DB and failed to remove it's file: {err}"
+    // If we can't even open the DB in memory, there is nothing else left to do,
+    // throw an error
+    if dbpath == ":memory:" {
+        let error = ffi::types::NORDDROP_RES_DB_ERROR;
+        let error_msg = "Failed to open in-memory DB";
+        moose.developer_exception(
+            error as i32,
+            "".to_string(),
+            error_msg.to_string(),
+            "Database Error".to_string(),
         );
-        return Err(ffi::types::NORDDROP_RES_DB_ERROR);
-    } else {
-        // Inform app that we wiped the old DB file
-        events.dispatch(types::Event::RuntimeError {
-            status: drop_core::Status::DbLost,
-        });
-    };
 
-    // Final try after cleaning up old DB file
-    match drop_storage::Storage::new(logger.clone(), dbpath) {
-        Ok(storage) => Ok(storage),
-        Err(err) => {
-            error!(logger, "Failed to prepare storage: {err}");
-            Err(ffi::types::NORDDROP_RES_DB_ERROR)
+        error!(logger, "{}", error_msg);
+        Err(error)
+    } else {
+        moose.developer_exception(
+            ffi::types::NORDDROP_RES_DB_ERROR as i32,
+            "Initial DB open failed, recreating".to_string(),
+            "Failed to open database".to_string(),
+            "Database Error".to_string(),
+        );
+        // Still problems? Let's try to delete the file, provided it's not in memory
+        warn!(logger, "Removing old DB file");
+        if let Err(err) = std::fs::remove_file(dbpath) {
+            let error_msg = format!("Failed to open DB and failed to remove it's file: {err}");
+            moose.developer_exception(
+                ffi::types::NORDDROP_RES_DB_ERROR as i32,
+                "".to_string(),
+                error_msg.to_string(),
+                "Database Error".to_string(),
+            );
+            error!(logger, "{}", error_msg);
+            // Try to at least open db in memory if the path doesn't work
+            return open_database(":memory:", events, logger, moose);
+        } else {
+            // Inform app that we wiped the old DB file
+            events.dispatch(types::Event::RuntimeError {
+                status: drop_core::Status::DbLost,
+            });
+        };
+
+        // Final try after cleaning up old DB file
+        match drop_storage::Storage::new(logger.clone(), dbpath) {
+            Ok(storage) => Ok(storage),
+            Err(err) => {
+                let error = ffi::types::NORDDROP_RES_DB_ERROR;
+                let error_msg = format!("Failed to open DB after cleaning up old file: {err}");
+                moose.developer_exception(
+                    error as i32,
+                    "".to_string(),
+                    error_msg.to_string(),
+                    "Database Error".to_string(),
+                );
+                error!(logger, "{}", error_msg);
+                Err(error)
+            }
         }
     }
 }

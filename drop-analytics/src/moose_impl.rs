@@ -189,6 +189,37 @@ impl super::Moose for MooseImpl {
             transfer_time
         );
     }
+
+    fn developer_exception(&self, code: i32, note: String, message: String, name: String) {
+        moose!(
+            self.logger,
+            send_developer_exceptionHandling_catchException,
+            -1,
+            code,
+            note,
+            message,
+            name
+        );
+    }
+
+    fn developer_exception_with_value(
+        &self,
+        arbitrary_value: i32,
+        code: i32,
+        note: String,
+        message: String,
+        name: String,
+    ) {
+        moose!(
+            self.logger,
+            send_developer_exceptionHandling_catchException,
+            arbitrary_value,
+            code,
+            note,
+            message,
+            name
+        );
+    }
 }
 
 impl From<super::Phase> for mooselibdropapp::LibdropappEventPhase {
