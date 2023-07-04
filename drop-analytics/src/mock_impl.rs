@@ -23,7 +23,9 @@ impl super::Moose for MockImpl {
     ) {
     }
 
-    fn developer_exception(
+    fn developer_exception(&self, _code: i32, _note: String, _message: String, _name: String) {}
+
+    fn developer_exception_with_value(
         &self,
         _arbitrary_value: i32,
         _code: i32,

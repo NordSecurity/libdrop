@@ -596,15 +596,9 @@ fn open_database(
     logger: &slog::Logger,
     moose: &Arc<dyn drop_analytics::Moose>,
 ) -> Result<drop_storage::Storage> {
-    // Try opening the DB 3 times
-    for i in 1..=3 {
-        match drop_storage::Storage::new(logger.clone(), dbpath) {
-            Ok(storage) => return Ok(storage),
-            Err(err) => error!(
-                logger,
-                "Failed to open DB at \"{dbpath}\": {err}, already tried {i} times",
-            ),
-        }
+    match drop_storage::Storage::new(logger.clone(), dbpath) {
+        Ok(storage) => return Ok(storage),
+        Err(err) => error!(logger, "Failed to open DB at \"{dbpath}\": {err}",),
     }
 
     // If we can't even open the DB in memory, there is nothing else left to do,
@@ -613,7 +607,6 @@ fn open_database(
         let error = ffi::types::NORDDROP_RES_DB_ERROR;
         let error_msg = "Failed to open in-memory DB";
         moose.developer_exception(
-            -1,
             error as i32,
             "".to_string(),
             error_msg.to_string(),
@@ -624,7 +617,6 @@ fn open_database(
         Err(error)
     } else {
         moose.developer_exception(
-            -1,
             ffi::types::NORDDROP_RES_DB_ERROR as i32,
             "Initial DB open failed, recreating".to_string(),
             "Failed to open database".to_string(),
@@ -635,7 +627,6 @@ fn open_database(
         if let Err(err) = std::fs::remove_file(dbpath) {
             let error_msg = format!("Failed to open DB and failed to remove it's file: {err}");
             moose.developer_exception(
-                -1,
                 ffi::types::NORDDROP_RES_DB_ERROR as i32,
                 "".to_string(),
                 error_msg.to_string(),
@@ -658,7 +649,6 @@ fn open_database(
                 let error = ffi::types::NORDDROP_RES_DB_ERROR;
                 let error_msg = format!("Failed to open DB after cleaning up old file: {err}");
                 moose.developer_exception(
-                    -1,
                     error as i32,
                     "".to_string(),
                     error_msg.to_string(),
