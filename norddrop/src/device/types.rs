@@ -119,10 +119,16 @@ pub struct Config {
     pub moose_event_path: String,
     pub moose_prod: bool,
     pub storage_path: String,
+    #[serde(default = "default_max_files_in_flight")]
+    pub max_uploads_in_flight: usize,
 }
 
 const fn default_connection_max_retry_interval_ms() -> u64 {
     10000
+}
+
+const fn default_max_files_in_flight() -> usize {
+    4
 }
 
 impl From<&drop_transfer::Error> for Status {
@@ -294,6 +300,7 @@ impl From<Config> for drop_config::Config {
             moose_event_path,
             moose_prod,
             storage_path,
+            max_uploads_in_flight,
         } = val;
 
         drop_config::Config {
@@ -305,6 +312,7 @@ impl From<Config> for drop_config::Config {
                 ),
                 transfer_idle_lifetime: Duration::from_millis(transfer_idle_lifetime_ms),
                 storage_path,
+                max_uploads_in_flight,
             },
             moose: drop_config::MooseConfig {
                 event_path: moose_event_path,
@@ -320,7 +328,7 @@ mod tests {
 
     #[test]
     fn deserialize_config() {
-        // Without `connection_max_retry_interval_ms`
+        // Without `connection_max_retry_interval_ms` and `max_uploads_in_flight`
         let json = r#"
         {
           "dir_depth_limit": 10,
@@ -335,6 +343,7 @@ mod tests {
 
         let cfg: Config = serde_json::from_str(json).expect("Failed to deserialize config");
         assert_eq!(cfg.connection_max_retry_interval_ms, 10000);
+        assert_eq!(cfg.max_uploads_in_flight, 4);
 
         let json = r#"
         {
@@ -345,7 +354,9 @@ mod tests {
           "connection_max_retry_interval_ms": 500,
           "moose_event_path": "test/path",
           "moose_prod": true,
-          "storage_path": ":memory:"
+          "storage_path": ":memory:",
+          "max_uploads_in_flight": 16,
+          "max_downloads_in_flight": 32
         }
         "#;
 
@@ -359,6 +370,7 @@ mod tests {
                     transfer_idle_lifetime,
                     connection_max_retry_interval,
                     storage_path,
+                    max_uploads_in_flight,
                 },
             moose: drop_config::MooseConfig { event_path, prod },
         } = cfg.into();
@@ -369,6 +381,7 @@ mod tests {
         assert_eq!(transfer_idle_lifetime, Duration::from_millis(2000));
         assert_eq!(event_path, "test/path");
         assert_eq!(storage_path, ":memory:");
+        assert_eq!(max_uploads_in_flight, 16);
         assert!(prod);
     }
 }
