@@ -256,7 +256,7 @@ class Drop:
         norddrop_lib.norddrop_new(
             ctypes.pointer(norddrop_instance),
             eventer_instance,
-            LogLevel.Debug,
+            LogLevel.Trace,
             logger_instance,
             pubkey_instance,
             ctypes.create_string_buffer(keys.secret()),
