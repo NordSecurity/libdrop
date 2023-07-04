@@ -128,11 +128,12 @@ impl NordDropFFI {
 
         let (tx, mut rx) = mpsc::channel::<drop_transfer::Event>(16);
 
-        let storage = Arc::new(self.rt.block_on(open_database(
+        let storage = Arc::new(open_database(
             &self.config.drop.storage_path,
             &self.event_dispatcher,
             &self.logger,
-        ))?);
+            &moose,
+        )?);
 
         // Spawn a task grabbing events from the inner service and dispatch them
         // to the host app
@@ -146,7 +147,7 @@ impl NordDropFFI {
             while let Some(e) = rx.recv().await {
                 debug!(event_logger, "emitting event: {:#?}", e);
 
-                if let Err(err) = dispatch.handle_event(&e).await {
+                if let Err(err) = dispatch.handle_event(&e) {
                     error!(event_logger, "Failed to handle database event: {err}");
                 }
 
@@ -222,7 +223,6 @@ impl NordDropFFI {
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
                 .purge_transfers(transfer_ids)
-                .await
                 .map_err(|err| {
                     error!(self.logger, "Failed to purge transfers: {:?}", err);
                     match err {
@@ -256,7 +256,6 @@ impl NordDropFFI {
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
                 .purge_transfers_until(until_timestamp)
-                .await
                 .map_err(|err| {
                     error!(self.logger, "Failed to purge transfers: {:?}", err);
                     match err {
@@ -290,7 +289,6 @@ impl NordDropFFI {
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
                 .transfers_since(since_timestamp)
-                .await
                 .map_err(|err| {
                     error!(self.logger, "Failed to get transfers: {:?}", err);
                     match err {
@@ -594,40 +592,73 @@ fn prepare_transfer_files(
     Ok(files)
 }
 
-async fn open_database(
+fn open_database(
     dbpath: &str,
     events: &EventDispatcher,
     logger: &slog::Logger,
+    moose: &Arc<dyn drop_analytics::Moose>,
 ) -> Result<drop_storage::Storage> {
-    // Try opening the DB 3 times
-    for i in 1..=3 {
-        match drop_storage::Storage::new(logger.clone(), dbpath).await {
-            Ok(storage) => return Ok(storage),
-            Err(err) => warn!(logger, "Failed to open DB: {err}, already tried {i} times",),
-        }
+    match drop_storage::Storage::new(logger.clone(), dbpath) {
+        Ok(storage) => return Ok(storage),
+        Err(err) => error!(logger, "Failed to open DB at \"{dbpath}\": {err}",),
     }
 
-    // Still problems? Let's try to delete the file
-    warn!(logger, "Removing old DB file");
-    if let Err(err) = std::fs::remove_file(dbpath) {
-        error!(
-            logger,
-            "Failed to opend DB and failed to remove it's file: {err}"
+    // If we can't even open the DB in memory, there is nothing else left to do,
+    // throw an error
+    if dbpath == ":memory:" {
+        let error = ffi::types::NORDDROP_RES_DB_ERROR;
+        let error_msg = "Failed to open in-memory DB";
+        moose.developer_exception(
+            error as i32,
+            "".to_string(),
+            error_msg.to_string(),
+            "Database Error".to_string(),
         );
-        return Err(ffi::types::NORDDROP_RES_DB_ERROR);
-    } else {
-        // Inform app that we wiped the old DB file
-        events.dispatch(types::Event::RuntimeError {
-            status: drop_core::Status::DbLost,
-        });
-    };
 
-    // Final try after cleaning up old DB file
-    match drop_storage::Storage::new(logger.clone(), dbpath).await {
-        Ok(storage) => Ok(storage),
-        Err(err) => {
-            error!(logger, "Failed to prepare storage: {err}");
-            Err(ffi::types::NORDDROP_RES_DB_ERROR)
+        error!(logger, "{}", error_msg);
+        Err(error)
+    } else {
+        moose.developer_exception(
+            ffi::types::NORDDROP_RES_DB_ERROR as i32,
+            "Initial DB open failed, recreating".to_string(),
+            "Failed to open database".to_string(),
+            "Database Error".to_string(),
+        );
+        // Still problems? Let's try to delete the file, provided it's not in memory
+        warn!(logger, "Removing old DB file");
+        if let Err(err) = std::fs::remove_file(dbpath) {
+            let error_msg = format!("Failed to open DB and failed to remove it's file: {err}");
+            moose.developer_exception(
+                ffi::types::NORDDROP_RES_DB_ERROR as i32,
+                "".to_string(),
+                error_msg.to_string(),
+                "Database Error".to_string(),
+            );
+            error!(logger, "{}", error_msg);
+            // Try to at least open db in memory if the path doesn't work
+            return open_database(":memory:", events, logger, moose);
+        } else {
+            // Inform app that we wiped the old DB file
+            events.dispatch(types::Event::RuntimeError {
+                status: drop_core::Status::DbLost,
+            });
+        };
+
+        // Final try after cleaning up old DB file
+        match drop_storage::Storage::new(logger.clone(), dbpath) {
+            Ok(storage) => Ok(storage),
+            Err(err) => {
+                let error = ffi::types::NORDDROP_RES_DB_ERROR;
+                let error_msg = format!("Failed to open DB after cleaning up old file: {err}");
+                moose.developer_exception(
+                    error as i32,
+                    "".to_string(),
+                    error_msg.to_string(),
+                    "Database Error".to_string(),
+                );
+                error!(logger, "{}", error_msg);
+                Err(error)
+            }
         }
     }
 }

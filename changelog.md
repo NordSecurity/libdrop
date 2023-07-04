@@ -8,10 +8,16 @@
 <br>
 
 ### v4.1.0
-### **UNRELEASED**
+### **SQL: Save, Query, Love**
 ---
 * Add IPv6 support
 * Add file rejections via `norddrop_reject_file()`
+* Switch to rusqlite for persistence
+* Try to open database in memory if path fails
+* Report database opening errors to moose
+* Use in memory database if on-disk fails
+* Checksum validation at the end of download
+* More trace logs on persistence layer
 
 ---
 <br>

@@ -67,7 +67,7 @@ pub(crate) async fn run(state: Arc<State>, xfer: crate::Transfer, logger: Logger
 }
 
 pub(crate) async fn resume(state: &Arc<State>, stop: &CancellationToken, logger: &Logger) {
-    let transfers = match state.storage.transfers_to_retry().await {
+    let transfers = match state.storage.transfers_to_retry() {
         Ok(transfers) => transfers,
         Err(err) => {
             error!(logger, "Failed to restore pedning transfers form DB: {err}");

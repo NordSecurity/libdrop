@@ -736,7 +736,7 @@ async fn init_client_handler(
         .insert_transfer(xfer.clone(), TransferConnection::Server(req_send.clone()))
         .context("Failed to insert a new transfer")?;
 
-    let existing_info = match state.storage.incoming_transfer_info(xfer.id()).await {
+    let existing_info = match state.storage.incoming_transfer_info(xfer.id()) {
         Ok(info) => info,
         Err(err) => {
             error!(
@@ -761,11 +761,11 @@ async fn init_client_handler(
 
         register_finished_paths(state, xfer, logger).await;
 
-        if let Err(err) = resume_transfer_files(state, xfer, &req_send, logger).await {
+        if let Err(err) = resume_transfer_files(state, xfer, &req_send, logger) {
             warn!(logger, "Failed to resume started files: {err:?}");
         }
     } else {
-        if let Err(err) = state.storage.insert_transfer(&current_info).await {
+        if let Err(err) = state.storage.insert_transfer(&current_info) {
             error!(logger, "Failed to insert transfer into the DB: {err:?}");
         }
 
@@ -803,7 +803,7 @@ fn ensure_resume_matches_existing_transfer(
     Ok(())
 }
 
-async fn resume_transfer_files(
+fn resume_transfer_files(
     state: &State,
     xfer: &crate::Transfer,
     req_send: &mpsc::UnboundedSender<ServerReq>,
@@ -812,7 +812,6 @@ async fn resume_transfer_files(
     let files = state
         .storage
         .incoming_files_to_resume(xfer.id())
-        .await
         .context("Failed to fetch files to resume")?;
 
     for file in files {
@@ -834,7 +833,7 @@ async fn resume_transfer_files(
 }
 
 async fn register_finished_paths(state: &State, xfer: &crate::Transfer, logger: &Logger) {
-    let paths = match state.storage.finished_incoming_files(xfer.id()).await {
+    let paths = match state.storage.finished_incoming_files(xfer.id()) {
         Ok(paths) => paths,
         Err(err) => {
             warn!(logger, "Failed to fetch finished paths: {err:?}");
