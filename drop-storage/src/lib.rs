@@ -1,16 +1,20 @@
 pub mod error;
 pub mod types;
 
-use std::str::FromStr;
+use std::vec;
 
-use slog::Logger;
-use sqlx::{sqlite::SqliteConnectOptions, SqliteConnection, SqlitePool};
+use include_dir::{include_dir, Dir};
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::{params, Transaction};
+use rusqlite_migration::Migrations;
+use slog::{trace, Logger};
 use types::{
     DbTransferType, IncomingPath, IncomingPathStateEvent, IncomingPathStateEventData, OutgoingPath,
     OutgoingPathStateEvent, OutgoingPathStateEventData, Transfer, TransferFiles,
     TransferIncomingPath, TransferOutgoingPath, TransferStateEvent,
 };
-use uuid::{fmt::Hyphenated, Uuid};
+use uuid::Uuid;
 
 use crate::error::Error;
 pub use crate::types::{
@@ -19,622 +23,661 @@ pub use crate::types::{
 };
 
 type Result<T> = std::result::Result<T, Error>;
+type QueryResult<T> = std::result::Result<T, rusqlite::Error>;
 // SQLite storage wrapper
 pub struct Storage {
-    _logger: Logger,
-    conn: SqlitePool,
+    pool: Pool<SqliteConnectionManager>,
+    logger: Logger,
 }
 
+const MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
+
 impl Storage {
-    pub async fn new(logger: Logger, path: &str) -> Result<Self> {
-        let options = SqliteConnectOptions::from_str(path)?.create_if_missing(true);
-        let conn = SqlitePool::connect_with(options).await?;
+    pub fn new(logger: Logger, path: &str) -> Result<Self> {
+        let manager = match path {
+            ":memory:" => SqliteConnectionManager::memory(),
+            _ => SqliteConnectionManager::file(path),
+        };
+        let pool = Pool::new(manager)?;
 
-        sqlx::migrate!("./migrations")
-            .run(&mut conn.acquire().await?)
-            .await
-            .map_err(|e| error::Error::InternalError(format!("Failed to run migrations: {e}")))?;
+        let mut conn = pool.get()?;
+        Migrations::from_directory(&MIGRATIONS_DIR)
+            .map_err(|e| {
+                Error::InternalError(format!("Failed to gather migrations from directory: {e}"))
+            })?
+            .to_latest(&mut conn)
+            .map_err(|e| Error::InternalError(format!("Failed to run migrations: {e}")))?;
 
-        Ok(Self {
-            _logger: logger,
-            conn,
-        })
+        Ok(Self { logger, pool })
     }
 
-    pub async fn insert_transfer(&self, transfer: &TransferInfo) -> Result<()> {
+    pub fn insert_transfer(&self, transfer: &TransferInfo) -> Result<()> {
         let transfer_type_int = match &transfer.files {
             TransferFiles::Incoming(_) => TransferType::Incoming as u32,
             TransferFiles::Outgoing(_) => TransferType::Outgoing as u32,
         };
 
-        let tid = transfer.id.hyphenated();
+        let tid = transfer.id.to_string();
+        trace!(
+            self.logger,
+            "Inserting transfer";
+            "transfer_id" => &tid,
+            "transfer_type" => transfer_type_int,
+        );
 
-        let mut conn = self.conn.begin().await?;
+        let mut conn = self.pool.get()?;
+        let conn = conn.transaction()?;
 
-        sqlx::query!(
+        conn.execute(
             "INSERT INTO transfers (id, peer, is_outgoing) VALUES (?1, ?2, ?3)",
-            tid,
-            transfer.peer,
-            transfer_type_int,
-        )
-        .execute(&mut *conn)
-        .await?;
+            params![tid, transfer.peer, transfer_type_int],
+        )?;
 
         match &transfer.files {
             TransferFiles::Incoming(files) => {
+                trace!(
+                    self.logger,
+                    "Inserting transfer::Incoming files len {}",
+                    files.len()
+                );
+
                 for file in files {
-                    Self::insert_incoming_path(&mut conn, transfer.id, file).await?;
+                    Self::insert_incoming_path(&conn, transfer.id, file)?;
                 }
             }
             TransferFiles::Outgoing(files) => {
+                trace!(
+                    self.logger,
+                    "Inserting transfer::Outgoing files len {}",
+                    files.len()
+                );
+
                 for file in files {
-                    Self::insert_outgoing_path(&mut conn, transfer.id, file).await?;
+                    Self::insert_outgoing_path(&conn, transfer.id, file)?;
                 }
             }
         }
 
-        conn.commit().await?;
+        conn.commit()?;
 
         Ok(())
     }
 
-    pub async fn incoming_transfer_info(
+    pub fn incoming_transfer_info(
         &self,
         transfer_id: Uuid,
     ) -> Result<Option<IncomingTransferInfo>> {
-        let tid = transfer_id.hyphenated();
+        let mut conn = self.pool.get()?;
+        let conn = conn.transaction()?;
 
-        let mut conn = self.conn.begin().await?;
-
-        let record = sqlx::query!(
-            "SELECT peer FROM transfers WHERE id = ?1 AND is_outgoing = ?2",
-            tid,
-            TransferType::Incoming as u32,
-        )
-        .fetch_optional(&mut *conn)
-        .await?;
+        let record = conn
+            .prepare("SELECT peer FROM transfers WHERE id = ?1 AND is_outgoing = ?2")?
+            .query_row(
+                params![transfer_id.to_string(), TransferType::Incoming as u32],
+                |r| r.get("peer"),
+            )?;
 
         let peer = if let Some(record) = record {
-            record.peer
+            record
         } else {
             return Ok(None);
         };
 
-        let files = sqlx::query_as!(
-            TransferIncomingPath,
-            r#"
-            SELECT relative_path, path_hash as file_id, bytes as size 
-            FROM incoming_paths
-            WHERE transfer_id = ?1
-            "#,
-            tid
-        )
-        .fetch_all(&mut *conn)
-        .await?;
+        let files = conn
+            .prepare(
+                r#"
+                SELECT relative_path, path_hash, bytes 
+                FROM incoming_paths
+                WHERE transfer_id = ?1
+                "#,
+            )?
+            .query_map(params![transfer_id.to_string()], |r| {
+                Ok(TransferIncomingPath {
+                    file_id: r.get("path_hash")?,
+                    relative_path: r.get("relative_path")?,
+                    size: r.get("bytes")?,
+                })
+            })?
+            .collect::<QueryResult<_>>()?;
+
+        conn.commit()?;
 
         Ok(Some(IncomingTransferInfo { peer, files }))
     }
 
-    async fn insert_incoming_path(
-        conn: &mut SqliteConnection,
+    fn insert_incoming_path(
+        conn: &Transaction<'_>,
         transfer_id: Uuid,
         path: &TransferIncomingPath,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+        let tid = transfer_id.to_string();
 
-        sqlx::query!(
-            r#"
-            INSERT INTO incoming_paths (transfer_id, relative_path, path_hash, bytes)
-            VALUES (?1, ?2, ?3, ?4)
-            ON CONFLICT DO NOTHING
-            "#,
-            tid,
-            path.relative_path,
-            path.file_id,
-            path.size,
-        )
-        .execute(conn)
-        .await?;
+        conn.execute(
+            "INSERT INTO incoming_paths (transfer_id, relative_path, path_hash, bytes)
+            VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO NOTHING",
+            params![tid, path.relative_path, path.file_id, path.size],
+        )?;
 
         Ok(())
     }
 
-    async fn insert_outgoing_path(
-        conn: &mut SqliteConnection,
+    fn insert_outgoing_path(
+        conn: &Transaction<'_>,
         transfer_id: Uuid,
         path: &TransferOutgoingPath,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+        let tid = transfer_id.to_string();
 
-        sqlx::query!(
-            r#"
-            INSERT INTO outgoing_paths (transfer_id, relative_path, path_hash, bytes, base_path)
-            VALUES (?1, ?2, ?3, ?4, ?5)
-            "#,
-            tid,
-            path.relative_path,
-            path.file_id,
-            path.size,
-            path.base_path,
-        )
-        .execute(conn)
-        .await?;
+        conn.execute(
+            "INSERT INTO outgoing_paths (transfer_id, relative_path, path_hash, bytes, base_path)
+            VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                tid,
+                path.relative_path,
+                path.file_id,
+                path.size,
+                path.base_path
+            ],
+        )?;
 
         Ok(())
     }
 
-    pub async fn save_checksum(
-        &self,
-        transfer_id: Uuid,
-        file_id: &str,
-        checksum: &[u8],
-    ) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+    pub fn save_checksum(&self, transfer_id: Uuid, file_id: &str, checksum: &[u8]) -> Result<()> {
+        let tid = transfer_id.to_string();
 
-        let mut conn = self.conn.acquire().await?;
+        trace!(
+            self.logger,
+            "Saving checksum";
+            "transfer_id" => &tid,
+            "file_id" => file_id,
+        );
 
-        sqlx::query!(
+        let conn = self.pool.get()?;
+        conn.execute(
             "UPDATE incoming_paths SET checksum = ?3 WHERE transfer_id = ?1 AND path_hash = ?2",
-            tid,
-            file_id,
-            checksum,
-        )
-        .execute(&mut *conn)
-        .await?;
+            params![tid, file_id, checksum],
+        )?;
 
         Ok(())
     }
 
-    pub async fn fetch_checksums(&self, transfer_id: Uuid) -> Result<Vec<FileChecksum>> {
-        let tid = transfer_id.hyphenated();
+    pub fn fetch_checksums(&self, transfer_id: Uuid) -> Result<Vec<FileChecksum>> {
+        let tid = transfer_id.to_string();
+        trace!(
+            self.logger,
+            "Fetching checksums";
+            "transfer_id" => &tid);
 
-        let mut conn = self.conn.acquire().await?;
-
-        let out = sqlx::query_as!(
-            FileChecksum,
-            "SELECT path_hash as file_id, checksum FROM incoming_paths WHERE transfer_id = ?1",
-            tid,
-        )
-        .fetch_all(&mut *conn)
-        .await?;
+        let conn = self.pool.get()?;
+        let out = conn
+            .prepare(
+                "SELECT path_hash as file_id, checksum FROM incoming_paths WHERE transfer_id = ?1",
+            )?
+            .query_map(params![tid], |row| {
+                Ok(FileChecksum {
+                    file_id: row.get("file_id")?,
+                    checksum: row.get("checksum")?,
+                })
+            })?
+            .collect::<QueryResult<Vec<_>>>()?;
 
         Ok(out)
     }
 
-    pub async fn insert_transfer_active_state(&self, transfer_id: Uuid) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+    pub fn insert_transfer_active_state(&self, transfer_id: Uuid) -> Result<()> {
+        let tid = transfer_id.to_string();
 
-        let mut conn = self.conn.acquire().await?;
+        trace!(
+            self.logger,
+            "Inserting transfer active state";
+            "transfer_id" => &tid);
 
-        sqlx::query!(
+        let conn = self.pool.get()?;
+        conn.execute(
             "INSERT INTO transfer_active_states (transfer_id) VALUES (?1)",
-            tid,
-        )
-        .execute(&mut *conn)
-        .await?;
+            params![tid],
+        )?;
 
         Ok(())
     }
 
-    pub async fn insert_transfer_failed_state(&self, transfer_id: Uuid, error: u32) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+    pub fn insert_transfer_failed_state(&self, transfer_id: Uuid, error: u32) -> Result<()> {
+        let tid = transfer_id.to_string();
 
-        let mut conn = self.conn.acquire().await?;
+        trace!(
+            self.logger,
+            "Inserting transfer failed state";
+            "transfer_id" => &tid,
+            "error" => error);
 
-        sqlx::query!(
+        let conn = self.pool.get()?;
+        conn.execute(
             "INSERT INTO transfer_failed_states (transfer_id, status_code) VALUES (?1, ?2)",
-            tid,
-            error,
-        )
-        .execute(&mut *conn)
-        .await?;
+            params![tid, error],
+        )?;
 
         Ok(())
     }
 
-    pub async fn insert_transfer_cancel_state(
-        &self,
-        transfer_id: Uuid,
-        by_peer: bool,
-    ) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+    pub fn insert_transfer_cancel_state(&self, transfer_id: Uuid, by_peer: bool) -> Result<()> {
+        let tid = transfer_id.to_string();
 
-        let mut conn = self.conn.acquire().await?;
+        trace!(
+            self.logger,
+            "Inserting transfer cancel state";
+            "transfer_id" => &tid,
+            "by_peer" => by_peer);
 
-        sqlx::query!(
+        let conn = self.pool.get()?;
+        conn.execute(
             "INSERT INTO transfer_cancel_states (transfer_id, by_peer) VALUES (?1, ?2)",
-            tid,
-            by_peer,
-        )
-        .execute(&mut *conn)
-        .await?;
+            params![tid, by_peer],
+        )?;
 
         Ok(())
     }
 
-    pub async fn insert_outgoing_path_pending_state(
+    pub fn insert_outgoing_path_pending_state(
         &self,
         transfer_id: Uuid,
         file_id: &str,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+        let tid = transfer_id.to_string();
 
-        let mut conn = self.conn.acquire().await?;
+        trace!(
+            self.logger,
+            "Inserting outgoing path pending state";
+            "transfer_id" => &tid,
+            "file_id" => file_id);
 
-        sqlx::query!(
-            r#"
-            INSERT INTO outgoing_path_pending_states (path_id)
-            SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2
-            "#,
-            tid,
-            file_id
-        )
-        .execute(&mut *conn)
-        .await?;
+        let conn = self.pool.get()?;
+        conn.execute(
+            "INSERT INTO outgoing_path_pending_states (path_id) VALUES ((SELECT id FROM \
+             outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
+            params![tid, file_id],
+        )?;
 
         Ok(())
     }
 
-    pub async fn insert_incoming_path_pending_state(
+    pub fn insert_incoming_path_pending_state(
         &self,
         transfer_id: Uuid,
         file_id: &str,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+        let tid = transfer_id.to_string();
 
-        let mut conn = self.conn.acquire().await?;
+        trace!(
+            self.logger,
+            "Inserting incoming path pending state";
+            "transfer_id" => &tid,
+            "file_id" => file_id);
 
-        sqlx::query!(
+        let conn = self.pool.get()?;
+        conn.execute(
             "INSERT INTO incoming_path_pending_states (path_id) VALUES ((SELECT id FROM \
              incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
-            tid,
-            file_id,
-        )
-        .execute(&mut *conn)
-        .await?;
+            params![tid, file_id],
+        )?;
 
         Ok(())
     }
 
-    pub async fn insert_outgoing_path_started_state(
+    pub fn insert_outgoing_path_started_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+        let tid = transfer_id.to_string();
 
-        let mut conn = self.conn.acquire().await?;
+        trace!(
+            self.logger,
+            "Inserting outgoing path started state";
+            "transfer_id" => &tid,
+            "path_id" => path_id);
 
-        sqlx::query!(
+        let conn = self.pool.get()?;
+        conn.execute(
             "INSERT INTO outgoing_path_started_states (path_id, bytes_sent) VALUES ((SELECT id \
              FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
-            tid,
-            path_id,
-            0
-        )
-        .execute(&mut *conn)
-        .await?;
+            params![tid, path_id, 0],
+        )?;
 
         Ok(())
     }
 
-    pub async fn insert_incoming_path_started_state(
+    pub fn insert_incoming_path_started_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
         base_dir: &str,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+        let tid = transfer_id.to_string();
 
-        let mut conn = self.conn.acquire().await?;
+        trace!(
+            self.logger,
+            "Inserting incoming path started state";
+            "transfer_id" => &tid,
+            "path_id" => path_id,
+            "base_dir" => base_dir);
 
-        sqlx::query!(
+        let conn = self.pool.get()?;
+        conn.execute(
             "INSERT INTO incoming_path_started_states (path_id, base_dir, bytes_received) VALUES \
              ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
-            tid,
-            path_id,
-            base_dir,
-            0
-        )
-        .execute(&mut *conn)
-        .await?;
+            params![tid, path_id, base_dir, 0],
+        )?;
 
         Ok(())
     }
 
-    pub async fn insert_outgoing_path_cancel_state(
+    pub fn insert_outgoing_path_cancel_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
         by_peer: bool,
         bytes_sent: i64,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+        let tid = transfer_id.to_string();
 
-        let mut conn = self.conn.acquire().await?;
+        trace!(
+            self.logger,
+            "Inserting outgoing path cancel state";
+            "transfer_id" => &tid,
+            "path_id" => path_id,
+            "by_peer" => by_peer,
+            "bytes_sent" => bytes_sent);
 
-        sqlx::query!(
+        let conn = self.pool.get()?;
+        conn.execute(
             "INSERT INTO outgoing_path_cancel_states (path_id, by_peer, bytes_sent) VALUES \
              ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
-            tid,
-            path_id,
-            by_peer,
-            bytes_sent
-        )
-        .execute(&mut *conn)
-        .await?;
+            params![tid, path_id, by_peer, bytes_sent],
+        )?;
 
         Ok(())
     }
 
-    pub async fn insert_incoming_path_cancel_state(
+    pub fn insert_incoming_path_cancel_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
         by_peer: bool,
         bytes_received: i64,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+        let tid = transfer_id.to_string();
 
-        let mut conn = self.conn.acquire().await?;
+        trace!(
+            self.logger,
+            "Inserting incoming path cancel state";
+            "transfer_id" => &tid,
+            "path_id" => path_id,
+            "by_peer" => by_peer,
+            "bytes_received" => bytes_received);
 
-        sqlx::query!(
+        let conn = self.pool.get()?;
+        conn.execute(
             "INSERT INTO incoming_path_cancel_states (path_id, by_peer, bytes_received) VALUES \
              ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
-            tid,
-            path_id,
-            by_peer,
-            bytes_received
-        )
-        .execute(&mut *conn)
-        .await?;
+            params![tid, path_id, by_peer, bytes_received],
+        )?;
 
         Ok(())
     }
 
-    pub async fn insert_incoming_path_failed_state(
+    pub fn insert_incoming_path_failed_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
         error: u32,
         bytes_received: i64,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+        let tid = transfer_id.to_string();
 
-        let mut conn = self.conn.acquire().await?;
+        trace!(
+            self.logger,
+            "Inserting incoming path failed state";
+            "transfer_id" => &tid,
+            "path_id" => path_id,
+            "error" => error,
+            "bytes_received" => bytes_received);
 
-        sqlx::query!(
+        let conn = self.pool.get()?;
+        conn.execute(
             "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) \
              VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), \
              ?3, ?4)",
-            tid,
-            path_id,
-            error,
-            bytes_received
-        )
-        .execute(&mut *conn)
-        .await?;
+            params![tid, path_id, error, bytes_received],
+        )?;
 
         Ok(())
     }
 
-    pub async fn insert_outgoing_path_failed_state(
+    pub fn insert_outgoing_path_failed_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
         error: u32,
         bytes_sent: i64,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+        let tid = transfer_id.to_string();
+        trace!(
+            self.logger,
+            "Inserting outgoing path failed state";
+            "transfer_id" => &tid,
+            "path_id" => path_id,
+            "error" => error,
+            "bytes_sent" => bytes_sent);
 
-        let mut conn = self.conn.acquire().await?;
-
-        sqlx::query!(
+        let conn = self.pool.get()?;
+        conn.execute(
             "INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent) VALUES \
              ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
-            tid,
-            path_id,
-            error,
-            bytes_sent
-        )
-        .execute(&mut *conn)
-        .await?;
+            params![tid, path_id, error, bytes_sent],
+        )?;
 
         Ok(())
     }
 
-    pub async fn insert_outgoing_path_completed_state(
+    pub fn insert_outgoing_path_completed_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+        let tid = transfer_id.to_string();
+        trace!(
+            self.logger,
+            "Inserting outgoing path completed state";
+            "transfer_id" => &tid,
+            "path_id" => path_id);
 
-        let mut conn = self.conn.acquire().await?;
-
-        sqlx::query!(
+        let conn = self.pool.get()?;
+        conn.execute(
             "INSERT INTO outgoing_path_completed_states (path_id) VALUES ((SELECT id FROM \
              outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
-            tid,
-            path_id,
-        )
-        .execute(&mut *conn)
-        .await?;
+            params![tid, path_id],
+        )?;
 
         Ok(())
     }
 
-    pub async fn insert_incoming_path_completed_state(
+    pub fn insert_incoming_path_completed_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
         final_path: &str,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+        let tid = transfer_id.to_string();
+        trace!(
+            self.logger,
+            "Inserting incoming path completed state";
+            "transfer_id" => &tid,
+            "path_id" => path_id,
+            "final_path" => final_path);
 
-        let mut conn = self.conn.acquire().await?;
-
-        sqlx::query!(
+        let conn = self.pool.get()?;
+        conn.execute(
             "INSERT INTO incoming_path_completed_states (path_id, final_path) VALUES ((SELECT id \
-             from incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
-            tid,
-            path_id,
-            final_path
-        )
-        .execute(&mut *conn)
-        .await?;
+             FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
+            params![tid, path_id, final_path],
+        )?;
 
         Ok(())
     }
 
-    pub async fn insert_outgoing_path_reject_state(
+    pub fn insert_outgoing_path_reject_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
         by_peer: bool,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+        let tid = transfer_id.to_string();
 
-        let mut conn = self.conn.acquire().await?;
-
-        sqlx::query!(
-            r#"
-            INSERT INTO outgoing_path_reject_states (path_id, by_peer)
-            SELECT id, ?3 FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2
-            "#,
-            tid,
-            path_id,
-            by_peer,
-        )
-        .execute(&mut *conn)
-        .await?;
+        let conn = self.pool.get()?;
+        conn.execute(
+            "INSERT INTO outgoing_path_reject_states (path_id, by_peer) VALUES ((SELECT id FROM \
+             outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
+            params![tid, path_id, by_peer],
+        )?;
 
         Ok(())
     }
 
-    pub async fn insert_incoming_path_reject_state(
+    pub fn insert_incoming_path_reject_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
         by_peer: bool,
     ) -> Result<()> {
-        let tid = transfer_id.hyphenated();
+        let tid = transfer_id.to_string();
 
-        let mut conn = self.conn.acquire().await?;
-
-        sqlx::query!(
-            r#"
-            INSERT INTO incoming_path_reject_states (path_id, by_peer)
-            SELECT id, ?3 FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
-            "#,
-            tid,
-            path_id,
-            by_peer,
-        )
-        .execute(&mut *conn)
-        .await?;
+        let conn = self.pool.get()?;
+        conn.execute(
+            "INSERT INTO incoming_path_reject_states (path_id, by_peer) VALUES ((SELECT id FROM \
+             incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
+            params![tid, path_id, by_peer],
+        )?;
 
         Ok(())
     }
 
-    pub async fn purge_transfers_until(&self, until_timestamp: i64) -> Result<()> {
-        let mut conn = self.conn.acquire().await?;
+    pub fn purge_transfers_until(&self, until_timestamp: i64) -> Result<()> {
+        let conn = self.pool.get()?;
 
-        sqlx::query!(
+        trace!(
+            self.logger,
+            "Purging transfers until timestamp";
+            "until_timestamp" => until_timestamp);
+
+        conn.execute(
             "DELETE FROM transfers WHERE created_at < datetime(?1, 'unixepoch')",
-            until_timestamp
-        )
-        .execute(&mut *conn)
-        .await?;
+            params![until_timestamp],
+        )?;
 
         Ok(())
     }
 
-    /// From the FAQ:
-    /// ### How can I do a `SELECT ... WHERE foo IN (...)` query?
-    /// In the future SQLx will support binding arrays as a comma-separated list
-    /// for every database, but unfortunately there's no general solution
-    /// for that currently in SQLx itself. You would need to manually
-    /// generate the query, at which point it cannot be used with the
-    /// macros.
-    async fn purge_transfer(&self, transfer_id: String) -> Result<()> {
-        let mut conn = self.conn.acquire().await?;
+    fn purge_transfer(&self, transfer_id: String) -> Result<()> {
+        let conn = self.pool.get()?;
 
-        sqlx::query!("DELETE FROM transfers WHERE id = $1", transfer_id)
-            .execute(&mut *conn)
-            .await?;
+        trace!(
+            self.logger,
+            "Purging transfer";
+            "transfer_id" => transfer_id.clone());
+
+        conn.execute("DELETE FROM transfers WHERE id = ?1", params![transfer_id])?;
 
         Ok(())
     }
 
-    pub async fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<()> {
+    pub fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<()> {
+        trace!(
+            self.logger,
+            "Purging transfers";
+            "transfer_ids" => format!("{:?}", transfer_ids));
+
         for id in transfer_ids {
-            self.purge_transfer(id).await?;
+            self.purge_transfer(id)?;
         }
 
         Ok(())
     }
 
-    pub async fn transfers_to_retry(&self) -> Result<Vec<TransferToRetry>> {
-        let mut conn = self.conn.begin().await?;
+    pub fn transfers_to_retry(&self) -> Result<Vec<TransferToRetry>> {
+        let mut conn = self.pool.get()?;
+        let conn = conn.transaction()?;
 
-        let rec_transfers = sqlx::query!(
-            r#"
-            SELECT transfers.id as  "id: Hyphenated", peer, COUNT(transfer_cancel_states.id) as cancel_count
-            FROM transfers
-            LEFT JOIN transfer_cancel_states ON transfers.id = transfer_cancel_states.transfer_id
-            WHERE
-                is_outgoing = ?1
-            GROUP BY transfers.id
-            HAVING cancel_count = 0
-            "#,
-            TransferType::Outgoing as u32
-        )
-        .fetch_all(&mut *conn)
-        .await?;
+        struct RecTransfer {
+            tid: String,
+            peer: String,
+        }
+
+        let rec_transfers: Vec<_> = conn
+            .prepare(
+                r#"
+                SELECT transfers.id as tid, peer, COUNT(transfer_cancel_states.id) as cancel_count
+                FROM transfers
+                LEFT JOIN transfer_cancel_states ON transfers.id = transfer_cancel_states.transfer_id
+                WHERE
+                    is_outgoing = ?1
+                GROUP BY transfers.id
+                HAVING cancel_count = 0
+                "#,
+            )?
+            .query_map(params![TransferType::Outgoing as u32], |r| {
+                Ok(RecTransfer {
+                    tid: r.get("tid")?,
+                    peer: r.get("peer")?,
+                })
+            })?
+            .collect::<QueryResult<_>>()?;
 
         let mut out = Vec::with_capacity(rec_transfers.len());
         for rec_transfer in rec_transfers {
-            let files = sqlx::query!(
-                "SELECT relative_path, base_path, path_hash, bytes FROM outgoing_paths WHERE \
-                 transfer_id = ?1",
-                rec_transfer.id
-            )
-            .fetch_all(&mut *conn)
-            .await?
-            .into_iter()
-            .map(|rec_file| FileToRetry {
-                file_id: rec_file.path_hash,
-                basepath: rec_file.base_path,
-                subpath: rec_file.relative_path,
-                size: rec_file.bytes as _,
-            })
-            .collect();
+            let files = conn
+                .prepare(
+                    r#"
+                    SELECT relative_path, base_path, path_hash, bytes 
+                    FROM outgoing_paths 
+                    WHERE transfer_id = ?1
+                    "#,
+                )?
+                .query_map(params![rec_transfer.tid], |r| {
+                    Ok(FileToRetry {
+                        file_id: r.get("path_hash")?,
+                        basepath: r.get("base_path")?,
+                        subpath: r.get("relative_path")?,
+                        size: r.get("bytes")?,
+                    })
+                })?
+                .collect::<QueryResult<_>>()?;
 
             out.push(TransferToRetry {
-                uuid: rec_transfer.id.into_uuid(),
+                uuid: rec_transfer.tid.parse().map_err(|err| {
+                    crate::Error::InternalError(format!("Failed to parse UUID: {err}"))
+                })?,
                 peer: rec_transfer.peer,
                 files,
             });
         }
 
-        conn.commit().await?;
+        conn.commit()?;
 
         Ok(out)
     }
 
-    pub async fn incoming_files_to_resume(&self, transfer_id: Uuid) -> Result<Vec<FileToRetry>> {
-        let tid = transfer_id.hyphenated();
+    pub fn incoming_files_to_resume(&self, transfer_id: Uuid) -> Result<Vec<FileToRetry>> {
+        let conn = self.pool.get()?;
 
-        let mut conn = self.conn.begin().await?;
-
-        let out = sqlx::query!(
-            r#"
+        let out = conn
+            .prepare(
+                r#"
             SELECT 
-                path_hash as "file_id!",
-                relative_path as "subpath!",
-                bytes as "size!",
-                strt.base_dir as "basedir!",
+                path_hash as file_id,
+                relative_path as subpath,
+                bytes as size,
+                strt.base_dir as basedir,
                 MAX(strt.created_at) as last_start,
                 MAX(canc.created_at) as last_cancel,
                 MAX(fail.created_at) as last_fail,
@@ -654,140 +697,141 @@ impl Storage {
                 AND (last_fail IS NULL OR last_start > last_fail)
                 AND (last_complete IS NULL OR last_start > last_complete)
             "#,
-            tid
-        )
-        .fetch_all(&mut *conn)
-        .await?
-        .into_iter()
-        .map(|r| FileToRetry {
-            file_id: r.file_id,
-            subpath: r.subpath,
-            basepath: r.basedir,
-            size: r.size as _,
-        })
-        .collect();
-
-        conn.commit().await?;
+            )?
+            .query_map(params![transfer_id.to_string()], |r| {
+                Ok(FileToRetry {
+                    file_id: r.get("file_id")?,
+                    subpath: r.get("subpath")?,
+                    basepath: r.get("basedir")?,
+                    size: r.get("size")?,
+                })
+            })?
+            .collect::<QueryResult<_>>()?;
 
         Ok(out)
     }
 
-    pub async fn finished_incoming_files(
-        &self,
-        transfer_id: Uuid,
-    ) -> Result<Vec<FinishedIncomingFile>> {
-        let tid = transfer_id.hyphenated();
+    pub fn finished_incoming_files(&self, transfer_id: Uuid) -> Result<Vec<FinishedIncomingFile>> {
+        let conn = self.pool.get()?;
 
-        let mut conn = self.conn.acquire().await?;
-
-        let paths = sqlx::query_as!(
-            FinishedIncomingFile,
-            r#"
-            SELECT relative_path as subpath, final_path
-            FROM incoming_paths ip
-            INNER JOIN incoming_path_completed_states ipcs ON ip.id = ipcs.path_id
-            WHERE transfer_id = ?1
-            "#,
-            tid,
-        )
-        .fetch_all(&mut *conn)
-        .await?;
+        let paths = conn
+            .prepare(
+                r#"
+                SELECT relative_path as subpath, final_path
+                FROM incoming_paths ip
+                INNER JOIN incoming_path_completed_states ipcs ON ip.id = ipcs.path_id
+                WHERE transfer_id = ?1
+                "#,
+            )?
+            .query_map(params![transfer_id.to_string()], |r| {
+                Ok(FinishedIncomingFile {
+                    subpath: r.get("subpath")?,
+                    final_path: r.get("final_path")?,
+                })
+            })?
+            .collect::<QueryResult<_>>()?;
 
         Ok(paths)
     }
 
-    pub async fn transfers_since(&self, since_timestamp: i64) -> Result<Vec<Transfer>> {
-        let mut conn = self.conn.acquire().await?;
+    pub fn transfers_since(&self, since_timestamp: i64) -> Result<Vec<Transfer>> {
+        let conn = self.pool.get()?;
 
-        let mut transfers = sqlx::query!(
-            r#"
-            SELECT id as "id: Hyphenated", peer, created_at, is_outgoing FROM transfers
-            WHERE created_at >= datetime(?1, 'unixepoch')
-            "#,
-            since_timestamp
-        )
-        .fetch_all(&mut *conn)
-        .await?
-        .into_iter()
-        .map(|t| {
-            let transfer_type = match t.is_outgoing {
-                0 => DbTransferType::Incoming(vec![]),
-                1 => DbTransferType::Outgoing(vec![]),
-                _ => unreachable!(),
-            };
+        trace!(
+            self.logger,
+            "Fetching transfers since timestamp";
+            "since_timestamp" => since_timestamp);
 
-            Transfer {
-                id: t.id.into_uuid(),
-                peer_id: t.peer,
-                transfer_type,
-                created_at: t.created_at,
-                states: vec![],
-            }
-        })
-        .collect::<Vec<_>>();
+        let mut transfers = conn
+            .prepare(
+                r#"
+                SELECT id, peer, created_at, is_outgoing FROM transfers
+                WHERE created_at >= datetime(?1, 'unixepoch')
+                "#,
+            )?
+            .query_map(params![since_timestamp], |row| {
+                let transfer_type = match row.get::<_, u32>("is_outgoing")? {
+                    0 => DbTransferType::Incoming(vec![]),
+                    1 => DbTransferType::Outgoing(vec![]),
+                    _ => unreachable!(),
+                };
+
+                let id: String = row.get("id")?;
+
+                Ok(Transfer {
+                    id: Uuid::parse_str(&id).map_err(|_| rusqlite::Error::InvalidQuery)?,
+                    peer_id: row.get("peer")?,
+                    transfer_type,
+                    created_at: row.get("created_at")?,
+                    states: vec![],
+                })
+            })?
+            .collect::<QueryResult<Vec<Transfer>>>()?;
 
         for transfer in &mut transfers {
             match transfer.transfer_type {
                 DbTransferType::Incoming(_) => {
                     transfer.transfer_type =
-                        DbTransferType::Incoming(self.get_incoming_paths(transfer.id).await?)
+                        DbTransferType::Incoming(self.get_incoming_paths(transfer.id)?)
                 }
                 DbTransferType::Outgoing(_) => {
                     transfer.transfer_type =
-                        DbTransferType::Outgoing(self.get_outgoing_paths(transfer.id).await?)
+                        DbTransferType::Outgoing(self.get_outgoing_paths(transfer.id)?)
                 }
             }
 
-            let tid = transfer.id.hyphenated();
+            let tid = transfer.id.to_string();
 
             transfer.states.extend(
-                sqlx::query!(
-                    "SELECT created_at  FROM transfer_active_states WHERE transfer_id = ?1",
-                    tid
-                )
-                .fetch_all(&mut *conn)
-                .await?
-                .iter()
-                .map(|s| TransferStateEvent {
-                    transfer_id: transfer.id,
-                    created_at: s.created_at,
-                    data: types::TransferStateEventData::Active,
-                }),
+                conn.prepare(
+                    r#"
+                    SELECT created_at FROM transfer_active_states WHERE transfer_id = ?1
+                    "#,
+                )?
+                .query_map(params![tid], |row| {
+                    Ok(TransferStateEvent {
+                        transfer_id: transfer.id,
+                        created_at: row.get("created_at")?,
+                        data: types::TransferStateEventData::Active,
+                    })
+                })?
+                .collect::<QueryResult<Vec<TransferStateEvent>>>()?,
             );
 
             transfer.states.extend(
-                sqlx::query!(
-                    "SELECT by_peer, created_at FROM transfer_cancel_states WHERE transfer_id = ?1",
-                    tid
-                )
-                .fetch_all(&mut *conn)
-                .await?
-                .iter()
-                .map(|s| TransferStateEvent {
-                    transfer_id: transfer.id,
-                    created_at: s.created_at,
-                    data: types::TransferStateEventData::Cancel {
-                        by_peer: s.by_peer != 0,
-                    },
-                }),
+                conn.prepare(
+                    r#"
+                    SELECT created_at, by_peer FROM transfer_cancel_states WHERE transfer_id = ?1
+                    "#,
+                )?
+                .query_map(params![tid], |row| {
+                    Ok(TransferStateEvent {
+                        transfer_id: transfer.id,
+                        created_at: row.get("created_at")?,
+                        data: types::TransferStateEventData::Cancel {
+                            by_peer: row.get("by_peer")?,
+                        },
+                    })
+                })?
+                .collect::<QueryResult<Vec<TransferStateEvent>>>()?,
             );
 
             transfer.states.extend(
-                sqlx::query!(
-                    "SELECT status_code, created_at FROM transfer_failed_states WHERE transfer_id \
-                     = ?1",
-                    tid
-                )
-                .fetch_all(&mut *conn)
-                .await?
-                .iter()
-                .map(|s| TransferStateEvent {
-                    transfer_id: transfer.id,
-                    created_at: s.created_at,
-                    data: types::TransferStateEventData::Failed {
-                        status_code: s.status_code,
-                    },
-                }),
+                conn.prepare(
+                    r#"
+                    SELECT created_at, status_code FROM transfer_failed_states WHERE transfer_id = ?1
+                    "#,
+                )?
+                .query_map(params![tid], |row| {
+                    Ok(TransferStateEvent {
+                        transfer_id: transfer.id,
+                        created_at: row.get("created_at")?,
+                        data: types::TransferStateEventData::Failed {
+                            status_code: row.get("status_code")?,
+                        },
+                    })
+                })?
+                .collect::<QueryResult<Vec<TransferStateEvent>>>()?,
             );
 
             transfer
@@ -798,112 +842,123 @@ impl Storage {
         Ok(transfers)
     }
 
-    async fn get_outgoing_paths(&self, transfer_id: Uuid) -> Result<Vec<OutgoingPath>> {
-        let tid = transfer_id.hyphenated();
+    fn get_outgoing_paths(&self, transfer_id: Uuid) -> Result<Vec<OutgoingPath>> {
+        let tid = transfer_id.to_string();
 
-        let mut conn = self.conn.acquire().await?;
+        trace!(
+            self.logger,
+            "Fetching outgoing paths for transfer";
+            "transfer_id" => &tid
+        );
 
-        let mut paths = sqlx::query!(
-            r#"SELECT id as "path_id!", * FROM outgoing_paths WHERE transfer_id = ?1"#,
-            tid
-        )
-        .fetch_all(&mut *conn)
-        .await?
-        .into_iter()
-        .map(|p| OutgoingPath {
-            id: p.path_id,
-            transfer_id,
-            base_path: p.base_path,
-            relative_path: p.relative_path,
-            file_id: p.path_hash,
-            bytes: p.bytes,
-            created_at: p.created_at,
-            states: vec![],
-        })
-        .collect::<Vec<_>>();
+        let conn = self.pool.get()?;
+        let mut paths = conn
+            .prepare(
+                r#"
+                SELECT * FROM outgoing_paths WHERE transfer_id = ?1
+                "#,
+            )?
+            .query_map(params![tid], |row| {
+                Ok(OutgoingPath {
+                    id: row.get("id")?,
+                    transfer_id,
+                    base_path: row.get("base_path")?,
+                    relative_path: row.get("relative_path")?,
+                    file_id: row.get("path_hash")?,
+                    bytes: row.get("bytes")?,
+                    created_at: row.get("created_at")?,
+                    states: vec![],
+                })
+            })?
+            .collect::<QueryResult<Vec<OutgoingPath>>>()?;
 
         for path in &mut paths {
             path.states.extend(
-                sqlx::query!(
-                    "SELECT * FROM outgoing_path_pending_states WHERE path_id = ?1",
-                    path.id
-                )
-                .fetch_all(&mut *conn)
-                .await?
-                .iter()
-                .map(|s| OutgoingPathStateEvent {
-                    path_id: s.path_id,
-                    created_at: s.created_at,
-                    data: OutgoingPathStateEventData::Pending,
-                }),
+                conn.prepare(
+                    r#"
+                    SELECT * FROM outgoing_path_pending_states WHERE path_id = ?1
+                    "#,
+                )?
+                .query_map(params![path.id], |row| {
+                    Ok(OutgoingPathStateEvent {
+                        path_id: row.get("path_id")?,
+                        created_at: row.get("created_at")?,
+                        data: OutgoingPathStateEventData::Pending,
+                    })
+                })?
+                .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
             );
 
             path.states.extend(
-                sqlx::query!(
-                    "SELECT * FROM outgoing_path_started_states WHERE path_id = ?1",
-                    path.id
-                )
-                .fetch_all(&mut *conn)
-                .await?
-                .iter()
-                .map(|s| OutgoingPathStateEvent {
-                    path_id: s.path_id,
-                    created_at: s.created_at,
-                    data: OutgoingPathStateEventData::Started {
-                        bytes_sent: s.bytes_sent,
-                    },
-                }),
+                conn.prepare(
+                    r#"
+                    SELECT * FROM outgoing_path_started_states WHERE path_id = ?1
+                    "#,
+                )?
+                .query_map(params![path.id], |row| {
+                    Ok(OutgoingPathStateEvent {
+                        path_id: row.get("path_id")?,
+                        created_at: row.get("created_at")?,
+                        data: OutgoingPathStateEventData::Started {
+                            bytes_sent: row.get("bytes_sent")?,
+                        },
+                    })
+                })?
+                .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
             );
 
             path.states.extend(
-                sqlx::query!(
-                    "SELECT * FROM outgoing_path_cancel_states WHERE path_id = ?1",
-                    path.id
-                )
-                .fetch_all(&mut *conn)
-                .await?
-                .iter()
-                .map(|s| OutgoingPathStateEvent {
-                    path_id: s.path_id,
-                    created_at: s.created_at,
-                    data: OutgoingPathStateEventData::Cancel {
-                        by_peer: s.by_peer != 0,
-                        bytes_sent: s.bytes_sent,
-                    },
-                }),
+                conn.prepare(
+                    r#"
+                    SELECT * FROM outgoing_path_cancel_states WHERE path_id = ?1
+                    "#,
+                )?
+                .query_map(params![path.id], |row| {
+                    Ok(OutgoingPathStateEvent {
+                        path_id: row.get("path_id")?,
+                        created_at: row.get("created_at")?,
+                        data: OutgoingPathStateEventData::Cancel {
+                            by_peer: row.get("by_peer")?,
+                            bytes_sent: row.get("bytes_sent")?,
+                        },
+                    })
+                })?
+                .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
             );
 
             path.states.extend(
-                sqlx::query!(
-                    "SELECT * FROM outgoing_path_failed_states WHERE path_id = ?1",
-                    path.id
-                )
-                .fetch_all(&mut *conn)
-                .await?
-                .iter()
-                .map(|s| OutgoingPathStateEvent {
-                    path_id: s.path_id,
-                    created_at: s.created_at,
-                    data: OutgoingPathStateEventData::Failed {
-                        status_code: s.status_code,
-                        bytes_sent: s.bytes_sent,
-                    },
-                }),
+                conn.prepare(
+                    r#"
+                    SELECT * FROM outgoing_path_failed_states WHERE path_id = ?1
+                    "#,
+                )?
+                .query_map(params![path.id], |row| {
+                    Ok(OutgoingPathStateEvent {
+                        path_id: row.get("path_id")?,
+                        created_at: row.get("created_at")?,
+                        data: OutgoingPathStateEventData::Failed {
+                            status_code: row.get("status_code")?,
+                            bytes_sent: row.get("bytes_sent")?,
+                        },
+                    })
+                })?
+                .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
             );
 
             path.states.extend(
-                sqlx::query!(
-                    "SELECT * FROM outgoing_path_completed_states WHERE path_id = ?1",
-                    path.id
-                )
-                .fetch_all(&mut *conn)
-                .await?
-                .iter()
-                .map(|s| OutgoingPathStateEvent {
-                    path_id: s.path_id,
-                    created_at: s.created_at,
-                    data: OutgoingPathStateEventData::Completed,
-                }),
+                conn.prepare(
+                    r#"
+                    SELECT * FROM outgoing_path_completed_states WHERE path_id = ?1
+                    "#,
+                )?
+                .query_map(params![path.id], |row| {
+                    Ok(OutgoingPathStateEvent {
+                        path_id: row.get("path_id")?,
+                        created_at: row.get("created_at")?,
+                        data: OutgoingPathStateEventData::Completed,
+                    })
+                })?
+                .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
             );
 
             path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
@@ -912,114 +967,124 @@ impl Storage {
         Ok(paths)
     }
 
-    async fn get_incoming_paths(&self, transfer_id: Uuid) -> Result<Vec<IncomingPath>> {
-        let tid = transfer_id.hyphenated();
+    fn get_incoming_paths(&self, transfer_id: Uuid) -> Result<Vec<IncomingPath>> {
+        let tid = transfer_id.to_string();
 
-        let mut conn = self.conn.acquire().await?;
+        trace!(
+            self.logger,
+            "Fetching incoming paths for transfer";
+            "transfer_id" => &tid);
 
-        let mut paths = sqlx::query!(
-            r#"SELECT id as "path_id!", * FROM incoming_paths WHERE transfer_id = ?1"#,
-            tid
-        )
-        .fetch_all(&mut *conn)
-        .await?
-        .into_iter()
-        .map(|p| IncomingPath {
-            id: p.path_id,
-            transfer_id,
-            relative_path: p.relative_path,
-            file_id: p.path_hash,
-            bytes: p.bytes,
-            created_at: p.created_at,
-            states: vec![],
-        })
-        .collect::<Vec<_>>();
+        let conn = self.pool.get()?;
+        let mut paths = conn
+            .prepare(
+                r#"
+                SELECT * FROM incoming_paths WHERE transfer_id = ?1
+                "#,
+            )?
+            .query_map(params![tid], |row| {
+                Ok(IncomingPath {
+                    id: row.get("id")?,
+                    transfer_id,
+                    relative_path: row.get("relative_path")?,
+                    file_id: row.get("path_hash")?,
+                    bytes: row.get("bytes")?,
+                    created_at: row.get("created_at")?,
+                    states: vec![],
+                })
+            })?
+            .collect::<QueryResult<Vec<IncomingPath>>>()?;
 
         for path in &mut paths {
             path.states.extend(
-                sqlx::query!(
-                    "SELECT * FROM incoming_path_pending_states WHERE path_id = ?1",
-                    path.id
-                )
-                .fetch_all(&mut *conn)
-                .await?
-                .iter()
-                .map(|s| IncomingPathStateEvent {
-                    path_id: s.path_id,
-                    created_at: s.created_at,
-                    data: IncomingPathStateEventData::Pending,
-                }),
+                conn.prepare(
+                    r#"
+                    SELECT * FROM incoming_path_pending_states WHERE path_id = ?1
+                    "#,
+                )?
+                .query_map(params![path.id], |row| {
+                    Ok(IncomingPathStateEvent {
+                        path_id: row.get("path_id")?,
+                        created_at: row.get("created_at")?,
+                        data: IncomingPathStateEventData::Pending,
+                    })
+                })?
+                .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
             );
 
             path.states.extend(
-                sqlx::query!(
-                    "SELECT * FROM incoming_path_started_states WHERE path_id = ?1",
-                    path.id
-                )
-                .fetch_all(&mut *conn)
-                .await?
-                .into_iter()
-                .map(|s| IncomingPathStateEvent {
-                    path_id: s.path_id,
-                    created_at: s.created_at,
-                    data: IncomingPathStateEventData::Started {
-                        base_dir: s.base_dir,
-                        bytes_received: s.bytes_received,
-                    },
-                }),
+                conn.prepare(
+                    r#"
+                    SELECT * FROM incoming_path_started_states WHERE path_id = ?1
+                    "#,
+                )?
+                .query_map(params![path.id], |row| {
+                    Ok(IncomingPathStateEvent {
+                        path_id: row.get("path_id")?,
+                        created_at: row.get("created_at")?,
+                        data: IncomingPathStateEventData::Started {
+                            bytes_received: row.get("bytes_received")?,
+                            base_dir: row.get("base_dir")?,
+                        },
+                    })
+                })?
+                .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
             );
 
             path.states.extend(
-                sqlx::query!(
-                    "SELECT * FROM incoming_path_cancel_states WHERE path_id = ?1",
-                    path.id
-                )
-                .fetch_all(&mut *conn)
-                .await?
-                .iter()
-                .map(|s| IncomingPathStateEvent {
-                    path_id: s.path_id,
-                    created_at: s.created_at,
-                    data: IncomingPathStateEventData::Cancel {
-                        by_peer: s.by_peer != 0,
-                        bytes_received: s.bytes_received,
-                    },
-                }),
+                conn.prepare(
+                    r#"
+                    SELECT * FROM incoming_path_cancel_states WHERE path_id = ?1
+                    "#,
+                )?
+                .query_map(params![path.id], |row| {
+                    Ok(IncomingPathStateEvent {
+                        path_id: row.get("path_id")?,
+                        created_at: row.get("created_at")?,
+                        data: IncomingPathStateEventData::Cancel {
+                            by_peer: row.get("by_peer")?,
+                            bytes_received: row.get("bytes_received")?,
+                        },
+                    })
+                })?
+                .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
             );
 
             path.states.extend(
-                sqlx::query!(
-                    "SELECT * FROM incoming_path_failed_states WHERE path_id = ?1",
-                    path.id
-                )
-                .fetch_all(&mut *conn)
-                .await?
-                .iter()
-                .map(|s| IncomingPathStateEvent {
-                    path_id: s.path_id,
-                    created_at: s.created_at,
-                    data: IncomingPathStateEventData::Failed {
-                        status_code: s.status_code,
-                        bytes_received: s.bytes_received,
-                    },
-                }),
+                conn.prepare(
+                    r#"
+                    SELECT * FROM incoming_path_failed_states WHERE path_id = ?1
+                    "#,
+                )?
+                .query_map(params![path.id], |row| {
+                    Ok(IncomingPathStateEvent {
+                        path_id: row.get("path_id")?,
+                        created_at: row.get("created_at")?,
+                        data: IncomingPathStateEventData::Failed {
+                            status_code: row.get("status_code")?,
+                            bytes_received: row.get("bytes_received")?,
+                        },
+                    })
+                })?
+                .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
             );
 
             path.states.extend(
-                sqlx::query!(
-                    "SELECT * FROM incoming_path_completed_states WHERE path_id = ?1",
-                    path.id
-                )
-                .fetch_all(&mut *conn)
-                .await?
-                .into_iter()
-                .map(|s| IncomingPathStateEvent {
-                    path_id: s.path_id,
-                    created_at: s.created_at,
-                    data: IncomingPathStateEventData::Completed {
-                        final_path: s.final_path,
-                    },
-                }),
+                conn.prepare(
+                    r#"
+                    SELECT * FROM incoming_path_completed_states WHERE path_id = ?1
+                    "#,
+                )?
+                .query_map(params![path.id], |row| {
+                    Ok(IncomingPathStateEvent {
+                        path_id: row.get("path_id")?,
+                        created_at: row.get("created_at")?,
+                        data: IncomingPathStateEventData::Completed {
+                            final_path: row.get("final_path")?,
+                        },
+                    })
+                })?
+                .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
             );
 
             path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
@@ -1033,10 +1098,10 @@ impl Storage {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_insert_transfer() {
+    #[test]
+    fn test_insert_transfer() {
         let logger = slog::Logger::root(slog::Discard, slog::o!());
-        let storage = Storage::new(logger, ":memory:").await.unwrap();
+        let storage = Storage::new(logger, ":memory:").unwrap();
 
         let transfer_id_1: Uuid = "23e488a4-0521-11ee-be56-0242ac120002".parse().unwrap();
         let transfer_id_2: Uuid = "23e48d7c-0521-11ee-be56-0242ac120002".parse().unwrap();
@@ -1059,7 +1124,7 @@ mod tests {
                 ]),
             };
 
-            storage.insert_transfer(&transfer).await.unwrap();
+            storage.insert_transfer(&transfer).unwrap();
         }
 
         {
@@ -1082,11 +1147,11 @@ mod tests {
                 ]),
             };
 
-            storage.insert_transfer(&transfer).await.unwrap();
+            storage.insert_transfer(&transfer).unwrap();
         }
 
         {
-            let transfers = storage.transfers_since(0).await.unwrap();
+            let transfers = storage.transfers_since(0).unwrap();
             assert_eq!(transfers.len(), 2);
 
             let incoming_transfer = &transfers[0];
@@ -1101,10 +1166,9 @@ mod tests {
 
         storage
             .purge_transfers(vec![transfer_id_1.to_string(), transfer_id_2.to_string()])
-            .await
             .unwrap();
 
-        let transfers = storage.transfers_since(0).await.unwrap();
+        let transfers = storage.transfers_since(0).unwrap();
 
         assert_eq!(transfers.len(), 0);
     }
