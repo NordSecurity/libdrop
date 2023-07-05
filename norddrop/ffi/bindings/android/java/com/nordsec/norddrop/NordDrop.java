@@ -76,6 +76,10 @@ public class NordDrop {
     return NorddropResult.swigToEnum(libnorddropJNI.NordDrop_purgeTransfersUntil(swigCPtr, this, untilTimestamp));
   }
 
+  public NorddropResult removeTransferFile(String txid, String fid) {
+    return NorddropResult.swigToEnum(libnorddropJNI.NordDrop_removeTransferFile(swigCPtr, this, txid, fid));
+  }
+
   public String getTransfersSince(long sinceTimestamp) {
     return libnorddropJNI.NordDrop_getTransfersSince(swigCPtr, this, sinceTimestamp);
   }
