@@ -1,7 +1,7 @@
 pub mod error;
 pub mod types;
 
-use std::vec;
+use std::{path::Path, vec};
 
 use include_dir::{include_dir, Dir};
 use r2d2::Pool;
@@ -10,16 +10,17 @@ use rusqlite::{params, Transaction};
 use rusqlite_migration::Migrations;
 use slog::{trace, Logger};
 use types::{
-    DbTransferType, IncomingPath, IncomingPathStateEvent, IncomingPathStateEventData, OutgoingPath,
-    OutgoingPathStateEvent, OutgoingPathStateEventData, Transfer, TransferFiles,
-    TransferIncomingPath, TransferOutgoingPath, TransferStateEvent,
+    DbTransferType, IncomingFileToRetry, IncomingPath, IncomingPathStateEvent,
+    IncomingPathStateEventData, OutgoingFileToRetry, OutgoingPath, OutgoingPathStateEvent,
+    OutgoingPathStateEventData, Transfer, TransferFiles, TransferIncomingPath,
+    TransferOutgoingPath, TransferStateEvent,
 };
 use uuid::Uuid;
 
 use crate::error::Error;
 pub use crate::types::{
-    FileChecksum, FileToRetry, FinishedIncomingFile, IncomingTransferInfo, TransferInfo,
-    TransferToRetry, TransferType,
+    FileChecksum, FinishedIncomingFile, IncomingTransferInfo, TransferInfo, TransferToRetry,
+    TransferType,
 };
 
 type Result<T> = std::result::Result<T, Error>;
@@ -168,16 +169,14 @@ impl Storage {
     ) -> Result<()> {
         let tid = transfer_id.to_string();
 
+        let uri = path.uri.as_str();
+
         conn.execute(
-            "INSERT INTO outgoing_paths (transfer_id, relative_path, path_hash, bytes, base_path)
-            VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![
-                tid,
-                path.relative_path,
-                path.file_id,
-                path.size,
-                path.base_path
-            ],
+            r#"
+            INSERT INTO outgoing_paths (transfer_id, relative_path, path_hash, bytes, uri)
+            VALUES (?1, ?2, ?3, ?4, ?5)
+            "#,
+            params![tid, path.relative_path, path.file_id, path.size, uri,],
         )?;
 
         Ok(())
@@ -638,20 +637,29 @@ impl Storage {
             let files = conn
                 .prepare(
                     r#"
-                    SELECT relative_path, base_path, path_hash, bytes 
+                    SELECT relative_path, uri, path_hash, bytes 
                     FROM outgoing_paths 
                     WHERE transfer_id = ?1
                     "#,
                 )?
                 .query_map(params![rec_transfer.tid], |r| {
-                    Ok(FileToRetry {
-                        file_id: r.get("path_hash")?,
-                        basepath: r.get("base_path")?,
-                        subpath: r.get("relative_path")?,
-                        size: r.get("bytes")?,
-                    })
+                    Ok((
+                        r.get("path_hash")?,
+                        r.get::<_, String>("uri")?,
+                        r.get("relative_path")?,
+                        r.get("bytes")?,
+                    ))
                 })?
-                .collect::<QueryResult<_>>()?;
+                .map(|row| {
+                    let (file_id, uri, subpath, size) = row?;
+                    Ok(OutgoingFileToRetry {
+                        file_id,
+                        uri: uri.parse()?,
+                        subpath,
+                        size,
+                    })
+                })
+                .collect::<Result<_>>()?;
 
             out.push(TransferToRetry {
                 uuid: rec_transfer.tid.parse().map_err(|err| {
@@ -667,7 +675,7 @@ impl Storage {
         Ok(out)
     }
 
-    pub fn incoming_files_to_resume(&self, transfer_id: Uuid) -> Result<Vec<FileToRetry>> {
+    pub fn incoming_files_to_resume(&self, transfer_id: Uuid) -> Result<Vec<IncomingFileToRetry>> {
         let conn = self.pool.get()?;
 
         let out = conn
@@ -699,7 +707,7 @@ impl Storage {
             "#,
             )?
             .query_map(params![transfer_id.to_string()], |r| {
-                Ok(FileToRetry {
+                Ok(IncomingFileToRetry {
                     file_id: r.get("file_id")?,
                     subpath: r.get("subpath")?,
                     basepath: r.get("basedir")?,
@@ -852,25 +860,63 @@ impl Storage {
         );
 
         let conn = self.pool.get()?;
-        let mut paths = conn
+        let mut paths: Vec<_> = conn
             .prepare(
                 r#"
                 SELECT * FROM outgoing_paths WHERE transfer_id = ?1
                 "#,
             )?
             .query_map(params![tid], |row| {
-                Ok(OutgoingPath {
-                    id: row.get("id")?,
-                    transfer_id,
-                    base_path: row.get("base_path")?,
-                    relative_path: row.get("relative_path")?,
-                    file_id: row.get("path_hash")?,
-                    bytes: row.get("bytes")?,
-                    created_at: row.get("created_at")?,
-                    states: vec![],
-                })
+                Ok((
+                    row.get("id")?,
+                    row.get("relative_path")?,
+                    row.get("path_hash")?,
+                    row.get("bytes")?,
+                    row.get("created_at")?,
+                    row.get::<_, String>("uri")?,
+                ))
             })?
-            .collect::<QueryResult<Vec<OutgoingPath>>>()?;
+            .map(|row| {
+                let (id, relative_path, file_id, bytes, created_at, uri) = row?;
+
+                let mut res = OutgoingPath {
+                    id,
+                    transfer_id,
+                    content_uri: None,
+                    base_path: None,
+                    relative_path,
+                    file_id,
+                    bytes,
+                    created_at,
+                    states: vec![],
+                };
+
+                let uri = url::Url::parse(&uri)?;
+
+                match uri.scheme() {
+                    "content" => res.content_uri = Some(uri),
+                    "file" => {
+                        let mut path = uri.to_file_path().map_err(|_| {
+                            crate::Error::InvalidUri("Failed to extract file path".to_string())
+                        })?;
+
+                        let count = Path::new(&res.relative_path).components().count();
+                        for _ in 0..count {
+                            path.pop();
+                        }
+
+                        res.base_path = Some(path);
+                    }
+                    unkown => {
+                        return Err(crate::Error::InvalidUri(format!(
+                            "Unknown URI scheme: {unkown}"
+                        )))
+                    }
+                }
+
+                Ok(res)
+            })
+            .collect::<Result<_>>()?;
 
         for path in &mut paths {
             path.states.extend(
@@ -1135,13 +1181,13 @@ mod tests {
                     TransferOutgoingPath {
                         file_id: "id3".to_string(),
                         size: 1024,
-                        base_path: "/dir".to_string(),
+                        uri: "file:///dir".parse().unwrap(),
                         relative_path: "3".to_string(),
                     },
                     TransferOutgoingPath {
                         file_id: "id4".to_string(),
                         relative_path: "4".to_string(),
-                        base_path: "/dir".to_string(),
+                        uri: "file:///dir".parse().unwrap(),
                         size: 2048,
                     },
                 ]),

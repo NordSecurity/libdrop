@@ -2396,12 +2396,11 @@ scenarios = [
                 [
                     action.Start("172.20.0.5"),
                     action.WaitForAnotherPeer(),
-                    action.MultipleNewTransfersWithSameFD(
-                        [
-                            "172.20.0.15",
-                            "172.20.0.25",
-                        ],
-                        "/tmp/testfile-small",
+                    action.NewTransferWithFD(
+                        "172.20.0.15", "/tmp/testfile-small", cached=True
+                    ),
+                    action.NewTransferWithFD(
+                        "172.20.0.25", "/tmp/testfile-small", cached=True
                     ),
                     action.WaitRacy(
                         [
@@ -5814,6 +5813,130 @@ scenarios = [
                     action.CheckDownloadedFiles(
                         [
                             action.File("/tmp/received/29-4/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-5",
+        "Send one file FD to a peer, stop the sender and then start back. Expect automatically restored transfer",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-5-ren.sqlite"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransferWithFD("172.20.0.15", "/tmp/testfile-big"),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(
+                        event.Start(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
+                    ),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(
+                        event.Progress(
+                            0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw", 0
+                        )
+                    ),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(
+                        event.Progress(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
+                    ),
+                    action.Stop(),
+                    action.Wait(event.FinishFailedTransfer(0, Error.CANCELED)),
+                    action.WaitForAnotherPeer(),
+                    # start the sender again
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-5-ren.sqlite"),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(
+                        event.Start(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
+                    ),
+                    action.Wait(
+                        event.Progress(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
+                    ),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
+                        "/tmp/received/29-5",
+                    ),
+                    action.Wait(
+                        event.Start(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
+                    ),
+                    action.Wait(
+                        event.FinishFailedTransfer(
+                            0,
+                            Error.WS_SERVER,
+                            ignore_os=True,
+                        )
+                    ),
+                    action.Wait(
+                        event.Start(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
+                    ),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
+                            "/tmp/received/29-5/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/29-5/testfile-big", 10485760),
                         ],
                     ),
                     action.CancelTransferRequest(0),

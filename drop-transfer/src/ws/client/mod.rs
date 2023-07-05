@@ -7,7 +7,6 @@ use std::{
     fs, io,
     net::{IpAddr, SocketAddr},
     ops::ControlFlow,
-    path::Path,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -35,7 +34,7 @@ use super::events::FileEventTx;
 use crate::{
     auth,
     error::ResultExt,
-    file::FileId,
+    file::{FileId, FileSubPath},
     manager::{TransferConnection, TransferGuard},
     protocol,
     service::State,
@@ -86,20 +85,20 @@ pub(crate) async fn resume(state: &Arc<State>, stop: &CancellationToken, logger:
                         .files
                         .into_iter()
                         .map(|dbfile| {
-                            let fullpath = Path::new(&dbfile.basepath).join(&dbfile.subpath);
-                            let meta = fs::symlink_metadata(&fullpath).with_context(|| {
-                                format!("Failed to load file: {}", dbfile.file_id)
-                            })?;
-                            anyhow::ensure!(!meta.is_dir(), "Invalid file type");
-
                             let file_id: FileId = dbfile.file_id.into();
-                            crate::File::new_to_send(
-                                dbfile.subpath.into(),
-                                fullpath,
-                                meta,
-                                file_id.clone(),
-                            )
-                            .with_context(|| format!("Failed to restore file {file_id} from DB"))
+                            let subpath: FileSubPath = dbfile.subpath.into();
+                            let uri = dbfile.uri;
+
+                            let file = match uri.scheme() {
+                                "file" => file_to_resume_from_path_uri(&uri, subpath, file_id)?,
+                                #[cfg(unix)]
+                                "content" => {
+                                    file_to_resume_from_content_uri(&state, uri, subpath, file_id)?
+                                }
+                                unknown => anyhow::bail!("Unknon URI schema: {unknown}"),
+                            };
+
+                            anyhow::Ok(file)
                         })
                         .collect::<Result<_, _>>()?;
 
@@ -536,4 +535,41 @@ async fn acquire_throttle_permit<'a>(
             None
         }
     }
+}
+
+fn file_to_resume_from_path_uri(
+    uri: &url::Url,
+    subpath: FileSubPath,
+    file_id: FileId,
+) -> anyhow::Result<crate::File> {
+    let fullpath = uri
+        .to_file_path()
+        .ok()
+        .context("Failed to extract file path")?;
+
+    let meta = fs::symlink_metadata(&fullpath)
+        .with_context(|| format!("Failed to load file: {}", file_id))?;
+
+    anyhow::ensure!(!meta.is_dir(), "Invalid file type");
+
+    crate::File::new_to_send(subpath, fullpath, meta, file_id.clone())
+        .with_context(|| format!("Failed to restore file {file_id} from DB"))
+}
+
+#[cfg(unix)]
+fn file_to_resume_from_content_uri(
+    state: &State,
+    uri: url::Url,
+    subpath: FileSubPath,
+    file_id: FileId,
+) -> anyhow::Result<crate::File> {
+    let callback = state
+        .fdresolv
+        .as_ref()
+        .context("Encountered content uri but FD resovler callback is missing")?;
+
+    let fd = callback(uri.as_str()).with_context(|| format!("Failed to fetch FD for: {uri}"))?;
+
+    crate::File::new_from_fd(subpath, uri, fd, file_id.clone())
+        .with_context(|| format!("Failed to restore file {file_id} from DB"))
 }
