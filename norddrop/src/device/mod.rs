@@ -6,7 +6,7 @@ use std::{
 };
 
 use drop_auth::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH};
-use drop_config::{Config, DropConfig};
+use drop_config::Config;
 use drop_transfer::{auth, utils::Hidden, File, Service, Transfer};
 use slog::{debug, error, trace, warn, Logger};
 use tokio::sync::{mpsc, Mutex};
@@ -26,6 +26,8 @@ pub(super) struct NordDropFFI {
     event_dispatcher: Arc<EventDispatcher>,
     keys: Arc<auth::Context>,
     config: Config,
+    #[cfg(unix)]
+    fdresolv: Option<Arc<drop_transfer::file::FdResolver>>,
 }
 
 struct EventDispatcher {
@@ -73,6 +75,8 @@ impl NordDropFFI {
             }),
             config: Config::default(),
             keys: Arc::new(crate_key_context(logger, privkey, pubkey_cb)),
+            #[cfg(unix)]
+            fdresolv: None,
         })
     }
 
@@ -168,6 +172,8 @@ impl NordDropFFI {
                 Arc::new(self.config.drop.clone()),
                 moose,
                 self.keys.clone(),
+                #[cfg(unix)]
+                self.fdresolv.clone(),
             )
             .await
             {
@@ -333,7 +339,7 @@ impl NordDropFFI {
             .ok_or(ffi::types::NORDDROP_RES_BAD_INPUT)?;
 
         let xfer = {
-            let files = prepare_transfer_files(&self.logger, &descriptors, &self.config.drop)?;
+            let files = self.prepare_transfer_files(&descriptors)?;
             Transfer::new(peer.ip(), files, &self.config.drop).map_err(|e| {
                 error!(
                     self.logger,
@@ -516,6 +522,88 @@ impl NordDropFFI {
 
         Ok(())
     }
+
+    #[cfg(unix)]
+    pub(super) fn set_fd_resolver_callback(
+        &mut self,
+        callback: ffi_types::norddrop_fd_cb,
+    ) -> Result<()> {
+        trace!(self.logger, "norddrop_set_fd_resolver_callback()",);
+
+        let inst = self.instance.blocking_lock();
+        if inst.is_some() {
+            error!(
+                self.logger,
+                "Failed to set FD resolver callback. Instance is already started"
+            );
+            return Err(ffi::types::NORDDROP_RES_ERROR);
+        }
+        drop(inst);
+
+        self.fdresolv = Some(crate_fd_callback(self.logger.clone(), callback));
+        Ok(())
+    }
+
+    fn prepare_transfer_files(&self, descriptors: &[TransferDescriptor]) -> Result<Vec<File>> {
+        let mut files = Vec::new();
+
+        #[allow(unused_variables)]
+        for (i, desc) in descriptors.iter().enumerate() {
+            if let Some(content_uri) = &desc.content_uri {
+                #[cfg(target_os = "windows")]
+                {
+                    error!(
+                        self.logger,
+                        "Specifying file descriptors in transfers is not supported under Windows"
+                    );
+                    return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
+                }
+
+                #[cfg(not(target_os = "windows"))]
+                {
+                    let fdresolv = if let Some(fdresolv) = self.fdresolv.as_ref() {
+                        fdresolv
+                    } else {
+                        error!(
+                            self.logger,
+                            "Content URI provided but RD resolver callback is not set up"
+                        );
+                        return Err(ffi::types::NORDDROP_RES_TRANSFER_CREATE);
+                    };
+
+                    let fd = if let Some(fd) = fdresolv(content_uri.as_str()) {
+                        fd
+                    } else {
+                        error!(self.logger, "Failed to fetch FD for file: {content_uri}");
+                        return Err(ffi::types::NORDDROP_RES_TRANSFER_CREATE);
+                    };
+
+                    let file =
+                        File::from_fd(&desc.path.0, content_uri.clone(), fd, i).map_err(|e| {
+                            error!(
+                                self.logger,
+                                "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
+                            );
+                            ffi::types::NORDDROP_RES_TRANSFER_CREATE
+                        })?;
+
+                    files.push(file);
+                }
+            } else {
+                let batch = File::from_path(&desc.path.0, &self.config.drop).map_err(|e| {
+                    error!(
+                        self.logger,
+                        "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
+                    );
+                    ffi::types::NORDDROP_RES_TRANSFER_CREATE
+                })?;
+
+                files.extend(batch);
+            }
+        }
+
+        Ok(files)
+    }
 }
 
 fn crate_key_context(
@@ -543,53 +631,6 @@ fn crate_key_context(
     };
 
     auth::Context::new(privkey, public)
-}
-
-fn prepare_transfer_files(
-    logger: &slog::Logger,
-    descriptors: &[TransferDescriptor],
-    config: &DropConfig,
-) -> Result<Vec<File>> {
-    let mut files = Vec::new();
-
-    #[allow(unused_variables)]
-    for (i, desc) in descriptors.iter().enumerate() {
-        if let Some(fd) = desc.fd {
-            #[cfg(target_os = "windows")]
-            {
-                error!(
-                    logger,
-                    "Specifying file descriptors in transfers is not supported under Windows"
-                );
-                return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
-            }
-
-            #[cfg(not(target_os = "windows"))]
-            {
-                let file = File::from_fd(&desc.path.0, fd, i).map_err(|e| {
-                    error!(
-                        logger,
-                        "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
-                    );
-                    ffi::types::NORDDROP_RES_TRANSFER_CREATE
-                })?;
-
-                files.push(file);
-            }
-        } else {
-            let batch = File::from_path(&desc.path.0, config).map_err(|e| {
-                error!(
-                    logger,
-                    "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
-                );
-                ffi::types::NORDDROP_RES_TRANSFER_CREATE
-            })?;
-
-            files.extend(batch);
-        }
-    }
-
-    Ok(files)
 }
 
 fn open_database(
@@ -661,4 +702,40 @@ fn open_database(
             }
         }
     }
+}
+
+#[cfg(unix)]
+fn crate_fd_callback(
+    logger: slog::Logger,
+    fd_cb: ffi_types::norddrop_fd_cb,
+) -> Arc<drop_transfer::file::FdResolver> {
+    use std::ffi::CString;
+
+    let fd_cb = std::sync::Mutex::new(fd_cb);
+
+    let func = move |uri: &str| {
+        let cstr_uri = match CString::new(uri) {
+            Ok(uri) => uri,
+            Err(err) => {
+                warn!(logger, "URI {uri} is invalid: {err}");
+                return None;
+            }
+        };
+
+        let guard = fd_cb.lock().expect("Failed to lock fd callback");
+        let res = unsafe { (guard.cb)(guard.ctx, cstr_uri.as_ptr() as _) };
+        drop(guard);
+
+        if res < 0 {
+            debug!(logger, "FD callback failed for {uri:?}");
+            None
+        } else {
+            Some(res)
+        }
+    };
+
+    // The callback may block the executor
+    let func = move |uri: &str| tokio::task::block_in_place(|| func(uri));
+
+    Arc::new(func)
 }

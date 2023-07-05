@@ -383,7 +383,58 @@ static int norddrop_jni_call_pubkey_cb(void *ctx, const char* ip, char *pubkey) 
     return cb_res;
 }
 
-SWIGINTERN struct norddrop *new_norddrop(norddrop_event_cb events,enum norddrop_log_level level,norddrop_logger_cb logger,norddrop_pubkey_cb pubkey_cb,char const *privkey){
+
+
+DECLARE_CACHED_CLASS(iNordDropFdCb, PKG "INordDropFdCb");
+DECLARE_CACHED_METHOD_ID(iNordDropFdCb, iNordDropFdCbFdHandleID, "fdHandle", "(Ljava/lang/String;)I");
+
+static int norddrop_jni_call_fd_cb(void *ctx, const char* uri) {
+    if (!jvm) {
+        return 1;
+    }
+
+    JNIEnv *env = NULL;
+
+    jint res = (*jvm)->GetEnv(jvm, (void**)&env, JNI_VERSION_1_6);
+    int attached = 0;
+    if (JNI_EDETACHED == res) {
+        JavaVMAttachArgs args = {
+            .version = JNI_VERSION_1_6,
+            .name = NULL,
+            .group = NULL,
+        };
+
+        if ((*jvm)->AttachCurrentThread(jvm, &env, (void*)&args)) {
+            return 1;
+        }
+        attached = 1;
+    } else if (JNI_OK != res) {
+        return 1;
+    }
+
+    jmethodID handle = GET_CACHED_METHOD_ID(env, iNordDropFdCbFdHandleID);
+    RETURN_VAL_AND_THROW_IF_NULL(env, handle, "fdHandle not found.", 1);
+
+    jstring juri = NULL;
+    if (uri != NULL) {
+        juri = (*env)->NewStringUTF(env, uri);
+        RETURN_VAL_AND_THROW_IF_NULL(env, juri, "URI string is null.", 1);
+    }
+
+    int cb_res = (*env)->CallIntMethod(env, (jobject)ctx, handle, juri);
+
+    if (juri != NULL) {
+        (*env)->DeleteLocalRef(env, juri);
+    }
+
+    if (attached) {
+        (*jvm)->DetachCurrentThread(jvm);
+    }
+
+    return cb_res;
+}
+
+SWIGINTERN struct norddrop *new_norddrop__SWIG_0(norddrop_event_cb events,enum norddrop_log_level level,norddrop_logger_cb logger,norddrop_pubkey_cb pubkey_cb,char const *privkey,norddrop_fd_cb fd_cb){
 
         JNIEnv *env = NULL;
         norddrop *t = NULL;
@@ -400,12 +451,28 @@ SWIGINTERN struct norddrop *new_norddrop(norddrop_event_cb events,enum norddrop_
             return NULL;
         }
 
+        result = norddrop_set_fd_resolver_callback(t, fd_cb);
+        if (result != NORDDROP_RES_OK) {
+            norddrop_destroy(t);
+            SWIG_JavaThrowException(env, SWIG_JavaIllegalArgumentException, "Could not set FD resolver callback");
+            return NULL;
+        }
+
         // Find necessary methods and classes so they are cached
         GET_CACHED_METHOD_ID(env, iNordDropLoggerCbloggerHandleID);
         GET_CACHED_METHOD_ID(env, iNordDropEventCbeventHandleID);
         GET_CACHED_METHOD_ID(env, iNordDropPubkeyCbPubkeyHandleID);
+        GET_CACHED_METHOD_ID(env, iNordDropFdCbFdHandleID);
         GET_CACHED_CLASS(env, norddropLogLevel);
 
+        return t;
+    }
+SWIGINTERN struct norddrop *new_norddrop__SWIG_1(norddrop_event_cb events,enum norddrop_log_level level,norddrop_logger_cb logger,norddrop_pubkey_cb pubkey_cb,char const *privkey){
+
+        norddrop *t = NULL;
+        if (NORDDROP_RES_OK != norddrop_new(&t, events, level, logger, pubkey_cb, privkey)) {
+            return NULL;
+        }
         return t;
     }
 SWIGINTERN void delete_norddrop(struct norddrop *self){
@@ -632,7 +699,75 @@ SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NORDDROP_1RES_1
 }
 
 
-SWIGEXPORT jlong JNICALL Java_com_nordsec_norddrop_libnorddropJNI_new_1NordDrop(JNIEnv *jenv, jclass jcls, jobject jarg1, jint jarg2, jobject jarg3, jobject jarg4, jbyteArray jarg5) {
+SWIGEXPORT jlong JNICALL Java_com_nordsec_norddrop_libnorddropJNI_new_1NordDrop_1_1SWIG_10(JNIEnv *jenv, jclass jcls, jobject jarg1, jint jarg2, jobject jarg3, jobject jarg4, jbyteArray jarg5, jobject jarg6) {
+  jlong jresult = 0 ;
+  norddrop_event_cb arg1 ;
+  enum norddrop_log_level arg2 ;
+  norddrop_logger_cb arg3 ;
+  norddrop_pubkey_cb arg4 ;
+  char *arg5 = (char *) 0 ;
+  norddrop_fd_cb arg6 ;
+  struct norddrop *result = 0 ;
+  
+  (void)jenv;
+  (void)jcls;
+  {
+    if (!jvm) {
+      (*jenv)->GetJavaVM(jenv, &jvm);
+    }
+    
+    norddrop_event_cb cb = {
+      .ctx = (*jenv)->NewGlobalRef(jenv, jarg1),
+      .cb = norddrop_jni_call_event_cb,
+    };
+    
+    arg1 = cb;
+  }
+  arg2 = (enum norddrop_log_level)jarg2; 
+  {
+    if (!jvm) {
+      (*jenv)->GetJavaVM(jenv, &jvm);
+    }
+    norddrop_logger_cb cb = {
+      .ctx = (*jenv)->NewGlobalRef(jenv, jarg3),
+      .cb = norddrop_jni_call_logger_cb,
+    };
+    arg3 = cb;
+  }
+  {
+    if (!jvm) {
+      (*jenv)->GetJavaVM(jenv, &jvm);
+    }
+    norddrop_pubkey_cb cb = {
+      .ctx = (*jenv)->NewGlobalRef(jenv, jarg4),
+      .cb = norddrop_jni_call_pubkey_cb,
+    };
+    arg4 = cb;
+  }
+  {
+    arg5 = (char *) (*jenv)->GetByteArrayElements(jenv, jarg5, 0); 
+  }
+  {
+    if (!jvm) {
+      (*jenv)->GetJavaVM(jenv, &jvm);
+    }
+    norddrop_fd_cb cb = {
+      .ctx = (*jenv)->NewGlobalRef(jenv, jarg6),
+      .cb = norddrop_jni_call_fd_cb,
+    };
+    arg6 = cb;
+  }
+  result = (struct norddrop *)new_norddrop__SWIG_0(arg1,arg2,arg3,arg4,(char const *)arg5,arg6);
+  *(struct norddrop **)&jresult = result; 
+  {
+    (*jenv)->ReleaseByteArrayElements(jenv, jarg5, (jbyte *) arg5, 0); 
+  }
+  
+  return jresult;
+}
+
+
+SWIGEXPORT jlong JNICALL Java_com_nordsec_norddrop_libnorddropJNI_new_1NordDrop_1_1SWIG_11(JNIEnv *jenv, jclass jcls, jobject jarg1, jint jarg2, jobject jarg3, jobject jarg4, jbyteArray jarg5) {
   jlong jresult = 0 ;
   norddrop_event_cb arg1 ;
   enum norddrop_log_level arg2 ;
@@ -679,7 +814,7 @@ SWIGEXPORT jlong JNICALL Java_com_nordsec_norddrop_libnorddropJNI_new_1NordDrop(
   {
     arg5 = (char *) (*jenv)->GetByteArrayElements(jenv, jarg5, 0); 
   }
-  result = (struct norddrop *)new_norddrop(arg1,arg2,arg3,arg4,(char const *)arg5);
+  result = (struct norddrop *)new_norddrop__SWIG_1(arg1,arg2,arg3,arg4,(char const *)arg5);
   *(struct norddrop **)&jresult = result; 
   {
     (*jenv)->ReleaseByteArrayElements(jenv, jarg5, (jbyte *) arg5, 0); 

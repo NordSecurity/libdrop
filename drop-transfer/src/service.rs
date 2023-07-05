@@ -36,6 +36,8 @@ pub(super) struct State {
     pub(crate) config: Arc<DropConfig>,
     pub(crate) storage: Arc<Storage>,
     pub(crate) throttle: Semaphore,
+    #[cfg(unix)]
+    pub fdresolv: Option<Arc<crate::file::FdResolver>>,
 }
 
 pub struct Service {
@@ -66,6 +68,7 @@ macro_rules! moose_try_file {
 
 // todo: better name to reduce confusion
 impl Service {
+    #[allow(clippy::too_many_arguments)]
     pub async fn start(
         addr: IpAddr,
         storage: Arc<Storage>,
@@ -74,6 +77,7 @@ impl Service {
         config: Arc<DropConfig>,
         moose: Arc<dyn Moose>,
         auth: Arc<auth::Context>,
+        #[cfg(unix)] fdresolv: Option<Arc<crate::file::FdResolver>>,
     ) -> Result<Self, Error> {
         let task = async {
             let state = Arc::new(State {
@@ -84,6 +88,8 @@ impl Service {
                 config,
                 auth: auth.clone(),
                 storage,
+                #[cfg(unix)]
+                fdresolv,
             });
 
             let stop = CancellationToken::new();

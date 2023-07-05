@@ -694,6 +694,77 @@ void _wrap_delete_NorddropPubkeyCb_norddropgo_0827d1f6f06eb1ea(struct norddrop_p
 }
 
 
+void _wrap_NorddropFdCb_Ctx_set_norddropgo_0827d1f6f06eb1ea(struct norddrop_fd_cb *_swig_go_0, void *_swig_go_1) {
+  struct norddrop_fd_cb *arg1 = (struct norddrop_fd_cb *) 0 ;
+  void *arg2 = (void *) 0 ;
+  
+  arg1 = *(struct norddrop_fd_cb **)&_swig_go_0; 
+  arg2 = *(void **)&_swig_go_1; 
+  
+  if (arg1) (arg1)->ctx = arg2;
+  
+}
+
+
+void *_wrap_NorddropFdCb_Ctx_get_norddropgo_0827d1f6f06eb1ea(struct norddrop_fd_cb *_swig_go_0) {
+  struct norddrop_fd_cb *arg1 = (struct norddrop_fd_cb *) 0 ;
+  void *result = 0 ;
+  void *_swig_go_result;
+  
+  arg1 = *(struct norddrop_fd_cb **)&_swig_go_0; 
+  
+  result = (void *) ((arg1)->ctx);
+  *(void **)&_swig_go_result = (void *)result; 
+  return _swig_go_result;
+}
+
+
+void _wrap_NorddropFdCb_Cb_set_norddropgo_0827d1f6f06eb1ea(struct norddrop_fd_cb *_swig_go_0, void* _swig_go_1) {
+  struct norddrop_fd_cb *arg1 = (struct norddrop_fd_cb *) 0 ;
+  norddrop_fd_fn arg2 = (norddrop_fd_fn) 0 ;
+  
+  arg1 = *(struct norddrop_fd_cb **)&_swig_go_0; 
+  arg2 = *(norddrop_fd_fn *)&_swig_go_1; 
+  
+  if (arg1) (arg1)->cb = arg2;
+  
+}
+
+
+void* _wrap_NorddropFdCb_Cb_get_norddropgo_0827d1f6f06eb1ea(struct norddrop_fd_cb *_swig_go_0) {
+  struct norddrop_fd_cb *arg1 = (struct norddrop_fd_cb *) 0 ;
+  norddrop_fd_fn result;
+  void* _swig_go_result;
+  
+  arg1 = *(struct norddrop_fd_cb **)&_swig_go_0; 
+  
+  result = (norddrop_fd_fn) ((arg1)->cb);
+  *(norddrop_fd_fn *)&_swig_go_result = (norddrop_fd_fn)result; 
+  return _swig_go_result;
+}
+
+
+struct norddrop_fd_cb *_wrap_new_NorddropFdCb_norddropgo_0827d1f6f06eb1ea() {
+  struct norddrop_fd_cb *result = 0 ;
+  struct norddrop_fd_cb *_swig_go_result;
+  
+  
+  result = (struct norddrop_fd_cb *)calloc(1, sizeof(struct norddrop_fd_cb));
+  *(struct norddrop_fd_cb **)&_swig_go_result = (struct norddrop_fd_cb *)result; 
+  return _swig_go_result;
+}
+
+
+void _wrap_delete_NorddropFdCb_norddropgo_0827d1f6f06eb1ea(struct norddrop_fd_cb *_swig_go_0) {
+  struct norddrop_fd_cb *arg1 = (struct norddrop_fd_cb *) 0 ;
+  
+  arg1 = *(struct norddrop_fd_cb **)&_swig_go_0; 
+  
+  free((char *) arg1);
+  
+}
+
+
 struct norddrop *_wrap_new_Norddrop_norddropgo_0827d1f6f06eb1ea(norddrop_event_cb _swig_go_0, intgo _swig_go_1, norddrop_logger_cb _swig_go_2, norddrop_pubkey_cb _swig_go_3, _gostring_ _swig_go_4) {
   norddrop_event_cb arg1 ;
   enum norddrop_log_level arg2 ;

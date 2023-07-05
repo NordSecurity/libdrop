@@ -173,6 +173,40 @@ class KeysCtx:
         return self.this.privkey
 
 
+class FdResolver:
+    def __init__(self):
+        self._files = []
+        self._cached = {}
+
+    def callback(self, ctx, uri):
+        uri: str = uri.decode("utf-8")
+        path = uri.removeprefix("content://")
+
+        fd: int = -1
+        if path.startswith("new"):
+            path = path.removeprefix("new")
+            fd = self.open(path)
+        elif path.startswith("cached"):
+            path = path.removeprefix("cached")
+
+            if path in self._cached:
+                fd = self._cached[path]
+            else:
+                fd = self.open(path)
+                self._cached[path] = fd
+        else:
+            raise Exception(f"Unknown content uri command: {uri}")
+
+        return fd
+
+    def open(self, path: str) -> int:
+        file = open(path, "r")
+        # save to object in order to increase the lifetime of the file until GC collects it and closes the file
+        self._files.append(file)
+
+        return file.fileno()
+
+
 class Drop:
     def __init__(self, path: str, keys: KeysCtx):
         norddrop_lib = ctypes.cdll.LoadLibrary(path)
@@ -193,6 +227,11 @@ class Drop:
             ctypes.POINTER(ctypes.c_char_p),
         )
 
+        fd_cb_func = ctypes.CFUNCTYPE(
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_char_p),
+        )
+
         ceventtype = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_char_p)
         clogtype = ctypes.CFUNCTYPE(
             None, ctypes.c_void_p, ctypes.c_int, ctypes.c_char_p
@@ -202,6 +241,12 @@ class Drop:
             ctypes.c_void_p,
             ctypes.c_char_p,
             ctypes.POINTER(ctypes.c_char_p),
+        )
+
+        cfdresolvtype = ctypes.CFUNCTYPE(
+            ctypes.c_int,
+            ctypes.c_void_p,
+            ctypes.c_char_p,
         )
 
         norddrop_lib.norddrop_version.restype = ctypes.c_char_p
@@ -220,9 +265,12 @@ class Drop:
         )
 
         events = EventQueue()
+        fdresolv = FdResolver()
+
         event_callback_wrapped = ceventtype(events.callback)
         log_callback_wrapped = clogtype(log_callback)
         pubkey_callback_wrapped = cpubkeytype(keys.callback)
+        fd_callback_wrapped = cfdresolvtype(fdresolv.callback)
 
         class event_cb(ctypes.Structure):
             _fields_ = [("ctx", ctypes.c_void_p), ("cb", event_cb_func)]
@@ -242,13 +290,21 @@ class Drop:
             def __str__(self):
                 return f"Python Pubkey callback: ctx={self.ctx}, cb={self.cb}"
 
+        class fdresolv_cb(ctypes.Structure):
+            _fields_ = [("ctx", ctypes.c_void_p), ("cb", fd_cb_func)]
+
+            def __str__(self):
+                return f"Python FD resolver callback: ctx={self.ctx}, cb={self.cb}"
+
         logger_instance = logger_cb()
         eventer_instance = event_cb()
         pubkey_instance = pubkey_cb()
+        fd_instance = fdresolv_cb()
 
         logger_instance.cb = ctypes.cast(log_callback_wrapped, logger_cb_func)
         eventer_instance.cb = ctypes.cast(event_callback_wrapped, event_cb_func)
         pubkey_instance.cb = ctypes.cast(pubkey_callback_wrapped, pubkey_cb_func)
+        fd_instance.cb = ctypes.cast(fd_callback_wrapped, fd_cb_func)
 
         fake_instance = ctypes.pointer(ctypes.c_void_p())
         norddrop_instance = ctypes.pointer(fake_instance)
@@ -262,10 +318,13 @@ class Drop:
             ctypes.create_string_buffer(keys.secret()),
         )
 
+        norddrop_lib.norddrop_set_fd_resolver_callback(norddrop_instance, fd_instance)
+
         self._instance = norddrop_instance
         self._events = events
+        self._fdresolv = fdresolv
         self._lib = norddrop_lib
-        self._retain = [logger_instance, eventer_instance, pubkey_instance]
+        self._retain = [logger_instance, eventer_instance, pubkey_instance, fd_instance]
 
     def new_transfer(self, peer: str, descriptors: typing.List[str]) -> str:
         descriptors_json = []
@@ -283,8 +342,8 @@ class Drop:
 
         return xfid.decode("utf-8")
 
-    def new_transfer_with_fd(self, peer: str, path: str, fd: int) -> str:
-        descriptor = [{"path": path, "fd": fd}]
+    def new_transfer_with_fd(self, peer: str, path: str, uri: str) -> str:
+        descriptor = [{"path": path, "content_uri": uri}]
 
         xfid = self._lib.norddrop_new_transfer(
             self._instance,

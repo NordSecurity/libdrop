@@ -112,16 +112,13 @@ impl Transfer {
                 .files
                 .values()
                 .filter_map(|f| {
-                    let base_path = match &f.kind {
+                    let uri = match &f.kind {
                         FileKind::FileToSend { source, .. } => match source {
-                            FileSource::Path(fullpath) => fullpath
-                                .ancestors()
-                                .nth(f.subpath.iter().count())?
-                                .to_str()?,
+                            FileSource::Path(fullpath) => {
+                                url::Url::from_file_path(&fullpath.0).ok()?
+                            }
                             #[cfg(unix)]
-                            FileSource::Fd(_) => ".", /* Let's pretend the files are in the
-                                                       * working dir. The FDs are only used on
-                                                       * Android, */
+                            FileSource::Fd { content_uri, .. } => content_uri.clone(),
                         },
                         _ => return None,
                     };
@@ -129,7 +126,7 @@ impl Transfer {
                     Some(drop_storage::types::TransferOutgoingPath {
                         file_id: f.file_id.to_string(),
                         relative_path: f.subpath.to_string(),
-                        base_path: base_path.to_string(),
+                        uri,
                         size: f.size() as _,
                     })
                 })

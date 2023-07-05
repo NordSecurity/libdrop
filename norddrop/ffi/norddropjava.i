@@ -18,7 +18,8 @@ static JavaVM *jvm = NULL;
         enum norddrop_log_level level,
         norddrop_logger_cb logger,
         norddrop_pubkey_cb pubkey_cb,
-        const char *privkey) {
+        const char *privkey,
+        norddrop_fd_cb fd_cb) {
 
         JNIEnv *env = NULL;
         norddrop *t = NULL;
@@ -35,10 +36,18 @@ static JavaVM *jvm = NULL;
             return NULL;
         }
 
+        result = norddrop_set_fd_resolver_callback(t, fd_cb);
+        if (result != NORDDROP_RES_OK) {
+            norddrop_destroy(t);
+            SWIG_JavaThrowException(env, SWIG_JavaIllegalArgumentException, "Could not set FD resolver callback");
+            return NULL;
+        }
+
         // Find necessary methods and classes so they are cached
         GET_CACHED_METHOD_ID(env, iNordDropLoggerCbloggerHandleID);
         GET_CACHED_METHOD_ID(env, iNordDropEventCbeventHandleID);
         GET_CACHED_METHOD_ID(env, iNordDropPubkeyCbPubkeyHandleID);
+        GET_CACHED_METHOD_ID(env, iNordDropFdCbFdHandleID);
         GET_CACHED_CLASS(env, norddropLogLevel);
 
         return t;
@@ -277,6 +286,79 @@ static int norddrop_jni_call_pubkey_cb(void *ctx, const char* ip, char *pubkey) 
     norddrop_pubkey_cb cb = {
         .ctx = (*jenv)->NewGlobalRef(jenv, $input),
         .cb = norddrop_jni_call_pubkey_cb,
+    };
+    $1 = cb;
+}
+
+
+///////////////////////////////////////////////////////////////
+// Wrap norddrop_fd_cb into java interface
+
+// INordDropfdCb.java is manualy written.
+%typemap(jstype) norddrop_fd_cb "INordDropFdCb"
+%typemap(jtype) norddrop_fd_cb "INordDropFdCb"
+%typemap(jni) norddrop_fd_cb "jobject"
+%typemap(javain) norddrop_fd_cb "$javainput"
+
+%{
+
+DECLARE_CACHED_CLASS(iNordDropFdCb, PKG "INordDropFdCb");
+DECLARE_CACHED_METHOD_ID(iNordDropFdCb, iNordDropFdCbFdHandleID, "fdHandle", "(Ljava/lang/String;)I");
+
+static int norddrop_jni_call_fd_cb(void *ctx, const char* uri) {
+    if (!jvm) {
+        return 1;
+    }
+
+    JNIEnv *env = NULL;
+
+    jint res = (*jvm)->GetEnv(jvm, (void**)&env, JNI_VERSION_1_6);
+    int attached = 0;
+    if (JNI_EDETACHED == res) {
+        JavaVMAttachArgs args = {
+            .version = JNI_VERSION_1_6,
+            .name = NULL,
+            .group = NULL,
+        };
+
+        if ((*jvm)->AttachCurrentThread(jvm, &env, (void*)&args)) {
+            return 1;
+        }
+        attached = 1;
+    } else if (JNI_OK != res) {
+        return 1;
+    }
+
+    jmethodID handle = GET_CACHED_METHOD_ID(env, iNordDropFdCbFdHandleID);
+    RETURN_VAL_AND_THROW_IF_NULL(env, handle, "fdHandle not found.", 1);
+
+    jstring juri = NULL;
+    if (uri != NULL) {
+        juri = (*env)->NewStringUTF(env, uri);
+        RETURN_VAL_AND_THROW_IF_NULL(env, juri, "URI string is null.", 1);
+    }
+
+    int cb_res = (*env)->CallIntMethod(env, (jobject)ctx, handle, juri);
+
+    if (juri != NULL) {
+        (*env)->DeleteLocalRef(env, juri);
+    }
+
+    if (attached) {
+        (*jvm)->DetachCurrentThread(jvm);
+    }
+
+    return cb_res;
+}
+%}
+
+%typemap(in) norddrop_fd_cb {
+    if (!jvm) {
+        (*jenv)->GetJavaVM(jenv, &jvm);
+    }
+    norddrop_fd_cb cb = {
+        .ctx = (*jenv)->NewGlobalRef(jenv, $input),
+        .cb = norddrop_jni_call_fd_cb,
     };
     $1 = cb;
 }

@@ -20,7 +20,7 @@ pub(super) fn open(source: &super::FileSource) -> crate::Result<Box<dyn Reader>>
     let reader: Box<dyn Reader> = match source {
         super::FileSource::Path(path) => Box::new(path::FileReader::new(path)?),
         #[cfg(unix)]
-        super::FileSource::Fd(fd) => Box::new(unsafe { fd::FileReader::new(*fd) }),
+        super::FileSource::Fd { fd, .. } => Box::new(unsafe { fd::FileReader::new(*fd) }),
     };
 
     Ok(reader)

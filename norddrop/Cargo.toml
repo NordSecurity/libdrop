@@ -15,6 +15,7 @@ serde_json = "1.0"
 slog = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
+url = { workspace = true }
 
 drop-transfer = { version = "1.0", path = "../drop-transfer" }
 drop-config = { version = "1.0", path = "../drop-config" }

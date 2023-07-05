@@ -35,8 +35,8 @@ typedef void* swig_type_3;
 typedef void* swig_type_4;
 typedef void* swig_type_5;
 typedef void* swig_type_6;
-typedef _gostring_ swig_type_7;
-typedef _gostring_ swig_type_8;
+typedef void* swig_type_7;
+typedef void* swig_type_8;
 typedef _gostring_ swig_type_9;
 typedef _gostring_ swig_type_10;
 typedef _gostring_ swig_type_11;
@@ -50,10 +50,12 @@ typedef _gostring_ swig_type_18;
 typedef _gostring_ swig_type_19;
 typedef _gostring_ swig_type_20;
 typedef _gostring_ swig_type_21;
-typedef long long swig_type_22;
+typedef _gostring_ swig_type_22;
 typedef _gostring_ swig_type_23;
 typedef long long swig_type_24;
 typedef _gostring_ swig_type_25;
+typedef long long swig_type_26;
+typedef _gostring_ swig_type_27;
 extern void _wrap_Swig_free_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1);
 extern uintptr_t _wrap_Swig_malloc_norddropgo_0827d1f6f06eb1ea(swig_intgo arg1);
 extern swig_intgo _wrap_NORDDROPLOGCRITICAL_norddropgo_0827d1f6f06eb1ea(void);
@@ -92,22 +94,28 @@ extern void _wrap_NorddropPubkeyCb_Cb_set_norddropgo_0827d1f6f06eb1ea(uintptr_t 
 extern swig_type_6 _wrap_NorddropPubkeyCb_Cb_get_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1);
 extern uintptr_t _wrap_new_NorddropPubkeyCb_norddropgo_0827d1f6f06eb1ea(void);
 extern void _wrap_delete_NorddropPubkeyCb_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1);
+extern void _wrap_NorddropFdCb_Ctx_set_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, uintptr_t arg2);
+extern uintptr_t _wrap_NorddropFdCb_Ctx_get_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1);
+extern void _wrap_NorddropFdCb_Cb_set_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_7 arg2);
+extern swig_type_8 _wrap_NorddropFdCb_Cb_get_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1);
+extern uintptr_t _wrap_new_NorddropFdCb_norddropgo_0827d1f6f06eb1ea(void);
+extern void _wrap_delete_NorddropFdCb_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1);
 
 #include <string.h>
 
-extern uintptr_t _wrap_new_Norddrop_norddropgo_0827d1f6f06eb1ea(norddrop_event_cb arg1, swig_intgo arg2, norddrop_logger_cb arg3, norddrop_pubkey_cb arg4, swig_type_7 arg5);
+extern uintptr_t _wrap_new_Norddrop_norddropgo_0827d1f6f06eb1ea(norddrop_event_cb arg1, swig_intgo arg2, norddrop_logger_cb arg3, norddrop_pubkey_cb arg4, swig_type_9 arg5);
 extern void _wrap_delete_Norddrop_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1);
-extern swig_intgo _wrap_Norddrop_Start_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_8 arg2, swig_type_9 arg3);
+extern swig_intgo _wrap_Norddrop_Start_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_10 arg2, swig_type_11 arg3);
 extern swig_intgo _wrap_Norddrop_Stop_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1);
-extern swig_intgo _wrap_Norddrop_CancelTransfer_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_10 arg2);
-extern swig_intgo _wrap_Norddrop_CancelFile_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_11 arg2, swig_type_12 arg3);
-extern swig_intgo _wrap_Norddrop_RejectFile_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_13 arg2, swig_type_14 arg3);
-extern swig_intgo _wrap_Norddrop_Download_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_15 arg2, swig_type_16 arg3, swig_type_17 arg4);
-extern swig_type_18 _wrap_Norddrop_NewTransfer_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_19 arg2, swig_type_20 arg3);
-extern swig_intgo _wrap_Norddrop_PurgeTransfers_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_21 arg2);
-extern swig_intgo _wrap_Norddrop_PurgeTransfersUntil_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_22 arg2);
-extern swig_type_23 _wrap_Norddrop_GetTransfersSince_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_24 arg2);
-extern swig_type_25 _wrap_Norddrop_Version_norddropgo_0827d1f6f06eb1ea(void);
+extern swig_intgo _wrap_Norddrop_CancelTransfer_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_12 arg2);
+extern swig_intgo _wrap_Norddrop_CancelFile_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_13 arg2, swig_type_14 arg3);
+extern swig_intgo _wrap_Norddrop_RejectFile_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_15 arg2, swig_type_16 arg3);
+extern swig_intgo _wrap_Norddrop_Download_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_17 arg2, swig_type_18 arg3, swig_type_19 arg4);
+extern swig_type_20 _wrap_Norddrop_NewTransfer_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_21 arg2, swig_type_22 arg3);
+extern swig_intgo _wrap_Norddrop_PurgeTransfers_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_23 arg2);
+extern swig_intgo _wrap_Norddrop_PurgeTransfersUntil_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_24 arg2);
+extern swig_type_25 _wrap_Norddrop_GetTransfersSince_norddropgo_0827d1f6f06eb1ea(uintptr_t arg1, swig_type_26 arg2);
+extern swig_type_27 _wrap_Norddrop_Version_norddropgo_0827d1f6f06eb1ea(void);
 #undef intgo
 */
 import "C"
@@ -445,6 +453,61 @@ type NorddropPubkeyCb interface {
 	GetCb() (_swig_ret _swig_fnptr)
 }
 
+type SwigcptrNorddropFdCb uintptr
+
+func (p SwigcptrNorddropFdCb) Swigcptr() uintptr {
+	return (uintptr)(p)
+}
+
+func (p SwigcptrNorddropFdCb) SwigIsNorddropFdCb() {
+}
+
+func (arg1 SwigcptrNorddropFdCb) SetCtx(arg2 uintptr) {
+	_swig_i_0 := arg1
+	_swig_i_1 := arg2
+	C._wrap_NorddropFdCb_Ctx_set_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), C.uintptr_t(_swig_i_1))
+}
+
+func (arg1 SwigcptrNorddropFdCb) GetCtx() (_swig_ret uintptr) {
+	var swig_r uintptr
+	_swig_i_0 := arg1
+	swig_r = (uintptr)(C._wrap_NorddropFdCb_Ctx_get_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0)))
+	return swig_r
+}
+
+func (arg1 SwigcptrNorddropFdCb) SetCb(arg2 _swig_fnptr) {
+	_swig_i_0 := arg1
+	_swig_i_1 := arg2
+	C._wrap_NorddropFdCb_Cb_set_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), C.swig_type_7(_swig_i_1))
+}
+
+func (arg1 SwigcptrNorddropFdCb) GetCb() (_swig_ret _swig_fnptr) {
+	var swig_r _swig_fnptr
+	_swig_i_0 := arg1
+	swig_r = (_swig_fnptr)(C._wrap_NorddropFdCb_Cb_get_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0)))
+	return swig_r
+}
+
+func NewNorddropFdCb() (_swig_ret NorddropFdCb) {
+	var swig_r NorddropFdCb
+	swig_r = (NorddropFdCb)(SwigcptrNorddropFdCb(C._wrap_new_NorddropFdCb_norddropgo_0827d1f6f06eb1ea()))
+	return swig_r
+}
+
+func DeleteNorddropFdCb(arg1 NorddropFdCb) {
+	_swig_i_0 := arg1.Swigcptr()
+	C._wrap_delete_NorddropFdCb_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0))
+}
+
+type NorddropFdCb interface {
+	Swigcptr() uintptr
+	SwigIsNorddropFdCb()
+	SetCtx(arg2 uintptr)
+	GetCtx() (_swig_ret uintptr)
+	SetCb(arg2 _swig_fnptr)
+	GetCb() (_swig_ret _swig_fnptr)
+}
+
 
 var eventCallbacks = map[uintptr]func(string){}
 var loggerCallbacks = map[uintptr]func(int, string){}
@@ -563,7 +626,7 @@ func NewNorddrop(arg1 func(string), arg2 Enum_SS_norddrop_log_level, arg3 func(i
         _swig_i_3 = cb
 }
 	_swig_i_4 := arg5
-	swig_r = (Norddrop)(SwigcptrNorddrop(C._wrap_new_Norddrop_norddropgo_0827d1f6f06eb1ea(C.norddrop_event_cb(_swig_i_0), C.swig_intgo(_swig_i_1), C.norddrop_logger_cb(_swig_i_2), C.norddrop_pubkey_cb(_swig_i_3), *(*C.swig_type_7)(unsafe.Pointer(&_swig_i_4)))))
+	swig_r = (Norddrop)(SwigcptrNorddrop(C._wrap_new_Norddrop_norddropgo_0827d1f6f06eb1ea(C.norddrop_event_cb(_swig_i_0), C.swig_intgo(_swig_i_1), C.norddrop_logger_cb(_swig_i_2), C.norddrop_pubkey_cb(_swig_i_3), *(*C.swig_type_9)(unsafe.Pointer(&_swig_i_4)))))
 	if Swig_escape_always_false {
 		Swig_escape_val = arg5
 	}
@@ -588,7 +651,7 @@ func (arg1 SwigcptrNorddrop) Start(arg2 string, arg3 string) (_swig_ret Enum_SS_
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2
 	_swig_i_2 := arg3
-	swig_r = (Enum_SS_norddrop_result)(C._wrap_Norddrop_Start_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), *(*C.swig_type_8)(unsafe.Pointer(&_swig_i_1)), *(*C.swig_type_9)(unsafe.Pointer(&_swig_i_2))))
+	swig_r = (Enum_SS_norddrop_result)(C._wrap_Norddrop_Start_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), *(*C.swig_type_10)(unsafe.Pointer(&_swig_i_1)), *(*C.swig_type_11)(unsafe.Pointer(&_swig_i_2))))
 	if Swig_escape_always_false {
 		Swig_escape_val = arg2
 	}
@@ -609,7 +672,7 @@ func (arg1 SwigcptrNorddrop) CancelTransfer(arg2 string) (_swig_ret Enum_SS_nord
 	var swig_r Enum_SS_norddrop_result
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2
-	swig_r = (Enum_SS_norddrop_result)(C._wrap_Norddrop_CancelTransfer_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), *(*C.swig_type_10)(unsafe.Pointer(&_swig_i_1))))
+	swig_r = (Enum_SS_norddrop_result)(C._wrap_Norddrop_CancelTransfer_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), *(*C.swig_type_12)(unsafe.Pointer(&_swig_i_1))))
 	if Swig_escape_always_false {
 		Swig_escape_val = arg2
 	}
@@ -621,7 +684,7 @@ func (arg1 SwigcptrNorddrop) CancelFile(arg2 string, arg3 string) (_swig_ret Enu
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2
 	_swig_i_2 := arg3
-	swig_r = (Enum_SS_norddrop_result)(C._wrap_Norddrop_CancelFile_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), *(*C.swig_type_11)(unsafe.Pointer(&_swig_i_1)), *(*C.swig_type_12)(unsafe.Pointer(&_swig_i_2))))
+	swig_r = (Enum_SS_norddrop_result)(C._wrap_Norddrop_CancelFile_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), *(*C.swig_type_13)(unsafe.Pointer(&_swig_i_1)), *(*C.swig_type_14)(unsafe.Pointer(&_swig_i_2))))
 	if Swig_escape_always_false {
 		Swig_escape_val = arg2
 	}
@@ -636,7 +699,7 @@ func (arg1 SwigcptrNorddrop) RejectFile(arg2 string, arg3 string) (_swig_ret Enu
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2
 	_swig_i_2 := arg3
-	swig_r = (Enum_SS_norddrop_result)(C._wrap_Norddrop_RejectFile_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), *(*C.swig_type_13)(unsafe.Pointer(&_swig_i_1)), *(*C.swig_type_14)(unsafe.Pointer(&_swig_i_2))))
+	swig_r = (Enum_SS_norddrop_result)(C._wrap_Norddrop_RejectFile_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), *(*C.swig_type_15)(unsafe.Pointer(&_swig_i_1)), *(*C.swig_type_16)(unsafe.Pointer(&_swig_i_2))))
 	if Swig_escape_always_false {
 		Swig_escape_val = arg2
 	}
@@ -652,7 +715,7 @@ func (arg1 SwigcptrNorddrop) Download(arg2 string, arg3 string, arg4 string) (_s
 	_swig_i_1 := arg2
 	_swig_i_2 := arg3
 	_swig_i_3 := arg4
-	swig_r = (Enum_SS_norddrop_result)(C._wrap_Norddrop_Download_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), *(*C.swig_type_15)(unsafe.Pointer(&_swig_i_1)), *(*C.swig_type_16)(unsafe.Pointer(&_swig_i_2)), *(*C.swig_type_17)(unsafe.Pointer(&_swig_i_3))))
+	swig_r = (Enum_SS_norddrop_result)(C._wrap_Norddrop_Download_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), *(*C.swig_type_17)(unsafe.Pointer(&_swig_i_1)), *(*C.swig_type_18)(unsafe.Pointer(&_swig_i_2)), *(*C.swig_type_19)(unsafe.Pointer(&_swig_i_3))))
 	if Swig_escape_always_false {
 		Swig_escape_val = arg2
 	}
@@ -670,7 +733,7 @@ func (arg1 SwigcptrNorddrop) NewTransfer(arg2 string, arg3 string) (_swig_ret st
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2
 	_swig_i_2 := arg3
-	swig_r_p := C._wrap_Norddrop_NewTransfer_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), *(*C.swig_type_19)(unsafe.Pointer(&_swig_i_1)), *(*C.swig_type_20)(unsafe.Pointer(&_swig_i_2)))
+	swig_r_p := C._wrap_Norddrop_NewTransfer_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), *(*C.swig_type_21)(unsafe.Pointer(&_swig_i_1)), *(*C.swig_type_22)(unsafe.Pointer(&_swig_i_2)))
 	swig_r = *(*string)(unsafe.Pointer(&swig_r_p))
 	if Swig_escape_always_false {
 		Swig_escape_val = arg2
@@ -687,7 +750,7 @@ func (arg1 SwigcptrNorddrop) PurgeTransfers(arg2 string) (_swig_ret Enum_SS_nord
 	var swig_r Enum_SS_norddrop_result
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2
-	swig_r = (Enum_SS_norddrop_result)(C._wrap_Norddrop_PurgeTransfers_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), *(*C.swig_type_21)(unsafe.Pointer(&_swig_i_1))))
+	swig_r = (Enum_SS_norddrop_result)(C._wrap_Norddrop_PurgeTransfers_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), *(*C.swig_type_23)(unsafe.Pointer(&_swig_i_1))))
 	if Swig_escape_always_false {
 		Swig_escape_val = arg2
 	}
@@ -698,7 +761,7 @@ func (arg1 SwigcptrNorddrop) PurgeTransfersUntil(arg2 int64) (_swig_ret Enum_SS_
 	var swig_r Enum_SS_norddrop_result
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2
-	swig_r = (Enum_SS_norddrop_result)(C._wrap_Norddrop_PurgeTransfersUntil_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), C.swig_type_22(_swig_i_1)))
+	swig_r = (Enum_SS_norddrop_result)(C._wrap_Norddrop_PurgeTransfersUntil_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), C.swig_type_24(_swig_i_1)))
 	return swig_r
 }
 
@@ -706,7 +769,7 @@ func (arg1 SwigcptrNorddrop) GetTransfersSince(arg2 int64) (_swig_ret string) {
 	var swig_r string
 	_swig_i_0 := arg1
 	_swig_i_1 := arg2
-	swig_r_p := C._wrap_Norddrop_GetTransfersSince_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), C.swig_type_24(_swig_i_1))
+	swig_r_p := C._wrap_Norddrop_GetTransfersSince_norddropgo_0827d1f6f06eb1ea(C.uintptr_t(_swig_i_0), C.swig_type_26(_swig_i_1))
 	swig_r = *(*string)(unsafe.Pointer(&swig_r_p))
 	var swig_r_1 string
  swig_r_1 = swigCopyString(swig_r) 
