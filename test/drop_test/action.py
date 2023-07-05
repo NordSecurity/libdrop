@@ -465,12 +465,13 @@ class PurgeTransfers(Action):
 
 
 class Start(Action):
-    def __init__(self, addr: str, dbpath: str = ":memory:"):
+    def __init__(self, addr: str, dbpath: str = ":memory:", max_reqs: int = 50):
         self._addr = addr
         self._dbpath = dbpath
+        self._max_reqs = max_reqs
 
     async def run(self, drop: ffi.Drop):
-        drop.start(self._addr, self._dbpath)
+        drop.start(self._addr, self._dbpath, self._max_reqs)
 
     def __str__(self):
         return f"Start(addr={self._addr}, dbpath={self._dbpath})"

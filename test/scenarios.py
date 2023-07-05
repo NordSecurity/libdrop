@@ -5947,4 +5947,116 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario30",
+        "Trigger DDoS protection. Expect some transfers to fail",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.WaitRacy(
+                        [
+                            event.Queued(
+                                0,
+                                {
+                                    event.File(
+                                        FILES["testfile-small"].id,
+                                        "testfile-small",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                            event.Queued(
+                                1,
+                                {
+                                    event.File(
+                                        FILES["testfile-small"].id,
+                                        "testfile-small",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                            event.FinishFailedTransfer(
+                                2,
+                                Error.IO,
+                            ),
+                        ]
+                    ),
+                    action.Sleep(2),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            3,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.ExpectCancel([0, 1, 3], True),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    # There are 2 request per transfer, the first one for
+                    # authentication nonce and the second with transfer. One
+                    # more is needed because that's how the implementation
+                    # works.
+                    action.Start("172.20.0.15", max_reqs=5),
+                    action.WaitRacy(
+                        [
+                            event.Receive(
+                                0,
+                                "172.20.0.5",
+                                {
+                                    event.File(
+                                        FILES["testfile-small"].id,
+                                        "testfile-small",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                            event.Receive(
+                                1,
+                                "172.20.0.5",
+                                {
+                                    event.File(
+                                        FILES["testfile-small"].id,
+                                        "testfile-small",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                        ]
+                    ),
+                    action.Wait(
+                        event.Receive(
+                            2,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.CancelTransferRequest(1),
+                    action.CancelTransferRequest(2),
+                    action.ExpectCancel([0, 1, 2], False),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]
