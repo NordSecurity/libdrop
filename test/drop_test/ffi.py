@@ -438,7 +438,7 @@ class Drop:
             err_type = LibResult(err).name
             raise Exception(f"purge_transfers has failed with code: {err}({err_type})")
 
-    def start(self, addr: str, dbpath: str):
+    def start(self, addr: str, dbpath: str, max_reqs_per_sec: int):
         cfg = {
             "dir_depth_limit": 5,
             "transfer_file_limit": 1000,
@@ -448,6 +448,7 @@ class Drop:
             "moose_event_path": "/tmp/moose-events",
             "moose_prod": False,
             "storage_path": dbpath,
+            "max_requests_per_sec": max_reqs_per_sec,
         }
 
         err = self._lib.norddrop_start(
