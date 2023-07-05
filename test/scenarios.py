@@ -4553,6 +4553,35 @@ scenarios = [
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-small"].id, False)
                     ),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.15",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "base_path": "/tmp",
+                                "bytes": 1048576,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "rejected",
+                                        "by_peer": false
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
@@ -4575,6 +4604,34 @@ scenarios = [
                     ),
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-small"].id, True)
+                    ),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.5",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "incoming",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "bytes": 1048576,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "rejected",
+                                        "by_peer": true
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
                     ),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
