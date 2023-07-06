@@ -6060,7 +6060,118 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario31-1",
+        "scenario31",
+        "Send the same file with two different transfer into the same directory. Expect no errors",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.WaitRacy(
+                        [
+                            event.Queued(
+                                0,
+                                {
+                                    event.File(
+                                        FILES["testfile-small"].id,
+                                        "testfile-small",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                            event.Queued(
+                                1,
+                                {
+                                    event.File(
+                                        FILES["testfile-small"].id,
+                                        "testfile-small",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                            event.Start(
+                                0,
+                                FILES["testfile-small"].id,
+                            ),
+                            event.Start(
+                                1,
+                                FILES["testfile-small"].id,
+                            ),
+                            event.FinishFileUploaded(
+                                0,
+                                FILES["testfile-small"].id,
+                            ),
+                            event.FinishFileUploaded(
+                                1,
+                                FILES["testfile-small"].id,
+                            ),
+                        ],
+                    ),
+                    action.ExpectCancel([0, 1], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15"),
+                    action.WaitRacy(
+                        [
+                            event.Receive(
+                                0,
+                                "172.20.0.5",
+                                {
+                                    event.File(
+                                        FILES["testfile-small"].id,
+                                        "testfile-small",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                            event.Receive(
+                                1,
+                                "172.20.0.5",
+                                {
+                                    event.File(
+                                        FILES["testfile-small"].id,
+                                        "testfile-small",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                        ]
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-small"].id,
+                        "/tmp/received/31/",
+                    ),
+                    action.Download(
+                        1,
+                        FILES["testfile-small"].id,
+                        "/tmp/received/31/",
+                    ),
+                    # We cannot predict the final path of files from each transfer so we cannot wait for specific event
+                    action.DrainEvents(4),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/31/testfile-small", 1048576),
+                            action.File("/tmp/received/31/testfile-small(1)", 1048576),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.CancelTransferRequest(1),
+                    action.ExpectCancel([0, 1], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario32-1",
         "Remove file on sending side. Expect file not being present in the sender JSON output",
         {
             "ren": ActionList(
@@ -6186,7 +6297,7 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario31-2",
+        "scenario32-2",
         "Remove file on receiver side. Expect file not being present in the receiver JSON output",
         {
             "ren": ActionList(
