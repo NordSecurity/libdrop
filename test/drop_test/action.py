@@ -273,6 +273,21 @@ class WaitRacy(Action):
         return f"WaitRacy({', '.join(str(e) for e in self._events)})"
 
 
+class DrainEvents(Action):
+    def __init__(self, count: int):
+        self._count = count
+
+    async def run(self, drop: ffi.Drop):
+        for i in range(0, self._count):
+            e = await drop._events.wait_for_any_event(100, ignore_progress=True)
+
+            if e is None:
+                raise Exception(f"Missing event number {i} while draining")
+
+    def __str__(self):
+        return f"DrainEvents({self._count})"
+
+
 class NoEvent(Action):
     def __init__(self, duration: int = 6):
         self._duration = duration

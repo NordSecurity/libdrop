@@ -77,7 +77,9 @@ class EventQueue:
                 ]
 
             if len(self._events) > 0:
-                return self._events[0]
+                e = self._events[0]
+                self._events = self._events[1:]
+                return e
 
             await asyncio.sleep(1)
 
