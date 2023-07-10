@@ -26,6 +26,8 @@ pub enum OutgoingPathStateEventData {
     Failed { status_code: i64, bytes_sent: i64 },
     #[serde(rename = "completed")]
     Completed,
+    #[serde(rename = "rejected")]
+    Rejected { by_peer: bool },
 }
 
 #[derive(Debug, Serialize)]
@@ -47,6 +49,8 @@ pub enum IncomingPathStateEventData {
     },
     #[serde(rename = "completed")]
     Completed { final_path: String },
+    #[serde(rename = "rejected")]
+    Rejected { by_peer: bool },
 }
 
 #[derive(Debug, Serialize)]
