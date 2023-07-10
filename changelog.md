@@ -9,6 +9,15 @@
 ---
 <br>
 
+### v4.2.0
+### **Little rejection**
+---
+* Fix rejection states not being present in the storage JSON output
+* Add `norddrop_remove_transfer_file()` method for removing rejected files from the database
+
+---
+<br>
+
 ### v4.1.0
 ### **SQL: Save, Query, Love**
 ---

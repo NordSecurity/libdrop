@@ -3,10 +3,11 @@ libdrop is a library for sending/receiving files, primarily over meshnet, but
 WAN is also an option.
 
 # Releasing
-- We follow the semver.
-- After changes are introduced it might need security review. This is especially true if major semver component is increased.
-- Before releasing `changelog.md` must be updated with the version name being released.
-- After the release the `main` branch should be merged into the `dev` branch
+- The version must be set in `LIBDROP_RELEASE_NAME` env variable before compiling the code. The value is embedded inside the binary as the release
+version. The format is `v{semver}`. An API call to `norddrop_version()` should be made to ensure that.
+- Before releasing `changelog.md` must be updated with the version name being released. Best if the tag is pointing to the commit updating `changelog.md`.
+- After the release the `main` branch must be merged into the `dev` branch.
+- After changes are introduced it might need an appsec review. This is especially true if the major semver component is increased.
 
 # Tests
 ## Whole testsuite
