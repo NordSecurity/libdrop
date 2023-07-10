@@ -6,7 +6,7 @@ use std::{path::Path, vec};
 use include_dir::{include_dir, Dir};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{params, Transaction};
+use rusqlite::{params, OptionalExtension, Transaction};
 use rusqlite_migration::Migrations;
 use slog::{trace, warn, Logger};
 use types::{
@@ -116,7 +116,8 @@ impl Storage {
             .query_row(
                 params![transfer_id.to_string(), TransferType::Incoming as u32],
                 |r| r.get("peer"),
-            )?;
+            )
+            .optional()?;
 
         let peer = if let Some(record) = record {
             record
