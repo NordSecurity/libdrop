@@ -786,6 +786,24 @@ impl Storage {
                 .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
             );
 
+            path.states.extend(
+                conn.prepare(
+                    r#"
+                    SELECT * FROM outgoing_path_reject_states WHERE path_id = ?1
+                    "#,
+                )?
+                .query_map(params![path.id], |row| {
+                    Ok(OutgoingPathStateEvent {
+                        path_id: row.get("path_id")?,
+                        created_at: row.get("created_at")?,
+                        data: OutgoingPathStateEventData::Rejected {
+                            by_peer: row.get("by_peer")?,
+                        },
+                    })
+                })?
+                .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
+            );
+
             path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
         }
 
@@ -906,6 +924,24 @@ impl Storage {
                         created_at: row.get("created_at")?,
                         data: IncomingPathStateEventData::Completed {
                             final_path: row.get("final_path")?,
+                        },
+                    })
+                })?
+                .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
+            );
+
+            path.states.extend(
+                conn.prepare(
+                    r#"
+                    SELECT * FROM incoming_path_reject_states WHERE path_id = ?1
+                    "#,
+                )?
+                .query_map(params![path.id], |row| {
+                    Ok(IncomingPathStateEvent {
+                        path_id: row.get("path_id")?,
+                        created_at: row.get("created_at")?,
+                        data: IncomingPathStateEventData::Rejected {
+                            by_peer: row.get("by_peer")?,
                         },
                     })
                 })?
