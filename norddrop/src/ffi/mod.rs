@@ -638,6 +638,58 @@ pub extern "C" fn norddrop_get_transfers_since(
     }
 }
 
+/// Removes a single transfer file from the database. The file must be rejected
+/// beforehand, otherwise the error is returned.
+///
+///  # Arguments
+///
+/// * `dev`: Pointer to the instance
+/// * `xfid`: Transfer ID
+/// * `fid`: File ID
+///
+/// # Safety
+/// The pointers provided should be valid
+#[no_mangle]
+pub unsafe extern "C" fn norddrop_remove_transfer_file(
+    dev: &norddrop,
+    xfid: *const c_char,
+    fid: *const c_char,
+) -> norddrop_result {
+    let result = panic::catch_unwind(|| {
+        let dev = dev
+            .0
+            .lock()
+            .map_err(|_| norddrop_result::NORDDROP_RES_ERROR)?;
+
+        let xfid = {
+            if xfid.is_null() {
+                return Err(norddrop_result::NORDDROP_RES_INVALID_STRING);
+            }
+
+            CStr::from_ptr(xfid)
+                .to_str()?
+                .parse()
+                .map_err(|_| norddrop_result::NORDDROP_RES_BAD_INPUT)?
+        };
+
+        let fid = {
+            if fid.is_null() {
+                return Err(norddrop_result::NORDDROP_RES_INVALID_STRING);
+            }
+            CStr::from_ptr(fid).to_str()?
+        };
+
+        dev.remove_transfer_file(xfid, fid)?;
+        Ok(())
+    });
+
+    match result {
+        Ok(Ok(())) => norddrop_result::NORDDROP_RES_OK,
+        Ok(Err(err)) => err,
+        Err(_) => norddrop_result::NORDDROP_RES_ERROR,
+    }
+}
+
 /// Create a new instance of norddrop. This is a required step to work
 /// with API further
 ///

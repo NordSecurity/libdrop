@@ -438,6 +438,19 @@ class Drop:
             err_type = LibResult(err).name
             raise Exception(f"purge_transfers has failed with code: {err}({err_type})")
 
+    def remove_transfer_file(self, uuid: str, fid: str):
+        err = self._lib.norddrop_remove_transfer_file(
+            self._instance,
+            ctypes.create_string_buffer(bytes(uuid, "utf-8")),
+            ctypes.create_string_buffer(bytes(fid, "utf-8")),
+        )
+
+        if err != 0:
+            err_type = LibResult(err).name
+            raise Exception(
+                f"remove_transfer_file has failed with code: {err}({err_type})"
+            )
+
     def start(self, addr: str, dbpath: str, max_reqs_per_sec: int):
         cfg = {
             "dir_depth_limit": 5,

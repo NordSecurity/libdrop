@@ -281,7 +281,9 @@ enum norddrop_result norddrop_reject_file(const struct norddrop *dev,
 
 /**
  * Set FD resolver callback.
- * The callback provides FDs based on URI
+ * The callback provides FDs based on URI.
+ * This function should be called before `norddrop_start()`, otherwise it will
+ * return an error.
  *
  * # Arguments
  *
@@ -461,6 +463,23 @@ enum norddrop_result norddrop_purge_transfers_until(const struct norddrop *dev,
  * ```
  */
 char *norddrop_get_transfers_since(const struct norddrop *dev, long long since_timestamp);
+
+/**
+ * Removes a single transfer file from the database. The file must be rejected
+ * beforehand, otherwise the error is returned.
+ *
+ *  # Arguments
+ *
+ * * `dev`: Pointer to the instance
+ * * `xfid`: Transfer ID
+ * * `fid`: File ID
+ *
+ * # Safety
+ * The pointers provided should be valid
+ */
+enum norddrop_result norddrop_remove_transfer_file(const struct norddrop *dev,
+                                                   const char *xfid,
+                                                   const char *fid);
 
 /**
  * Create a new instance of norddrop. This is a required step to work
