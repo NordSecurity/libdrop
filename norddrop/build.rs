@@ -3,6 +3,10 @@ use std::{collections::HashSet, env, error::Error, iter::FromIterator, process::
 fn parse_version() -> Result<String, Box<dyn Error>> {
     println!("cargo:rerun-if-changed=.git/HEAD");
 
+    println!(
+        "cargo:warning=LIBDROP_RELEASE_NAME -> {:?}",
+        option_env!("LIBDROP_RELEASE_NAME")
+    );
     let version = match option_env!("LIBDROP_RELEASE_NAME") {
         Some(v) => v.to_string(),
         None => format!(
@@ -17,6 +21,7 @@ fn parse_version() -> Result<String, Box<dyn Error>> {
         ),
     };
 
+    println!("cargo:warning=parse_version() -> {}", &version);
     println!("cargo:rustc-env=DROP_VERSION={}", &version);
 
     Ok(version)
