@@ -6065,6 +6065,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5", dbpath="/tmp/db/31-1-ren.sqlite"),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -6132,6 +6133,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15", dbpath="/tmp/db/31-1-stimpy.sqlite"),
                     action.Wait(
                         event.Receive(
                             0,
@@ -6189,6 +6191,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.Start("172.20.0.5", dbpath="/tmp/db/31-2-ren.sqlite"),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -6241,6 +6244,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
+                    action.Start("172.20.0.15", dbpath="/tmp/db/31-2-stimpy.sqlite"),
                     action.Wait(
                         event.Receive(
                             0,
