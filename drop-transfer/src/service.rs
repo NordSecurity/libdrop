@@ -160,6 +160,24 @@ impl Service {
         }
     }
 
+    pub fn remove_transfer_file(&self, transfer_id: Uuid, file_id: &FileId) -> crate::Result<()> {
+        match self
+            .state
+            .storage
+            .remove_transfer_file(transfer_id, file_id.as_ref())
+        {
+            Ok(Some(())) => Ok(()),
+            Ok(None) => {
+                warn!(self.logger, "File {file_id} not removed from {transfer_id}");
+                Err(Error::InvalidArgument)
+            }
+            Err(err) => {
+                error!(self.logger, "Failed to remove transfer file: {err}");
+                Err(Error::StorageError)
+            }
+        }
+    }
+
     pub async fn send_request(&mut self, xfer: crate::Transfer) {
         self.state.moose.service_quality_transfer_batch(
             drop_analytics::Phase::Start,
