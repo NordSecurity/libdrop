@@ -2,6 +2,7 @@
 ### **Little rejection**
 ---
 * Fix rejection states not being present in the storage JSON output
+* Add `norddrop_remove_transfer_file()` method for removing rejected files from the database
 
 ---
 <br>

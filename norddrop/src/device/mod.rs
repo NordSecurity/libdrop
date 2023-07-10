@@ -302,6 +302,31 @@ impl NordDropFFI {
         Ok(result)
     }
 
+    pub(super) fn remove_transfer_file(
+        &self,
+        transfer_id: uuid::Uuid,
+        file_id: &str,
+    ) -> Result<()> {
+        trace!(
+            self.logger,
+            "remove_transfer_file() transfer_id: {transfer_id}, file_id: {file_id}",
+        );
+
+        let res = self
+            .instance
+            .blocking_lock()
+            .as_ref()
+            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+            .remove_transfer_file(transfer_id, &(file_id.into()));
+
+        match res {
+            Ok(()) => Ok(()),
+            Err(drop_transfer::Error::StorageError) => Err(ffi::types::NORDDROP_RES_DB_ERROR),
+            Err(drop_transfer::Error::InvalidArgument) => Err(ffi::types::NORDDROP_RES_BAD_INPUT),
+            Err(_) => Err(ffi::types::NORDDROP_RES_ERROR),
+        }
+    }
+
     pub(super) fn new_transfer(&mut self, peer: &str, descriptors: &str) -> Result<uuid::Uuid> {
         trace!(
             self.logger,
