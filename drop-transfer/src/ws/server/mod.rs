@@ -428,6 +428,8 @@ async fn handle_client(
         } else {
             debug!(logger, "WS client disconnected");
         }
+
+        handler.finalize_success().await;
     }
 }
 
