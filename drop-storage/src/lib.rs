@@ -1316,13 +1316,13 @@ mod tests {
                 TransferOutgoingPath {
                     file_id: "id3".to_string(),
                     size: 1024,
-                    base_path: "/dir".to_string(),
+                    uri: "file:///dir".parse().unwrap(),
                     relative_path: "3".to_string(),
                 },
                 TransferOutgoingPath {
                     file_id: "id4".to_string(),
                     relative_path: "4".to_string(),
-                    base_path: "/dir".to_string(),
+                    uri: "file:///dir".parse().unwrap(),
                     size: 2048,
                 },
             ]),
