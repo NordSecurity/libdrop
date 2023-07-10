@@ -56,3 +56,4 @@ Whenever IPv6 is used in a text form e.g. it is stored in the DB, included in th
 # Licensing
 [This project is licensed under the terms of the GNU General Public License v3.0 only](LICENSE)
 .
+.
