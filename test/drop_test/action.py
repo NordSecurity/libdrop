@@ -488,3 +488,17 @@ class PurgeTransfers(Action):
 
     def __str__(self):
         return f"PurgeTransfers({self.uuid_indices})"
+
+
+class RemoveTransferFile(Action):
+    def __init__(self, uuid_slot: int, fid):
+        self._uuid_slot = uuid_slot
+        self._fid = fid
+
+    async def run(self, drop: ffi.Drop):
+        UUIDS_LOCK.acquire()
+        drop.remove_transfer_file(UUIDS[self._uuid_slot], self._fid)
+        UUIDS_LOCK.release()
+
+    def __str__(self):
+        return f"RemoveTransferFile({print_uuid(self._uuid_slot)}, {self._fid})"

@@ -8,7 +8,7 @@ use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, Transaction};
 use rusqlite_migration::Migrations;
-use slog::{trace, Logger};
+use slog::{trace, warn, Logger};
 use types::{
     DbTransferType, IncomingPath, IncomingPathStateEvent, IncomingPathStateEventData, OutgoingPath,
     OutgoingPathStateEvent, OutgoingPathStateEventData, Transfer, TransferFiles,
@@ -667,6 +667,53 @@ impl Storage {
         Ok(transfers)
     }
 
+    pub fn remove_transfer_file(&self, transfer_id: Uuid, file_id: &str) -> Result<Option<()>> {
+        let conn = self.pool.get()?;
+
+        let tid = transfer_id.to_string();
+
+        trace!(
+            self.logger,
+            "Removing transfer file";
+            "transfer_id" => &tid,
+            "file_id" => file_id,
+        );
+
+        let mut count = 0;
+        count += conn
+            .prepare(
+                r#"
+                DELETE FROM outgoing_paths
+                WHERE transfer_id = ?1
+                    AND path_hash = ?2
+                    AND id IN(SELECT path_id FROM outgoing_path_reject_states)
+            "#,
+            )?
+            .execute(params![tid, file_id])?;
+        count += conn
+            .prepare(
+                r#"
+                DELETE FROM incoming_paths
+                WHERE transfer_id = ?1
+                    AND path_hash = ?2
+                    AND id IN(SELECT path_id FROM incoming_path_reject_states)
+            "#,
+            )?
+            .execute(params![tid, file_id])?;
+
+        match count {
+            0 => Ok(None),
+            1 => Ok(Some(())),
+            _ => {
+                warn!(
+                    self.logger,
+                    "Deleted a file from both outgoing and incoming paths"
+                );
+                Ok(Some(()))
+            }
+        }
+    }
+
     fn get_outgoing_paths(&self, transfer_id: Uuid) -> Result<Vec<OutgoingPath>> {
         let tid = transfer_id.to_string();
 
@@ -1032,5 +1079,124 @@ mod tests {
         let transfers = storage.transfers_since(0).unwrap();
 
         assert_eq!(transfers.len(), 0);
+    }
+
+    #[test]
+    fn remove_outgoing_rejected_file() {
+        let logger = slog::Logger::root(slog::Discard, slog::o!());
+        let storage = Storage::new(logger, ":memory:").unwrap();
+
+        let transfer_id: Uuid = "23e488a4-0521-11ee-be56-0242ac120002".parse().unwrap();
+
+        let transfer = TransferInfo {
+            id: transfer_id,
+            peer: "5.6.7.8".to_string(),
+            files: TransferFiles::Outgoing(vec![
+                TransferOutgoingPath {
+                    file_id: "id3".to_string(),
+                    size: 1024,
+                    base_path: "/dir".to_string(),
+                    relative_path: "3".to_string(),
+                },
+                TransferOutgoingPath {
+                    file_id: "id4".to_string(),
+                    relative_path: "4".to_string(),
+                    base_path: "/dir".to_string(),
+                    size: 2048,
+                },
+            ]),
+        };
+
+        storage.insert_transfer(&transfer).unwrap();
+        storage
+            .insert_outgoing_path_reject_state(transfer_id, "id3", false)
+            .unwrap();
+
+        let transfers = storage.transfers_since(0).unwrap();
+        assert_eq!(transfers.len(), 1);
+
+        let paths = match &transfers[0].transfer_type {
+            DbTransferType::Outgoing(out) => out,
+            _ => panic!("Unexpected transfer type"),
+        };
+        assert_eq!(paths.len(), 2);
+
+        assert!(storage
+            .remove_transfer_file(transfer_id, "id3")
+            .unwrap()
+            .is_some());
+        assert!(storage
+            .remove_transfer_file(transfer_id, "id4")
+            .unwrap()
+            .is_none());
+
+        let transfers = storage.transfers_since(0).unwrap();
+        assert_eq!(transfers.len(), 1);
+
+        let paths = match &transfers[0].transfer_type {
+            DbTransferType::Outgoing(out) => out,
+            _ => panic!("Unexpected transfer type"),
+        };
+        assert_eq!(paths.len(), 1); // 1 since we removed one of them
+        assert_eq!(paths[0].file_id, "id4");
+    }
+
+    #[test]
+    fn remove_incoming_rejected_file() {
+        let logger = slog::Logger::root(slog::Discard, slog::o!());
+        let storage = Storage::new(logger, ":memory:").unwrap();
+
+        let transfer_id: Uuid = "23e488a4-0521-11ee-be56-0242ac120002".parse().unwrap();
+
+        let transfer = TransferInfo {
+            id: transfer_id,
+            peer: "5.6.7.8".to_string(),
+            files: TransferFiles::Incoming(vec![
+                TransferIncomingPath {
+                    file_id: "id3".to_string(),
+                    size: 1024,
+                    relative_path: "3".to_string(),
+                },
+                TransferIncomingPath {
+                    file_id: "id4".to_string(),
+                    relative_path: "4".to_string(),
+                    size: 2048,
+                },
+            ]),
+        };
+
+        storage.insert_transfer(&transfer).unwrap();
+        storage
+            .insert_incoming_path_reject_state(transfer_id, "id3", false)
+            .unwrap();
+
+        let transfers = storage.transfers_since(0).unwrap();
+        assert_eq!(transfers.len(), 1);
+
+        let paths = match &transfers[0].transfer_type {
+            DbTransferType::Incoming(inc) => inc,
+            _ => panic!("Unexpected transfer type"),
+        };
+        assert_eq!(paths.len(), 2);
+
+        assert!(storage
+            .remove_transfer_file(transfer_id, "id3")
+            .unwrap()
+            .is_some());
+        assert!(storage
+            .remove_transfer_file(transfer_id, "id4")
+            .unwrap()
+            .is_none());
+
+        let transfers = storage.transfers_since(0).unwrap();
+        assert_eq!(transfers.len(), 1);
+
+        let paths = match &transfers[0].transfer_type {
+            DbTransferType::Incoming(inc) => inc,
+            _ => panic!("Unexpected transfer type"),
+        };
+
+        assert_eq!(paths.len(), 1); // 1 since we removed one of them
+        assert_eq!(paths[0].file_id, "id4");
     }
 }
