@@ -1,3 +1,11 @@
+### v4.2.0
+### **Little rejection**
+---
+* Fix rejection states not being present in the storage JSON output
+
+---
+<br>
+
 ### v4.1.0
 ### **SQL: Save, Query, Love**
 ---
