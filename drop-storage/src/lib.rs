@@ -12,7 +12,7 @@ use slog::{trace, warn, Logger};
 use types::{
     DbTransferType, IncomingFileToRetry, IncomingPath, IncomingPathStateEvent,
     IncomingPathStateEventData, OutgoingFileToRetry, OutgoingPath, OutgoingPathStateEvent,
-    OutgoingPathStateEventData, Transfer, TransferFiles, TransferIncomingPath,
+    OutgoingPathStateEventData, TempFileLocation, Transfer, TransferFiles, TransferIncomingPath,
     TransferOutgoingPath, TransferStateEvent,
 };
 use uuid::Uuid;
@@ -896,6 +896,37 @@ impl Storage {
                 Ok(Some(()))
             }
         }
+    }
+
+    pub fn fetch_temp_locations(&self, transfer_id: Uuid) -> Result<Vec<TempFileLocation>> {
+        let tid = transfer_id.to_string();
+
+        trace!(
+            self.logger,
+            "Fetching temporary file locations";
+            "transfer_id" => &tid
+        );
+
+        let conn = self.pool.get()?;
+
+        let out = conn
+            .prepare(
+                r#"
+                SELECT DISTINCT path_hash, base_dir
+                FROM incoming_paths ip
+                INNER JOIN incoming_path_started_states ipss ON ip.id = ipss.path_id 
+                WHERE transfer_id = ?1
+                "#,
+            )?
+            .query_map(params![tid], |row| {
+                Ok(TempFileLocation {
+                    file_id: row.get("path_hash")?,
+                    base_path: row.get("base_dir")?,
+                })
+            })?
+            .collect::<QueryResult<_>>()?;
+
+        Ok(out)
     }
 
     fn get_outgoing_paths(&self, transfer_id: Uuid) -> Result<Vec<OutgoingPath>> {

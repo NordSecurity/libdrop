@@ -444,6 +444,8 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
             .expect("Event channel should always be open");
     }
 
+    async fn finalize_success(self) {}
+
     fn recv_timeout(&mut self) -> Option<Duration> {
         if PING {
             Some(
