@@ -231,7 +231,7 @@ class WaitForAnotherPeer(Action):
         pass
 
     async def run(self, drop: ffi.Drop):
-        await asyncio.sleep(2)
+        await asyncio.sleep(0.2)
 
     def __str__(self):
         return f"WaitForAnotherPeer"
@@ -290,7 +290,7 @@ class DrainEvents(Action):
 
 
 class NoEvent(Action):
-    def __init__(self, duration: int = 6):
+    def __init__(self, duration: int = 1):
         self._duration = duration
 
     async def run(self, drop: ffi.Drop):
