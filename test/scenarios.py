@@ -3519,14 +3519,14 @@ scenarios = [
                         FILES[
                             "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
                         ].id,
-                        "/tmp/received/19-3/stimpy/0",
+                        "/tmp/received/19-1/stimpy/0",
                     ),
                     action.Download(
                         1,
                         FILES[
                             "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
                         ].id,
-                        "/tmp/received/19-3/stimpy/1",
+                        "/tmp/received/19-1/stimpy/1",
                     ),
                     action.WaitRacy(
                         [
@@ -3591,14 +3591,14 @@ scenarios = [
                         FILES[
                             "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
                         ].id,
-                        "/tmp/received/19-3/stimpy/0",
+                        "/tmp/received/19-1/george/0",
                     ),
                     action.Download(
                         1,
                         FILES[
                             "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
                         ].id,
-                        "/tmp/received/19-3/stimpy/1",
+                        "/tmp/received/19-1/george/1",
                     ),
                     action.WaitRacy(
                         [
