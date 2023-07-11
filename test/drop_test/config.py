@@ -126,4 +126,4 @@ FILES = {
     ),
 }
 
-DBFILES = {"26-corrupted.sqlite": b"this is a corrupted sqlite file"}
+DBFILES = {"26-1-corrupted.sqlite": b"this is a corrupted sqlite file"}
