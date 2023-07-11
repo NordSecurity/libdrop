@@ -586,16 +586,11 @@ impl handler::Downloader for Downloader {
             return Err(crate::Error::FilenameTooLong);
         }
 
-        let tmp_filename = if cfg!(target_os = "android") {
-            format!(
-                "{}-{}.dropdl-part",
-                task.xfer.id().as_simple(),
-                task.file.id()
-            )
-        } else {
-            format!("{}.dropdl-part", task.file.id())
-        };
-
+        let tmp_filename = format!(
+            "{}-{}.dropdl-part",
+            task.xfer.id().as_simple(),
+            task.file.id()
+        );
         let tmp_location: Hidden<PathBuf> = Hidden(task.base_dir.join(tmp_filename));
 
         // Check if we can resume the temporary file

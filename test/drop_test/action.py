@@ -9,6 +9,7 @@ import subprocess
 import typing
 import json
 import time
+import glob
 
 from . import event, ffi
 from .logger import logger
@@ -273,6 +274,21 @@ class WaitRacy(Action):
         return f"WaitRacy({', '.join(str(e) for e in self._events)})"
 
 
+class DrainEvents(Action):
+    def __init__(self, count: int):
+        self._count = count
+
+    async def run(self, drop: ffi.Drop):
+        for i in range(0, self._count):
+            e = await drop._events.wait_for_any_event(100, ignore_progress=True)
+
+            if e is None:
+                raise Exception(f"Missing event number {i} while draining")
+
+    def __str__(self):
+        return f"DrainEvents({self._count})"
+
+
 class NoEvent(Action):
     def __init__(self, duration: int = 6):
         self._duration = duration
@@ -345,11 +361,14 @@ class Stop(Action):
 
 
 class ModifyFile(Action):
-    def __init__(self, file: str):
-        self._file = file
+    def __init__(self, file_glob: str):
+        self._file = file_glob
 
     async def run(self, drop: ffi.Drop):
-        with open(self._file, "a") as f:
+        file_list = glob.glob(self._file)
+        file = file_list[0]
+
+        with open(file, "a") as f:
             f.write("42")
 
     def __str__(self):
@@ -378,13 +397,15 @@ class CompareTrees(Action):
 
 
 class WaitForResume(Action):
-    def __init__(self, uuid_slot: int, file_id: str, tmp_file_path: str):
+    def __init__(self, uuid_slot: int, file_id: str, tmp_file_path_glob: str):
         self._uuid_slot = uuid_slot
         self._file_id = file_id
-        self._tmp_file_path = tmp_file_path
+        self._tmp_file_path = tmp_file_path_glob
 
     async def run(self, drop: ffi.Drop):
-        stat = os.stat(self._tmp_file_path)
+        file_list = glob.glob(self._tmp_file_path)
+        stat = os.stat(file_list[0])  # just take the first find
+
         await drop._events.wait_for(event.Start(self._uuid_slot, self._file_id), False)
         await drop._events.wait_for(
             event.Progress(self._uuid_slot, self._file_id, stat.st_size), False
@@ -407,11 +428,13 @@ class DropPrivileges(Action):
 
 
 class DeleteFile(Action):
-    def __init__(self, file_path: str):
-        self._file_path = file_path
+    def __init__(self, file_path_glob: str):
+        self._file_path = file_path_glob
 
     async def run(self, drop: ffi.Drop):
-        os.remove(self._file_path)
+        file_list = glob.glob(self._file_path)
+        for file in file_list:
+            os.remove(file)
 
     def __str__(self):
         return f"DeleteFile({self._file_path})"
