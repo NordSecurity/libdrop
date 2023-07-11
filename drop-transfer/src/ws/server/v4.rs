@@ -539,6 +539,34 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             .expect("Event channel should always be open");
     }
 
+    async fn finalize_success(self) {
+        match self.state.storage.fetch_temp_locations(self.xfer.id()) {
+            Ok(files) => {
+                for file in files {
+                    let file_id = FileId::from(file.file_id);
+
+                    let loc = PathBuf::from(file.base_path)
+                        .join(temp_file_name(self.xfer.id(), &file_id));
+                    let loc = Hidden(loc);
+
+                    debug!(self.logger, "Removing temporary file: {loc:?}");
+                    if let Err(err) = std::fs::remove_file(&*loc) {
+                        debug!(
+                            self.logger,
+                            "Failed to delete temporary file: {loc:?}, {err}"
+                        );
+                    }
+                }
+            }
+            Err(err) => {
+                warn!(
+                    self.logger,
+                    "Failed to fetch temporary files locaitons from the DB: {err}"
+                );
+            }
+        }
+    }
+
     fn recv_timeout(&mut self) -> Option<Duration> {
         Some(
             self.state
@@ -586,12 +614,10 @@ impl handler::Downloader for Downloader {
             return Err(crate::Error::FilenameTooLong);
         }
 
-        let tmp_filename = format!(
-            "{}-{}.dropdl-part",
-            task.xfer.id().as_simple(),
-            task.file.id()
+        let tmp_location: Hidden<PathBuf> = Hidden(
+            task.base_dir
+                .join(temp_file_name(task.xfer.id(), task.file.id())),
         );
-        let tmp_location: Hidden<PathBuf> = Hidden(task.base_dir.join(tmp_filename));
 
         // Check if we can resume the temporary file
         match tokio::task::block_in_place(|| super::TmpFileState::load(&tmp_location.0)) {
@@ -738,4 +764,8 @@ impl FileTask {
             csum_tx,
         }
     }
+}
+
+fn temp_file_name(transfer_id: uuid::Uuid, file_id: &FileId) -> String {
+    format!("{}-{file_id}.dropdl-part", transfer_id.as_simple(),)
 }

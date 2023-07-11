@@ -166,6 +166,11 @@ pub struct TransferToRetry {
     pub files: Vec<OutgoingFileToRetry>,
 }
 
+pub struct TempFileLocation {
+    pub file_id: String,
+    pub base_path: String,
+}
+
 #[derive(Debug)]
 pub enum Event {
     Pending {
