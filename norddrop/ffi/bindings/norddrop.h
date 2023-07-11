@@ -310,12 +310,6 @@ enum norddrop_result norddrop_set_fd_resolver_callback(const struct norddrop *de
  * * `transfer_file_limit` - when aggregating files from the path, if this
  * limit is reached, an error is returned.
  *
- * * `req_connection_timeout_ms` - timeout value used in connecting to the
- *   peer.
- * The formula for retrying is: starting from 0.2 seconds we double it
- * each time until we cap at req_connection_timeout_ms / 10. This is useful
- * when the peer is not responding at all.
- *
  * * `transfer_idle_lifetime_ms` - this timeout plays a role in an already
  * established transfer as sometimes one peer might go offline with no notice.
  * This timeout controls the amount of time we will wait for any action from

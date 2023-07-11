@@ -342,7 +342,6 @@ mod tests {
         {
           "dir_depth_limit": 10,
           "transfer_file_limit": 100,
-          "req_connection_timeout_ms": 1000,
           "transfer_idle_lifetime_ms": 2000,
           "moose_event_path": "test/path",
           "moose_prod": true,
@@ -359,7 +358,6 @@ mod tests {
         {
           "dir_depth_limit": 10,
           "transfer_file_limit": 100,
-          "req_connection_timeout_ms": 1000,
           "transfer_idle_lifetime_ms": 2000,
           "connection_max_retry_interval_ms": 500,
           "moose_event_path": "test/path",
