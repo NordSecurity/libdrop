@@ -489,6 +489,7 @@ class PurgeTransfers(Action):
     def __str__(self):
         return f"PurgeTransfers({self.uuid_indices})"
 
+
 class RemoveTransferFile(Action):
     def __init__(self, uuid_slot: int, fid):
         self._uuid_slot = uuid_slot
@@ -502,8 +503,13 @@ class RemoveTransferFile(Action):
     def __str__(self):
         return f"RemoveTransferFile({print_uuid(self._uuid_slot)}, {self._fid})"
 
+
 class AssertMooseEvents(Action):
-    def __init__(self, expected_outputs: typing.List[str], events_file: str = "/tmp/moose-events.json"):
+    def __init__(
+        self,
+        expected_outputs: typing.List[str],
+        events_file: str = "/tmp/moose-events.json",
+    ):
         self._expected_outputs = expected_outputs
         self._events_file = events_file
 
