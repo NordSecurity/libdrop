@@ -1,20 +1,28 @@
 #[cfg(feature = "moose")]
 mod moose_impl;
 
+mod file_impl;
 mod mock_impl;
 
 use std::sync::{Arc, Mutex, Weak};
 
+use serde::{Deserialize, Serialize};
 use slog::Logger;
 
 static INSTANCE: Mutex<Option<Weak<dyn Moose>>> = Mutex::new(None);
 
-#[derive(Clone, Copy, Debug)]
+const MOOSE_STATUS_SUCCESS: i32 = 0;
+const MOOSE_VALUE_NONE: i32 = -1;
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum Phase {
+    #[serde(rename = "start")]
     Start,
+    #[serde(rename = "end")]
     End,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct TransferInfo {
     pub mime_type_list: String,
     pub extension_list: String,
@@ -23,7 +31,7 @@ pub struct TransferInfo {
     pub file_count: i32,
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct FileInfo {
     pub mime_type: String,
     pub extension: String,
@@ -81,8 +89,12 @@ fn create(
         let moose = moose_impl::MooseImpl::new(logger, event_path, app_version, prod)?;
         Ok(Arc::new(moose))
     }
+    #[cfg(feature = "moose_file")]
+    {
+        Ok(moose_file(logger, event_path, app_version, prod))
+    }
 
-    #[cfg(not(feature = "moose"))]
+    #[cfg(not(any(feature = "moose", feature = "moose_file")))]
     {
         Ok(moose_mock())
     }
@@ -109,4 +121,18 @@ pub fn init_moose(
 
 pub fn moose_mock() -> Arc<dyn Moose> {
     Arc::new(mock_impl::MockImpl)
+}
+
+pub fn moose_file(
+    logger: Logger,
+    event_path: String,
+    app_version: String,
+    prod: bool,
+) -> Arc<dyn Moose> {
+    Arc::new(file_impl::FileImpl::new(
+        logger,
+        event_path,
+        app_version,
+        prod,
+    ))
 }

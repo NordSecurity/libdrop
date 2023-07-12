@@ -8,15 +8,13 @@ use mooselibdropapp as moose;
 use serde_json::Value;
 use slog::{error, info, warn, Logger};
 
-use crate::{FileInfo, TransferInfo};
+use crate::{FileInfo, TransferInfo, MOOSE_STATUS_SUCCESS, MOOSE_VALUE_NONE};
 
 const DROP_MOOSE_APP_NAME: &str = "norddrop";
 
 /// Version of the tracker used, should be updated everytime the tracker library
 /// is updated
 const DROP_MOOSE_TRACKER_VERSION: &str = "0.4.0";
-
-const MOOSE_STATUS_SUCCESS: i32 = 0;
 
 pub struct MooseImpl {
     logger: slog::Logger,
@@ -194,7 +192,7 @@ impl super::Moose for MooseImpl {
         moose!(
             self.logger,
             send_developer_exceptionHandling_catchException,
-            -1,
+            MOOSE_VALUE_NONE,
             code,
             note,
             message,
