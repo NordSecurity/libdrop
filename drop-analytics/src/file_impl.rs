@@ -1,9 +1,9 @@
-use crate::{FileInfo, Phase, TransferInfo, MOOSE_STATUS_SUCCESS, MOOSE_VALUE_NONE};
+use std::{fs::File, io::Write, path::Path};
 
 use serde::{Deserialize, Serialize};
-
 use slog::Logger;
-use std::{fs::File, io::Write, path::Path};
+
+use crate::{FileInfo, Phase, TransferInfo, MOOSE_STATUS_SUCCESS, MOOSE_VALUE_NONE};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
