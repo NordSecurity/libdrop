@@ -4588,7 +4588,7 @@ scenarios = [
                     action.Download(
                         0,
                         FILES["testfile-small"].id,
-                        "/tmp/no-permissions",
+                        "/root",
                     ),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
@@ -4702,7 +4702,7 @@ scenarios = [
                     action.DropPrivileges(),
                     action.Start(
                         "172.20.0.5",
-                        dbpath="/tmp/no-permissions/no-access-db.sqlite",
+                        dbpath="/root/no-access-db.sqlite",
                     ),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
