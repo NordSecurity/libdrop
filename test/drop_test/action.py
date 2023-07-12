@@ -38,7 +38,7 @@ def compare_json_struct(expected: dict, actual: dict):
 
             if expected_value != actual_value:
                 raise Exception(
-                    f"Value missmatch for key: '{key}'. Expected '{expected_value}', got '{actual_value}'"
+                    f"Value mismatch for key: '{key}'. Expected '{expected_value}', got '{actual_value}'"
                 )
 
 
@@ -489,7 +489,6 @@ class PurgeTransfers(Action):
     def __str__(self):
         return f"PurgeTransfers({self.uuid_indices})"
 
-
 class RemoveTransferFile(Action):
     def __init__(self, uuid_slot: int, fid):
         self._uuid_slot = uuid_slot
@@ -502,3 +501,24 @@ class RemoveTransferFile(Action):
 
     def __str__(self):
         return f"RemoveTransferFile({print_uuid(self._uuid_slot)}, {self._fid})"
+
+class AssertMooseEvents(Action):
+    def __init__(self, expected_outputs: typing.List[str], events_file: str = "/tmp/moose-events.json"):
+        self._expected_outputs = expected_outputs
+        self._events_file = events_file
+
+    async def run(self, drop: ffi.Drop):
+        if not os.path.exists(self._events_file):
+            raise Exception("Moose events file not found")
+
+        events = json.loads(open(self._events_file).read())
+
+        if len(events) != len(self._expected_outputs):
+            raise Exception(
+                f"Expected {len(self._expected_outputs)} event(s), got {len(events)}"
+            )
+        for i in range(len(self._expected_outputs)):
+            compare_json_struct(json.loads(self._expected_outputs[i]), events[i])
+
+    def __str__(self):
+        return f"AssertMooseEvents({','.join(self._expected_outputs)})"
