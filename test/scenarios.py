@@ -81,6 +81,58 @@ scenarios = [
                     action.AssertTransfers([]),
                     action.NoEvent(),
                     action.Stop(),
+                    action.AssertMooseEvents([
+                        """{
+                            "type": "init",
+                            "phase": "start",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }""",
+                        """{
+                            "type": "batch",
+                            "phase": "start",
+                            "transfer_id": "*",
+                            "info": {
+                                "mime_type_list": "unknown",
+                                "extension_list": "unknown",
+                                "file_size_list": "10240",
+                                "transfer_size_kb": 10240,
+                                "file_count": 1
+                            }
+                        }""",
+                        """{
+                            "type": "file",
+                            "phase": "start",
+                            "result": 0,
+                            "transfer_id": "*",
+                            "transfer_time": "*",
+                            "info": {
+                                "mime_type": "unknown",
+                                "extension": "unknown",
+                                "size_kb": 10240
+                            }
+                        }""",
+                        """{
+                            "type": "file",
+                            "phase": "end",
+                            "result": 0,
+                            "transfer_id": "*",
+                            "transfer_time": "*",
+                            "info": {
+                                "mime_type": "unknown",
+                                "extension": "unknown",
+                                "size_kb": 10240
+                            }
+                        }""",
+                        """{
+                            "type": "init",
+                            "phase": "end",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }"""
+                    ]),
                 ]
             ),
             "stimpy": ActionList(
@@ -159,6 +211,58 @@ scenarios = [
                     action.AssertTransfers([]),
                     action.NoEvent(),
                     action.Stop(),
+                    action.AssertMooseEvents([
+                        """{
+                            "type": "init",
+                            "phase": "start",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }""",
+                        """{
+                            "type": "file",
+                            "phase": "start",
+                            "result": 0,
+                            "transfer_id": "*",
+                            "transfer_time": "*",
+                            "info": {
+                                "mime_type": "",
+                                "extension": "",
+                                "size_kb": 0
+                            }
+                        }""",
+                        """{
+                            "type": "file",
+                            "phase": "end",
+                            "result": 0,
+                            "transfer_id": "*",
+                            "transfer_time": "*",
+                            "info": {
+                                "mime_type": "",
+                                "extension": "",
+                                "size_kb": 0
+                            }
+                        }""",
+                        """{
+                            "type": "file",
+                            "phase": "end",
+                            "result": 1,
+                            "transfer_id": "*",
+                            "transfer_time": "*",
+                            "info": {
+                                "mime_type": "",
+                                "extension": "",
+                                "size_kb": 0
+                            }
+                        }""",
+                        """{
+                            "type": "init",
+                            "phase": "end",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }"""
+                    ]),
                 ]
             ),
         },
@@ -3140,7 +3244,7 @@ scenarios = [
     ),
     Scenario(
         "scenario17",
-        "Modify the file during the transfer, expecct error",
+        "Modify the file during the transfer, expect error",
         {
             "ren": ActionList(
                 [
@@ -3209,6 +3313,58 @@ scenarios = [
                     ),
                     action.NoEvent(),
                     action.Stop(),
+                    action.AssertMooseEvents([
+                        """{
+                            "type": "init",
+                            "phase": "start",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }""",
+                        """{
+                            "type": "batch",
+                            "phase": "start",
+                            "transfer_id": "*",
+                            "info": {
+                                "mime_type_list": "unknown",
+                                "extension_list": "unknown",
+                                "file_size_list": "10240",
+                                "transfer_size_kb": 10240,
+                                "file_count": 1
+                            }
+                        }""",
+                        """{
+                            "type": "file",
+                            "phase": "start",
+                            "result": 0,
+                            "transfer_id": "*",
+                            "transfer_time": "*",
+                            "info": {
+                                "mime_type": "unknown",
+                                "extension": "unknown",
+                                "size_kb": 10240
+                            }
+                        }""",
+                        """{
+                            "type": "file",
+                            "phase": "end",
+                            "result": 28,
+                            "transfer_id": "*",
+                            "transfer_time": "*",
+                            "info": {
+                                "mime_type": "unknown",
+                                "extension": "unknown",
+                                "size_kb": 10240
+                            }
+                        }""",
+                        """{
+                            "type": "init",
+                            "phase": "end",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }"""
+                    ]),
                 ]
             ),
             "stimpy": ActionList(
@@ -3282,6 +3438,46 @@ scenarios = [
                     ),
                     action.NoEvent(),
                     action.Stop(),
+                    action.AssertMooseEvents([
+                        """{
+                            "type": "init",
+                            "phase": "start",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }""",
+                        """{
+                            "type": "file",
+                            "phase": "start",
+                            "result": 0,
+                            "transfer_id": "*",
+                            "transfer_time": "*",
+                            "info": {
+                                "mime_type": "",
+                                "extension": "",
+                                "size_kb": 0
+                            }
+                        }""",
+                        """{
+                            "type": "file",
+                            "phase": "end",
+                            "result": 1,
+                            "transfer_id": "*",
+                            "transfer_time": "*",
+                            "info": {
+                                "mime_type": "",
+                                "extension": "",
+                                "size_kb": 0
+                            }
+                        }""",
+                        """{
+                            "type": "init",
+                            "phase": "end",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }"""
+                    ]),
                 ]
             ),
         },
