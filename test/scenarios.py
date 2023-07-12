@@ -1348,7 +1348,7 @@ scenarios = [
     ),
     Scenario(
         "scenario5",
-        "Try to send file to an offline peer. Expect slient retries",
+        "Try to send file to an offline peer. Expect silent retries",
         {
             "ren": ActionList(
                 [
@@ -1776,7 +1776,7 @@ scenarios = [
     ),
     Scenario(
         "scenario8-2",
-        "Send two identical files with complicated extensions one by one, expect appending (1), no reanme or other weird stuff",
+        "Send two identical files with complicated extensions one by one, expect appending (1), no rename or other weird stuff",
         {
             "ren": ActionList(
                 [
@@ -2188,7 +2188,7 @@ scenarios = [
     ),
     Scenario(
         "scenario10-3",
-        "Start file transfer to offline peeer, then stop immediately before the connection fails",
+        "Start file transfer to offline peer, then stop immediately before the connection fails",
         {
             "ren": ActionList(
                 [
@@ -3283,7 +3283,7 @@ scenarios = [
     ),
     Scenario(
         "scenario17",
-        "Modify the file during the transfer, expecct error",
+        "Modify the file during the transfer, expect error",
         {
             "ren": ActionList(
                 [
@@ -3433,7 +3433,7 @@ scenarios = [
     ),
     Scenario(
         "scenario18",
-        "Check if temporary file gets deleted after sucessful transfer",
+        "Check if temporary file gets deleted after successful transfer",
         {
             "ren": ActionList(
                 [
@@ -3502,7 +3502,7 @@ scenarios = [
             ),
         },
     ),
-    # Androind team reported that sending file with too long name multiple times produces different results
+    # Android team reported that sending file with too long name multiple times produces different results
     Scenario(
         "scenario19-1",
         "Send file with too long name to two peers twice, expect it to fail each time",
@@ -4431,7 +4431,7 @@ scenarios = [
     ),
     Scenario(
         "scenario23-1",
-        "Send two files with the same name but different fs location, expect them to transfer sucesfully",
+        "Send two files with the same name but different fs location, expect them to transfer successfully",
         {
             "ren": ActionList(
                 [
@@ -4542,7 +4542,7 @@ scenarios = [
     ),
     Scenario(
         "scenario23-2",
-        "Send two files with the same name but different fs location simultaneously, expect them to transfer sucesfully",
+        "Send two files with the same name but different fs location simultaneously, expect them to transfer successfully",
         {
             "ren": ActionList(
                 [
@@ -5000,7 +5000,7 @@ scenarios = [
     ),
     Scenario(
         "scenario27-3",
-        "Reject currently transmited file on sender side. Expect event on both peers plus cancel event",
+        "Reject currently transmitted file on sender side. Expect event on both peers plus cancel event",
         {
             "ren": ActionList(
                 [
@@ -5064,7 +5064,7 @@ scenarios = [
     ),
     Scenario(
         "scenario27-4",
-        "Reject currently transmited file on receiver side. Expect event on both peers plus cancel event",
+        "Reject currently transmitted file on receiver side. Expect event on both peers plus cancel event",
         {
             "ren": ActionList(
                 [
