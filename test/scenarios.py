@@ -1232,6 +1232,121 @@ scenarios = [
         },
     ),
     Scenario(
+        "scenario4-11",
+        "Send a request with one file, cancel the request from the sender immediately, expect the other side not to be able to issue download calls",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    # Wait for another peer to appear
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.Wait(event.FinishTransferCanceled(0, False)),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.FinishTransferCanceled(0, True)),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received",
+                    ),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0, FILES["testfile-big"].id, Error.BAD_TRANSFER
+                        )
+                    ),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario4-12",
+        "Send a request with one file to a peer that's offline. Wait for Queued event and cancel the transfer from the sender side. Expect no events on the receiver once it comes online",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.Wait(event.FinishTransferCanceled(0, False)),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Sleep(8),
+                    action.Start("172.20.0.15"),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario4-13",
+        "Send a request with one file to a peer that's offline. Cancel the transfer from the sender side immediately. Expect no events on the receiver once it comes online",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.CancelTransferRequest(0),
+                    action.Wait(event.FinishTransferCanceled(0, False)),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Sleep(8),
+                    action.Start("172.20.0.15"),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
         "scenario5",
         "Try to send file to an offline peer. Expect slient retries",
         {
