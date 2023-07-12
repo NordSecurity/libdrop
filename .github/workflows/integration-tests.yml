@@ -15,7 +15,7 @@ jobs:
           default: true
       - name: Build linux binary for testing
         run: |
-          cargo build
+          cargo build --features moose_file
       - name: run tests
         run: |
           cd test
