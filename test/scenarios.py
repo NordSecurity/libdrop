@@ -4588,7 +4588,7 @@ scenarios = [
                     action.Download(
                         0,
                         FILES["testfile-small"].id,
-                        "/tmp/no-permissions",
+                        "/root",
                     ),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
@@ -4677,18 +4677,94 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario26",
+        "scenario26-1",
         "Test if the instance can recover on database corruption",
         {
             "ren": ActionList(
                 [
                     action.Start(
                         "172.20.0.5",
-                        dbpath="/tmp/db/26-corrupted.sqlite",
+                        dbpath="/tmp/db/26-1-corrupted.sqlite",
                     ),
                     action.Wait(event.RuntimeError(Error.DB_LOST)),
                     action.NoEvent(),
                     action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario26-2",
+        "Provide database with insufficient permissions, expect file share to work",
+        {
+            "ren": ActionList(
+                [
+                    action.DropPrivileges(),
+                    action.Start(
+                        "172.20.0.5",
+                        dbpath="/root/no-access-db.sqlite",
+                    ),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-small"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-small"].id,
+                        "/tmp/received/26-2",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-small"].id,
+                            "/tmp/received/26-2/testfile-small",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/26-2/testfile-small", 1048576),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                 ]
             ),
         },
