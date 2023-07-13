@@ -1,4 +1,4 @@
-use std::{fs, ops::ControlFlow, path::PathBuf, time::Duration};
+use std::{fs, ops::ControlFlow, path::PathBuf, sync::Arc, time::Duration};
 
 use tokio::sync::mpsc::Sender;
 use warp::ws::{Message, WebSocket};
@@ -18,7 +18,7 @@ pub trait HandlerInit {
         self,
         ws: &mut WebSocket,
         msg_tx: Sender<Message>,
-        xfer: IncomingTransfer,
+        xfer: Arc<IncomingTransfer>,
     ) -> Option<Self::Loop>;
 
     fn pinger(&mut self) -> Self::Pinger;

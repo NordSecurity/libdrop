@@ -38,7 +38,7 @@ use crate::{
     error::ResultExt,
     event::DownloadSuccess,
     file::{self, FileSubPath, FileToRecv},
-    manager::{IncomingState, TransferGuard},
+    manager::{IncomingState, Rejections, TransferGuard},
     protocol,
     quarantine::PathExt,
     service::State,
@@ -61,7 +61,7 @@ pub enum ServerReq {
 
 pub struct FileXferTask {
     pub file: FileToRecv,
-    pub xfer: IncomingTransfer,
+    pub xfer: Arc<IncomingTransfer>,
     pub base_dir: Hidden<PathBuf>,
 }
 
@@ -314,6 +314,8 @@ impl RunContext<'_> {
             }
         };
 
+        let xfer = Arc::new(xfer);
+
         let stop_job = async {
             // Stop the download job
             info!(self.logger, "Aborting transfer download");
@@ -347,7 +349,7 @@ async fn handle_client(
     logger: &slog::Logger,
     mut socket: WebSocket,
     mut handler: impl handler::HandlerInit,
-    xfer: IncomingTransfer,
+    xfer: Arc<IncomingTransfer>,
 ) {
     let xfer_id = xfer.id();
     let _guard = TransferGuard::new(state.clone(), xfer_id);
@@ -439,7 +441,7 @@ async fn handle_client(
 }
 
 impl FileXferTask {
-    pub fn new(file: FileToRecv, xfer: IncomingTransfer, base_dir: PathBuf) -> Self {
+    pub fn new(file: FileToRecv, xfer: Arc<IncomingTransfer>, base_dir: PathBuf) -> Self {
         Self {
             file,
             xfer,
@@ -756,7 +758,7 @@ fn move_tmp_to_dst(
 
 async fn init_client_handler(
     state: &State,
-    xfer: &IncomingTransfer,
+    xfer: &Arc<IncomingTransfer>,
     req_send: mpsc::UnboundedSender<ServerReq>,
     logger: &Logger,
 ) -> anyhow::Result<()> {
@@ -772,7 +774,7 @@ async fn init_client_handler(
             xfer: xfer.clone(),
             conn: req_send.clone(),
             dir_mappings: Default::default(),
-            rejections: Default::default(),
+            rejections: Rejections::new(xfer.clone()),
         }),
     };
 
@@ -845,7 +847,7 @@ fn ensure_resume_matches_existing_transfer(
 
 fn resume_transfer_files(
     state: &State,
-    xfer: &IncomingTransfer,
+    xfer: &Arc<IncomingTransfer>,
     req_send: &mpsc::UnboundedSender<ServerReq>,
     logger: &Logger,
 ) -> anyhow::Result<()> {

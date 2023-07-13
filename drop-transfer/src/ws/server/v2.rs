@@ -40,7 +40,7 @@ pub struct HandlerLoop<'a, const PING: bool> {
     state: &'a Arc<State>,
     logger: &'a slog::Logger,
     msg_tx: Sender<Message>,
-    xfer: IncomingTransfer,
+    xfer: Arc<IncomingTransfer>,
     last_recv: Instant,
     jobs: HashMap<FileSubPath, FileTask>,
 }
@@ -104,7 +104,7 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
         self,
         _: &mut WebSocket,
         msg_tx: Sender<Message>,
-        xfer: IncomingTransfer,
+        xfer: Arc<IncomingTransfer>,
     ) -> Option<Self::Loop> {
         let Self {
             peer: _,

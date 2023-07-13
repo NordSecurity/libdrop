@@ -60,7 +60,7 @@ pub trait Transfer {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TransferData<F: File> {
     peer: IpAddr,
     uuid: Uuid,

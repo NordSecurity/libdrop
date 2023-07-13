@@ -149,8 +149,8 @@ impl From<&drop_transfer::Error> for Status {
 impl From<drop_transfer::Event> for Event {
     fn from(e: drop_transfer::Event) -> Self {
         match e {
-            drop_transfer::Event::RequestReceived(tx) => Event::RequestReceived(tx.into()),
-            drop_transfer::Event::RequestQueued(tx) => Event::RequestQueued(tx.into()),
+            drop_transfer::Event::RequestReceived(tx) => Event::RequestReceived(tx.as_ref().into()),
+            drop_transfer::Event::RequestQueued(tx) => Event::RequestQueued(tx.as_ref().into()),
             drop_transfer::Event::FileUploadStarted(tx, fid) => {
                 Event::TransferStarted(StartEvent {
                     transfer: tx.id().to_string(),
@@ -276,29 +276,29 @@ impl From<drop_transfer::Event> for Event {
     }
 }
 
-impl<T: drop_transfer::Transfer> From<T> for EventTransfer {
-    fn from(t: T) -> EventTransfer {
+impl<T: drop_transfer::Transfer> From<&T> for EventTransfer {
+    fn from(t: &T) -> EventTransfer {
         EventTransfer {
             transfer: t.id().to_string(),
         }
     }
 }
 
-impl<T: drop_transfer::Transfer> From<T> for EventTransferRequest {
-    fn from(t: T) -> EventTransferRequest {
+impl<T: drop_transfer::Transfer> From<&T> for EventTransferRequest {
+    fn from(t: &T) -> EventTransferRequest {
         EventTransferRequest {
             peer: t.peer().to_string(),
             transfer: t.id().to_string(),
-            files: extract_transfer_files(&t),
+            files: extract_transfer_files(t),
         }
     }
 }
 
-impl<T: drop_transfer::Transfer> From<T> for EventRequestQueued {
-    fn from(t: T) -> EventRequestQueued {
+impl<T: drop_transfer::Transfer> From<&T> for EventRequestQueued {
+    fn from(t: &T) -> EventRequestQueued {
         EventRequestQueued {
             transfer: t.id().to_string(),
-            files: extract_transfer_files(&t),
+            files: extract_transfer_files(t),
         }
     }
 }

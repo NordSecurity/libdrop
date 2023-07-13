@@ -36,7 +36,7 @@ use crate::{
     auth,
     error::ResultExt,
     file::{File, FileId, FileSubPath, FileToSend},
-    manager::{OutgoingState, TransferGuard},
+    manager::{OutgoingState, Rejections, TransferGuard},
     protocol,
     service::State,
     transfer::Transfer,
@@ -55,10 +55,10 @@ struct RunContext<'a> {
     logger: &'a slog::Logger,
     state: &'a Arc<State>,
     socket: WebSocket,
-    xfer: &'a OutgoingTransfer,
+    xfer: &'a Arc<OutgoingTransfer>,
 }
 
-pub(crate) async fn run(state: Arc<State>, xfer: OutgoingTransfer, logger: Logger) {
+pub(crate) async fn run(state: Arc<State>, xfer: Arc<OutgoingTransfer>, logger: Logger) {
     loop {
         let cf = connect_to_peer(&state, &xfer, &logger).await;
         if cf.is_break() {
@@ -123,7 +123,7 @@ pub(crate) async fn resume(state: &Arc<State>, stop: &CancellationToken, logger:
                     }
                 };
 
-                run(state, xfer, logger).await
+                run(state, Arc::new(xfer), logger).await
             }
         };
 
@@ -145,7 +145,7 @@ pub(crate) async fn resume(state: &Arc<State>, stop: &CancellationToken, logger:
 
 async fn connect_to_peer(
     state: &Arc<State>,
-    xfer: &OutgoingTransfer,
+    xfer: &Arc<OutgoingTransfer>,
     logger: &Logger,
 ) -> ControlFlow<()> {
     let (socket, ver) = match establish_ws_conn(state, xfer.peer(), logger).await {
@@ -336,7 +336,7 @@ impl RunContext<'_> {
             Entry::Vacant(entry) => entry.insert(OutgoingState {
                 xfer: self.xfer.clone(),
                 conn: tx,
-                rejections: Default::default(),
+                rejections: Rejections::new(self.xfer.clone()),
             }),
         };
 
@@ -449,7 +449,7 @@ async fn start_upload(
     logger: slog::Logger,
     events: Arc<FileEventTx>,
     mut uploader: impl Uploader,
-    xfer: OutgoingTransfer,
+    xfer: Arc<OutgoingTransfer>,
     file_id: FileId,
 ) -> anyhow::Result<JoinHandle<()>> {
     let xfile = xfer
