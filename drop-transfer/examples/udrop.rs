@@ -13,7 +13,7 @@ use clap::{arg, command, value_parser, ArgAction, Command};
 use drop_auth::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
 use drop_config::DropConfig;
 use drop_storage::Storage;
-use drop_transfer::{auth, Event, File, Service, Transfer};
+use drop_transfer::{auth, Event, File, FileToSend, OutgoingTransfer, Service, Transfer};
 use slog::{o, Drain, Logger};
 use slog_scope::{error, info};
 use tokio::sync::mpsc;
@@ -167,18 +167,35 @@ async fn listen(
                     xfid, file, status
                 );
             }
-            Event::TransferCanceled(xfer, _, by_peer) => {
+            Event::IncomingTransferCanceled(xfer, by_peer) => {
                 info!(
-                    "[EVENT] TransferCanceled {}, by peer? {}",
+                    "[EVENT] IncomingTransferCanceled {}, by peer? {}",
                     xfer.id(),
                     by_peer
                 );
 
                 active_file_downloads.remove(&xfer.id());
             }
-            Event::TransferFailed(xfer, err, by_peer) => {
+            Event::OutgoingTransferCanceled(xfer, by_peer) => {
                 info!(
-                    "[EVENT] TransferFailed {}, status: {}, by peer? {}",
+                    "[EVENT] OutgoingTransferCanceled {}, by peer? {}",
+                    xfer.id(),
+                    by_peer
+                );
+
+                active_file_downloads.remove(&xfer.id());
+            }
+            Event::IncomingTransferFailed(xfer, err, by_peer) => {
+                info!(
+                    "[EVENT] IncomingTransferFailed {}, status: {}, by peer? {}",
+                    xfer.id(),
+                    err,
+                    by_peer
+                );
+            }
+            Event::OutgoingTransferFailed(xfer, err, by_peer) => {
+                info!(
+                    "[EVENT] OutgoingTransferFailed {}, status: {}, by peer? {}",
                     xfer.id(),
                     err,
                     by_peer
@@ -280,12 +297,12 @@ async fn main() -> anyhow::Result<()> {
             .context("Missing path list")?
         {
             files.extend(
-                File::from_path(path, &config)
+                FileToSend::from_path(path, &config)
                     .context("Cannot build transfer from the files provided")?,
             );
         }
 
-        Some(Transfer::new(*addr, files, &config)?)
+        Some(OutgoingTransfer::new(*addr, files, &config)?)
     } else {
         None
     };

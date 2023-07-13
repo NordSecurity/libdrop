@@ -24,9 +24,10 @@ use crate::{
     file::FileSubPath,
     protocol::v2,
     service::State,
+    transfer::{IncomingTransfer, Transfer},
     utils::Hidden,
     ws::{self, events::FileEventTx},
-    FileId,
+    File, FileId,
 };
 
 pub struct HandlerInit<'a, const PING: bool = true> {
@@ -39,7 +40,7 @@ pub struct HandlerLoop<'a, const PING: bool> {
     state: &'a Arc<State>,
     logger: &'a slog::Logger,
     msg_tx: Sender<Message>,
-    xfer: crate::Transfer,
+    xfer: IncomingTransfer,
     last_recv: Instant,
     jobs: HashMap<FileSubPath, FileTask>,
 }
@@ -103,7 +104,7 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
         self,
         _: &mut WebSocket,
         msg_tx: Sender<Message>,
-        xfer: crate::Transfer,
+        xfer: IncomingTransfer,
     ) -> Option<Self::Loop> {
         let Self {
             peer: _,
@@ -222,7 +223,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                 drop_analytics::Phase::End,
                 self.xfer.id().to_string(),
                 0,
-                file.info(),
+                Some(file.info()),
             );
 
             self.state
@@ -280,7 +281,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
-                    file.info(),
+                    Some(file.info()),
                 );
 
                 events
@@ -350,7 +351,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
             .values()
             .filter(|file| {
                 self.jobs
-                    .get(&file.subpath)
+                    .get(file.subpath())
                     .map_or(false, |state| !state.job.is_finished())
             })
             .for_each(|file| {
@@ -359,7 +360,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
-                    file.info(),
+                    Some(file.info()),
                 );
             });
 
@@ -367,9 +368,8 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 
         self.state
             .event_tx
-            .send(crate::Event::TransferCanceled(
+            .send(crate::Event::IncomingTransferCanceled(
                 self.xfer.clone(),
-                false,
                 by_peer,
             ))
             .await
@@ -439,7 +439,11 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 
         self.state
             .event_tx
-            .send(crate::Event::TransferFailed(self.xfer.clone(), err, true))
+            .send(crate::Event::IncomingTransferFailed(
+                self.xfer.clone(),
+                err,
+                true,
+            ))
             .await
             .expect("Event channel should always be open");
     }
@@ -589,7 +593,7 @@ impl FileTask {
 }
 
 impl handler::Request for (v2::TransferRequest, IpAddr, Arc<DropConfig>) {
-    fn parse(self) -> anyhow::Result<crate::Transfer> {
+    fn parse(self) -> anyhow::Result<IncomingTransfer> {
         self.try_into().context("Failed to parse transfer request")
     }
 }

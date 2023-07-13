@@ -14,7 +14,11 @@ use drop_config::DropConfig;
 use serde::{Deserialize, Serialize};
 
 use super::v4;
-use crate::file::{FileId, FileKind, FileSubPath};
+use crate::{
+    file::{File as _, FileId, FileSubPath, FileToRecv},
+    transfer::IncomingTransfer,
+    OutgoingTransfer, Transfer,
+};
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct File {
@@ -54,24 +58,20 @@ pub enum ClientMsg {
     Cancel(Download),
 }
 
-impl TryFrom<(TransferRequest, IpAddr, Arc<DropConfig>)> for crate::Transfer {
+impl TryFrom<(TransferRequest, IpAddr, Arc<DropConfig>)> for IncomingTransfer {
     type Error = crate::Error;
 
     fn try_from(
         (TransferRequest { files }, peer, config): (TransferRequest, IpAddr, Arc<DropConfig>),
     ) -> Result<Self, Self::Error> {
         fn process_file(
-            in_files: &mut Vec<crate::File>,
+            in_files: &mut Vec<FileToRecv>,
             subpath: FileSubPath,
             File { size, children, .. }: File,
         ) -> crate::Result<()> {
             match size {
                 Some(size) => {
-                    in_files.push(crate::File {
-                        file_id: FileId::from(&subpath),
-                        subpath,
-                        kind: FileKind::FileToRecv { size },
-                    });
+                    in_files.push(FileToRecv::new(FileId::from(&subpath), subpath, size));
                 }
                 None => {
                     for file in children {
@@ -100,14 +100,12 @@ impl TryFrom<(TransferRequest, IpAddr, Arc<DropConfig>)> for crate::Transfer {
     }
 }
 
-impl TryFrom<&crate::Transfer> for TransferRequest {
-    type Error = crate::Error;
-
-    fn try_from(value: &crate::Transfer) -> Result<Self, Self::Error> {
+impl From<&OutgoingTransfer> for TransferRequest {
+    fn from(value: &OutgoingTransfer) -> Self {
         let mut files: Vec<File> = Vec::new();
 
         for file in value.files().values() {
-            let mut parents = file.subpath.iter();
+            let mut parents = file.subpath().iter();
             let mut files = &mut files;
             let name = if let Some(name) = parents.next_back() {
                 name.clone()
@@ -138,7 +136,7 @@ impl TryFrom<&crate::Transfer> for TransferRequest {
             });
         }
 
-        Ok(Self { files })
+        Self { files }
     }
 }
 

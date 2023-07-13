@@ -7,6 +7,8 @@ use drop_storage::{
 };
 use uuid::Uuid;
 
+use crate::transfer::Transfer;
+
 pub struct StorageDispatch<'a> {
     storage: &'a drop_storage::Storage,
     file_progress: HashMap<(Uuid, String), i64>,
@@ -229,30 +231,26 @@ impl From<&crate::Event> for Event {
                 file_id: file.to_string(),
                 error_code: error.into(),
             },
-            crate::Event::TransferCanceled(transfer, is_sender, by_peer) => {
-                let transfer_type = match is_sender {
-                    false => TransferType::Incoming,
-                    true => TransferType::Outgoing,
-                };
-
-                Event::TransferCanceled {
-                    transfer_type,
-                    transfer_info: transfer.storage_info(),
-                    by_peer: *by_peer,
-                }
-            }
-            crate::Event::TransferFailed(transfer, error, by_peer) => {
-                let transfer_type = match by_peer {
-                    false => TransferType::Outgoing,
-                    true => TransferType::Incoming,
-                };
-
-                Event::TransferFailed {
-                    transfer_type,
-                    transfer_info: transfer.storage_info(),
-                    error_code: error.into(),
-                }
-            }
+            crate::Event::IncomingTransferCanceled(transfer, by_peer) => Event::TransferCanceled {
+                transfer_type: TransferType::Incoming,
+                transfer_info: transfer.storage_info(),
+                by_peer: *by_peer,
+            },
+            crate::Event::OutgoingTransferCanceled(transfer, by_peer) => Event::TransferCanceled {
+                transfer_type: TransferType::Outgoing,
+                transfer_info: transfer.storage_info(),
+                by_peer: *by_peer,
+            },
+            crate::Event::IncomingTransferFailed(transfer, error, _) => Event::TransferFailed {
+                transfer_type: TransferType::Incoming,
+                transfer_info: transfer.storage_info(),
+                error_code: error.into(),
+            },
+            crate::Event::OutgoingTransferFailed(transfer, error, _) => Event::TransferFailed {
+                transfer_type: TransferType::Outgoing,
+                transfer_info: transfer.storage_info(),
+                error_code: error.into(),
+            },
             crate::Event::FileDownloadProgress(transfer, file, progress) => Event::FileProgress {
                 transfer_id: transfer.id(),
                 file_id: file.to_string(),

@@ -4,16 +4,17 @@ use tokio::sync::mpsc::Sender;
 use tokio_tungstenite::tungstenite::Message;
 
 use super::{ClientReq, WebSocket};
-use crate::ws;
+use crate::{ws, OutgoingTransfer};
 
 #[async_trait::async_trait]
 pub trait HandlerInit {
     type Pinger: ws::Pinger;
     type Loop: HandlerLoop;
 
-    async fn start(&mut self, socket: &mut WebSocket, xfer: &crate::Transfer) -> crate::Result<()>;
+    async fn start(&mut self, socket: &mut WebSocket, xfer: &OutgoingTransfer)
+        -> crate::Result<()>;
 
-    fn upgrade(self, msg_tx: Sender<Message>, xfer: crate::Transfer) -> Self::Loop;
+    fn upgrade(self, msg_tx: Sender<Message>, xfer: OutgoingTransfer) -> Self::Loop;
     fn pinger(&mut self) -> Self::Pinger;
 }
 

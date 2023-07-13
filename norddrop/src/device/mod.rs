@@ -7,7 +7,7 @@ use std::{
 
 use drop_auth::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH};
 use drop_config::Config;
-use drop_transfer::{auth, utils::Hidden, File, Service, Transfer};
+use drop_transfer::{auth, utils::Hidden, FileToSend, OutgoingTransfer, Service, Transfer};
 use slog::{debug, error, trace, warn, Logger};
 use tokio::sync::{mpsc, Mutex};
 
@@ -365,7 +365,7 @@ impl NordDropFFI {
 
         let xfer = {
             let files = self.prepare_transfer_files(&descriptors)?;
-            Transfer::new(peer.ip(), files, &self.config.drop).map_err(|e| {
+            OutgoingTransfer::new(peer.ip(), files, &self.config.drop).map_err(|e| {
                 error!(
                     self.logger,
                     "Could not create transfer ({:?}): {}", descriptors, e
@@ -569,7 +569,10 @@ impl NordDropFFI {
         Ok(())
     }
 
-    fn prepare_transfer_files(&self, descriptors: &[TransferDescriptor]) -> Result<Vec<File>> {
+    fn prepare_transfer_files(
+        &self,
+        descriptors: &[TransferDescriptor],
+    ) -> Result<Vec<FileToSend>> {
         let mut files = Vec::new();
 
         #[allow(unused_variables)]
@@ -603,8 +606,8 @@ impl NordDropFFI {
                         return Err(ffi::types::NORDDROP_RES_TRANSFER_CREATE);
                     };
 
-                    let file =
-                        File::from_fd(&desc.path.0, content_uri.clone(), fd, i).map_err(|e| {
+                    let file = FileToSend::from_fd(&desc.path.0, content_uri.clone(), fd, i)
+                        .map_err(|e| {
                             error!(
                                 self.logger,
                                 "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
@@ -615,13 +618,14 @@ impl NordDropFFI {
                     files.push(file);
                 }
             } else {
-                let batch = File::from_path(&desc.path.0, &self.config.drop).map_err(|e| {
-                    error!(
-                        self.logger,
-                        "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
-                    );
-                    ffi::types::NORDDROP_RES_TRANSFER_CREATE
-                })?;
+                let batch =
+                    FileToSend::from_path(&desc.path.0, &self.config.drop).map_err(|e| {
+                        error!(
+                            self.logger,
+                            "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
+                        );
+                        ffi::types::NORDDROP_RES_TRANSFER_CREATE
+                    })?;
 
                 files.extend(batch);
             }
