@@ -22,12 +22,13 @@ use warp::ws::{Message, WebSocket};
 
 use super::{handler, ServerReq};
 use crate::{
-    file::{self, FileKind},
+    file::{self, FileToRecv},
     protocol::v5 as prot,
     service::State,
+    transfer::{IncomingTransfer, Transfer},
     utils::Hidden,
     ws::events::FileEventTx,
-    FileId,
+    File, FileId,
 };
 
 pub struct HandlerInit<'a> {
@@ -40,7 +41,7 @@ pub struct HandlerLoop<'a> {
     state: Arc<State>,
     logger: &'a slog::Logger,
     msg_tx: Sender<Message>,
-    xfer: crate::Transfer,
+    xfer: IncomingTransfer,
     last_recv: Instant,
     jobs: HashMap<FileId, FileTask>,
     checksums: HashMap<FileId, Arc<AsyncCell<[u8; 32]>>>,
@@ -109,7 +110,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
         mut self,
         ws: &mut WebSocket,
         msg_tx: Sender<Message>,
-        xfer: crate::Transfer,
+        xfer: IncomingTransfer,
     ) -> Option<Self::Loop> {
         let task = async {
             let checksums = self
@@ -168,7 +169,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             async move {
                 for xfile in to_fetch.into_iter().filter_map(|id| xfer.files().get(&id)) {
                     let msg = prot::ReqChsum {
-                        file: xfile.file_id.clone(),
+                        file: xfile.id().clone(),
                         limit: xfile.size(),
                     };
                     let msg = prot::ServerMsg::ReqChsum(msg);
@@ -307,7 +308,7 @@ impl HandlerLoop<'_> {
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
-                    file.info(),
+                    Some(file.info()),
                 );
 
                 events
@@ -326,11 +327,12 @@ impl HandlerLoop<'_> {
             if let Some(xstate) = self
                 .state
                 .transfer_manager
+                .incoming
                 .lock()
                 .await
-                .state_mut(self.xfer.id())
+                .get_mut(&self.xfer.id())
             {
-                match xstate.reject_file(file_id.clone()) {
+                match xstate.rejections.reject(&xstate.xfer, file_id.clone()) {
                     Ok(true) => (),
                     res => {
                         debug!(
@@ -376,7 +378,7 @@ impl HandlerLoop<'_> {
             drop_analytics::Phase::End,
             self.xfer.id().to_string(),
             0,
-            file.info(),
+            Some(file.info()),
         );
 
         self.state
@@ -487,7 +489,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
-                    file.info(),
+                    Some(file.info()),
                 );
             });
 
@@ -495,9 +497,8 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
         self.state
             .event_tx
-            .send(crate::Event::TransferCanceled(
+            .send(crate::Event::IncomingTransferCanceled(
                 self.xfer.clone(),
-                false,
                 by_peer,
             ))
             .await
@@ -571,7 +572,11 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
         self.state
             .event_tx
-            .send(crate::Event::TransferFailed(self.xfer.clone(), err, true))
+            .send(crate::Event::IncomingTransferFailed(
+                self.xfer.clone(),
+                err,
+                true,
+            ))
             .await
             .expect("Event channel should always be open");
     }
@@ -645,7 +650,7 @@ impl Downloader {
 #[async_trait::async_trait]
 impl handler::Downloader for Downloader {
     async fn init(&mut self, task: &super::FileXferTask) -> crate::Result<handler::DownloadInit> {
-        let filename_len = task.file.subpath.name().len();
+        let filename_len = task.file.subpath().name().len();
 
         if filename_len + super::MAX_FILE_SUFFIX_LEN > super::MAX_FILENAME_LENGTH {
             return Err(crate::Error::FilenameTooLong);
@@ -804,19 +809,16 @@ impl FileTask {
 }
 
 impl handler::Request for (prot::TransferRequest, IpAddr, Arc<DropConfig>) {
-    fn parse(self) -> anyhow::Result<crate::Transfer> {
+    fn parse(self) -> anyhow::Result<IncomingTransfer> {
         let (prot::TransferRequest { files, id }, peer, config) = self;
 
         let files = files
             .into_iter()
-            .map(|f| crate::File {
-                file_id: f.id,
-                subpath: f.path,
-                kind: FileKind::FileToRecv { size: f.size },
-            })
+            .map(|f| FileToRecv::new(f.id, f.path, f.size))
             .collect();
 
-        crate::Transfer::new_with_uuid(peer, files, id, &config).context("Failed to crate transfer")
+        IncomingTransfer::new_with_uuid(peer, files, id, &config)
+            .context("Failed to crate transfer")
     }
 }
 

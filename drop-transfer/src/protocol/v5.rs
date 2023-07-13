@@ -27,7 +27,11 @@
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
-use crate::{file::FileSubPath, FileId};
+use crate::{
+    file::{File as _, FileSubPath},
+    transfer::Transfer,
+    FileId, OutgoingTransfer,
+};
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct File {
@@ -137,9 +141,6 @@ impl<T> Chunk<T>
 where
     T: From<String> + ToString,
 {
-    // Message structure:
-    // [u32 little endian file id length][file id][file chunk]
-
     pub fn decode(mut msg: Vec<u8>) -> anyhow::Result<Self> {
         const LEN_SIZE: usize = std::mem::size_of::<u32>();
 
@@ -182,8 +183,8 @@ where
     }
 }
 
-impl From<&crate::Transfer> for TransferRequest {
-    fn from(value: &crate::Transfer) -> Self {
+impl From<&OutgoingTransfer> for TransferRequest {
+    fn from(value: &OutgoingTransfer) -> Self {
         Self {
             files: value
                 .files()

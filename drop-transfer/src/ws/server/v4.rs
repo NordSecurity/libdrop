@@ -21,7 +21,15 @@ use tokio::{
 use warp::ws::{Message, WebSocket};
 
 use super::{handler, ServerReq};
-use crate::{file, protocol::v4, service::State, utils::Hidden, ws::events::FileEventTx, FileId};
+use crate::{
+    file,
+    protocol::v4,
+    service::State,
+    transfer::{IncomingTransfer, Transfer},
+    utils::Hidden,
+    ws::events::FileEventTx,
+    File, FileId,
+};
 
 pub struct HandlerInit<'a> {
     peer: IpAddr,
@@ -33,7 +41,7 @@ pub struct HandlerLoop<'a> {
     state: Arc<State>,
     logger: &'a slog::Logger,
     msg_tx: Sender<Message>,
-    xfer: crate::Transfer,
+    xfer: IncomingTransfer,
     last_recv: Instant,
     jobs: HashMap<FileId, FileTask>,
     checksums: HashMap<FileId, Arc<AsyncCell<[u8; 32]>>>,
@@ -102,7 +110,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
         mut self,
         ws: &mut WebSocket,
         msg_tx: Sender<Message>,
-        xfer: crate::Transfer,
+        xfer: IncomingTransfer,
     ) -> Option<Self::Loop> {
         let task = async {
             let checksums = self
@@ -161,7 +169,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             async move {
                 for xfile in to_fetch.into_iter().filter_map(|id| xfer.files().get(&id)) {
                     let msg = v4::ReqChsum {
-                        file: xfile.file_id.clone(),
+                        file: xfile.id().clone(),
                         limit: xfile.size(),
                     };
                     let msg = v4::ServerMsg::ReqChsum(msg);
@@ -279,7 +287,7 @@ impl HandlerLoop<'_> {
                 drop_analytics::Phase::End,
                 self.xfer.id().to_string(),
                 0,
-                file.info(),
+                Some(file.info()),
             );
 
             self.state
@@ -340,7 +348,7 @@ impl HandlerLoop<'_> {
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
-                    file.info(),
+                    Some(file.info()),
                 );
 
                 events
@@ -451,7 +459,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
-                    file.info(),
+                    Some(file.info()),
                 );
             });
 
@@ -459,9 +467,8 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
         self.state
             .event_tx
-            .send(crate::Event::TransferCanceled(
+            .send(crate::Event::IncomingTransferCanceled(
                 self.xfer.clone(),
-                false,
                 by_peer,
             ))
             .await
@@ -534,7 +541,11 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
         self.state
             .event_tx
-            .send(crate::Event::TransferFailed(self.xfer.clone(), err, true))
+            .send(crate::Event::IncomingTransferFailed(
+                self.xfer.clone(),
+                err,
+                true,
+            ))
             .await
             .expect("Event channel should always be open");
     }
@@ -608,7 +619,7 @@ impl Downloader {
 #[async_trait::async_trait]
 impl handler::Downloader for Downloader {
     async fn init(&mut self, task: &super::FileXferTask) -> crate::Result<handler::DownloadInit> {
-        let filename_len = task.file.subpath.name().len();
+        let filename_len = task.file.subpath().name().len();
 
         if filename_len + super::MAX_FILE_SUFFIX_LEN > super::MAX_FILENAME_LENGTH {
             return Err(crate::Error::FilenameTooLong);

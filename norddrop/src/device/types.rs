@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use drop_transfer::utils::Hidden;
+use drop_transfer::{utils::Hidden, File as _, Transfer};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Debug)]
@@ -222,16 +222,34 @@ impl From<drop_transfer::Event> for Event {
                     status: From::from(&status),
                 },
             },
-            drop_transfer::Event::TransferCanceled(tx, _, by_peer) => Event::TransferFinished {
-                transfer: tx.id().to_string(),
-                data: FinishEvent::TransferCanceled { by_peer },
-            },
-            drop_transfer::Event::TransferFailed(tx, status, _) => Event::TransferFinished {
-                transfer: tx.id().to_string(),
-                data: FinishEvent::TransferFailed {
-                    status: From::from(&status),
-                },
-            },
+            drop_transfer::Event::IncomingTransferCanceled(tx, by_peer) => {
+                Event::TransferFinished {
+                    transfer: tx.id().to_string(),
+                    data: FinishEvent::TransferCanceled { by_peer },
+                }
+            }
+            drop_transfer::Event::OutgoingTransferCanceled(tx, by_peer) => {
+                Event::TransferFinished {
+                    transfer: tx.id().to_string(),
+                    data: FinishEvent::TransferCanceled { by_peer },
+                }
+            }
+            drop_transfer::Event::IncomingTransferFailed(tx, status, _) => {
+                Event::TransferFinished {
+                    transfer: tx.id().to_string(),
+                    data: FinishEvent::TransferFailed {
+                        status: From::from(&status),
+                    },
+                }
+            }
+            drop_transfer::Event::OutgoingTransferFailed(tx, status, _) => {
+                Event::TransferFinished {
+                    transfer: tx.id().to_string(),
+                    data: FinishEvent::TransferFailed {
+                        status: From::from(&status),
+                    },
+                }
+            }
             drop_transfer::Event::FileDownloadRejected {
                 transfer_id,
                 file_id,
@@ -258,16 +276,16 @@ impl From<drop_transfer::Event> for Event {
     }
 }
 
-impl From<drop_transfer::Transfer> for EventTransfer {
-    fn from(t: drop_transfer::Transfer) -> EventTransfer {
+impl<T: drop_transfer::Transfer> From<T> for EventTransfer {
+    fn from(t: T) -> EventTransfer {
         EventTransfer {
             transfer: t.id().to_string(),
         }
     }
 }
 
-impl From<drop_transfer::Transfer> for EventTransferRequest {
-    fn from(t: drop_transfer::Transfer) -> EventTransferRequest {
+impl<T: drop_transfer::Transfer> From<T> for EventTransferRequest {
+    fn from(t: T) -> EventTransferRequest {
         EventTransferRequest {
             peer: t.peer().to_string(),
             transfer: t.id().to_string(),
@@ -276,8 +294,8 @@ impl From<drop_transfer::Transfer> for EventTransferRequest {
     }
 }
 
-impl From<drop_transfer::Transfer> for EventRequestQueued {
-    fn from(t: drop_transfer::Transfer) -> EventRequestQueued {
+impl<T: drop_transfer::Transfer> From<T> for EventRequestQueued {
+    fn from(t: T) -> EventRequestQueued {
         EventRequestQueued {
             transfer: t.id().to_string(),
             files: extract_transfer_files(&t),
@@ -285,7 +303,7 @@ impl From<drop_transfer::Transfer> for EventRequestQueued {
     }
 }
 
-fn extract_transfer_files(t: &drop_transfer::Transfer) -> Vec<File> {
+fn extract_transfer_files(t: &impl drop_transfer::Transfer) -> Vec<File> {
     t.files()
         .values()
         .map(|f| File {

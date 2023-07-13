@@ -6,60 +6,65 @@ use std::{
     sync::Arc,
 };
 
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{mpsc::UnboundedSender, Mutex};
 use uuid::Uuid;
 
 use crate::{
     file::FileSubPath,
     service::State,
+    transfer::{IncomingTransfer, OutgoingTransfer, Transfer},
     ws::{client::ClientReq, server::ServerReq},
-    Error, FileId, Transfer,
+    Error, FileId,
 };
 
-#[derive(Clone)]
-pub enum TransferConnection {
-    Client(UnboundedSender<ClientReq>),
-    Server(UnboundedSender<ServerReq>),
+pub struct IncomingState {
+    pub xfer: IncomingTransfer,
+    pub conn: UnboundedSender<ServerReq>,
+    pub dir_mappings: DirMapping,
+    pub rejections: Rejections,
 }
 
-pub struct TransferState {
-    pub(crate) xfer: Transfer,
-    pub(crate) connection: TransferConnection,
-    // Used for mapping directories inside the destination
-    dir_mappings: HashMap<PathBuf, String>,
-
-    rejected: HashSet<FileId>,
+pub struct OutgoingState {
+    pub xfer: OutgoingTransfer,
+    pub conn: UnboundedSender<ClientReq>,
+    pub rejections: Rejections,
 }
 
 /// Transfer manager is responsible for keeping track of all ongoing or pending
 /// transfers and their status
 #[derive(Default)]
-pub(crate) struct TransferManager {
-    transfers: HashMap<Uuid, TransferState>,
+pub struct TransferManager {
+    pub incoming: Mutex<HashMap<Uuid, IncomingState>>,
+    pub outgoing: Mutex<HashMap<Uuid, OutgoingState>>,
 }
 
-impl TransferState {
-    fn new(xfer: Transfer, connection: TransferConnection) -> Self {
-        Self {
-            xfer,
-            connection,
-            dir_mappings: HashMap::new(),
-            rejected: HashSet::new(),
-        }
-    }
+#[derive(Default)]
+pub struct DirMapping {
+    mappings: HashMap<PathBuf, String>,
+}
 
+#[derive(Default)]
+pub struct Rejections {
+    rejected: HashSet<FileId>,
+}
+
+impl Rejections {
     /// Returns `true` if file was sucesfully marked as rejected and `false` if
     /// it was already marked as such
-    pub(crate) fn reject_file(&mut self, file: FileId) -> crate::Result<bool> {
-        if !self.xfer.files().contains_key(&file) {
+    pub(crate) fn reject(&mut self, xfer: &impl Transfer, file: FileId) -> crate::Result<bool> {
+        if !xfer.contains(&file) {
             return Err(crate::Error::BadFileId);
         }
 
         Ok(self.rejected.insert(file))
     }
 
-    pub(crate) fn ensure_file_not_rejected(&self, file: &FileId) -> crate::Result<()> {
-        if !self.xfer.files().contains_key(file) {
+    pub(crate) fn ensure_not_rejected(
+        &self,
+        xfer: &impl Transfer,
+        file: &FileId,
+    ) -> crate::Result<()> {
+        if !xfer.contains(file) {
             return Err(crate::Error::BadFileId);
         }
 
@@ -69,7 +74,9 @@ impl TransferState {
             Ok(())
         }
     }
+}
 
+impl DirMapping {
     /// This function composes the final path for the file.
     /// For ordinary files (subpath contains only one element) it just joins
     /// `dest_dir` with `file_subpath`. For directories (subpath of the form
@@ -83,7 +90,7 @@ impl TransferState {
     ///  `dest_dir/<mapped dir1>/dir2/../filename`
     ///
     /// The results are cached in RAM to speed this up
-    pub(crate) fn compose_final_path(
+    pub fn compose_final_path(
         &mut self,
         dest_dir: &Path,
         file_subpath: &FileSubPath,
@@ -98,7 +105,7 @@ impl TransferState {
         let mapped = match next {
             Some(next) => {
                 // Check if dir exists and is known to us
-                let name = match self.dir_mappings.entry(dest_dir.join(probe)) {
+                let name = match self.mappings.entry(dest_dir.join(probe)) {
                     // Dir is known, reuse
                     Entry::Occupied(occ) => occ.get().clone(),
                     // Dir in new, check if there is name conflict and add to known
@@ -135,42 +142,13 @@ impl TransferState {
         Ok(mapped)
     }
 
-    pub(crate) fn register_preexisting_final_path(
+    pub fn register_preexisting_final_path(
         &mut self,
         file_subpath: &FileSubPath,
         full_path: impl AsRef<Path>,
     ) {
-        self.dir_mappings
+        self.mappings
             .extend(extract_directory_mapping(file_subpath, full_path.as_ref()));
-    }
-}
-
-impl TransferManager {
-    /// Cancel ALL of the ongoing file transfers for a given transfer ID    
-    pub(crate) fn cancel_transfer(&mut self, transfer_id: Uuid) -> Option<TransferState> {
-        self.transfers.remove(&transfer_id)
-    }
-
-    pub(crate) fn insert_transfer(
-        &mut self,
-        xfer: Transfer,
-        connection: TransferConnection,
-    ) -> crate::Result<()> {
-        match self.transfers.entry(xfer.id()) {
-            Entry::Occupied(_) => Err(Error::BadTransferState("Transfer already exists".into())),
-            Entry::Vacant(entry) => {
-                entry.insert(TransferState::new(xfer, connection));
-                Ok(())
-            }
-        }
-    }
-
-    pub(crate) fn state(&self, id: Uuid) -> Option<&TransferState> {
-        self.transfers.get(&id)
-    }
-
-    pub(crate) fn state_mut(&mut self, id: Uuid) -> Option<&mut TransferState> {
-        self.transfers.get_mut(&id)
     }
 }
 
@@ -180,10 +158,10 @@ pub(crate) struct TransferGuard {
 }
 
 impl TransferGuard {
-    pub(crate) fn new(state: Arc<State>, id: Uuid) -> Self {
+    pub(crate) fn new(state: Arc<State>, xfer: Uuid) -> Self {
         Self {
             state: ManuallyDrop::new(state),
-            id,
+            id: xfer,
         }
     }
 }
@@ -194,8 +172,8 @@ impl Drop for TransferGuard {
         let id = self.id;
 
         tokio::spawn(async move {
-            let mut lock = state.transfer_manager.lock().await;
-            let _ = lock.cancel_transfer(id);
+            let _ = state.transfer_manager.incoming.lock().await.remove(&id);
+            let _ = state.transfer_manager.outgoing.lock().await.remove(&id);
         });
     }
 }

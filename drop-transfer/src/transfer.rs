@@ -6,60 +6,32 @@ use drop_storage::TransferInfo as StorageInfo;
 use uuid::Uuid;
 
 use crate::{
-    file::{FileId, FileKind, FileSource, FileSubPath},
-    Error, File,
+    file::{File, FileId, FileSource, FileSubPath, FileToRecv, FileToSend},
+    Error,
 };
 
-type Result<T> = std::result::Result<T, Error>;
+pub type IncomingTransfer = TransferData<FileToRecv>;
+pub type OutgoingTransfer = TransferData<FileToSend>;
 
-#[derive(Clone, Debug)]
-pub struct Transfer {
-    peer: IpAddr,
-    uuid: Uuid,
+pub trait Transfer {
+    type File: File;
 
-    // all the files
-    files: HashMap<FileId, File>,
-}
+    fn id(&self) -> Uuid;
+    fn peer(&self) -> IpAddr;
+    fn files(&self) -> &HashMap<FileId, Self::File>;
 
-impl Transfer {
-    pub fn new(peer: IpAddr, files: Vec<File>, config: &DropConfig) -> Result<Self> {
-        Self::new_with_uuid(peer, files, Uuid::new_v4(), config)
+    fn contains(&self, file_id: &FileId) -> bool {
+        self.files().contains_key(file_id)
     }
 
-    pub(crate) fn new_with_uuid(
-        peer: IpAddr,
-        files: Vec<File>,
-        uuid: Uuid,
-        config: &DropConfig,
-    ) -> Result<Self> {
-        if files.len() > config.transfer_file_limit {
-            return Err(Error::TransferLimitsExceeded);
-        }
-
-        let files = files
-            .into_iter()
-            .map(|file| (file.file_id.clone(), file))
-            .collect();
-
-        Ok(Self { peer, uuid, files })
-    }
-
-    pub(crate) fn file_by_subpath(&self, file_subpath: &FileSubPath) -> Option<&File> {
-        self.files
+    fn file_by_subpath(&self, file_subpath: &FileSubPath) -> Option<&Self::File> {
+        self.files()
             .values()
-            .find(|file| file.subpath == *file_subpath)
+            .find(|file| file.subpath() == file_subpath)
     }
 
-    pub fn files(&self) -> &HashMap<FileId, File> {
-        &self.files
-    }
-
-    pub fn info(&self) -> TransferInfo {
-        let info_list = self
-            .files
-            .values()
-            .map(|f| f.info().unwrap_or_default())
-            .collect::<Vec<_>>();
+    fn info(&self) -> TransferInfo {
+        let info_list = self.files().values().map(|f| f.info()).collect::<Vec<_>>();
 
         let size_list = info_list
             .iter()
@@ -83,70 +55,106 @@ impl Transfer {
                 .collect::<Vec<String>>()
                 .join(","),
             transfer_size_kb: size_list.iter().sum(),
-            file_count: info_list.len() as i32,
+            file_count: self.files().len() as i32,
         }
     }
+}
 
-    pub fn storage_info(&self) -> StorageInfo {
-        // TODO(msz): this insane check wouldn't be needed if we had two different
-        // `Transfer` types
-        let is_incoming = match self.files.values().next() {
-            Some(files) => matches!(files.kind, FileKind::FileToRecv { .. }),
-            None => true, // TODO(msz): Arbitrarily chosen, there is no way to differentiate here
-        };
+#[derive(Debug, Clone)]
+pub struct TransferData<F: File> {
+    peer: IpAddr,
+    uuid: Uuid,
 
-        let files = if is_incoming {
-            let files = self
-                .files
-                .values()
-                .map(|f| drop_storage::types::TransferIncomingPath {
-                    file_id: f.file_id.to_string(),
-                    relative_path: f.subpath.to_string(),
+    // all the files
+    files: HashMap<FileId, F>,
+}
+
+impl<F: File> TransferData<F> {
+    pub fn new(peer: IpAddr, files: Vec<F>, config: &DropConfig) -> crate::Result<Self> {
+        Self::new_with_uuid(peer, files, Uuid::new_v4(), config)
+    }
+
+    pub(crate) fn new_with_uuid(
+        peer: IpAddr,
+        files: Vec<F>,
+        uuid: Uuid,
+        config: &DropConfig,
+    ) -> crate::Result<Self> {
+        if files.len() > config.transfer_file_limit {
+            return Err(Error::TransferLimitsExceeded);
+        }
+
+        let files = files
+            .into_iter()
+            .map(|file| (file.id().clone(), file))
+            .collect();
+
+        Ok(Self { peer, uuid, files })
+    }
+}
+
+impl<F: File> Transfer for TransferData<F> {
+    type File = F;
+
+    fn id(&self) -> Uuid {
+        self.uuid
+    }
+
+    fn peer(&self) -> IpAddr {
+        self.peer
+    }
+
+    fn files(&self) -> &HashMap<FileId, Self::File> {
+        &self.files
+    }
+}
+
+impl IncomingTransfer {
+    pub(crate) fn storage_info(&self) -> StorageInfo {
+        let files = self
+            .files
+            .values()
+            .map(|f| drop_storage::types::TransferIncomingPath {
+                file_id: f.id().to_string(),
+                relative_path: f.subpath().to_string(),
+                size: f.size() as _,
+            })
+            .collect();
+
+        StorageInfo {
+            id: self.id(),
+            peer: self.peer().to_string(),
+            files: drop_storage::types::TransferFiles::Incoming(files),
+        }
+    }
+}
+
+impl OutgoingTransfer {
+    pub(crate) fn storage_info(&self) -> StorageInfo {
+        let files = self
+            .files
+            .values()
+            .filter_map(|f| {
+                let uri = match &f.source {
+                    FileSource::Path(fullpath) => url::Url::from_file_path(&fullpath.0).ok()?,
+                    #[cfg(unix)]
+                    FileSource::Fd { content_uri, .. } => content_uri.clone(),
+                };
+
+                Some(drop_storage::types::TransferOutgoingPath {
+                    file_id: f.id().to_string(),
+                    relative_path: f.subpath().to_string(),
+                    uri,
                     size: f.size() as _,
                 })
-                .collect();
+            })
+            .collect();
 
-            drop_storage::types::TransferFiles::Incoming(files)
-        } else {
-            let files = self
-                .files
-                .values()
-                .filter_map(|f| {
-                    let uri = match &f.kind {
-                        FileKind::FileToSend { source, .. } => match source {
-                            FileSource::Path(fullpath) => {
-                                url::Url::from_file_path(&fullpath.0).ok()?
-                            }
-                            #[cfg(unix)]
-                            FileSource::Fd { content_uri, .. } => content_uri.clone(),
-                        },
-                        _ => return None,
-                    };
-
-                    Some(drop_storage::types::TransferOutgoingPath {
-                        file_id: f.file_id.to_string(),
-                        relative_path: f.subpath.to_string(),
-                        uri,
-                        size: f.size() as _,
-                    })
-                })
-                .collect();
-
-            drop_storage::types::TransferFiles::Outgoing(files)
-        };
-
+        let files = drop_storage::types::TransferFiles::Outgoing(files);
         StorageInfo {
             id: self.id(),
             peer: self.peer().to_string(),
             files,
         }
-    }
-
-    pub fn id(&self) -> Uuid {
-        self.uuid
-    }
-
-    pub fn peer(&self) -> IpAddr {
-        self.peer
     }
 }

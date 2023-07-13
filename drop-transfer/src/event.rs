@@ -2,7 +2,12 @@ use std::path::Path;
 
 use uuid::Uuid;
 
-use crate::{file::FileId, utils::Hidden, Error, Transfer};
+use crate::{
+    file::FileId,
+    transfer::{IncomingTransfer, OutgoingTransfer},
+    utils::Hidden,
+    Error,
+};
 
 #[derive(Debug)]
 pub struct DownloadSuccess {
@@ -12,23 +17,23 @@ pub struct DownloadSuccess {
 
 #[derive(Debug)]
 pub enum Event {
-    RequestReceived(Transfer),
-    RequestQueued(Transfer),
+    RequestReceived(IncomingTransfer),
+    RequestQueued(OutgoingTransfer),
 
-    FileUploadStarted(Transfer, FileId),
-    FileDownloadStarted(Transfer, FileId, String),
+    FileUploadStarted(OutgoingTransfer, FileId),
+    FileDownloadStarted(IncomingTransfer, FileId, String),
 
-    FileUploadProgress(Transfer, FileId, u64),
-    FileDownloadProgress(Transfer, FileId, u64),
+    FileUploadProgress(OutgoingTransfer, FileId, u64),
+    FileDownloadProgress(IncomingTransfer, FileId, u64),
 
-    FileUploadSuccess(Transfer, FileId),
-    FileDownloadSuccess(Transfer, DownloadSuccess),
+    FileUploadSuccess(OutgoingTransfer, FileId),
+    FileDownloadSuccess(IncomingTransfer, DownloadSuccess),
 
-    FileUploadCancelled(Transfer, FileId, bool),
-    FileDownloadCancelled(Transfer, FileId, bool),
+    FileUploadCancelled(OutgoingTransfer, FileId, bool),
+    FileDownloadCancelled(IncomingTransfer, FileId, bool),
 
-    FileUploadFailed(Transfer, FileId, Error),
-    FileDownloadFailed(Transfer, FileId, Error),
+    FileUploadFailed(OutgoingTransfer, FileId, Error),
+    FileDownloadFailed(IncomingTransfer, FileId, Error),
 
     FileUploadRejected {
         transfer_id: Uuid,
@@ -41,7 +46,9 @@ pub enum Event {
         by_peer: bool,
     },
 
-    TransferCanceled(Transfer, bool, bool),
+    IncomingTransferCanceled(IncomingTransfer, bool),
+    OutgoingTransferCanceled(OutgoingTransfer, bool),
 
-    TransferFailed(Transfer, Error, bool),
+    IncomingTransferFailed(IncomingTransfer, Error, bool),
+    OutgoingTransferFailed(OutgoingTransfer, Error, bool),
 }
