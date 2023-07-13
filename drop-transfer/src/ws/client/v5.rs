@@ -28,7 +28,7 @@ pub struct HandlerLoop<'a> {
     tasks: HashMap<FileId, FileTask>,
     done: HashSet<FileId>,
     last_recv: Instant,
-    xfer: OutgoingTransfer,
+    xfer: Arc<OutgoingTransfer>,
 }
 
 struct FileTask {
@@ -63,7 +63,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
         Ok(())
     }
 
-    fn upgrade(self, upload_tx: Sender<Message>, xfer: OutgoingTransfer) -> Self::Loop {
+    fn upgrade(self, upload_tx: Sender<Message>, xfer: Arc<OutgoingTransfer>) -> Self::Loop {
         let Self { state, logger } = self;
 
         HandlerLoop {
@@ -153,7 +153,7 @@ impl HandlerLoop<'_> {
                 .await
                 .get_mut(&self.xfer.id())
             {
-                match xstate.rejections.reject(&xstate.xfer, file_id.clone()) {
+                match xstate.rejections.reject(file_id.clone()) {
                     Ok(true) => (),
                     res => {
                         debug!(
@@ -376,7 +376,7 @@ impl HandlerLoop<'_> {
     async fn ensure_not_rejected(&self, file_id: &FileId) -> crate::Result<()> {
         let lock = self.state.transfer_manager.outgoing.lock().await;
         let state = lock.get(&self.xfer.id()).ok_or(crate::Error::BadTransfer)?;
-        state.rejections.ensure_not_rejected(&state.xfer, file_id)?;
+        state.rejections.ensure_not_rejected(file_id)?;
         Ok(())
     }
 }
@@ -567,7 +567,7 @@ impl FileTask {
         state: Arc<State>,
         logger: &slog::Logger,
         sink: Sender<Message>,
-        xfer: OutgoingTransfer,
+        xfer: Arc<OutgoingTransfer>,
         file_id: FileId,
         offset: u64,
     ) -> anyhow::Result<Self> {

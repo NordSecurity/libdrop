@@ -190,6 +190,7 @@ impl Service {
             error!(self.logger, "Failed to insert transfer into storage: {err}",);
         }
 
+        let xfer = Arc::new(xfer);
         let stop_job = {
             let state = self.state.clone();
             let xfer = xfer.clone();
@@ -244,7 +245,7 @@ impl Service {
             let mut lock = self.state.transfer_manager.incoming.lock().await;
 
             let state = lock.get_mut(&uuid).ok_or(Error::BadTransfer)?;
-            state.rejections.ensure_not_rejected(&state.xfer, file_id)?;
+            state.rejections.ensure_not_rejected(file_id)?;
 
             let file = state.xfer.files().get(file_id).ok_or(Error::BadFileId)?;
 
@@ -291,7 +292,7 @@ impl Service {
         {
             let lock = self.state.transfer_manager.incoming.lock().await;
             if let Some(state) = lock.get(&xfer_uuid) {
-                state.rejections.ensure_not_rejected(&state.xfer, &file)?;
+                state.rejections.ensure_not_rejected(&file)?;
                 state
                     .conn
                     .send(ServerReq::Cancel { file })
@@ -303,7 +304,7 @@ impl Service {
         {
             let lock = self.state.transfer_manager.outgoing.lock().await;
             if let Some(state) = lock.get(&xfer_uuid) {
-                state.rejections.ensure_not_rejected(&state.xfer, &file)?;
+                state.rejections.ensure_not_rejected(&file)?;
                 state
                     .conn
                     .send(ClientReq::Cancel { file })
@@ -322,7 +323,7 @@ impl Service {
         {
             let mut lock = self.state.transfer_manager.incoming.lock().await;
             if let Some(state) = lock.get_mut(&transfer_id) {
-                if !state.rejections.reject(&state.xfer, file.clone())? {
+                if !state.rejections.reject(file.clone())? {
                     return Err(crate::Error::Rejected);
                 }
 
@@ -336,7 +337,7 @@ impl Service {
         {
             let mut lock = self.state.transfer_manager.outgoing.lock().await;
             if let Some(state) = lock.get_mut(&transfer_id) {
-                if !state.rejections.reject(&state.xfer, file.clone())? {
+                if !state.rejections.reject(file.clone())? {
                     return Err(crate::Error::Rejected);
                 }
 

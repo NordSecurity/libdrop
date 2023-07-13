@@ -41,7 +41,7 @@ pub struct HandlerLoop<'a> {
     state: Arc<State>,
     logger: &'a slog::Logger,
     msg_tx: Sender<Message>,
-    xfer: IncomingTransfer,
+    xfer: Arc<IncomingTransfer>,
     last_recv: Instant,
     jobs: HashMap<FileId, FileTask>,
     checksums: HashMap<FileId, Arc<AsyncCell<[u8; 32]>>>,
@@ -110,7 +110,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
         mut self,
         ws: &mut WebSocket,
         msg_tx: Sender<Message>,
-        xfer: IncomingTransfer,
+        xfer: Arc<IncomingTransfer>,
     ) -> Option<Self::Loop> {
         let task = async {
             let checksums = self

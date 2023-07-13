@@ -28,7 +28,7 @@ pub struct HandlerLoop<'a, const PING: bool> {
     upload_tx: Sender<Message>,
     tasks: HashMap<FileSubPath, FileTask>,
     last_recv: Instant,
-    xfer: OutgoingTransfer,
+    xfer: Arc<OutgoingTransfer>,
 }
 
 struct Uploader {
@@ -62,7 +62,7 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
         Ok(())
     }
 
-    fn upgrade(self, upload_tx: Sender<Message>, xfer: OutgoingTransfer) -> Self::Loop {
+    fn upgrade(self, upload_tx: Sender<Message>, xfer: Arc<OutgoingTransfer>) -> Self::Loop {
         let Self { state, logger } = self;
 
         HandlerLoop {
@@ -225,9 +225,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                 let lock = self.state.transfer_manager.outgoing.lock().await;
 
                 let state = lock.get(&self.xfer.id()).ok_or(crate::Error::BadTransfer)?;
-                state
-                    .rejections
-                    .ensure_not_rejected(&state.xfer, file.id())?;
+                state.rejections.ensure_not_rejected(file.id())?;
             }
 
             match self.tasks.entry(file_id.clone()) {
@@ -484,7 +482,7 @@ impl FileTask {
     async fn new(
         state: &Arc<State>,
         uploader: Uploader,
-        xfer: OutgoingTransfer,
+        xfer: Arc<OutgoingTransfer>,
         file: FileSubPath,
         logger: &slog::Logger,
     ) -> anyhow::Result<Self> {

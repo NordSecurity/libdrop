@@ -18,16 +18,16 @@ use crate::{
 };
 
 pub struct IncomingState {
-    pub xfer: IncomingTransfer,
+    pub xfer: Arc<IncomingTransfer>,
     pub conn: UnboundedSender<ServerReq>,
     pub dir_mappings: DirMapping,
-    pub rejections: Rejections,
+    pub rejections: Rejections<IncomingTransfer>,
 }
 
 pub struct OutgoingState {
-    pub xfer: OutgoingTransfer,
+    pub xfer: Arc<OutgoingTransfer>,
     pub conn: UnboundedSender<ClientReq>,
-    pub rejections: Rejections,
+    pub rejections: Rejections<OutgoingTransfer>,
 }
 
 /// Transfer manager is responsible for keeping track of all ongoing or pending
@@ -43,28 +43,31 @@ pub struct DirMapping {
     mappings: HashMap<PathBuf, String>,
 }
 
-#[derive(Default)]
-pub struct Rejections {
+pub struct Rejections<T: Transfer> {
+    xfer: Arc<T>,
     rejected: HashSet<FileId>,
 }
 
-impl Rejections {
+impl<T: Transfer> Rejections<T> {
+    pub(crate) fn new(xfer: Arc<T>) -> Self {
+        Self {
+            xfer,
+            rejected: HashSet::new(),
+        }
+    }
+
     /// Returns `true` if file was sucesfully marked as rejected and `false` if
     /// it was already marked as such
-    pub(crate) fn reject(&mut self, xfer: &impl Transfer, file: FileId) -> crate::Result<bool> {
-        if !xfer.contains(&file) {
+    pub(crate) fn reject(&mut self, file: FileId) -> crate::Result<bool> {
+        if !self.xfer.contains(&file) {
             return Err(crate::Error::BadFileId);
         }
 
         Ok(self.rejected.insert(file))
     }
 
-    pub(crate) fn ensure_not_rejected(
-        &self,
-        xfer: &impl Transfer,
-        file: &FileId,
-    ) -> crate::Result<()> {
-        if !xfer.contains(file) {
+    pub(crate) fn ensure_not_rejected(&self, file: &FileId) -> crate::Result<()> {
+        if !self.xfer.contains(file) {
             return Err(crate::Error::BadFileId);
         }
 

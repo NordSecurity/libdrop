@@ -1,4 +1,4 @@
-use std::{ops::ControlFlow, time::Duration};
+use std::{ops::ControlFlow, sync::Arc, time::Duration};
 
 use tokio::sync::mpsc::Sender;
 use tokio_tungstenite::tungstenite::Message;
@@ -14,7 +14,7 @@ pub trait HandlerInit {
     async fn start(&mut self, socket: &mut WebSocket, xfer: &OutgoingTransfer)
         -> crate::Result<()>;
 
-    fn upgrade(self, msg_tx: Sender<Message>, xfer: OutgoingTransfer) -> Self::Loop;
+    fn upgrade(self, msg_tx: Sender<Message>, xfer: Arc<OutgoingTransfer>) -> Self::Loop;
     fn pinger(&mut self) -> Self::Pinger;
 }
 
