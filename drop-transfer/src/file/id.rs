@@ -118,6 +118,12 @@ impl FileSubPath {
             .collect::<Result<_, _>>()?;
         Ok(Self(vec))
     }
+
+    pub fn extension(&self) -> Option<&str> {
+        Path::new(self.name())
+            .extension()
+            .and_then(|os| os.to_str())
+    }
 }
 
 impl<T> From<T> for FileSubPath

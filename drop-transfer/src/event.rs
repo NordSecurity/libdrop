@@ -1,8 +1,13 @@
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use uuid::Uuid;
 
-use crate::{file::FileId, utils::Hidden, Error, Transfer};
+use crate::{
+    file::FileId,
+    transfer::{IncomingTransfer, OutgoingTransfer},
+    utils::Hidden,
+    Error,
+};
 
 #[derive(Debug)]
 pub struct DownloadSuccess {
@@ -12,23 +17,23 @@ pub struct DownloadSuccess {
 
 #[derive(Debug)]
 pub enum Event {
-    RequestReceived(Transfer),
-    RequestQueued(Transfer),
+    RequestReceived(Arc<IncomingTransfer>),
+    RequestQueued(Arc<OutgoingTransfer>),
 
-    FileUploadStarted(Transfer, FileId),
-    FileDownloadStarted(Transfer, FileId, String),
+    FileUploadStarted(Arc<OutgoingTransfer>, FileId),
+    FileDownloadStarted(Arc<IncomingTransfer>, FileId, String),
 
-    FileUploadProgress(Transfer, FileId, u64),
-    FileDownloadProgress(Transfer, FileId, u64),
+    FileUploadProgress(Arc<OutgoingTransfer>, FileId, u64),
+    FileDownloadProgress(Arc<IncomingTransfer>, FileId, u64),
 
-    FileUploadSuccess(Transfer, FileId),
-    FileDownloadSuccess(Transfer, DownloadSuccess),
+    FileUploadSuccess(Arc<OutgoingTransfer>, FileId),
+    FileDownloadSuccess(Arc<IncomingTransfer>, DownloadSuccess),
 
-    FileUploadCancelled(Transfer, FileId, bool),
-    FileDownloadCancelled(Transfer, FileId, bool),
+    FileUploadCancelled(Arc<OutgoingTransfer>, FileId, bool),
+    FileDownloadCancelled(Arc<IncomingTransfer>, FileId, bool),
 
-    FileUploadFailed(Transfer, FileId, Error),
-    FileDownloadFailed(Transfer, FileId, Error),
+    FileUploadFailed(Arc<OutgoingTransfer>, FileId, Error),
+    FileDownloadFailed(Arc<IncomingTransfer>, FileId, Error),
 
     FileUploadRejected {
         transfer_id: Uuid,
@@ -41,7 +46,9 @@ pub enum Event {
         by_peer: bool,
     },
 
-    TransferCanceled(Transfer, bool, bool),
+    IncomingTransferCanceled(Arc<IncomingTransfer>, bool),
+    OutgoingTransferCanceled(Arc<OutgoingTransfer>, bool),
 
-    TransferFailed(Transfer, Error, bool),
+    IncomingTransferFailed(Arc<IncomingTransfer>, Error, bool),
+    OutgoingTransferFailed(Arc<OutgoingTransfer>, Error, bool),
 }

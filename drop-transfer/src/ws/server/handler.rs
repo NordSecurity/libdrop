@@ -1,10 +1,10 @@
-use std::{fs, ops::ControlFlow, path::PathBuf, time::Duration};
+use std::{fs, ops::ControlFlow, path::PathBuf, sync::Arc, time::Duration};
 
 use tokio::sync::mpsc::Sender;
 use warp::ws::{Message, WebSocket};
 
 use super::ServerReq;
-use crate::{utils::Hidden, ws};
+use crate::{transfer::IncomingTransfer, utils::Hidden, ws};
 
 #[async_trait::async_trait]
 pub trait HandlerInit {
@@ -18,7 +18,7 @@ pub trait HandlerInit {
         self,
         ws: &mut WebSocket,
         msg_tx: Sender<Message>,
-        xfer: crate::Transfer,
+        xfer: Arc<IncomingTransfer>,
     ) -> Option<Self::Loop>;
 
     fn pinger(&mut self) -> Self::Pinger;
@@ -41,7 +41,7 @@ pub trait HandlerLoop {
 }
 
 pub trait Request {
-    fn parse(self) -> anyhow::Result<crate::Transfer>;
+    fn parse(self) -> anyhow::Result<IncomingTransfer>;
 }
 
 #[derive(Debug, Clone)]

@@ -12,7 +12,9 @@ use tokio::{sync::mpsc::Sender, task::JoinHandle};
 use tokio_tungstenite::tungstenite::{self, Message};
 
 use super::{handler, ClientReq, WebSocket};
-use crate::{protocol::v5 as prot, service::State, ws, FileId};
+use crate::{
+    protocol::v5 as prot, service::State, transfer::Transfer, ws, File, FileId, OutgoingTransfer,
+};
 
 pub struct HandlerInit<'a> {
     state: &'a Arc<State>,
@@ -26,7 +28,7 @@ pub struct HandlerLoop<'a> {
     tasks: HashMap<FileId, FileTask>,
     done: HashSet<FileId>,
     last_recv: Instant,
-    xfer: crate::Transfer,
+    xfer: Arc<OutgoingTransfer>,
 }
 
 struct FileTask {
@@ -51,13 +53,17 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
     type Pinger = tokio::time::Interval;
     type Loop = HandlerLoop<'a>;
 
-    async fn start(&mut self, socket: &mut WebSocket, xfer: &crate::Transfer) -> crate::Result<()> {
+    async fn start(
+        &mut self,
+        socket: &mut WebSocket,
+        xfer: &OutgoingTransfer,
+    ) -> crate::Result<()> {
         let req = prot::TransferRequest::from(xfer);
         socket.send(Message::from(&req)).await?;
         Ok(())
     }
 
-    fn upgrade(self, upload_tx: Sender<Message>, xfer: crate::Transfer) -> Self::Loop {
+    fn upgrade(self, upload_tx: Sender<Message>, xfer: Arc<OutgoingTransfer>) -> Self::Loop {
         let Self { state, logger } = self;
 
         HandlerLoop {
@@ -123,7 +129,7 @@ impl HandlerLoop<'_> {
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
-                    file.info(),
+                    Some(file.info()),
                 );
 
                 task.events
@@ -142,11 +148,12 @@ impl HandlerLoop<'_> {
             if let Some(xstate) = self
                 .state
                 .transfer_manager
+                .outgoing
                 .lock()
                 .await
-                .state_mut(self.xfer.id())
+                .get_mut(&self.xfer.id())
             {
-                match xstate.reject_file(file_id.clone()) {
+                match xstate.rejections.reject(file_id.clone()) {
                     Ok(true) => (),
                     res => {
                         debug!(
@@ -186,7 +193,7 @@ impl HandlerLoop<'_> {
             drop_analytics::Phase::End,
             self.xfer.id().to_string(),
             0,
-            file.info(),
+            Some(file.info()),
         );
 
         self.state
@@ -235,15 +242,7 @@ impl HandlerLoop<'_> {
         limit: u64,
     ) -> anyhow::Result<()> {
         let f = async {
-            {
-                self.state
-                    .transfer_manager
-                    .lock()
-                    .await
-                    .state(self.xfer.id())
-                    .ok_or(crate::Error::BadTransfer)?
-                    .ensure_file_not_rejected(&file_id)?;
-            }
+            self.ensure_not_rejected(&file_id).await?;
 
             let xfile = self.xfer.files().get(&file_id).context("File not found")?;
             let checksum = tokio::task::block_in_place(|| xfile.checksum(limit))?;
@@ -286,15 +285,7 @@ impl HandlerLoop<'_> {
         offset: u64,
     ) -> anyhow::Result<()> {
         let start = async {
-            {
-                self.state
-                    .transfer_manager
-                    .lock()
-                    .await
-                    .state(self.xfer.id())
-                    .ok_or(crate::Error::BadTransfer)?
-                    .ensure_file_not_rejected(&file_id)?;
-            }
+            self.ensure_not_rejected(&file_id).await?;
 
             match self.tasks.entry(file_id.clone()) {
                 Entry::Occupied(o) => {
@@ -381,6 +372,13 @@ impl HandlerLoop<'_> {
             }
         }
     }
+
+    async fn ensure_not_rejected(&self, file_id: &FileId) -> crate::Result<()> {
+        let lock = self.state.transfer_manager.outgoing.lock().await;
+        let state = lock.get(&self.xfer.id()).ok_or(crate::Error::BadTransfer)?;
+        state.rejections.ensure_not_rejected(file_id)?;
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -409,7 +407,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
-                    file.info(),
+                    Some(file.info()),
                 )
             });
 
@@ -417,9 +415,8 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
         self.state
             .event_tx
-            .send(crate::Event::TransferCanceled(
+            .send(crate::Event::OutgoingTransferCanceled(
                 self.xfer.clone(),
-                true,
                 by_peer,
             ))
             .await
@@ -510,7 +507,11 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
         self.state
             .event_tx
-            .send(crate::Event::TransferFailed(self.xfer.clone(), err, false))
+            .send(crate::Event::OutgoingTransferFailed(
+                self.xfer.clone(),
+                err,
+                false,
+            ))
             .await
             .expect("Event channel should always be open");
     }
@@ -566,7 +567,7 @@ impl FileTask {
         state: Arc<State>,
         logger: &slog::Logger,
         sink: Sender<Message>,
-        xfer: crate::Transfer,
+        xfer: Arc<OutgoingTransfer>,
         file_id: FileId,
         offset: u64,
     ) -> anyhow::Result<Self> {
