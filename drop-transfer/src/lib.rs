@@ -11,14 +11,16 @@ pub mod transfer;
 pub mod utils;
 mod ws;
 
+#[cfg(unix)]
+pub use crate::file::FdResolver;
 pub(crate) use crate::manager::TransferManager;
 pub use crate::{
     error::Error,
     event::Event,
-    file::{File, FileId},
+    file::{File, FileId, FileToRecv, FileToSend},
     service::Service,
     storage_dispatch::StorageDispatch,
-    transfer::Transfer,
+    transfer::{IncomingTransfer, OutgoingTransfer, Transfer, TransferData},
 };
 
 pub type Result<T> = std::result::Result<T, Error>;

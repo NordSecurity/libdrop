@@ -4,6 +4,7 @@ mod v4;
 mod v5;
 
 use std::{
+    collections::hash_map::Entry,
     fs, io,
     net::{IpAddr, SocketAddr},
     ops::ControlFlow,
@@ -34,12 +35,13 @@ use super::events::FileEventTx;
 use crate::{
     auth,
     error::ResultExt,
-    file::{FileId, FileSubPath},
-    manager::{TransferConnection, TransferGuard},
+    file::{File, FileId, FileSubPath, FileToSend},
+    manager::{OutgoingState, Rejections, TransferGuard},
     protocol,
     service::State,
+    transfer::Transfer,
     ws::Pinger,
-    Event,
+    Event, OutgoingTransfer,
 };
 
 pub type WebSocket = WebSocketStream<TcpStream>;
@@ -53,10 +55,10 @@ struct RunContext<'a> {
     logger: &'a slog::Logger,
     state: &'a Arc<State>,
     socket: WebSocket,
-    xfer: &'a crate::Transfer,
+    xfer: &'a Arc<OutgoingTransfer>,
 }
 
-pub(crate) async fn run(state: Arc<State>, xfer: crate::Transfer, logger: Logger) {
+pub(crate) async fn run(state: Arc<State>, xfer: Arc<OutgoingTransfer>, logger: Logger) {
     loop {
         let cf = connect_to_peer(&state, &xfer, &logger).await;
         if cf.is_break() {
@@ -102,7 +104,7 @@ pub(crate) async fn resume(state: &Arc<State>, stop: &CancellationToken, logger:
                         })
                         .collect::<Result<_, _>>()?;
 
-                    let xfer = crate::Transfer::new_with_uuid(
+                    let xfer = OutgoingTransfer::new_with_uuid(
                         transfer.peer.parse().context("Failed to parse peer IP")?,
                         files,
                         transfer.uuid,
@@ -121,7 +123,7 @@ pub(crate) async fn resume(state: &Arc<State>, stop: &CancellationToken, logger:
                     }
                 };
 
-                run(state, xfer, logger).await
+                run(state, Arc::new(xfer), logger).await
             }
         };
 
@@ -143,7 +145,7 @@ pub(crate) async fn resume(state: &Arc<State>, stop: &CancellationToken, logger:
 
 async fn connect_to_peer(
     state: &Arc<State>,
-    xfer: &crate::Transfer,
+    xfer: &Arc<OutgoingTransfer>,
     logger: &Logger,
 ) -> ControlFlow<()> {
     let (socket, ver) = match establish_ws_conn(state, xfer.peer(), logger).await {
@@ -153,7 +155,7 @@ async fn connect_to_peer(
 
             state
                 .event_tx
-                .send(Event::TransferFailed(xfer.clone(), err, false))
+                .send(Event::OutgoingTransferFailed(xfer.clone(), err, false))
                 .await
                 .expect("Failed to send TransferFailed event");
 
@@ -318,11 +320,25 @@ impl RunContext<'_> {
 
         let (tx, rx) = mpsc::unbounded_channel();
 
-        self.state
+        match self
+            .state
             .transfer_manager
+            .outgoing
             .lock()
             .await
-            .insert_transfer(self.xfer.clone(), TransferConnection::Client(tx))?;
+            .entry(self.xfer.id())
+        {
+            Entry::Occupied(_) => {
+                return Err(crate::Error::BadTransferState(
+                    "Transfer already exists".into(),
+                ))
+            }
+            Entry::Vacant(entry) => entry.insert(OutgoingState {
+                xfer: self.xfer.clone(),
+                conn: tx,
+                rejections: Rejections::new(self.xfer.clone()),
+            }),
+        };
 
         self.state
             .event_tx
@@ -348,7 +364,7 @@ impl RunContext<'_> {
 
                 self.state
                     .event_tx
-                    .send(Event::TransferFailed(self.xfer.clone(), err, false))
+                    .send(Event::OutgoingTransferFailed(self.xfer.clone(), err, false))
                     .await
                     .expect("Failed to send TransferFailed event");
 
@@ -433,7 +449,7 @@ async fn start_upload(
     logger: slog::Logger,
     events: Arc<FileEventTx>,
     mut uploader: impl Uploader,
-    xfer: crate::Transfer,
+    xfer: Arc<OutgoingTransfer>,
     file_id: FileId,
 ) -> anyhow::Result<JoinHandle<()>> {
     let xfile = xfer
@@ -454,7 +470,7 @@ async fn start_upload(
             drop_analytics::Phase::Start,
             xfer.id().to_string(),
             0,
-            xfile.info(),
+            Some(xfile.info()),
         );
 
         let send_file = async {
@@ -488,7 +504,7 @@ async fn start_upload(
             drop_analytics::Phase::End,
             xfer.id().to_string(),
             transfer_time.elapsed().as_millis() as i32,
-            xfile.info(),
+            Some(xfile.info()),
         );
 
         match result {
@@ -541,7 +557,7 @@ fn file_to_resume_from_path_uri(
     uri: &url::Url,
     subpath: FileSubPath,
     file_id: FileId,
-) -> anyhow::Result<crate::File> {
+) -> anyhow::Result<FileToSend> {
     let fullpath = uri
         .to_file_path()
         .ok()
@@ -552,7 +568,7 @@ fn file_to_resume_from_path_uri(
 
     anyhow::ensure!(!meta.is_dir(), "Invalid file type");
 
-    crate::File::new_to_send(subpath, fullpath, meta, file_id.clone())
+    FileToSend::new_to_send(subpath, fullpath, meta, file_id.clone())
         .with_context(|| format!("Failed to restore file {file_id} from DB"))
 }
 
@@ -562,7 +578,7 @@ fn file_to_resume_from_content_uri(
     uri: url::Url,
     subpath: FileSubPath,
     file_id: FileId,
-) -> anyhow::Result<crate::File> {
+) -> anyhow::Result<FileToSend> {
     let callback = state
         .fdresolv
         .as_ref()
@@ -570,6 +586,6 @@ fn file_to_resume_from_content_uri(
 
     let fd = callback(uri.as_str()).with_context(|| format!("Failed to fetch FD for: {uri}"))?;
 
-    crate::File::new_from_fd(subpath, uri, fd, file_id.clone())
+    FileToSend::new_from_fd(subpath, uri, fd, file_id.clone())
         .with_context(|| format!("Failed to restore file {file_id} from DB"))
 }

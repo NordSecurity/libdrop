@@ -4,7 +4,7 @@ mod v4;
 mod v5;
 
 use std::{
-    collections::HashMap,
+    collections::{hash_map::Entry, HashMap},
     fs,
     io::{self, Write},
     net::{IpAddr, SocketAddr},
@@ -37,14 +37,15 @@ use crate::{
     auth,
     error::ResultExt,
     event::DownloadSuccess,
-    file::{self, FileSubPath},
-    manager::{TransferConnection, TransferGuard},
+    file::{self, FileSubPath, FileToRecv},
+    manager::{IncomingState, Rejections, TransferGuard},
     protocol,
     quarantine::PathExt,
     service::State,
+    transfer::{IncomingTransfer, Transfer},
     utils::Hidden,
     ws::Pinger,
-    Error, Event, FileId,
+    Error, Event, File, FileId,
 };
 
 const MAX_FILENAME_LENGTH: usize = 255;
@@ -59,8 +60,8 @@ pub enum ServerReq {
 }
 
 pub struct FileXferTask {
-    pub file: crate::File,
-    pub xfer: crate::Transfer,
+    pub file: FileToRecv,
+    pub xfer: Arc<IncomingTransfer>,
     pub base_dir: Hidden<PathBuf>,
 }
 
@@ -313,13 +314,19 @@ impl RunContext<'_> {
             }
         };
 
+        let xfer = Arc::new(xfer);
+
         let stop_job = async {
             // Stop the download job
             info!(self.logger, "Aborting transfer download");
 
             self.state
                 .event_tx
-                .send(Event::TransferFailed(xfer.clone(), Error::Canceled, true))
+                .send(Event::IncomingTransferFailed(
+                    xfer.clone(),
+                    Error::Canceled,
+                    true,
+                ))
                 .await
                 .expect("Failed to send TransferFailed event");
         };
@@ -342,7 +349,7 @@ async fn handle_client(
     logger: &slog::Logger,
     mut socket: WebSocket,
     mut handler: impl handler::HandlerInit,
-    xfer: crate::Transfer,
+    xfer: Arc<IncomingTransfer>,
 ) {
     let xfer_id = xfer.id();
     let _guard = TransferGuard::new(state.clone(), xfer_id);
@@ -434,7 +441,7 @@ async fn handle_client(
 }
 
 impl FileXferTask {
-    pub fn new(file: crate::File, xfer: crate::Transfer, base_dir: PathBuf) -> Self {
+    pub fn new(file: FileToRecv, xfer: Arc<IncomingTransfer>, base_dir: PathBuf) -> Self {
         Self {
             file,
             xfer,
@@ -548,11 +555,14 @@ impl FileXferTask {
     }
 
     async fn prepare_abs_path(&self, state: &State) -> crate::Result<PathBuf> {
-        let mut lock = state.transfer_manager.lock().await;
+        let mut lock = state.transfer_manager.incoming.lock().await;
 
-        let mapping = lock
-            .state_mut(self.xfer.id())
-            .ok_or(crate::Error::Canceled)?
+        let state = lock
+            .get_mut(&self.xfer.id())
+            .ok_or(crate::Error::Canceled)?;
+
+        let mapping = state
+            .dir_mappings
             .compose_final_path(&self.base_dir, self.file.subpath())?;
 
         drop(lock);
@@ -618,7 +628,7 @@ impl FileXferTask {
                     drop_analytics::Phase::Start,
                     self.xfer.id().to_string(),
                     0,
-                    self.file.info(),
+                    Some(self.file.info()),
                 );
 
                 events
@@ -648,7 +658,7 @@ impl FileXferTask {
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     transfer_time.elapsed().as_millis() as i32,
-                    self.file.info(),
+                    Some(self.file.info()),
                 );
 
                 let event = match result {
@@ -748,16 +758,25 @@ fn move_tmp_to_dst(
 
 async fn init_client_handler(
     state: &State,
-    xfer: &crate::Transfer,
+    xfer: &Arc<IncomingTransfer>,
     req_send: mpsc::UnboundedSender<ServerReq>,
     logger: &Logger,
 ) -> anyhow::Result<()> {
-    state
+    match state
         .transfer_manager
+        .incoming
         .lock()
         .await
-        .insert_transfer(xfer.clone(), TransferConnection::Server(req_send.clone()))
-        .context("Failed to insert a new transfer")?;
+        .entry(xfer.id())
+    {
+        Entry::Occupied(_) => anyhow::bail!("Failed to insert a new transfer"),
+        Entry::Vacant(entry) => entry.insert(IncomingState {
+            xfer: xfer.clone(),
+            conn: req_send.clone(),
+            dir_mappings: Default::default(),
+            rejections: Rejections::new(xfer.clone()),
+        }),
+    };
 
     let existing_info = match state.storage.incoming_transfer_info(xfer.id()) {
         Ok(info) => info,
@@ -828,7 +847,7 @@ fn ensure_resume_matches_existing_transfer(
 
 fn resume_transfer_files(
     state: &State,
-    xfer: &crate::Transfer,
+    xfer: &Arc<IncomingTransfer>,
     req_send: &mpsc::UnboundedSender<ServerReq>,
     logger: &Logger,
 ) -> anyhow::Result<()> {
@@ -840,11 +859,7 @@ fn resume_transfer_files(
     for file in files {
         info!(logger, "Resuming file: {}", file.file_id);
 
-        let xfile = crate::File {
-            file_id: file.file_id.into(),
-            subpath: From::from(&file.subpath),
-            kind: crate::file::FileKind::FileToRecv { size: file.size },
-        };
+        let xfile = FileToRecv::new(file.file_id.into(), From::from(&file.subpath), file.size);
         let task = FileXferTask::new(xfile, xfer.clone(), file.basepath.into());
 
         let _ = req_send.send(ServerReq::Download {
@@ -855,7 +870,7 @@ fn resume_transfer_files(
     Ok(())
 }
 
-async fn register_finished_paths(state: &State, xfer: &crate::Transfer, logger: &Logger) {
+async fn register_finished_paths(state: &State, xfer: &IncomingTransfer, logger: &Logger) {
     let paths = match state.storage.finished_incoming_files(xfer.id()) {
         Ok(paths) => paths,
         Err(err) => {
@@ -864,12 +879,14 @@ async fn register_finished_paths(state: &State, xfer: &crate::Transfer, logger: 
         }
     };
 
-    let mut lock = state.transfer_manager.lock().await;
+    let mut lock = state.transfer_manager.incoming.lock().await;
 
-    if let Some(xstate) = lock.state_mut(xfer.id()) {
+    if let Some(xstate) = lock.get_mut(&xfer.id()) {
         for path in paths {
             let subpath = FileSubPath::from(path.subpath);
-            xstate.register_preexisting_final_path(&subpath, &path.final_path);
+            xstate
+                .dir_mappings
+                .register_preexisting_final_path(&subpath, &path.final_path);
         }
     }
 }

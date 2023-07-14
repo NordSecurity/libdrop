@@ -24,18 +24,41 @@ use crate::{utils::Hidden, Error};
 pub type FdResolver = dyn Fn(&str) -> Option<RawFd> + Send + Sync;
 
 const HEADER_SIZE: usize = 1024;
+const UNKNOWN_STR: &str = "unknown";
 
-#[allow(clippy::large_enum_variant)]
+pub trait File {
+    fn id(&self) -> &FileId;
+    fn subpath(&self) -> &FileSubPath;
+    fn size(&self) -> u64;
+    fn mime_type(&self) -> &str;
+
+    fn info(&self) -> FileInfo {
+        FileInfo {
+            mime_type: self.mime_type().to_string(),
+            extension: self
+                .subpath()
+                .extension()
+                .unwrap_or(UNKNOWN_STR)
+                .to_string(),
+            size_kb: (self.size() as f64 / 1024.0).ceil() as i32,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
-pub enum FileKind {
-    FileToSend {
-        meta: Hidden<fs::Metadata>,
-        source: FileSource,
-        mime_type: Option<Hidden<String>>,
-    },
-    FileToRecv {
-        size: u64,
-    },
+pub struct FileToSend {
+    file_id: FileId,
+    subpath: FileSubPath,
+    meta: Hidden<fs::Metadata>,
+    pub(crate) source: FileSource,
+    mime_type: Option<Hidden<String>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct FileToRecv {
+    file_id: FileId,
+    subpath: FileSubPath,
+    size: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -48,65 +71,65 @@ pub enum FileSource {
     },
 }
 
-#[derive(Clone, Debug)]
-pub struct File {
-    pub(crate) file_id: FileId,
-    pub(crate) subpath: FileSubPath,
-    pub(crate) kind: FileKind,
-}
-
-impl File {
-    fn walk(path: &Path, config: &DropConfig) -> Result<Vec<Self>, Error> {
-        let parent = path
-            .parent()
-            .ok_or_else(|| crate::Error::BadPath("Missing parent directory".into()))?;
-
-        let mut files = Vec::new();
-        let mut breadth = 0;
-
-        for entry in WalkDir::new(path).min_depth(1).into_iter() {
-            let entry = entry?;
-            let meta = entry.metadata()?;
-
-            if !meta.is_file() {
-                continue;
-            }
-
-            if entry.depth() > config.dir_depth_limit {
-                return Err(Error::TransferLimitsExceeded);
-            }
-
-            breadth += 1;
-
-            if breadth > config.transfer_file_limit {
-                return Err(Error::TransferLimitsExceeded);
-            }
-
-            let subpath = entry
-                .path()
-                .strip_prefix(parent)
-                .map_err(|err| crate::Error::BadPath(err.to_string()))?;
-
-            let subpath = FileSubPath::from_path(subpath)?;
-
-            let path = entry.into_path();
-            let file_id = file_id_from_path(&path)?;
-            let file = File::new_to_send(subpath, path, meta, file_id)?;
-            files.push(file);
-        }
-
-        Ok(files)
+impl File for FileToSend {
+    fn id(&self) -> &FileId {
+        &self.file_id
     }
 
+    fn subpath(&self) -> &FileSubPath {
+        &self.subpath
+    }
+
+    fn size(&self) -> u64 {
+        self.meta.len()
+    }
+
+    fn mime_type(&self) -> &str {
+        self.mime_type
+            .as_ref()
+            .map(|x| x.as_str())
+            .unwrap_or(UNKNOWN_STR)
+    }
+}
+
+impl File for FileToRecv {
+    fn id(&self) -> &FileId {
+        &self.file_id
+    }
+
+    fn subpath(&self) -> &FileSubPath {
+        &self.subpath
+    }
+
+    fn size(&self) -> u64 {
+        self.size
+    }
+
+    fn mime_type(&self) -> &str {
+        ""
+    }
+}
+
+impl FileToRecv {
+    pub fn new(file_id: FileId, subpath: FileSubPath, size: u64) -> Self {
+        Self {
+            file_id,
+            subpath,
+            size,
+        }
+    }
+}
+
+impl FileToSend {
     pub fn from_path(path: impl Into<PathBuf>, config: &DropConfig) -> Result<Vec<Self>, Error> {
         let path = path.into();
         let meta = fs::symlink_metadata(&path)?;
         let file_id = file_id_from_path(&path)?;
 
         let files = if meta.is_dir() {
-            File::walk(&path, config)?
+            Self::walk(&path, config)?
         } else {
-            let file = File::new_to_send(FileSubPath::from_file_name(&path)?, path, meta, file_id)?;
+            let file = Self::new_to_send(FileSubPath::from_file_name(&path)?, path, meta, file_id)?;
             vec![file]
         };
 
@@ -137,11 +160,9 @@ impl File {
         Ok(Self {
             file_id,
             subpath,
-            kind: FileKind::FileToSend {
-                meta: Hidden(meta),
-                source: FileSource::Path(Hidden(path)),
-                mime_type: Some(Hidden(mime_type)),
-            },
+            meta: Hidden(meta),
+            source: FileSource::Path(Hidden(path)),
+            mime_type: Some(Hidden(mime_type)),
         })
     }
 
@@ -187,11 +208,9 @@ impl File {
             Ok(Self {
                 file_id,
                 subpath,
-                kind: FileKind::FileToSend {
-                    meta: Hidden(meta),
-                    source: FileSource::Fd { fd, content_uri },
-                    mime_type: Some(Hidden(mime_type)),
-                },
+                meta: Hidden(meta),
+                source: FileSource::Fd { fd, content_uri },
+                mime_type: Some(Hidden(mime_type)),
             })
         };
         let result = create_file();
@@ -202,58 +221,59 @@ impl File {
         result
     }
 
-    pub fn size(&self) -> u64 {
-        match &self.kind {
-            FileKind::FileToSend { meta, .. } => meta.len(),
-            FileKind::FileToRecv { size } => *size,
+    fn walk(path: &Path, config: &DropConfig) -> Result<Vec<Self>, Error> {
+        let parent = path
+            .parent()
+            .ok_or_else(|| crate::Error::BadPath("Missing parent directory".into()))?;
+
+        let mut files = Vec::new();
+        let mut breadth = 0;
+
+        for entry in WalkDir::new(path).min_depth(1).into_iter() {
+            let entry = entry?;
+            let meta = entry.metadata()?;
+
+            if !meta.is_file() {
+                continue;
+            }
+
+            if entry.depth() > config.dir_depth_limit {
+                return Err(Error::TransferLimitsExceeded);
+            }
+
+            breadth += 1;
+
+            if breadth > config.transfer_file_limit {
+                return Err(Error::TransferLimitsExceeded);
+            }
+
+            let subpath = entry
+                .path()
+                .strip_prefix(parent)
+                .map_err(|err| crate::Error::BadPath(err.to_string()))?;
+
+            let subpath = FileSubPath::from_path(subpath)?;
+
+            let path = entry.into_path();
+            let file_id = file_id_from_path(&path)?;
+            let file = Self::new_to_send(subpath, path, meta, file_id)?;
+            files.push(file);
         }
-    }
 
-    pub fn id(&self) -> &FileId {
-        &self.file_id
-    }
-
-    pub fn subpath(&self) -> &FileSubPath {
-        &self.subpath
-    }
-
-    pub fn info(&self) -> Option<FileInfo> {
-        match &self.kind {
-            FileKind::FileToSend { mime_type, .. } => Some(FileInfo {
-                mime_type: mime_type
-                    .as_deref()
-                    .cloned()
-                    .unwrap_or_else(|| "unknown".to_string()),
-                extension: AsRef::<Path>::as_ref(self.subpath.name())
-                    .extension()
-                    .map(|e| e.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "unknown".to_string()),
-                size_kb: (self.size() as f64 / 1024.0).ceil() as i32,
-            }),
-            _ => None,
-        }
+        Ok(files)
     }
 
     // Open the file if it wasn't already opened and return the std::fs::File
     // instance
     pub(crate) fn open(&self, offset: u64) -> crate::Result<FileReader> {
-        match &self.kind {
-            FileKind::FileToSend { meta, source, .. } => {
-                let mut reader = reader::open(source)?;
-                reader.seek(io::SeekFrom::Start(offset))?;
-                FileReader::new(reader, meta.0.clone())
-            }
-            _ => Err(Error::BadFile),
-        }
+        let mut reader = reader::open(&self.source)?;
+        reader.seek(io::SeekFrom::Start(offset))?;
+        FileReader::new(reader, self.meta.0.clone())
     }
 
     /// Calculate sha2 of a file. This is a blocking operation
     pub(crate) fn checksum(&self, limit: u64) -> crate::Result<[u8; 32]> {
-        let reader = match &self.kind {
-            FileKind::FileToSend { source, .. } => reader::open(source)?,
-            _ => return Err(Error::BadFile),
-        };
-
+        let reader = reader::open(&self.source)?;
         let mut reader = io::BufReader::new(reader).take(limit);
         let csum = checksum(&mut reader)?;
         Ok(csum)
@@ -294,8 +314,9 @@ mod tests {
             let mut tmp = tempfile::NamedTempFile::new().expect("Failed to create tmp file");
             tmp.write_all(TEST).unwrap();
 
-            let file = &super::File::from_path(tmp.path(), &DropConfig::default()).unwrap()[0];
-            let size = file.size();
+            let file =
+                &super::FileToSend::from_path(tmp.path(), &DropConfig::default()).unwrap()[0];
+            let size = file.meta.len();
 
             assert_eq!(size, TEST.len() as u64);
 

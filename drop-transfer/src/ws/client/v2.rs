@@ -12,7 +12,10 @@ use tokio::{sync::mpsc::Sender, task::JoinHandle};
 use tokio_tungstenite::tungstenite::{self, Message};
 
 use super::{handler, ClientReq, WebSocket};
-use crate::{file::FileSubPath, protocol::v2, service::State, ws, FileId};
+use crate::{
+    file::FileSubPath, protocol::v2, service::State, transfer::Transfer, ws, File, FileId,
+    OutgoingTransfer,
+};
 
 pub struct HandlerInit<'a, const PING: bool = true> {
     state: &'a Arc<State>,
@@ -25,7 +28,7 @@ pub struct HandlerLoop<'a, const PING: bool> {
     upload_tx: Sender<Message>,
     tasks: HashMap<FileSubPath, FileTask>,
     last_recv: Instant,
-    xfer: crate::Transfer,
+    xfer: Arc<OutgoingTransfer>,
 }
 
 struct Uploader {
@@ -49,13 +52,17 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
     type Pinger = ws::utils::Pinger<PING>;
     type Loop = HandlerLoop<'a, PING>;
 
-    async fn start(&mut self, socket: &mut WebSocket, xfer: &crate::Transfer) -> crate::Result<()> {
-        let req = v2::TransferRequest::try_from(xfer)?;
+    async fn start(
+        &mut self,
+        socket: &mut WebSocket,
+        xfer: &OutgoingTransfer,
+    ) -> crate::Result<()> {
+        let req = v2::TransferRequest::from(xfer);
         socket.send(Message::from(&req)).await?;
         Ok(())
     }
 
-    fn upgrade(self, upload_tx: Sender<Message>, xfer: crate::Transfer) -> Self::Loop {
+    fn upgrade(self, upload_tx: Sender<Message>, xfer: Arc<OutgoingTransfer>) -> Self::Loop {
         let Self { state, logger } = self;
 
         HandlerLoop {
@@ -133,7 +140,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                 drop_analytics::Phase::End,
                 self.xfer.id().to_string(),
                 0,
-                file.info(),
+                Some(file.info()),
             );
 
             self.state
@@ -165,7 +172,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
-                    file.info(),
+                    Some(file.info()),
                 );
 
                 task.events
@@ -215,13 +222,10 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
     async fn on_download(&mut self, file_id: FileSubPath) {
         let start = async {
             if let Some(file) = self.xfer.file_by_subpath(&file_id) {
-                self.state
-                    .transfer_manager
-                    .lock()
-                    .await
-                    .state(self.xfer.id())
-                    .ok_or(crate::Error::BadTransfer)?
-                    .ensure_file_not_rejected(file.id())?;
+                let lock = self.state.transfer_manager.outgoing.lock().await;
+
+                let state = lock.get(&self.xfer.id()).ok_or(crate::Error::BadTransfer)?;
+                state.rejections.ensure_not_rejected(file.id())?;
             }
 
             match self.tasks.entry(file_id.clone()) {
@@ -317,7 +321,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
             .values()
             .filter(|file| {
                 self.tasks
-                    .get(&file.subpath)
+                    .get(file.subpath())
                     .map_or(false, |task| !task.job.is_finished())
             })
             .for_each(|file| {
@@ -326,7 +330,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
                     drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
-                    file.info(),
+                    Some(file.info()),
                 )
             });
 
@@ -334,9 +338,8 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 
         self.state
             .event_tx
-            .send(crate::Event::TransferCanceled(
+            .send(crate::Event::OutgoingTransferCanceled(
                 self.xfer.clone(),
-                true,
                 by_peer,
             ))
             .await
@@ -415,7 +418,11 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 
         self.state
             .event_tx
-            .send(crate::Event::TransferFailed(self.xfer.clone(), err, false))
+            .send(crate::Event::OutgoingTransferFailed(
+                self.xfer.clone(),
+                err,
+                false,
+            ))
             .await
             .expect("Event channel should always be open");
     }
@@ -475,7 +482,7 @@ impl FileTask {
     async fn new(
         state: &Arc<State>,
         uploader: Uploader,
-        xfer: crate::Transfer,
+        xfer: Arc<OutgoingTransfer>,
         file: FileSubPath,
         logger: &slog::Logger,
     ) -> anyhow::Result<Self> {
