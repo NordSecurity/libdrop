@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 pub struct TransferDescriptor {
     pub path: Hidden<String>,
     pub content_uri: Option<url::Url>,
+    pub fd: Option<i32>,
 }
 
 #[derive(Serialize)]

@@ -589,21 +589,25 @@ impl NordDropFFI {
 
                 #[cfg(not(target_os = "windows"))]
                 {
-                    let fdresolv = if let Some(fdresolv) = self.fdresolv.as_ref() {
-                        fdresolv
-                    } else {
-                        error!(
-                            self.logger,
-                            "Content URI provided but RD resolver callback is not set up"
-                        );
-                        return Err(ffi::types::NORDDROP_RES_TRANSFER_CREATE);
-                    };
-
-                    let fd = if let Some(fd) = fdresolv(content_uri.as_str()) {
+                    let fd = if let Some(fd) = desc.fd {
                         fd
                     } else {
-                        error!(self.logger, "Failed to fetch FD for file: {content_uri}");
-                        return Err(ffi::types::NORDDROP_RES_TRANSFER_CREATE);
+                        let fdresolv = if let Some(fdresolv) = self.fdresolv.as_ref() {
+                            fdresolv
+                        } else {
+                            error!(
+                                self.logger,
+                                "Content URI provided but RD resolver callback is not set up"
+                            );
+                            return Err(ffi::types::NORDDROP_RES_TRANSFER_CREATE);
+                        };
+
+                        if let Some(fd) = fdresolv(content_uri.as_str()) {
+                            fd
+                        } else {
+                            error!(self.logger, "Failed to fetch FD for file: {content_uri}");
+                            return Err(ffi::types::NORDDROP_RES_TRANSFER_CREATE);
+                        }
                     };
 
                     let file = FileToSend::from_fd(&desc.path.0, content_uri.clone(), fd, i)
