@@ -1,7 +1,6 @@
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     io,
-    mem::ManuallyDrop,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -11,7 +10,6 @@ use uuid::Uuid;
 
 use crate::{
     file::FileSubPath,
-    service::State,
     transfer::{IncomingTransfer, OutgoingTransfer, Transfer},
     ws::{client::ClientReq, server::ServerReq},
     Error, FileId,
@@ -26,8 +24,7 @@ pub struct IncomingState {
 
 pub struct OutgoingState {
     pub xfer: Arc<OutgoingTransfer>,
-    pub conn: UnboundedSender<ClientReq>,
-    pub rejections: Rejections<OutgoingTransfer>,
+    pub conn: Option<UnboundedSender<ClientReq>>,
 }
 
 /// Transfer manager is responsible for keeping track of all ongoing or pending
@@ -152,32 +149,6 @@ impl DirMapping {
     ) {
         self.mappings
             .extend(extract_directory_mapping(file_subpath, full_path.as_ref()));
-    }
-}
-
-pub(crate) struct TransferGuard {
-    state: ManuallyDrop<Arc<State>>,
-    id: Uuid,
-}
-
-impl TransferGuard {
-    pub(crate) fn new(state: Arc<State>, xfer: Uuid) -> Self {
-        Self {
-            state: ManuallyDrop::new(state),
-            id: xfer,
-        }
-    }
-}
-
-impl Drop for TransferGuard {
-    fn drop(&mut self) {
-        let state = unsafe { ManuallyDrop::take(&mut self.state) };
-        let id = self.id;
-
-        tokio::spawn(async move {
-            let _ = state.transfer_manager.incoming.lock().await.remove(&id);
-            let _ = state.transfer_manager.outgoing.lock().await.remove(&id);
-        });
     }
 }
 

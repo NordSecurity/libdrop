@@ -108,6 +108,13 @@ impl HandlerLoop<'_> {
         });
         socket.send(Message::from(&msg)).await?;
 
+        self.state.storage.update_outgoing_file_sync_states(
+            self.xfer.id(),
+            file_id.as_ref(),
+            Some(drop_storage::sync::FileState::Rejected),
+            None,
+        )?;
+
         self.on_reject(file_id, false).await;
 
         Ok(())
@@ -144,26 +151,13 @@ impl HandlerLoop<'_> {
     }
 
     async fn on_reject(&mut self, file_id: FileId, by_peer: bool) {
-        if by_peer {
-            if let Some(xstate) = self
-                .state
-                .transfer_manager
-                .outgoing
-                .lock()
-                .await
-                .get_mut(&self.xfer.id())
-            {
-                match xstate.rejections.reject(file_id.clone()) {
-                    Ok(true) => (),
-                    res => {
-                        debug!(
-                            self.logger,
-                            "Failed to run rejection procedure on peers request: {res:?}"
-                        );
-                        return;
-                    }
-                }
-            }
+        if let Err(err) = self.state.storage.update_outgoing_file_sync_states(
+            self.xfer.id(),
+            file_id.as_ref(),
+            Some(drop_storage::sync::FileState::Rejected),
+            Some(drop_storage::sync::FileState::Rejected),
+        ) {
+            error!(self.logger, "Failed to register file rejection: {err}");
         }
 
         info!(self.logger, "Rejecting file {file_id}, by_peer?: {by_peer}");
@@ -196,15 +190,17 @@ impl HandlerLoop<'_> {
             Some(file.info()),
         );
 
-        self.state
-            .event_tx
-            .send(crate::Event::FileUploadRejected {
-                transfer_id: self.xfer.id(),
-                file_id,
-                by_peer,
-            })
-            .await
-            .expect("Event channel should be open");
+        if by_peer {
+            self.state
+                .event_tx
+                .send(crate::Event::FileUploadRejected {
+                    transfer_id: self.xfer.id(),
+                    file_id,
+                    by_peer,
+                })
+                .await
+                .expect("Event channel should be open");
+        }
     }
 
     async fn on_progress(&self, file_id: FileId, transfered: u64) {
@@ -374,9 +370,15 @@ impl HandlerLoop<'_> {
     }
 
     async fn ensure_not_rejected(&self, file_id: &FileId) -> crate::Result<()> {
-        let lock = self.state.transfer_manager.outgoing.lock().await;
-        let state = lock.get(&self.xfer.id()).ok_or(crate::Error::BadTransfer)?;
-        state.rejections.ensure_not_rejected(file_id)?;
+        let state = self
+            .state
+            .storage
+            .outgoing_file_sync_state(self.xfer.id(), file_id.as_ref())?
+            .ok_or(crate::Error::BadFileId)?;
+
+        if matches!(state.local_state, drop_storage::sync::FileState::Rejected) {
+            return Err(crate::Error::Rejected);
+        }
         Ok(())
     }
 }
@@ -392,6 +394,14 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
     async fn on_close(&mut self, by_peer: bool) {
         debug!(self.logger, "ClientHandler::on_close(by_peer: {})", by_peer);
+
+        if let Err(err) = self.state.storage.update_transfer_sync_states(
+            self.xfer.id(),
+            Some(drop_storage::sync::TransferState::Canceled),
+            Some(drop_storage::sync::TransferState::Canceled),
+        ) {
+            error!(self.logger, "Failed to store transfer cancel state: {err}");
+        }
 
         self.xfer
             .files()
@@ -411,16 +421,18 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
                 )
             });
 
-        self.on_stop().await;
+        if by_peer {
+            self.state
+                .event_tx
+                .send(crate::Event::OutgoingTransferCanceled(
+                    self.xfer.clone(),
+                    by_peer,
+                ))
+                .await
+                .expect("Could not send a transfer cancelled event, channel closed");
+        }
 
-        self.state
-            .event_tx
-            .send(crate::Event::OutgoingTransferCanceled(
-                self.xfer.clone(),
-                by_peer,
-            ))
-            .await
-            .expect("Could not send a transfer cancelled event, channel closed");
+        self.on_stop().await;
     }
 
     async fn on_recv(

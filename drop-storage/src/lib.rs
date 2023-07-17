@@ -1,4 +1,5 @@
 pub mod error;
+pub mod sync;
 pub mod types;
 
 use std::{path::Path, vec};
@@ -99,8 +100,71 @@ impl Storage {
             }
         }
 
+        sync::insert_transfer(
+            &conn,
+            transfer.id,
+            matches!(transfer.files, TransferFiles::Incoming(_)),
+        )?;
+
         conn.commit()?;
 
+        Ok(())
+    }
+
+    pub fn update_transfer_sync_states(
+        &self,
+        transfer_id: Uuid,
+        remote: Option<sync::TransferState>,
+        local: Option<sync::TransferState>,
+    ) -> Result<()> {
+        let mut conn = self.pool.get()?;
+        let conn = conn.transaction()?;
+
+        if let Some(remote) = remote {
+            sync::transfer_set_remote_state(&conn, transfer_id, remote)?;
+        }
+        if let Some(local) = local {
+            sync::transfer_set_local_state(&conn, transfer_id, local)?;
+        }
+
+        conn.commit()?;
+        Ok(())
+    }
+
+    pub fn transfer_sync_state(&self, transfer_id: Uuid) -> crate::Result<Option<sync::Transfer>> {
+        sync::transfer_state(&*self.pool.get()?, transfer_id)
+    }
+
+    pub fn trasnfer_sync_clear(&self, transfer_id: Uuid) -> crate::Result<Option<()>> {
+        sync::transfer_clear(&*self.pool.get()?, transfer_id)
+    }
+
+    pub fn outgoing_file_sync_state(
+        &self,
+        transfer_id: Uuid,
+        file_id: &str,
+    ) -> crate::Result<Option<sync::File>> {
+        sync::outgoing_file_state(&*self.pool.get()?, transfer_id, file_id)
+    }
+
+    pub fn update_outgoing_file_sync_states(
+        &self,
+        transfer_id: Uuid,
+        file_id: &str,
+        remote: Option<sync::FileState>,
+        local: Option<sync::FileState>,
+    ) -> crate::Result<()> {
+        let mut conn = self.pool.get()?;
+        let conn = conn.transaction()?;
+
+        if let Some(remote) = remote {
+            sync::outgoing_file_set_remote_state(&conn, transfer_id, file_id, remote)?;
+        }
+        if let Some(local) = local {
+            sync::outgoing_file_set_local_state(&conn, transfer_id, file_id, local)?;
+        }
+
+        conn.commit()?;
         Ok(())
     }
 
@@ -616,13 +680,10 @@ impl Storage {
         let rec_transfers: Vec<_> = conn
             .prepare(
                 r#"
-                SELECT transfers.id as tid, peer, COUNT(transfer_cancel_states.id) as cancel_count
-                FROM transfers
-                LEFT JOIN transfer_cancel_states ON transfers.id = transfer_cancel_states.transfer_id
-                WHERE
-                    is_outgoing = ?1
-                GROUP BY transfers.id
-                HAVING cancel_count = 0
+                SELECT t.id as tid, peer
+                FROM transfers t
+                INNER JOIN sync_transfer st ON st.transfer_id = t.id
+                WHERE t.is_outgoing = ?1
                 "#,
             )?
             .query_map(params![TransferType::Outgoing as u32], |r| {
