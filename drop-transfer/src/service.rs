@@ -1,4 +1,5 @@
 use std::{
+    collections::hash_map::Entry,
     fs,
     net::IpAddr,
     path::{Component, Path},
@@ -20,6 +21,7 @@ use crate::{
     auth,
     error::ResultExt,
     file::File,
+    manager::OutgoingState,
     transfer::Transfer,
     ws::{
         self,
@@ -186,31 +188,65 @@ impl Service {
             xfer.info(),
         );
 
-        if let Err(err) = self.state.storage.insert_transfer(&xfer.storage_info()) {
-            error!(self.logger, "Failed to insert transfer into storage: {err}",);
-        }
-
         let xfer = Arc::new(xfer);
-        let stop_job = {
-            let state = self.state.clone();
-            let xfer = xfer.clone();
-            let logger = self.logger.clone();
 
-            async move {
-                // Stop the download job
-                warn!(logger, "Aborting transfer download");
+        let mut lock = self.state.transfer_manager.outgoing.lock().await;
+        match lock.entry(xfer.id()) {
+            Entry::Occupied(_) => {
+                warn!(
+                    self.logger,
+                    "Outgoing transfer UUID colision: {}",
+                    xfer.id()
+                );
 
-                state
+                self.state
                     .event_tx
                     .send(Event::OutgoingTransferFailed(
-                        xfer,
-                        crate::Error::Canceled,
+                        xfer.clone(),
+                        crate::Error::BadTransferState("Transfer already exists".into()),
                         true,
                     ))
                     .await
-                    .expect("Failed to send TransferFailed event");
+                    .expect("Event channel should be open");
+                return;
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(OutgoingState {
+                    xfer: xfer.clone(),
+                    conn: None,
+                });
             }
         };
+        drop(lock);
+
+        if let Err(err) = self.state.storage.insert_transfer(&xfer.storage_info()) {
+            error!(self.logger, "Failed to insert transfer into storage: {err}",);
+
+            self.state
+                .event_tx
+                .send(Event::OutgoingTransferFailed(
+                    xfer.clone(),
+                    crate::Error::StorageError,
+                    true,
+                ))
+                .await
+                .expect("Event channel should be open");
+
+            // remove manager leftover
+            self.state
+                .transfer_manager
+                .outgoing
+                .lock()
+                .await
+                .remove(&xfer.id());
+            return;
+        }
+
+        self.state
+            .event_tx
+            .send(Event::RequestQueued(xfer.clone()))
+            .await
+            .expect("Could not send a RequestQueued event, channel closed");
 
         let client_job = ws::client::run(self.state.clone(), xfer, self.logger.clone());
         let stop = self.stop.clone();
@@ -219,9 +255,7 @@ impl Service {
             tokio::select! {
                 biased;
 
-                _ = stop.cancelled() => {
-                    stop_job.await;
-                },
+                _ = stop.cancelled() => (),
                 _ = client_job => (),
             }
         });
@@ -288,73 +322,131 @@ impl Service {
     }
 
     /// Cancel a single file in a transfer
-    pub async fn cancel(&mut self, xfer_uuid: Uuid, file: FileId) -> crate::Result<()> {
-        {
-            let lock = self.state.transfer_manager.incoming.lock().await;
-            if let Some(state) = lock.get(&xfer_uuid) {
-                state.rejections.ensure_not_rejected(&file)?;
-                state
-                    .conn
-                    .send(ServerReq::Cancel { file })
-                    .map_err(|err| Error::BadTransferState(err.to_string()))?;
+    pub async fn cancel(&mut self, transfer_id: Uuid, file: FileId) -> crate::Result<()> {
+        let state = self
+            .state
+            .storage
+            .transfer_sync_state(transfer_id)?
+            .ok_or(crate::Error::BadTransfer)?;
 
-                return Ok(());
-            }
-        }
-        {
-            let lock = self.state.transfer_manager.outgoing.lock().await;
-            if let Some(state) = lock.get(&xfer_uuid) {
-                state.rejections.ensure_not_rejected(&file)?;
-                state
-                    .conn
-                    .send(ClientReq::Cancel { file })
-                    .map_err(|err| Error::BadTransferState(err.to_string()))?;
-
-                return Ok(());
-            }
+        if matches!(
+            state.local_state,
+            drop_storage::sync::TransferState::Canceled
+        ) {
+            return Err(crate::Error::BadTransfer);
         }
 
-        Err(Error::BadTransfer)
+        if state.is_outgoing {
+            return Err(crate::Error::BadTransfer);
+        }
+
+        let lock = self.state.transfer_manager.incoming.lock().await;
+        if let Some(state) = lock.get(&transfer_id) {
+            state.rejections.ensure_not_rejected(&file)?;
+            state
+                .conn
+                .send(ServerReq::Cancel { file })
+                .map_err(|err| Error::BadTransferState(err.to_string()))?;
+        }
+
+        Ok(())
     }
 
     /// Reject a single file in a transfer. After rejection the file can no
     /// logner be transfered
     pub async fn reject(&self, transfer_id: Uuid, file: FileId) -> crate::Result<()> {
-        {
-            let mut lock = self.state.transfer_manager.incoming.lock().await;
-            if let Some(state) = lock.get_mut(&transfer_id) {
-                if !state.rejections.reject(file.clone())? {
-                    return Err(crate::Error::Rejected);
-                }
+        let state = self
+            .state
+            .storage
+            .transfer_sync_state(transfer_id)?
+            .ok_or(crate::Error::BadTransfer)?;
 
-                state
-                    .conn
-                    .send(ServerReq::Reject { file })
-                    .map_err(|err| Error::BadTransferState(err.to_string()))?;
-                return Ok(());
-            }
-        }
-        {
-            let mut lock = self.state.transfer_manager.outgoing.lock().await;
-            if let Some(state) = lock.get_mut(&transfer_id) {
-                if !state.rejections.reject(file.clone())? {
-                    return Err(crate::Error::Rejected);
-                }
-
-                state
-                    .conn
-                    .send(ClientReq::Reject { file })
-                    .map_err(|err| Error::BadTransferState(err.to_string()))?;
-                return Ok(());
-            }
+        if matches!(
+            state.local_state,
+            drop_storage::sync::TransferState::Canceled
+        ) {
+            return Err(crate::Error::BadTransfer);
         }
 
-        Err(Error::BadTransfer)
+        if state.is_outgoing {
+            let state = self
+                .state
+                .storage
+                .outgoing_file_sync_state(transfer_id, file.as_ref())?
+                .ok_or(crate::Error::BadFileId)?;
+
+            match state.local_state {
+                drop_storage::sync::FileState::Alive => {
+                    self.state.storage.update_outgoing_file_sync_states(
+                        transfer_id,
+                        file.as_ref(),
+                        None,
+                        Some(drop_storage::sync::FileState::Rejected),
+                    )?;
+
+                    let lock = self.state.transfer_manager.outgoing.lock().await;
+                    let state = lock.get(&transfer_id).ok_or(crate::Error::BadTransfer)?;
+
+                    if let Some(conn) = state.conn.as_ref() {
+                        let _ = conn.send(ClientReq::Reject { file: file.clone() });
+                    }
+                    drop(lock);
+
+                    self.state
+                        .event_tx
+                        .send(crate::Event::FileUploadRejected {
+                            transfer_id,
+                            file_id: file,
+                            by_peer: false,
+                        })
+                        .await
+                        .expect("Event channel should be open");
+                }
+                drop_storage::sync::FileState::Rejected => return Err(crate::Error::Rejected),
+            }
+        } else {
+            //TODO(msz):
+        };
+
+        Ok(())
     }
 
     /// Cancel all of the files in a transfer
     pub async fn cancel_all(&mut self, transfer_id: Uuid) -> crate::Result<()> {
-        {
+        let state = self
+            .state
+            .storage
+            .transfer_sync_state(transfer_id)?
+            .ok_or(crate::Error::BadTransfer)?;
+
+        if matches!(
+            state.local_state,
+            drop_storage::sync::TransferState::Canceled
+        ) {
+            return Err(crate::Error::BadTransfer);
+        }
+
+        if state.is_outgoing {
+            let mut lock = self.state.transfer_manager.outgoing.lock().await;
+            let state = lock
+                .get_mut(&transfer_id)
+                .ok_or(crate::Error::BadTransfer)?;
+            let _ = state.conn.take();
+            let xfer = state.xfer.clone();
+            drop(lock);
+
+            self.state.storage.update_transfer_sync_states(
+                transfer_id,
+                None,
+                Some(drop_storage::sync::TransferState::Canceled),
+            )?;
+
+            self.state
+                .event_tx
+                .send(crate::Event::OutgoingTransferCanceled(xfer, false))
+                .await
+                .expect("Event channel should be open");
+        } else {
             let mut lock = self.state.transfer_manager.incoming.lock().await;
             if let Some(state) = lock.remove(&transfer_id) {
                 state.xfer.files().values().for_each(|file| {
@@ -368,29 +460,9 @@ impl Service {
                         Some(file.info()),
                     )
                 });
-
-                return Ok(());
-            }
-        }
-        {
-            let mut lock = self.state.transfer_manager.outgoing.lock().await;
-            if let Some(state) = lock.remove(&transfer_id) {
-                state.xfer.files().values().for_each(|file| {
-                    let status: u32 = From::from(&Error::Canceled);
-
-                    self.state.moose.service_quality_transfer_file(
-                        Err(status as _),
-                        drop_analytics::Phase::End,
-                        state.xfer.id().to_string(),
-                        0,
-                        Some(file.info()),
-                    )
-                });
-
-                return Ok(());
-            }
+            };
         }
 
-        Err(Error::BadTransfer)
+        Ok(())
     }
 }

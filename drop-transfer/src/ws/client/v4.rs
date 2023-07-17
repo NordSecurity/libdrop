@@ -339,9 +339,14 @@ impl HandlerLoop<'_> {
     }
 
     async fn ensure_not_rejected(&self, file_id: &FileId) -> crate::Result<()> {
-        let lock = self.state.transfer_manager.outgoing.lock().await;
-        let state = lock.get(&self.xfer.id()).ok_or(crate::Error::BadTransfer)?;
-        state.rejections.ensure_not_rejected(file_id)?;
+        let state = self
+            .state
+            .storage
+            .outgoing_file_sync_state(self.xfer.id(), file_id.as_ref())?
+            .ok_or(crate::Error::BadFileId)?;
+        if matches!(state.local_state, drop_storage::sync::FileState::Rejected) {
+            return Err(crate::Error::Rejected);
+        }
         Ok(())
     }
 }

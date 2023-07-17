@@ -222,10 +222,16 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
     async fn on_download(&mut self, file_id: FileSubPath) {
         let start = async {
             if let Some(file) = self.xfer.file_by_subpath(&file_id) {
-                let lock = self.state.transfer_manager.outgoing.lock().await;
-
-                let state = lock.get(&self.xfer.id()).ok_or(crate::Error::BadTransfer)?;
-                state.rejections.ensure_not_rejected(file.id())?;
+                let state = self
+                    .state
+                    .storage
+                    .outgoing_file_sync_state(self.xfer.id(), file.id().as_ref())
+                    .context("DB failed")?
+                    .context("Invalid file ID")?;
+                anyhow::ensure!(
+                    matches!(state.local_state, drop_storage::sync::FileState::Rejected),
+                    "File is rejected"
+                );
             }
 
             match self.tasks.entry(file_id.clone()) {

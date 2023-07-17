@@ -4,7 +4,6 @@ mod v4;
 mod v5;
 
 use std::{
-    collections::hash_map::Entry,
     fs, io,
     net::{IpAddr, SocketAddr},
     ops::ControlFlow,
@@ -13,6 +12,7 @@ use std::{
 };
 
 use anyhow::Context;
+use drop_storage::sync;
 use futures::{SinkExt, StreamExt};
 use hyper::{http::HeaderValue, StatusCode};
 use slog::{debug, error, info, warn, Logger};
@@ -36,7 +36,7 @@ use crate::{
     auth,
     error::ResultExt,
     file::{File, FileId, FileSubPath, FileToSend},
-    manager::{OutgoingState, Rejections, TransferGuard},
+    manager::OutgoingState,
     protocol,
     service::State,
     transfer::Transfer,
@@ -62,6 +62,17 @@ pub(crate) async fn run(state: Arc<State>, xfer: Arc<OutgoingTransfer>, logger: 
     loop {
         let cf = connect_to_peer(&state, &xfer, &logger).await;
         if cf.is_break() {
+            let _ = state
+                .transfer_manager
+                .outgoing
+                .lock()
+                .await
+                .remove(&xfer.id());
+
+            if let Err(err) = state.storage.trasnfer_sync_clear(xfer.id()) {
+                error!(logger, "Failed to clear transfer sync data: {err}");
+            }
+
             return;
         }
     }
@@ -77,58 +88,69 @@ pub(crate) async fn resume(state: &Arc<State>, stop: &CancellationToken, logger:
     };
 
     for transfer in transfers {
-        let task = {
-            let state = state.clone();
-            let logger = logger.clone();
+        let restore_transfer = || {
+            let files = transfer
+                .files
+                .into_iter()
+                .map(|dbfile| {
+                    let file_id: FileId = dbfile.file_id.into();
+                    let subpath: FileSubPath = dbfile.subpath.into();
+                    let uri = dbfile.uri;
 
-            async move {
-                let restore_transfer = || {
-                    let files = transfer
-                        .files
-                        .into_iter()
-                        .map(|dbfile| {
-                            let file_id: FileId = dbfile.file_id.into();
-                            let subpath: FileSubPath = dbfile.subpath.into();
-                            let uri = dbfile.uri;
+                    let file = match uri.scheme() {
+                        "file" => file_to_resume_from_path_uri(&uri, subpath, file_id)?,
+                        #[cfg(unix)]
+                        "content" => file_to_resume_from_content_uri(state, uri, subpath, file_id)?,
+                        unknown => anyhow::bail!("Unknon URI schema: {unknown}"),
+                    };
 
-                            let file = match uri.scheme() {
-                                "file" => file_to_resume_from_path_uri(&uri, subpath, file_id)?,
-                                #[cfg(unix)]
-                                "content" => {
-                                    file_to_resume_from_content_uri(&state, uri, subpath, file_id)?
-                                }
-                                unknown => anyhow::bail!("Unknon URI schema: {unknown}"),
-                            };
+                    anyhow::Ok(file)
+                })
+                .collect::<Result<_, _>>()?;
 
-                            anyhow::Ok(file)
-                        })
-                        .collect::<Result<_, _>>()?;
+            let xfer = OutgoingTransfer::new_with_uuid(
+                transfer.peer.parse().context("Failed to parse peer IP")?,
+                files,
+                transfer.uuid,
+                &state.config,
+            )
+            .context("Failed to create transfer")?;
 
-                    let xfer = OutgoingTransfer::new_with_uuid(
-                        transfer.peer.parse().context("Failed to parse peer IP")?,
-                        files,
-                        transfer.uuid,
-                        &state.config,
-                    )
-                    .context("Failed to create transfer")?;
+            anyhow::Ok(xfer)
+        };
 
-                    anyhow::Ok(xfer)
-                };
+        let xfer = match restore_transfer() {
+            Ok(xfer) => {
+                let xfer = Arc::new(xfer);
+                let _ = state.transfer_manager.outgoing.lock().await.insert(
+                    xfer.id(),
+                    OutgoingState {
+                        xfer: xfer.clone(),
+                        conn: None,
+                    },
+                );
 
-                let xfer = match restore_transfer() {
-                    Ok(xfer) => xfer,
-                    Err(err) => {
-                        error!(logger, "Failed to restore transfer: {err}");
-                        return;
-                    }
-                };
+                xfer
+            }
+            Err(err) => {
+                error!(
+                    logger,
+                    "Failed to restore transfer {}: {err}", transfer.uuid
+                );
 
-                run(state, Arc::new(xfer), logger).await
+                continue;
             }
         };
 
         let logger = logger.clone();
         let stop = stop.clone();
+        let task = {
+            let logger = logger.clone();
+            let state = state.clone();
+            async move {
+                run(state, xfer, logger).await;
+            }
+        };
 
         tokio::spawn(async move {
             tokio::select! {
@@ -173,12 +195,24 @@ async fn connect_to_peer(
     };
 
     use protocol::Version;
-    match ver {
+    let control = match ver {
         Version::V1 => ctx.run(v2::HandlerInit::<false>::new(state, logger)).await,
         Version::V2 => ctx.run(v2::HandlerInit::<true>::new(state, logger)).await,
         Version::V4 => ctx.run(v4::HandlerInit::new(state, logger)).await,
         Version::V5 => ctx.run(v5::HandlerInit::new(state, logger)).await,
+    };
+
+    if let Some(state) = state
+        .transfer_manager
+        .outgoing
+        .lock()
+        .await
+        .get_mut(&xfer.id())
+    {
+        let _ = state.conn.take();
     }
+
+    control
 }
 
 async fn establish_ws_conn(
@@ -315,45 +349,54 @@ impl RunContext<'_> {
     async fn start(
         &mut self,
         handler: &mut impl HandlerInit,
-    ) -> crate::Result<UnboundedReceiver<ClientReq>> {
+    ) -> crate::Result<Option<UnboundedReceiver<ClientReq>>> {
+        let state = if let Some(state) = self.state.storage.transfer_sync_state(self.xfer.id())? {
+            state
+        } else {
+            return Ok(None);
+        };
+
         handler.start(&mut self.socket, self.xfer).await?;
+
+        match (state.local_state, state.remote_state) {
+            (sync::TransferState::New, _) => self.state.storage.update_transfer_sync_states(
+                self.xfer.id(),
+                Some(sync::TransferState::Active),
+                Some(sync::TransferState::Active),
+            )?,
+            (_, sync::TransferState::New) => self.state.storage.update_transfer_sync_states(
+                self.xfer.id(),
+                Some(sync::TransferState::Active),
+                None,
+            )?,
+            _ => (),
+        }
 
         let (tx, rx) = mpsc::unbounded_channel();
 
-        match self
-            .state
-            .transfer_manager
-            .outgoing
-            .lock()
-            .await
-            .entry(self.xfer.id())
-        {
-            Entry::Occupied(_) => {
-                return Err(crate::Error::BadTransferState(
-                    "Transfer already exists".into(),
-                ))
+        match state.local_state {
+            sync::TransferState::Canceled => {
+                drop(tx);
             }
-            Entry::Vacant(entry) => entry.insert(OutgoingState {
-                xfer: self.xfer.clone(),
-                conn: tx,
-                rejections: Rejections::new(self.xfer.clone()),
-            }),
-        };
+            _ => {
+                self.state
+                    .transfer_manager
+                    .outgoing
+                    .lock()
+                    .await
+                    .get_mut(&self.xfer.id())
+                    .expect("Missing transfer data")
+                    .conn = Some(tx);
+            }
+        }
 
-        self.state
-            .event_tx
-            .send(Event::RequestQueued(self.xfer.clone()))
-            .await
-            .expect("Could not send a RequestQueued event, channel closed");
-
-        Ok(rx)
+        Ok(Some(rx))
     }
 
     async fn run(mut self, mut handler: impl HandlerInit) -> ControlFlow<()> {
-        let _guard = TransferGuard::new(self.state.clone(), self.xfer.id());
-
         let mut api_req_rx = match self.start(&mut handler).await {
-            Ok(rx) => rx,
+            Ok(Some(rx)) => rx,
+            Ok(None) => return ControlFlow::Break(()),
             Err(err) => {
                 error!(
                     self.logger,
@@ -361,13 +404,6 @@ impl RunContext<'_> {
                     self.xfer.id(),
                     err
                 );
-
-                self.state
-                    .event_tx
-                    .send(Event::OutgoingTransferFailed(self.xfer.clone(), err, false))
-                    .await
-                    .expect("Failed to send TransferFailed event");
-
                 return ControlFlow::Continue(());
             }
         };
@@ -424,13 +460,7 @@ impl RunContext<'_> {
             handler.finalize_failure(err).await;
             ControlFlow::Continue(())
         } else {
-            let task = async {
-                // Drain messages
-                while self.socket.next().await.transpose()?.is_some() {}
-                anyhow::Ok(())
-            };
-
-            if let Err(err) = task.await {
+            if let Err(err) = self.drain_socket().await {
                 warn!(
                     self.logger,
                     "Failed to gracefully close the client connection: {err}"
@@ -441,6 +471,11 @@ impl RunContext<'_> {
 
             ControlFlow::Break(())
         }
+    }
+
+    async fn drain_socket(&mut self) -> crate::Result<()> {
+        while self.socket.next().await.transpose()?.is_some() {}
+        Ok(())
     }
 }
 

@@ -38,7 +38,7 @@ use crate::{
     error::ResultExt,
     event::DownloadSuccess,
     file::{self, FileSubPath, FileToRecv},
-    manager::{IncomingState, Rejections, TransferGuard},
+    manager::{IncomingState, Rejections},
     protocol,
     quarantine::PathExt,
     service::State,
@@ -351,8 +351,6 @@ async fn handle_client(
     mut handler: impl handler::HandlerInit,
     xfer: Arc<IncomingTransfer>,
 ) {
-    let xfer_id = xfer.id();
-    let _guard = TransferGuard::new(state.clone(), xfer_id);
     let (req_send, mut req_rx) = mpsc::unbounded_channel();
 
     if let Err(err) = init_client_handler(state, &xfer, req_send, logger).await {
