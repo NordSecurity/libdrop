@@ -403,6 +403,7 @@ name = "drop-analytics"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "serde",
  "serde_json",
  "slog",
 ]
