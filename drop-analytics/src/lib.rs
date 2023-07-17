@@ -1,6 +1,7 @@
 #[cfg(feature = "moose")]
 mod moose_impl;
 
+#[cfg(feature = "moose_file")]
 mod file_impl;
 mod mock_impl;
 
@@ -11,7 +12,10 @@ use slog::Logger;
 
 static INSTANCE: Mutex<Option<Weak<dyn Moose>>> = Mutex::new(None);
 
+#[allow(dead_code)]
 const MOOSE_STATUS_SUCCESS: i32 = 0;
+
+#[allow(dead_code)]
 const MOOSE_VALUE_NONE: i32 = -1;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -91,7 +95,12 @@ fn create(
     }
     #[cfg(feature = "moose_file")]
     {
-        Ok(moose_file(logger, event_path, app_version, prod))
+        Ok(Arc::new(file_impl::FileImpl::new(
+            logger,
+            event_path,
+            app_version,
+            prod,
+        )))
     }
 
     #[cfg(not(any(feature = "moose", feature = "moose_file")))]
@@ -121,18 +130,4 @@ pub fn init_moose(
 
 pub fn moose_mock() -> Arc<dyn Moose> {
     Arc::new(mock_impl::MockImpl)
-}
-
-pub fn moose_file(
-    logger: Logger,
-    event_path: String,
-    app_version: String,
-    prod: bool,
-) -> Arc<dyn Moose> {
-    Arc::new(file_impl::FileImpl::new(
-        logger,
-        event_path,
-        app_version,
-        prod,
-    ))
 }
