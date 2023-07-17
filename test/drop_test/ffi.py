@@ -401,7 +401,7 @@ class Drop:
             "req_connection_timeout_ms": 10000,
             "connection_max_retry_interval_ms": 2000,
             "transfer_idle_lifetime_ms": 10000,
-            "moose_event_path": "/tmp/moose-events",
+            "moose_event_path": "/tmp/moose-events.json",
             "moose_prod": False,
             "storage_path": dbpath,
         }
