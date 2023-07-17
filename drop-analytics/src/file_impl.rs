@@ -69,13 +69,14 @@ impl FileImpl {
     }
 
     fn write_event(&self, event: MooseEventType) -> Result<(), std::io::Error> {
-        let data = if !Path::new(&self.event_path).exists() {
-            "[]".to_string()
-        } else {
-            std::fs::read_to_string(&self.event_path)?
+        let mut events: Vec<MooseEventType> = {
+            if !Path::new(&self.event_path).exists() {
+                vec![]
+            } else {
+                let data = std::fs::read_to_string(&self.event_path)?;
+                serde_json::from_str(&data)?
+            }
         };
-
-        let mut events: Vec<MooseEventType> = serde_json::from_str(&data)?;
         events.push(event);
 
         File::create(&self.event_path)?.write_all(serde_json::to_string(&events)?.as_bytes())?;
