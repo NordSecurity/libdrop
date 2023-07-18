@@ -4728,10 +4728,83 @@ scenarios = [
                     action.Wait(event.RuntimeError(Error.DB_LOST)),
                     action.NoEvent(),
                     action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "exception",
+                            "arbitrary_value": -1,
+                            "code": 11,
+                            "note": "Initial DB open failed, recreating",
+                            "message": "Failed to open database",
+                            "name": "Database Error"
+                        }""",
+                            """{
+                            "type": "init",
+                            "phase": "start",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }""",
+                            """{
+                            "type": "init",
+                            "phase": "end",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }""",
+                        ]
+                    ),
                 ]
             ),
         },
         dbpath="/tmp/db/26-corrupted.sqlite",
+    ),
+    Scenario(
+        "scenario26-1",
+        "Test if the instance can recover when file is innacessible",
+        {
+            "ren": ActionList(
+                [
+                    action.NoEvent(),
+                    action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "exception",
+                            "arbitrary_value": -1,
+                            "code": 11,
+                            "note": "Initial DB open failed, recreating",
+                            "message": "Failed to open database",
+                            "name": "Database Error"
+                        }""",
+                            """{
+                            "type": "exception",
+                            "arbitrary_value": -1,
+                            "code": 11,
+                            "note": "",
+                            "message": "Failed to open DB and failed to remove it's file: Is a directory (os error 21)",
+                            "name": "Database Error"
+                        }""",
+                            """{
+                            "type": "init",
+                            "phase": "start",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }""",
+                            """{
+                            "type": "init",
+                            "phase": "end",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }""",
+                        ]
+                    ),
+                ]
+            ),
+        },
+        dbpath="/tmp/no-permissions",
     ),
     Scenario(
         "scenario27-1",
