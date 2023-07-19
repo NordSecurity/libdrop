@@ -5008,13 +5008,39 @@ scenarios = [
                     action.Wait(event.RuntimeError(Error.DB_LOST)),
                     action.NoEvent(),
                     action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "exception",
+                            "arbitrary_value": -1,
+                            "code": 11,
+                            "note": "Initial DB open failed, recreating",
+                            "message": "Failed to open database",
+                            "name": "Database Error"
+                        }""",
+                            """{
+                            "type": "init",
+                            "phase": "start",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }""",
+                            """{
+                            "type": "init",
+                            "phase": "end",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }""",
+                        ]
+                    ),
                 ]
             ),
         },
     ),
     Scenario(
         "scenario26-2",
-        "Provide database with insufficient permissions, expect file share to work",
+        "Provide database with insufficient permissions, expect file share and in-memory database to work, with failures being reported to moose",
         {
             "ren": ActionList(
                 [
@@ -5045,7 +5071,116 @@ scenarios = [
                     ),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.15",
+                        "created_at": "*",
+                        "states": [
+                            {
+                                "created_at": "*",
+                                "state": "cancel",
+                                "by_peer": true
+                            }
+                        ],
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "base_path": "/tmp",
+                                "bytes": 1048576,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "started",
+                                        "bytes_sent": 0
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "completed"
+                                    }
+                                ]
+                            }
+                        ]
+                    }""",
+                        ]
+                    ),
                     action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "exception",
+                            "arbitrary_value": -1,
+                            "code": 11,
+                            "note": "Initial DB open failed, recreating",
+                            "message": "Failed to open database",
+                            "name": "Database Error"
+                        }""",
+                            """{
+                            "type": "exception",
+                            "arbitrary_value": -1,
+                            "code": 11,
+                            "note": "",
+                            "message": "Failed to open DB and failed to remove it's file: Permission denied (os error 13)",
+                            "name": "Database Error"
+                        }""",
+                            """{
+                            "type": "init",
+                            "phase": "start",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }""",
+                            """{
+                            "type": "batch",
+                            "phase": "start",
+                            "transfer_id": "*",
+                            "info": {
+                                "mime_type_list": "unknown",
+                                "extension_list": "unknown",
+                                "file_size_list": "1024",
+                                "transfer_size_kb": 1024,
+                                "file_count": 1
+                            }
+                        }""",
+                            """{
+                            "type": "file",
+                            "phase": "start",
+                            "result": 0,
+                            "transfer_id": "*",
+                            "transfer_time": "*",
+                            "info": {
+                                "mime_type": "unknown",
+                                "extension": "unknown",
+                                "size_kb": 1024
+                            }
+                        }""",
+                            """{
+                            "type": "file",
+                            "phase": "end",
+                            "result": 0,
+                            "transfer_id": "*",
+                            "transfer_time": "*",
+                            "info": {
+                                "mime_type": "unknown",
+                                "extension": "unknown",
+                                "size_kb": 1024
+                            }
+                        }""",
+                            """{
+                            "type": "init",
+                            "phase": "end",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }""",
+                        ]
+                    ),
                 ]
             ),
             "stimpy": ActionList(
