@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS sync_incoming_files (
 CREATE TABLE IF NOT EXISTS sync_incoming_files_inflight (
   sync_id INTEGER NOT NULL,
   path_id INTEGER NOT NULL,
+  base_dir TEXT NOT NULL,
   FOREIGN KEY(sync_id, path_id) REFERENCES sync_incoming_files(sync_id, path_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 

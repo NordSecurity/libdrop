@@ -144,8 +144,13 @@ pub struct FileChecksum {
 pub struct IncomingFileToRetry {
     pub file_id: String,
     pub subpath: String,
-    pub basepath: String,
     pub size: u64,
+}
+
+pub struct IncomingTransferToRetry {
+    pub uuid: uuid::Uuid,
+    pub peer: String,
+    pub files: Vec<IncomingFileToRetry>,
 }
 
 pub struct FinishedIncomingFile {
@@ -160,7 +165,7 @@ pub struct OutgoingFileToRetry {
     pub size: i64,
 }
 
-pub struct TransferToRetry {
+pub struct OutgoingTransferToRetry {
     pub uuid: uuid::Uuid,
     pub peer: String,
     pub files: Vec<OutgoingFileToRetry>,

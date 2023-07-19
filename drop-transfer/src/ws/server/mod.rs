@@ -4,7 +4,7 @@ mod v4;
 mod v5;
 
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::HashMap,
     fs,
     io::{self, Write},
     net::{IpAddr, SocketAddr},
@@ -15,6 +15,7 @@ use std::{
 
 use anyhow::Context;
 use drop_auth::Nonce;
+use drop_storage::sync;
 use futures::{SinkExt, StreamExt};
 use handler::{Downloader, HandlerInit, HandlerLoop, Request};
 use hyper::StatusCode;
@@ -38,7 +39,7 @@ use crate::{
     error::ResultExt,
     event::DownloadSuccess,
     file::{self, FileSubPath, FileToRecv},
-    manager::{IncomingState, Rejections},
+    manager::IncomingState,
     protocol,
     quarantine::PathExt,
     service::State,
@@ -268,6 +269,66 @@ pub(crate) fn start(
     Ok(task)
 }
 
+pub(crate) async fn resume(state: &State, logger: &Logger) {
+    let transfers = match state.storage.incoming_transfers_to_resume() {
+        Ok(transfers) => transfers,
+        Err(err) => {
+            error!(
+                logger,
+                "Failed to restore incoming pedning transfers form DB: {err}"
+            );
+            return;
+        }
+    };
+
+    let transfers: Vec<_> = transfers
+        .into_iter()
+        .filter_map(|transfer| {
+            let restore_transfer = || {
+                let files = transfer
+                    .files
+                    .into_iter()
+                    .map(|dbfile| {
+                        FileToRecv::new(dbfile.file_id.into(), dbfile.subpath.into(), dbfile.size)
+                    })
+                    .collect();
+
+                let xfer = IncomingTransfer::new_with_uuid(
+                    transfer.peer.parse().context("Failed to parse peer IP")?,
+                    files,
+                    transfer.uuid,
+                    &state.config,
+                )
+                .context("Failed to create transfer")?;
+
+                let mut xstate = IncomingState {
+                    xfer: Arc::new(xfer),
+                    conn: None,
+                    dir_mappings: Default::default(),
+                };
+
+                register_finished_paths(state, &mut xstate, logger);
+                anyhow::Ok(xstate)
+            };
+
+            match restore_transfer() {
+                Ok(xstate) => Some((xstate.xfer.id(), xstate)),
+                Err(err) => {
+                    error!(
+                        logger,
+                        "Failed to restore transfer {}: {err}", transfer.uuid
+                    );
+
+                    None
+                }
+            }
+        })
+        .collect();
+
+    let mut lock = state.transfer_manager.incoming.lock().await;
+    lock.extend(transfers);
+}
+
 struct RunContext<'a> {
     logger: &'a slog::Logger,
     state: Arc<State>,
@@ -316,28 +377,13 @@ impl RunContext<'_> {
 
         let xfer = Arc::new(xfer);
 
-        let stop_job = async {
-            // Stop the download job
-            info!(self.logger, "Aborting transfer download");
-
-            self.state
-                .event_tx
-                .send(Event::IncomingTransferFailed(
-                    xfer.clone(),
-                    Error::Canceled,
-                    true,
-                ))
-                .await
-                .expect("Failed to send TransferFailed event");
-        };
-
-        let job = handle_client(&self.state, self.logger, self.socket, handler, xfer.clone());
+        let job = handle_client(&self.state, self.logger, self.socket, handler, xfer);
 
         tokio::select! {
             biased;
 
             _ = self.stop.cancelled() => {
-                stop_job.await;
+                info!(self.logger, "Aborting transfer download");
             },
             _ = job => (),
         };
@@ -355,22 +401,19 @@ async fn handle_client(
 
     if let Err(err) = init_client_handler(state, &xfer, req_send, logger).await {
         error!(logger, "Failed to init trasfer: {err:?}");
-
         let _ = handler.on_error(&mut socket, err).await;
-        let _ = socket.close().await;
-
         return;
     }
 
     let mut ping = handler.pinger();
 
     let (send_tx, mut send_rx) = mpsc::channel(2);
-    let mut handler = if let Some(handler) = handler.upgrade(&mut socket, send_tx, xfer).await {
-        handler
-    } else {
-        let _ = socket.close().await;
-        return;
-    };
+    let mut handler =
+        if let Some(handler) = handler.upgrade(&mut socket, send_tx, xfer.clone()).await {
+            handler
+        } else {
+            return;
+        };
 
     let task = async {
         loop {
@@ -383,6 +426,7 @@ async fn handle_client(
                         handler.on_req(&mut socket, req).await?;
                     } else {
                         debug!(logger, "Stoppping server connection gracefuly");
+                        socket.send(Message::close()).await?;
                         handler.on_close(false).await;
                         break;
                     }
@@ -418,10 +462,8 @@ async fn handle_client(
         handler.finalize_failure(err).await;
     } else {
         let task = async {
-            socket.send(Message::close()).await?;
             // Drain messages
             while socket.next().await.transpose()?.is_some() {}
-
             socket.close().await
         };
 
@@ -432,6 +474,20 @@ async fn handle_client(
             );
         } else {
             debug!(logger, "WS client disconnected");
+        }
+
+        let _ = state
+            .transfer_manager
+            .outgoing
+            .lock()
+            .await
+            .remove(&xfer.id());
+        if let Err(err) = state.storage.trasnfer_sync_clear(xfer.id()) {
+            warn!(
+                logger,
+                "Failed to clear sync state for {}: {err}",
+                xfer.id()
+            );
         }
 
         handler.finalize_success().await;
@@ -760,60 +816,68 @@ async fn init_client_handler(
     req_send: mpsc::UnboundedSender<ServerReq>,
     logger: &Logger,
 ) -> anyhow::Result<()> {
-    match state
-        .transfer_manager
-        .incoming
-        .lock()
-        .await
-        .entry(xfer.id())
-    {
-        Entry::Occupied(_) => anyhow::bail!("Failed to insert a new transfer"),
-        Entry::Vacant(entry) => entry.insert(IncomingState {
-            xfer: xfer.clone(),
-            conn: req_send.clone(),
-            dir_mappings: Default::default(),
-            rejections: Rejections::new(xfer.clone()),
-        }),
-    };
+    match state.storage.transfer_sync_state(xfer.id())? {
+        Some(tr_state) => {
+            if let (sync::TransferState::New, _) = (tr_state.local_state, tr_state.remote_state) {
+                state.storage.update_transfer_sync_states(
+                    xfer.id(),
+                    Some(sync::TransferState::Active),
+                    Some(sync::TransferState::Active),
+                )?
+            }
 
-    let existing_info = match state.storage.incoming_transfer_info(xfer.id()) {
-        Ok(info) => info,
-        Err(err) => {
-            error!(
+            let existing_info = state
+                .storage
+                .incoming_transfer_info(xfer.id())?
+                .context("Transfer missing in DB")?;
+            let current_info = xfer.storage_info();
+
+            ensure_resume_matches_existing_transfer(current_info, existing_info)
+                .with_context(|| format!("Failed to validate transfer {} resume", xfer.id()))?;
+
+            info!(
                 logger,
-                "DB failed upon checking if transfer is a resume: {err:?}",
+                "Transfer {} resume. Resuming started files",
+                xfer.id()
             );
-            // Fall back to treating it as a new one
-            None
+
+            match tr_state.local_state {
+                sync::TransferState::Canceled => drop(req_send),
+                _ => {
+                    reject_transfer_files(state, xfer, &req_send, logger);
+                    resume_transfer_files(state, xfer, &req_send, logger);
+
+                    state
+                        .transfer_manager
+                        .incoming
+                        .lock()
+                        .await
+                        .get_mut(&xfer.id())
+                        .expect("Missing incoming transfer data")
+                        .conn = Some(req_send);
+                }
+            }
         }
-    };
+        None => {
+            if let Err(err) = state.storage.insert_transfer(&xfer.storage_info()) {
+                error!(logger, "Failed to insert transfer into the DB: {err:?}");
+            }
 
-    let current_info = xfer.storage_info();
-    if let Some(existing_info) = existing_info {
-        ensure_resume_matches_existing_transfer(current_info, existing_info)
-            .with_context(|| format!("Failed to validate transfer {} resume", xfer.id()))?;
+            let _ = state.transfer_manager.incoming.lock().await.insert(
+                xfer.id(),
+                IncomingState {
+                    xfer: xfer.clone(),
+                    conn: Some(req_send),
+                    dir_mappings: Default::default(),
+                },
+            );
 
-        info!(
-            logger,
-            "Transfer {} resume. Resuming started files",
-            xfer.id()
-        );
-
-        register_finished_paths(state, xfer, logger).await;
-
-        if let Err(err) = resume_transfer_files(state, xfer, &req_send, logger) {
-            warn!(logger, "Failed to resume started files: {err:?}");
+            state
+                .event_tx
+                .send(Event::RequestReceived(xfer.clone()))
+                .await
+                .expect("Failed to notify receiving peer!");
         }
-    } else {
-        if let Err(err) = state.storage.insert_transfer(&current_info) {
-            error!(logger, "Failed to insert transfer into the DB: {err:?}");
-        }
-
-        state
-            .event_tx
-            .send(Event::RequestReceived(xfer.clone()))
-            .await
-            .expect("Failed to notify receiving peer!");
     }
 
     Ok(())
@@ -848,28 +912,59 @@ fn resume_transfer_files(
     xfer: &Arc<IncomingTransfer>,
     req_send: &mpsc::UnboundedSender<ServerReq>,
     logger: &Logger,
-) -> anyhow::Result<()> {
-    let files = state
-        .storage
-        .incoming_files_to_resume(xfer.id())
-        .context("Failed to fetch files to resume")?;
+) {
+    let files = match state.storage.incoming_files_to_resume(xfer.id()) {
+        Ok(files) => files,
+        Err(err) => {
+            warn!(logger, "Failed to fetch files to resume: {err}");
+            return;
+        }
+    };
 
     for file in files {
         info!(logger, "Resuming file: {}", file.file_id);
 
-        let xfile = FileToRecv::new(file.file_id.into(), From::from(&file.subpath), file.size);
-        let task = FileXferTask::new(xfile, xfer.clone(), file.basepath.into());
+        if let Some(xfile) = xfer.files().get(&file.file_id) {
+            let task = FileXferTask::new(xfile.clone(), xfer.clone(), file.base_dir.into());
 
-        let _ = req_send.send(ServerReq::Download {
-            task: Box::new(task),
-        });
+            let _ = req_send.send(ServerReq::Download {
+                task: Box::new(task),
+            });
+        } else {
+            warn!(logger, "Missing file: {}", file.file_id);
+        }
     }
-
-    Ok(())
 }
 
-async fn register_finished_paths(state: &State, xfer: &IncomingTransfer, logger: &Logger) {
-    let paths = match state.storage.finished_incoming_files(xfer.id()) {
+fn reject_transfer_files(
+    state: &State,
+    xfer: &Arc<IncomingTransfer>,
+    req_send: &mpsc::UnboundedSender<ServerReq>,
+    logger: &Logger,
+) {
+    let files = match state.storage.incoming_files_to_reject(xfer.id()) {
+        Ok(files) => files,
+        Err(err) => {
+            warn!(logger, "Failed to fetch files to reject: {err}");
+            return;
+        }
+    };
+
+    for file_id in files {
+        info!(logger, "Rejecting file: {file_id}");
+
+        if xfer.files().get(&file_id).is_some() {
+            let _ = req_send.send(ServerReq::Reject {
+                file: file_id.into(),
+            });
+        } else {
+            warn!(logger, "Missing file: {file_id}");
+        }
+    }
+}
+
+fn register_finished_paths(state: &State, xstate: &mut IncomingState, logger: &Logger) {
+    let paths = match state.storage.finished_incoming_files(xstate.xfer.id()) {
         Ok(paths) => paths,
         Err(err) => {
             warn!(logger, "Failed to fetch finished paths: {err:?}");
@@ -877,14 +972,10 @@ async fn register_finished_paths(state: &State, xfer: &IncomingTransfer, logger:
         }
     };
 
-    let mut lock = state.transfer_manager.incoming.lock().await;
-
-    if let Some(xstate) = lock.get_mut(&xfer.id()) {
-        for path in paths {
-            let subpath = FileSubPath::from(path.subpath);
-            xstate
-                .dir_mappings
-                .register_preexisting_final_path(&subpath, &path.final_path);
-        }
+    for path in paths {
+        let subpath = FileSubPath::from(path.subpath);
+        xstate
+            .dir_mappings
+            .register_preexisting_final_path(&subpath, &path.final_path);
     }
 }

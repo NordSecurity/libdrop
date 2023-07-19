@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap},
     io,
     path::{Path, PathBuf},
     sync::Arc,
@@ -10,16 +10,14 @@ use uuid::Uuid;
 
 use crate::{
     file::FileSubPath,
-    transfer::{IncomingTransfer, OutgoingTransfer, Transfer},
+    transfer::{IncomingTransfer, OutgoingTransfer},
     ws::{client::ClientReq, server::ServerReq},
-    Error, FileId,
 };
 
 pub struct IncomingState {
     pub xfer: Arc<IncomingTransfer>,
-    pub conn: UnboundedSender<ServerReq>,
+    pub conn: Option<UnboundedSender<ServerReq>>,
     pub dir_mappings: DirMapping,
-    pub rejections: Rejections<IncomingTransfer>,
 }
 
 pub struct OutgoingState {
@@ -38,42 +36,6 @@ pub struct TransferManager {
 #[derive(Default)]
 pub struct DirMapping {
     mappings: HashMap<PathBuf, String>,
-}
-
-pub struct Rejections<T: Transfer> {
-    xfer: Arc<T>,
-    rejected: HashSet<FileId>,
-}
-
-impl<T: Transfer> Rejections<T> {
-    pub(crate) fn new(xfer: Arc<T>) -> Self {
-        Self {
-            xfer,
-            rejected: HashSet::new(),
-        }
-    }
-
-    /// Returns `true` if file was sucesfully marked as rejected and `false` if
-    /// it was already marked as such
-    pub(crate) fn reject(&mut self, file: FileId) -> crate::Result<bool> {
-        if !self.xfer.contains(&file) {
-            return Err(crate::Error::BadFileId);
-        }
-
-        Ok(self.rejected.insert(file))
-    }
-
-    pub(crate) fn ensure_not_rejected(&self, file: &FileId) -> crate::Result<()> {
-        if !self.xfer.contains(file) {
-            return Err(crate::Error::BadFileId);
-        }
-
-        if self.rejected.contains(file) {
-            Err(Error::Rejected)
-        } else {
-            Ok(())
-        }
-    }
 }
 
 impl DirMapping {

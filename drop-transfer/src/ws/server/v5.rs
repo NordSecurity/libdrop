@@ -12,6 +12,7 @@ use std::{
 use anyhow::Context;
 use async_cell::sync::AsyncCell;
 use drop_config::DropConfig;
+use drop_storage::sync;
 use futures::{SinkExt, StreamExt};
 use slog::{debug, error, info, warn};
 use tokio::{
@@ -259,6 +260,13 @@ impl HandlerLoop<'_> {
         });
         socket.send(Message::from(&msg)).await?;
 
+        self.state.storage.update_incoming_file_sync_states(
+            self.xfer.id(),
+            file_id.as_ref(),
+            Some(sync::FileState::Rejected),
+            None,
+        )?;
+
         self.on_reject(file_id, false).await;
 
         Ok(())
@@ -323,29 +331,16 @@ impl HandlerLoop<'_> {
     }
 
     async fn on_reject(&mut self, file_id: FileId, by_peer: bool) {
-        if by_peer {
-            if let Some(xstate) = self
-                .state
-                .transfer_manager
-                .incoming
-                .lock()
-                .await
-                .get_mut(&self.xfer.id())
-            {
-                match xstate.rejections.reject(file_id.clone()) {
-                    Ok(true) => (),
-                    res => {
-                        debug!(
-                            self.logger,
-                            "Failed to run rejection procedure on peers request: {res:?}"
-                        );
-                        return;
-                    }
-                }
-            }
-        }
-
         info!(self.logger, "Rejecting file {file_id}, by_peer?: {by_peer}");
+
+        if let Err(err) = self.state.storage.update_incoming_file_sync_states(
+            self.xfer.id(),
+            file_id.as_ref(),
+            Some(sync::FileState::Rejected),
+            Some(sync::FileState::Rejected),
+        ) {
+            error!(self.logger, "Failed to register file rejection: {err}");
+        }
 
         if let Some(FileTask {
             job: task,
@@ -381,15 +376,17 @@ impl HandlerLoop<'_> {
             Some(file.info()),
         );
 
-        self.state
-            .event_tx
-            .send(crate::Event::FileDownloadRejected {
-                transfer_id: self.xfer.id(),
-                file_id,
-                by_peer,
-            })
-            .await
-            .expect("Event channel should be open");
+        if by_peer {
+            self.state
+                .event_tx
+                .send(crate::Event::FileDownloadRejected {
+                    transfer_id: self.xfer.id(),
+                    file_id,
+                    by_peer,
+                })
+                .await
+                .expect("Event channel should be open");
+        }
     }
 
     async fn on_error(&mut self, file_id: Option<FileId>, msg: String) {
@@ -475,6 +472,14 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
     async fn on_close(&mut self, by_peer: bool) {
         debug!(self.logger, "ServerHandler::on_close(by_peer: {})", by_peer);
 
+        if let Err(err) = self.state.storage.update_transfer_sync_states(
+            self.xfer.id(),
+            Some(drop_storage::sync::TransferState::Canceled),
+            Some(drop_storage::sync::TransferState::Canceled),
+        ) {
+            error!(self.logger, "Failed to store transfer cancel state: {err}");
+        }
+
         self.xfer
             .files()
             .values()
@@ -493,16 +498,18 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
                 );
             });
 
-        self.on_stop().await;
+        if by_peer {
+            self.state
+                .event_tx
+                .send(crate::Event::IncomingTransferCanceled(
+                    self.xfer.clone(),
+                    by_peer,
+                ))
+                .await
+                .expect("Could not send a file cancelled event, channel closed");
+        }
 
-        self.state
-            .event_tx
-            .send(crate::Event::IncomingTransferCanceled(
-                self.xfer.clone(),
-                by_peer,
-            ))
-            .await
-            .expect("Could not send a file cancelled event, channel closed");
+        self.on_stop().await;
     }
 
     async fn on_recv(
@@ -561,24 +568,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
     async fn finalize_failure(self, err: anyhow::Error) {
         error!(self.logger, "Server failed to handle WS message: {:?}", err);
-
-        let err = match err.downcast::<crate::Error>() {
-            Ok(err) => err,
-            Err(err) => err.downcast::<warp::Error>().map_or_else(
-                |err| crate::Error::BadTransferState(err.to_string()),
-                Into::into,
-            ),
-        };
-
-        self.state
-            .event_tx
-            .send(crate::Event::IncomingTransferFailed(
-                self.xfer.clone(),
-                err,
-                true,
-            ))
-            .await
-            .expect("Event channel should always be open");
     }
 
     async fn finalize_success(self) {

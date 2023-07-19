@@ -81,28 +81,6 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
 }
 
 impl<const PING: bool> HandlerLoop<'_, PING> {
-    async fn issue_cancel(
-        &mut self,
-        socket: &mut WebSocket,
-        file_id: FileId,
-    ) -> anyhow::Result<()> {
-        let file_subpath = if let Some(file) = self.xfer.files().get(&file_id) {
-            file.subpath().clone()
-        } else {
-            warn!(self.logger, "Missing file with ID: {file_id:?}");
-            return Ok(());
-        };
-
-        let msg = v2::ClientMsg::Cancel(v2::Download {
-            file: file_subpath.clone(),
-        });
-        socket.send(Message::from(&msg)).await?;
-
-        self.on_cancel(file_subpath, false).await;
-
-        Ok(())
-    }
-
     async fn issue_reject(
         &mut self,
         socket: &mut WebSocket,
@@ -314,7 +292,6 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
 impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     async fn on_req(&mut self, socket: &mut WebSocket, req: ClientReq) -> anyhow::Result<()> {
         match req {
-            ClientReq::Cancel { file } => self.issue_cancel(socket, file).await,
             ClientReq::Reject { file } => self.issue_reject(socket, file).await,
         }
     }

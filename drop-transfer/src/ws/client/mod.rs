@@ -47,7 +47,6 @@ use crate::{
 pub type WebSocket = WebSocketStream<TcpStream>;
 
 pub enum ClientReq {
-    Cancel { file: FileId },
     Reject { file: FileId },
 }
 
@@ -79,10 +78,13 @@ pub(crate) async fn run(state: Arc<State>, xfer: Arc<OutgoingTransfer>, logger: 
 }
 
 pub(crate) async fn resume(state: &Arc<State>, stop: &CancellationToken, logger: &Logger) {
-    let transfers = match state.storage.transfers_to_retry() {
+    let transfers = match state.storage.outgoing_transfers_to_resume() {
         Ok(transfers) => transfers,
         Err(err) => {
-            error!(logger, "Failed to restore pedning transfers form DB: {err}");
+            error!(
+                logger,
+                "Failed to restore pedning outgoing transfers form DB: {err}"
+            );
             return;
         }
     };
@@ -379,6 +381,8 @@ impl RunContext<'_> {
                 drop(tx);
             }
             _ => {
+                reject_transfer_files(self.state, self.xfer, &tx, self.logger);
+
                 self.state
                     .transfer_manager
                     .outgoing
@@ -623,4 +627,31 @@ fn file_to_resume_from_content_uri(
 
     FileToSend::new_from_fd(subpath, uri, fd, file_id.clone())
         .with_context(|| format!("Failed to restore file {file_id} from DB"))
+}
+
+fn reject_transfer_files(
+    state: &State,
+    xfer: &Arc<OutgoingTransfer>,
+    req_send: &mpsc::UnboundedSender<ClientReq>,
+    logger: &Logger,
+) {
+    let files = match state.storage.outgoing_files_to_reject(xfer.id()) {
+        Ok(files) => files,
+        Err(err) => {
+            warn!(logger, "Failed to fetch files to reject: {err}");
+            return;
+        }
+    };
+
+    for file_id in files {
+        info!(logger, "Rejecting file: {file_id}");
+
+        if xfer.files().get(&file_id).is_some() {
+            let _ = req_send.send(ClientReq::Reject {
+                file: file_id.into(),
+            });
+        } else {
+            warn!(logger, "Missing file: {file_id}");
+        }
+    }
 }
