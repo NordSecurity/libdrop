@@ -7,21 +7,21 @@ use std::{path::Path, vec};
 use include_dir::{include_dir, Dir};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{params, OptionalExtension, Transaction};
+use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use rusqlite_migration::Migrations;
 use slog::{trace, warn, Logger};
 use types::{
     DbTransferType, IncomingFileToRetry, IncomingPath, IncomingPathStateEvent,
-    IncomingPathStateEventData, OutgoingFileToRetry, OutgoingPath, OutgoingPathStateEvent,
-    OutgoingPathStateEventData, TempFileLocation, Transfer, TransferFiles, TransferIncomingPath,
-    TransferOutgoingPath, TransferStateEvent,
+    IncomingPathStateEventData, IncomingTransferToRetry, OutgoingFileToRetry, OutgoingPath,
+    OutgoingPathStateEvent, OutgoingPathStateEventData, TempFileLocation, Transfer, TransferFiles,
+    TransferIncomingPath, TransferOutgoingPath, TransferStateEvent,
 };
 use uuid::Uuid;
 
 use crate::error::Error;
 pub use crate::types::{
-    FileChecksum, FinishedIncomingFile, IncomingTransferInfo, TransferInfo, TransferToRetry,
-    TransferType,
+    FileChecksum, FinishedIncomingFile, IncomingTransferInfo, OutgoingTransferToRetry,
+    TransferInfo, TransferType,
 };
 
 type Result<T> = std::result::Result<T, Error>;
@@ -166,6 +166,52 @@ impl Storage {
 
         conn.commit()?;
         Ok(())
+    }
+
+    pub fn incoming_file_sync_state(
+        &self,
+        transfer_id: Uuid,
+        file_id: &str,
+    ) -> crate::Result<Option<sync::File>> {
+        sync::incoming_file_state(&*self.pool.get()?, transfer_id, file_id)
+    }
+
+    pub fn update_incoming_file_sync_states(
+        &self,
+        transfer_id: Uuid,
+        file_id: &str,
+        remote: Option<sync::FileState>,
+        local: Option<sync::FileState>,
+    ) -> crate::Result<()> {
+        let mut conn = self.pool.get()?;
+        let conn = conn.transaction()?;
+
+        if let Some(remote) = remote {
+            sync::incoming_file_set_remote_state(&conn, transfer_id, file_id, remote)?;
+        }
+        if let Some(local) = local {
+            sync::incoming_file_set_local_state(&conn, transfer_id, file_id, local)?;
+        }
+
+        conn.commit()?;
+        Ok(())
+    }
+
+    pub fn stop_incoming_file(
+        &self,
+        transfer_id: Uuid,
+        file_id: &str,
+    ) -> crate::Result<Option<()>> {
+        sync::stop_incoming_file(&*self.pool.get()?, transfer_id, file_id)
+    }
+
+    pub fn start_incoming_file(
+        &self,
+        transfer_id: Uuid,
+        file_id: &str,
+        base_dir: &str,
+    ) -> crate::Result<Option<()>> {
+        sync::start_incoming_file(&*self.pool.get()?, transfer_id, file_id, base_dir)
     }
 
     pub fn incoming_transfer_info(
@@ -668,31 +714,15 @@ impl Storage {
         Ok(())
     }
 
-    pub fn transfers_to_retry(&self) -> Result<Vec<TransferToRetry>> {
+    pub fn outgoing_files_to_reject(&self, transfer_id: Uuid) -> Result<Vec<String>> {
+        sync::outgoing_files_to_reject(&*self.pool.get()?, transfer_id)
+    }
+
+    pub fn outgoing_transfers_to_resume(&self) -> Result<Vec<OutgoingTransferToRetry>> {
         let mut conn = self.pool.get()?;
         let conn = conn.transaction()?;
 
-        struct RecTransfer {
-            tid: String,
-            peer: String,
-        }
-
-        let rec_transfers: Vec<_> = conn
-            .prepare(
-                r#"
-                SELECT t.id as tid, peer
-                FROM transfers t
-                INNER JOIN sync_transfer st ON st.transfer_id = t.id
-                WHERE t.is_outgoing = ?1
-                "#,
-            )?
-            .query_map(params![TransferType::Outgoing as u32], |r| {
-                Ok(RecTransfer {
-                    tid: r.get("tid")?,
-                    peer: r.get("peer")?,
-                })
-            })?
-            .collect::<QueryResult<_>>()?;
+        let rec_transfers = transfers_to_resume(&conn, TransferType::Outgoing)?;
 
         let mut out = Vec::with_capacity(rec_transfers.len());
         for rec_transfer in rec_transfers {
@@ -723,7 +753,7 @@ impl Storage {
                 })
                 .collect::<Result<_>>()?;
 
-            out.push(TransferToRetry {
+            out.push(OutgoingTransferToRetry {
                 uuid: rec_transfer.tid.parse().map_err(|err| {
                     crate::Error::InternalError(format!("Failed to parse UUID: {err}"))
                 })?,
@@ -737,48 +767,50 @@ impl Storage {
         Ok(out)
     }
 
-    pub fn incoming_files_to_resume(&self, transfer_id: Uuid) -> Result<Vec<IncomingFileToRetry>> {
-        let conn = self.pool.get()?;
+    pub fn incoming_transfers_to_resume(&self) -> crate::Result<Vec<IncomingTransferToRetry>> {
+        let mut conn = self.pool.get()?;
+        let conn = conn.transaction()?;
 
-        let out = conn
-            .prepare(
-                r#"
-            SELECT 
-                path_hash as file_id,
-                relative_path as subpath,
-                bytes as size,
-                strt.base_dir as basedir,
-                MAX(strt.created_at) as last_start,
-                MAX(canc.created_at) as last_cancel,
-                MAX(fail.created_at) as last_fail,
-                MAX(comp.created_at) as last_complete,
-                COUNT(rej.created_at) as rej_count
-            FROM incoming_paths p
-            INNER JOIN incoming_path_started_states strt ON p.id = strt.path_id
-            LEFT JOIN incoming_path_cancel_states canc ON p.id = canc.path_id
-            LEFT JOIN incoming_path_failed_states fail ON p.id = fail.path_id
-            LEFT JOIN incoming_path_completed_states comp ON p.id = comp.path_id
-            LEFT JOIN incoming_path_reject_states rej ON p.id = rej.path_id
-            WHERE transfer_id = ?1
-            GROUP BY p.id
-            HAVING 
-                rej_count = 0
-                AND (last_cancel IS NULL OR last_start > last_cancel)
-                AND (last_fail IS NULL OR last_start > last_fail)
-                AND (last_complete IS NULL OR last_start > last_complete)
-            "#,
-            )?
-            .query_map(params![transfer_id.to_string()], |r| {
-                Ok(IncomingFileToRetry {
-                    file_id: r.get("file_id")?,
-                    subpath: r.get("subpath")?,
-                    basepath: r.get("basedir")?,
-                    size: r.get("size")?,
-                })
-            })?
-            .collect::<QueryResult<_>>()?;
+        let rec_transfers = transfers_to_resume(&conn, TransferType::Incoming)?;
 
+        let mut out = Vec::with_capacity(rec_transfers.len());
+        for rec_transfer in rec_transfers {
+            let files = conn
+                .prepare(
+                    r#"
+                    SELECT relative_path, path_hash, bytes 
+                    FROM incoming_paths 
+                    WHERE transfer_id = ?1
+                    "#,
+                )?
+                .query_map(params![rec_transfer.tid], |r| {
+                    Ok(IncomingFileToRetry {
+                        file_id: r.get("path_hash")?,
+                        subpath: r.get("relative_path")?,
+                        size: r.get("bytes")?,
+                    })
+                })?
+                .collect::<QueryResult<_>>()?;
+
+            out.push(IncomingTransferToRetry {
+                uuid: rec_transfer.tid.parse().map_err(|err| {
+                    crate::Error::InternalError(format!("Failed to parse UUID: {err}"))
+                })?,
+                peer: rec_transfer.peer,
+                files,
+            });
+        }
+
+        conn.commit()?;
         Ok(out)
+    }
+
+    pub fn incoming_files_to_resume(&self, transfer_id: Uuid) -> Result<Vec<sync::FileInFilght>> {
+        sync::incoming_files_in_flight(&*self.pool.get()?, transfer_id)
+    }
+
+    pub fn incoming_files_to_reject(&self, transfer_id: Uuid) -> Result<Vec<String>> {
+        sync::incoming_files_to_reject(&*self.pool.get()?, transfer_id)
     }
 
     pub fn finished_incoming_files(&self, transfer_id: Uuid) -> Result<Vec<FinishedIncomingFile>> {
@@ -1314,6 +1346,32 @@ impl Storage {
 
         Ok(paths)
     }
+}
+
+struct RecTransfer {
+    tid: String,
+    peer: String,
+}
+
+fn transfers_to_resume(conn: &Connection, ty: TransferType) -> crate::Result<Vec<RecTransfer>> {
+    let res = conn
+        .prepare(
+            r#"
+            SELECT t.id as tid, peer
+            FROM transfers t
+            INNER JOIN sync_transfer st ON st.transfer_id = t.id
+            WHERE t.is_outgoing = ?1
+            "#,
+        )?
+        .query_map(params![ty as u32], |r| {
+            Ok(RecTransfer {
+                tid: r.get("tid")?,
+                peer: r.get("peer")?,
+            })
+        })?
+        .collect::<QueryResult<_>>()?;
+
+    Ok(res)
 }
 
 #[cfg(test)]

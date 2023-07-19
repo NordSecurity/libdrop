@@ -9,7 +9,7 @@ use anyhow::Context;
 use futures::SinkExt;
 use slog::{debug, error, info, warn};
 use tokio::{sync::mpsc::Sender, task::JoinHandle};
-use tokio_tungstenite::tungstenite::{self, Message};
+use tokio_tungstenite::tungstenite::Message;
 
 use super::{handler, ClientReq, WebSocket};
 use crate::{
@@ -83,21 +83,6 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
 }
 
 impl HandlerLoop<'_> {
-    async fn issue_cancel(
-        &mut self,
-        socket: &mut WebSocket,
-        file_id: FileId,
-    ) -> anyhow::Result<()> {
-        let msg = prot::ClientMsg::Cancel(prot::Cancel {
-            file: file_id.clone(),
-        });
-        socket.send(Message::from(&msg)).await?;
-
-        self.on_cancel(file_id, false).await;
-
-        Ok(())
-    }
-
     async fn issue_reject(
         &mut self,
         socket: &mut WebSocket,
@@ -237,8 +222,8 @@ impl HandlerLoop<'_> {
         file_id: FileId,
         limit: u64,
     ) -> anyhow::Result<()> {
-        let f = async {
-            self.ensure_not_rejected(&file_id).await?;
+        let f = || {
+            self.ensure_not_rejected(&file_id)?;
 
             let xfile = self.xfer.files().get(&file_id).context("File not found")?;
             let checksum = tokio::task::block_in_place(|| xfile.checksum(limit))?;
@@ -250,7 +235,7 @@ impl HandlerLoop<'_> {
             })
         };
 
-        match f.await {
+        match f() {
             Ok(report) => {
                 socket
                     .send(Message::from(&prot::ClientMsg::ReportChsum(report)))
@@ -281,7 +266,7 @@ impl HandlerLoop<'_> {
         offset: u64,
     ) -> anyhow::Result<()> {
         let start = async {
-            self.ensure_not_rejected(&file_id).await?;
+            self.ensure_not_rejected(&file_id)?;
 
             match self.tasks.entry(file_id.clone()) {
                 Entry::Occupied(o) => {
@@ -369,7 +354,7 @@ impl HandlerLoop<'_> {
         }
     }
 
-    async fn ensure_not_rejected(&self, file_id: &FileId) -> crate::Result<()> {
+    fn ensure_not_rejected(&self, file_id: &FileId) -> crate::Result<()> {
         let state = self
             .state
             .storage
@@ -387,7 +372,6 @@ impl HandlerLoop<'_> {
 impl handler::HandlerLoop for HandlerLoop<'_> {
     async fn on_req(&mut self, socket: &mut WebSocket, req: ClientReq) -> anyhow::Result<()> {
         match req {
-            ClientReq::Cancel { file } => self.issue_cancel(socket, file).await,
             ClientReq::Reject { file } => self.issue_reject(socket, file).await,
         }
     }
@@ -508,24 +492,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
     async fn finalize_failure(self, err: anyhow::Error) {
         error!(self.logger, "Client failed on WS loop: {err:?}");
-
-        let err = match err.downcast::<crate::Error>() {
-            Ok(err) => err,
-            Err(err) => err.downcast::<tungstenite::Error>().map_or_else(
-                |err| crate::Error::BadTransferState(err.to_string()),
-                Into::into,
-            ),
-        };
-
-        self.state
-            .event_tx
-            .send(crate::Event::OutgoingTransferFailed(
-                self.xfer.clone(),
-                err,
-                false,
-            ))
-            .await
-            .expect("Event channel should always be open");
     }
 
     fn recv_timeout(&mut self) -> Option<Duration> {
