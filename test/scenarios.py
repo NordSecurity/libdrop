@@ -231,9 +231,9 @@ scenarios = [
                             "transfer_id": "*",
                             "transfer_time": "*",
                             "info": {
-                                "mime_type": "",
-                                "extension": "",
-                                "size_kb": 0
+                                "mime_type": "unknown",
+                                "extension": "unknown",
+                                "size_kb": 10240
                             }
                         }""",
                             """{
@@ -243,9 +243,9 @@ scenarios = [
                             "transfer_id": "*",
                             "transfer_time": "*",
                             "info": {
-                                "mime_type": "",
-                                "extension": "",
-                                "size_kb": 0
+                                "mime_type": "unknown",
+                                "extension": "unknown",
+                                "size_kb": 10240
                             }
                         }""",
                             """{
@@ -255,9 +255,9 @@ scenarios = [
                             "transfer_id": "*",
                             "transfer_time": "*",
                             "info": {
-                                "mime_type": "",
-                                "extension": "",
-                                "size_kb": 0
+                                "mime_type": "unknown",
+                                "extension": "unknown",
+                                "size_kb": 10240
                             }
                         }""",
                             """{
@@ -3605,9 +3605,9 @@ scenarios = [
                             "transfer_id": "*",
                             "transfer_time": "*",
                             "info": {
-                                "mime_type": "",
-                                "extension": "",
-                                "size_kb": 0
+                                "mime_type": "unknown",
+                                "extension": "unknown",
+                                "size_kb": 10240
                             }
                         }""",
                             """{
@@ -3617,9 +3617,9 @@ scenarios = [
                             "transfer_id": "*",
                             "transfer_time": "*",
                             "info": {
-                                "mime_type": "",
-                                "extension": "",
-                                "size_kb": 0
+                                "mime_type": "unknown",
+                                "extension": "unknown",
+                                "size_kb": 10240
                             }
                         }""",
                             """{
