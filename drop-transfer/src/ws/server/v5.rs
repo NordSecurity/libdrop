@@ -12,7 +12,6 @@ use std::{
 use anyhow::Context;
 use async_cell::sync::AsyncCell;
 use drop_config::DropConfig;
-use drop_storage::sync;
 use futures::{SinkExt, StreamExt};
 use slog::{debug, error, info, warn};
 use tokio::{
@@ -260,13 +259,10 @@ impl HandlerLoop<'_> {
         });
         socket.send(Message::from(&msg)).await?;
 
-        self.state.storage.update_incoming_file_sync_states(
-            self.xfer.id(),
-            file_id.as_ref(),
-            Some(sync::FileState::Rejected),
-            None,
-        )?;
-
+        self.state
+            .transfer_manager
+            .incoming_rejection_ack(self.xfer.id(), &file_id)
+            .await?;
         self.on_reject(file_id, false).await;
 
         Ok(())
@@ -333,13 +329,15 @@ impl HandlerLoop<'_> {
     async fn on_reject(&mut self, file_id: FileId, by_peer: bool) {
         info!(self.logger, "Rejecting file {file_id}, by_peer?: {by_peer}");
 
-        if let Err(err) = self.state.storage.update_incoming_file_sync_states(
-            self.xfer.id(),
-            file_id.as_ref(),
-            Some(sync::FileState::Rejected),
-            Some(sync::FileState::Rejected),
-        ) {
-            error!(self.logger, "Failed to register file rejection: {err}");
+        if by_peer {
+            if let Err(err) = self
+                .state
+                .transfer_manager
+                .incoming_recv_rejection(self.xfer.id(), &file_id)
+                .await
+            {
+                error!(self.logger, "Failed to handler file rejection: {err}");
+            }
         }
 
         if let Some(FileTask {
@@ -362,11 +360,7 @@ impl HandlerLoop<'_> {
             }
         }
 
-        let file = self
-            .xfer
-            .files()
-            .get(&file_id)
-            .expect("File should exists since we have a transfer task running");
+        let file = &self.xfer.files()[&file_id];
 
         self.state.moose.service_quality_transfer_file(
             Err(drop_core::Status::FileRejected as i32),
@@ -472,12 +466,15 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
     async fn on_close(&mut self, by_peer: bool) {
         debug!(self.logger, "ServerHandler::on_close(by_peer: {})", by_peer);
 
-        if let Err(err) = self.state.storage.update_transfer_sync_states(
-            self.xfer.id(),
-            Some(drop_storage::sync::TransferState::Canceled),
-            Some(drop_storage::sync::TransferState::Canceled),
-        ) {
-            error!(self.logger, "Failed to store transfer cancel state: {err}");
+        if by_peer {
+            self.state
+                .event_tx
+                .send(crate::Event::IncomingTransferCanceled(
+                    self.xfer.clone(),
+                    by_peer,
+                ))
+                .await
+                .expect("Could not send a file cancelled event, channel closed");
         }
 
         self.xfer
@@ -497,17 +494,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
                     Some(file.info()),
                 );
             });
-
-        if by_peer {
-            self.state
-                .event_tx
-                .send(crate::Event::IncomingTransferCanceled(
-                    self.xfer.clone(),
-                    by_peer,
-                ))
-                .await
-                .expect("Could not send a file cancelled event, channel closed");
-        }
 
         self.on_stop().await;
     }
@@ -538,8 +524,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             self.on_chunk(ws, file, data).await?;
         } else if msg.is_close() {
             debug!(self.logger, "Got CLOSE frame");
-            self.on_close(true).await;
-
             return Ok(ControlFlow::Break(()));
         } else if msg.is_ping() {
             debug!(self.logger, "PING");
