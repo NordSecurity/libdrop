@@ -97,7 +97,7 @@ scenarios = [
                             "transfer_id": "*",
                             "info": {
                                 "mime_type_list": "unknown",
-                                "extension_list": "unknown",
+                                "extension_list": "none",
                                 "file_size_list": "10240",
                                 "transfer_size_kb": 10240,
                                 "file_count": 1
@@ -111,7 +111,7 @@ scenarios = [
                             "transfer_time": "*",
                             "info": {
                                 "mime_type": "unknown",
-                                "extension": "unknown",
+                                "extension": "none",
                                 "size_kb": 10240
                             }
                         }""",
@@ -123,7 +123,7 @@ scenarios = [
                             "transfer_time": "*",
                             "info": {
                                 "mime_type": "unknown",
-                                "extension": "unknown",
+                                "extension": "none",
                                 "size_kb": 10240
                             }
                         }""",
@@ -232,7 +232,7 @@ scenarios = [
                             "transfer_time": "*",
                             "info": {
                                 "mime_type": "unknown",
-                                "extension": "unknown",
+                                "extension": "none",
                                 "size_kb": 10240
                             }
                         }""",
@@ -244,7 +244,7 @@ scenarios = [
                             "transfer_time": "*",
                             "info": {
                                 "mime_type": "unknown",
-                                "extension": "unknown",
+                                "extension": "none",
                                 "size_kb": 10240
                             }
                         }""",
@@ -256,7 +256,7 @@ scenarios = [
                             "transfer_time": "*",
                             "info": {
                                 "mime_type": "unknown",
-                                "extension": "unknown",
+                                "extension": "none",
                                 "size_kb": 10240
                             }
                         }""",
@@ -3476,7 +3476,7 @@ scenarios = [
                             "transfer_id": "*",
                             "info": {
                                 "mime_type_list": "unknown",
-                                "extension_list": "unknown",
+                                "extension_list": "none",
                                 "file_size_list": "10240",
                                 "transfer_size_kb": 10240,
                                 "file_count": 1
@@ -3490,7 +3490,7 @@ scenarios = [
                             "transfer_time": "*",
                             "info": {
                                 "mime_type": "unknown",
-                                "extension": "unknown",
+                                "extension": "none",
                                 "size_kb": 10240
                             }
                         }""",
@@ -3502,7 +3502,7 @@ scenarios = [
                             "transfer_time": "*",
                             "info": {
                                 "mime_type": "unknown",
-                                "extension": "unknown",
+                                "extension": "none",
                                 "size_kb": 10240
                             }
                         }""",
@@ -3606,7 +3606,7 @@ scenarios = [
                             "transfer_time": "*",
                             "info": {
                                 "mime_type": "unknown",
-                                "extension": "unknown",
+                                "extension": "none",
                                 "size_kb": 10240
                             }
                         }""",
@@ -3618,7 +3618,7 @@ scenarios = [
                             "transfer_time": "*",
                             "info": {
                                 "mime_type": "unknown",
-                                "extension": "unknown",
+                                "extension": "none",
                                 "size_kb": 10240
                             }
                         }""",
@@ -5142,7 +5142,7 @@ scenarios = [
                             "transfer_id": "*",
                             "info": {
                                 "mime_type_list": "unknown",
-                                "extension_list": "unknown",
+                                "extension_list": "none",
                                 "file_size_list": "1024",
                                 "transfer_size_kb": 1024,
                                 "file_count": 1
@@ -5156,7 +5156,7 @@ scenarios = [
                             "transfer_time": "*",
                             "info": {
                                 "mime_type": "unknown",
-                                "extension": "unknown",
+                                "extension": "none",
                                 "size_kb": 1024
                             }
                         }""",
@@ -5168,7 +5168,7 @@ scenarios = [
                             "transfer_time": "*",
                             "info": {
                                 "mime_type": "unknown",
-                                "extension": "unknown",
+                                "extension": "none",
                                 "size_kb": 1024
                             }
                         }""",
