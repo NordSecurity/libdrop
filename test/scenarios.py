@@ -6714,19 +6714,19 @@ scenarios = [
                     action.Download(
                         0,
                         FILES["testfile-small"].id,
-                        "/tmp/received/31/",
+                        "/tmp/received/32/",
                     ),
                     action.Download(
                         1,
                         FILES["testfile-small"].id,
-                        "/tmp/received/31/",
+                        "/tmp/received/32/",
                     ),
                     # We cannot predict the final path of files from each transfer so we cannot wait for specific event
                     action.DrainEvents(4),
                     action.CheckDownloadedFiles(
                         [
-                            action.File("/tmp/received/31/testfile-small", 1048576),
-                            action.File("/tmp/received/31/testfile-small(1)", 1048576),
+                            action.File("/tmp/received/32/testfile-small", 1048576),
+                            action.File("/tmp/received/32/testfile-small(1)", 1048576),
                         ],
                     ),
                     action.CancelTransferRequest(0),
