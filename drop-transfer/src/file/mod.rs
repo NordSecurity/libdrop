@@ -106,7 +106,7 @@ impl File for FileToRecv {
     }
 
     fn mime_type(&self) -> &str {
-        ""
+        UNKNOWN_STR
     }
 }
 
