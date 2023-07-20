@@ -75,7 +75,7 @@ impl Storage {
             params![tid, transfer.peer, transfer_type_int],
         )?;
 
-        match &transfer.files {
+        let is_incoming = match &transfer.files {
             TransferFiles::Incoming(files) => {
                 trace!(
                     self.logger,
@@ -86,6 +86,7 @@ impl Storage {
                 for file in files {
                     Self::insert_incoming_path(&conn, transfer.id, file)?;
                 }
+                true
             }
             TransferFiles::Outgoing(files) => {
                 trace!(
@@ -97,14 +98,11 @@ impl Storage {
                 for file in files {
                     Self::insert_outgoing_path(&conn, transfer.id, file)?;
                 }
+                false
             }
-        }
+        };
 
-        sync::insert_transfer(
-            &conn,
-            transfer.id,
-            matches!(transfer.files, TransferFiles::Incoming(_)),
-        )?;
+        sync::insert_transfer(&conn, transfer.id, is_incoming)?;
 
         conn.commit()?;
 
