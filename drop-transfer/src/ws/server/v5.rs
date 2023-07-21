@@ -333,7 +333,7 @@ impl HandlerLoop<'_> {
             if let Err(err) = self
                 .state
                 .transfer_manager
-                .incoming_recv_rejection(self.xfer.id(), &file_id)
+                .incoming_rejection_recv(self.xfer.id(), &file_id)
                 .await
             {
                 error!(self.logger, "Failed to handler file rejection: {err}");

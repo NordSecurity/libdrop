@@ -4,7 +4,7 @@ mod v4;
 mod v5;
 
 use std::{
-    fs, io,
+    io,
     net::{IpAddr, SocketAddr},
     ops::ControlFlow,
     sync::Arc,
@@ -28,15 +28,13 @@ use tokio_tungstenite::{
     tungstenite::{self, client::IntoClientRequest, protocol::Role, Message},
     WebSocketStream,
 };
-use tokio_util::sync::CancellationToken;
 
 use self::handler::{HandlerInit, HandlerLoop, Uploader};
 use super::events::FileEventTx;
 use crate::{
     auth,
     error::ResultExt,
-    file::{File, FileId, FileSubPath, FileToSend},
-    manager::OutgoingState,
+    file::{File, FileId},
     protocol,
     service::State,
     transfer::Transfer,
@@ -74,96 +72,6 @@ pub(crate) async fn run(state: Arc<State>, xfer: Arc<OutgoingTransfer>, logger: 
 
             return;
         }
-    }
-}
-
-pub(crate) async fn resume(state: &Arc<State>, stop: &CancellationToken, logger: &Logger) {
-    let transfers = match state.storage.outgoing_transfers_to_resume() {
-        Ok(transfers) => transfers,
-        Err(err) => {
-            error!(
-                logger,
-                "Failed to restore pedning outgoing transfers form DB: {err}"
-            );
-            return;
-        }
-    };
-
-    for transfer in transfers {
-        let restore_transfer = || {
-            let files = transfer
-                .files
-                .into_iter()
-                .map(|dbfile| {
-                    let file_id: FileId = dbfile.file_id.into();
-                    let subpath: FileSubPath = dbfile.subpath.into();
-                    let uri = dbfile.uri;
-
-                    let file = match uri.scheme() {
-                        "file" => file_to_resume_from_path_uri(&uri, subpath, file_id)?,
-                        #[cfg(unix)]
-                        "content" => file_to_resume_from_content_uri(state, uri, subpath, file_id)?,
-                        unknown => anyhow::bail!("Unknon URI schema: {unknown}"),
-                    };
-
-                    anyhow::Ok(file)
-                })
-                .collect::<Result<_, _>>()?;
-
-            let xfer = OutgoingTransfer::new_with_uuid(
-                transfer.peer.parse().context("Failed to parse peer IP")?,
-                files,
-                transfer.uuid,
-                &state.config,
-            )
-            .context("Failed to create transfer")?;
-
-            anyhow::Ok(xfer)
-        };
-
-        let xfer = match restore_transfer() {
-            Ok(xfer) => {
-                let xfer = Arc::new(xfer);
-                let _ = state.transfer_manager.outgoing.lock().await.insert(
-                    xfer.id(),
-                    OutgoingState {
-                        xfer: xfer.clone(),
-                        conn: None,
-                    },
-                );
-
-                xfer
-            }
-            Err(err) => {
-                error!(
-                    logger,
-                    "Failed to restore transfer {}: {err}", transfer.uuid
-                );
-
-                continue;
-            }
-        };
-
-        let logger = logger.clone();
-        let stop = stop.clone();
-        let task = {
-            let logger = logger.clone();
-            let state = state.clone();
-            async move {
-                run(state, xfer, logger).await;
-            }
-        };
-
-        tokio::spawn(async move {
-            tokio::select! {
-                biased;
-
-                _ = stop.cancelled() => {
-                    warn!(logger, "Aborting transfer resume");
-                },
-                _ = task => (),
-            }
-        });
     }
 }
 
@@ -434,13 +342,10 @@ impl RunContext<'_> {
                     },
                     // Message received
                     recv = super::utils::recv(&mut self.socket, handler.recv_timeout()) => {
-                        match recv? {
-                            Some(msg) => {
-                                if handler.on_recv(&mut self.socket, msg).await.context("Handler on recv")?.is_break() {
-                                    break;
-                                }
-                            },
-                            None => break,
+                        let msg =  recv?.context("Failed to receive WS message")?;
+                        if handler.on_recv(&mut self.socket, msg).await.context("Handler on recv")?.is_break() {
+                            handler.on_close(true).await;
+                            break;
                         }
                     },
                     // Message to send down the wire
@@ -471,6 +376,19 @@ impl RunContext<'_> {
                 );
             } else {
                 debug!(self.logger, "WS client disconnected");
+            }
+
+            if let Err(err) = self
+                .state
+                .transfer_manager
+                .outgoing_remove(self.xfer.id())
+                .await
+            {
+                warn!(
+                    self.logger,
+                    "Failed to clear sync state for {}: {err}",
+                    self.xfer.id()
+                );
             }
 
             ControlFlow::Break(())
@@ -590,43 +508,6 @@ async fn acquire_throttle_permit<'a>(
             None
         }
     }
-}
-
-fn file_to_resume_from_path_uri(
-    uri: &url::Url,
-    subpath: FileSubPath,
-    file_id: FileId,
-) -> anyhow::Result<FileToSend> {
-    let fullpath = uri
-        .to_file_path()
-        .ok()
-        .context("Failed to extract file path")?;
-
-    let meta = fs::symlink_metadata(&fullpath)
-        .with_context(|| format!("Failed to load file: {}", file_id))?;
-
-    anyhow::ensure!(!meta.is_dir(), "Invalid file type");
-
-    FileToSend::new_to_send(subpath, fullpath, meta, file_id.clone())
-        .with_context(|| format!("Failed to restore file {file_id} from DB"))
-}
-
-#[cfg(unix)]
-fn file_to_resume_from_content_uri(
-    state: &State,
-    uri: url::Url,
-    subpath: FileSubPath,
-    file_id: FileId,
-) -> anyhow::Result<FileToSend> {
-    let callback = state
-        .fdresolv
-        .as_ref()
-        .context("Encountered content uri but FD resovler callback is missing")?;
-
-    let fd = callback(uri.as_str()).with_context(|| format!("Failed to fetch FD for: {uri}"))?;
-
-    FileToSend::new_from_fd(subpath, uri, fd, file_id.clone())
-        .with_context(|| format!("Failed to restore file {file_id} from DB"))
 }
 
 fn reject_transfer_files(

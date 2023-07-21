@@ -371,7 +371,7 @@ async fn handle_client(
                 },
                 // Message received
                 recv = super::utils::recv(&mut socket, handler.recv_timeout()) => {
-                    let msg =  recv?.context("Failed to receiver WS message")?;
+                    let msg =  recv?.context("Failed to receive WS message")?;
                     if handler.on_recv(&mut socket, msg).await?.is_break() {
                         handler.on_close(true).await;
                         break;
