@@ -1,6 +1,6 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
-    io,
+    fs, io,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -8,18 +8,21 @@ use std::{
 use anyhow::Context;
 use drop_config::DropConfig;
 use drop_storage::{sync, Storage};
-use slog::{error, info, Logger};
+use slog::{error, info, warn, Logger};
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
     file::FileSubPath,
+    service::State,
     transfer::{IncomingTransfer, OutgoingTransfer},
     ws::{
+        self,
         client::ClientReq,
         server::{FileXferTask, ServerReq},
     },
-    File, FileId, FileToRecv, Transfer,
+    File, FileId, FileToRecv, FileToSend, Transfer,
 };
 
 pub struct TransferSync {
@@ -33,6 +36,11 @@ pub struct IncomingFileSync {
     pub in_flight: Option<PathBuf>,
 }
 
+pub struct OutgoingFileSync {
+    local: sync::FileState,
+    remote: sync::FileState,
+}
+
 pub struct IncomingState {
     pub xfer: Arc<IncomingTransfer>,
     pub conn: Option<UnboundedSender<ServerReq>>,
@@ -44,6 +52,8 @@ pub struct IncomingState {
 pub struct OutgoingState {
     pub xfer: Arc<OutgoingTransfer>,
     pub conn: Option<UnboundedSender<ClientReq>>,
+    xfer_sync: TransferSync,
+    file_sync: HashMap<FileId, OutgoingFileSync>,
 }
 
 /// Transfer manager is responsible for keeping track of all ongoing or pending
@@ -61,11 +71,9 @@ pub struct DirMapping {
 }
 
 impl TransferManager {
-    pub fn new(storage: Arc<Storage>, config: &DropConfig, logger: Logger) -> Self {
-        let incoming = tokio::task::block_in_place(|| restore_incoming(&storage, config, &logger));
-
+    pub fn new(storage: Arc<Storage>, logger: Logger) -> Self {
         Self {
-            incoming: Mutex::new(incoming),
+            incoming: Default::default(),
             outgoing: Default::default(),
             storage,
             logger,
@@ -140,6 +148,200 @@ impl TransferManager {
         }
     }
 
+    pub async fn insert_outgoing(&self, xfer: Arc<OutgoingTransfer>) -> crate::Result<()> {
+        let mut lock = self.outgoing.lock().await;
+
+        match lock.entry(xfer.id()) {
+            Entry::Occupied(_) => {
+                warn!(
+                    self.logger,
+                    "Outgoing transfer UUID colision: {}",
+                    xfer.id()
+                );
+
+                return Err(crate::Error::BadTransferState(
+                    "Transfer already exists".into(),
+                ));
+            }
+            Entry::Vacant(entry) => {
+                self.storage.insert_transfer(&xfer.storage_info())?;
+
+                entry.insert(OutgoingState {
+                    conn: None,
+                    xfer_sync: TransferSync {
+                        local: sync::TransferState::New,
+                        remote: sync::TransferState::New,
+                    },
+                    file_sync: xfer
+                        .files()
+                        .keys()
+                        .map(|file_id| {
+                            (
+                                file_id.clone(),
+                                OutgoingFileSync {
+                                    local: sync::FileState::Alive,
+                                    remote: sync::FileState::Alive,
+                                },
+                            )
+                        })
+                        .collect(),
+                    xfer,
+                });
+            }
+        };
+
+        Ok(())
+    }
+
+    pub async fn outgoing_rejection_post(
+        &self,
+        transfer_id: Uuid,
+        file_id: &FileId,
+    ) -> crate::Result<()> {
+        let mut lock = self.outgoing.lock().await;
+
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        if matches!(
+            state.xfer_sync.local,
+            drop_storage::sync::TransferState::Canceled
+        ) {
+            return Err(crate::Error::BadTransfer);
+        }
+
+        let sync = state
+            .file_sync
+            .get_mut(file_id)
+            .ok_or(crate::Error::BadFileId)?;
+
+        match sync.local {
+            sync::FileState::Rejected => return Err(crate::Error::Rejected),
+            sync::FileState::Alive => {
+                self.storage.update_outgoing_file_sync_states(
+                    state.xfer.id(),
+                    file_id.as_ref(),
+                    None,
+                    Some(sync::FileState::Rejected),
+                )?;
+                sync.local = sync::FileState::Rejected;
+
+                if let Some(conn) = &state.conn {
+                    let _ = conn.send(ClientReq::Reject {
+                        file: file_id.clone(),
+                    });
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn outgoing_rejection_ack(
+        &self,
+        transfer_id: Uuid,
+        file_id: &FileId,
+    ) -> crate::Result<()> {
+        let mut lock = self.outgoing.lock().await;
+
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        let sync = state
+            .file_sync
+            .get_mut(file_id)
+            .ok_or(crate::Error::BadFileId)?;
+
+        self.storage.update_outgoing_file_sync_states(
+            transfer_id,
+            file_id.as_ref(),
+            Some(sync::FileState::Rejected),
+            None,
+        )?;
+        sync.remote = sync::FileState::Rejected;
+
+        Ok(())
+    }
+
+    pub async fn outgoing_rejection_recv(
+        &self,
+        transfer_id: Uuid,
+        file_id: &FileId,
+    ) -> crate::Result<()> {
+        let mut lock = self.outgoing.lock().await;
+
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        let sync = state
+            .file_sync
+            .get_mut(file_id)
+            .ok_or(crate::Error::BadFileId)?;
+
+        self.storage.update_outgoing_file_sync_states(
+            transfer_id,
+            file_id.as_ref(),
+            Some(sync::FileState::Rejected),
+            Some(sync::FileState::Rejected),
+        )?;
+        sync.remote = sync::FileState::Rejected;
+        sync.local = sync::FileState::Rejected;
+
+        Ok(())
+    }
+
+    pub async fn incoming_rejection_post(
+        &self,
+        transfer_id: Uuid,
+        file_id: &FileId,
+    ) -> crate::Result<()> {
+        let mut lock = self.incoming.lock().await;
+
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        if matches!(
+            state.xfer_sync.local,
+            drop_storage::sync::TransferState::Canceled
+        ) {
+            return Err(crate::Error::BadTransfer);
+        }
+
+        let sync = state
+            .file_sync
+            .get_mut(file_id)
+            .ok_or(crate::Error::BadFileId)?;
+
+        match sync.local {
+            sync::FileState::Rejected => return Err(crate::Error::Rejected),
+            sync::FileState::Alive => {
+                self.storage.update_incoming_file_sync_states(
+                    state.xfer.id(),
+                    file_id.as_ref(),
+                    None,
+                    Some(sync::FileState::Rejected),
+                )?;
+                self.storage
+                    .stop_incoming_file(state.xfer.id(), file_id.as_ref())?;
+
+                sync.local = sync::FileState::Rejected;
+                let _ = sync.in_flight.take();
+
+                if let Some(conn) = &state.conn {
+                    let _ = conn.send(ServerReq::Reject {
+                        file: file_id.clone(),
+                    });
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn incoming_rejection_ack(
         &self,
         transfer_id: Uuid,
@@ -167,7 +369,7 @@ impl TransferManager {
         Ok(())
     }
 
-    pub async fn incoming_recv_rejection(
+    pub async fn incoming_rejection_recv(
         &self,
         transfer_id: Uuid,
         file_id: &FileId,
@@ -198,9 +400,12 @@ impl TransferManager {
 
     pub async fn incoming_remove(&self, transfer_id: Uuid) -> crate::Result<()> {
         let mut lock = self.incoming.lock().await;
-        let state = lock.remove(&transfer_id).ok_or(crate::Error::BadTransfer)?;
+        if !lock.contains_key(&transfer_id) {
+            return Err(crate::Error::BadTransfer);
+        }
+        self.storage.trasnfer_sync_clear(transfer_id)?;
+        lock.remove(&transfer_id);
 
-        self.storage.trasnfer_sync_clear(state.xfer.id())?;
         Ok(())
     }
 
@@ -225,8 +430,65 @@ impl TransferManager {
         )?;
         state.xfer_sync.local = sync::TransferState::Canceled;
         let _ = state.conn.take();
+        for val in state.file_sync.values_mut() {
+            val.in_flight.take();
+        }
 
         Ok(state.xfer.clone())
+    }
+
+    pub async fn outgoing_issue_close(
+        &self,
+        transfer_id: Uuid,
+    ) -> crate::Result<Arc<OutgoingTransfer>> {
+        let mut lock = self.outgoing.lock().await;
+
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        if matches!(state.xfer_sync.local, sync::TransferState::Canceled) {
+            return Err(crate::Error::BadTransfer);
+        }
+
+        self.storage.update_transfer_sync_states(
+            transfer_id,
+            None,
+            Some(drop_storage::sync::TransferState::Canceled),
+        )?;
+        state.xfer_sync.local = sync::TransferState::Canceled;
+        let _ = state.conn.take();
+
+        Ok(state.xfer.clone())
+    }
+
+    pub async fn outgoing_ensure_file_not_rejected(
+        &self,
+        transfer_id: Uuid,
+        file_id: &FileId,
+    ) -> crate::Result<()> {
+        let lock = self.outgoing.lock().await;
+        let state = lock.get(&transfer_id).ok_or(crate::Error::BadTransfer)?;
+        let state = state
+            .file_sync
+            .get(file_id)
+            .ok_or(crate::Error::BadFileId)?;
+
+        if matches!(state.local, drop_storage::sync::FileState::Rejected) {
+            return Err(crate::Error::Rejected);
+        }
+        Ok(())
+    }
+
+    pub async fn outgoing_remove(&self, transfer_id: Uuid) -> crate::Result<()> {
+        let mut lock = self.outgoing.lock().await;
+        if !lock.contains_key(&transfer_id) {
+            return Err(crate::Error::BadTransfer);
+        }
+        self.storage.trasnfer_sync_clear(transfer_id)?;
+        lock.remove(&transfer_id);
+
+        Ok(())
     }
 }
 
@@ -307,37 +569,6 @@ impl IncomingState {
         };
 
         Ok(canceled)
-    }
-
-    pub fn reject_file(&mut self, storage: &Storage, file_id: &FileId) -> crate::Result<()> {
-        let sync = self
-            .file_sync
-            .get_mut(file_id)
-            .ok_or(crate::Error::BadFileId)?;
-
-        match sync.local {
-            sync::FileState::Rejected => return Err(crate::Error::Rejected),
-            sync::FileState::Alive => {
-                storage.update_incoming_file_sync_states(
-                    self.xfer.id(),
-                    file_id.as_ref(),
-                    None,
-                    Some(sync::FileState::Rejected),
-                )?;
-                storage.stop_incoming_file(self.xfer.id(), file_id.as_ref())?;
-
-                sync.local = sync::FileState::Rejected;
-                let _ = sync.in_flight.take();
-
-                if let Some(conn) = &self.conn {
-                    let _ = conn.send(ServerReq::Reject {
-                        file: file_id.clone(),
-                    });
-                }
-            }
-        }
-
-        Ok(())
     }
 
     fn reject_pending(&self, conn: &UnboundedSender<ServerReq>, logger: &Logger) {
@@ -450,6 +681,32 @@ impl DirMapping {
     }
 }
 
+pub(crate) async fn resume(state: &Arc<State>, stop: CancellationToken, logger: &Logger) {
+    let incoming = {
+        let state = state.clone();
+        let logger = logger.clone();
+        tokio::task::spawn_blocking(move || {
+            restore_incoming(&state.storage, &state.config, &logger)
+        })
+    };
+
+    let outgoing = {
+        let state = state.clone();
+        let logger = logger.clone();
+        tokio::task::spawn_blocking(move || restore_outgoing(&state, &stop, &logger))
+    };
+
+    match incoming.await {
+        Ok(incoming) => *state.transfer_manager.incoming.lock().await = incoming,
+        Err(err) => error!(logger, "Failed to join incoming resume task: {err}"),
+    }
+
+    match outgoing.await {
+        Ok(outgoing) => *state.transfer_manager.outgoing.lock().await = outgoing,
+        Err(err) => error!(logger, "Failed to join outgoing resume task: {err}"),
+    }
+}
+
 fn restore_incoming(
     storage: &Storage,
     config: &DropConfig,
@@ -556,6 +813,169 @@ fn restore_incoming(
             }
         })
         .collect()
+}
+
+fn restore_outgoing(
+    state: &Arc<State>,
+    stop: &CancellationToken,
+    logger: &Logger,
+) -> HashMap<Uuid, OutgoingState> {
+    let transfers = match state.storage.outgoing_transfers_to_resume() {
+        Ok(transfers) => transfers,
+        Err(err) => {
+            error!(
+                logger,
+                "Failed to restore pedning outgoing transfers form DB: {err}"
+            );
+
+            return HashMap::new();
+        }
+    };
+
+    let xfers: HashMap<_, _> = transfers
+        .into_iter()
+        .filter_map(|transfer| {
+            let restore_transfer = || {
+                let files = transfer
+                    .files
+                    .into_iter()
+                    .map(|dbfile| {
+                        let file_id: FileId = dbfile.file_id.into();
+                        let subpath: FileSubPath = dbfile.subpath.into();
+                        let uri = dbfile.uri;
+
+                        let file = match uri.scheme() {
+                            "file" => file_to_resume_from_path_uri(&uri, subpath, file_id)?,
+                            #[cfg(unix)]
+                            "content" => {
+                                file_to_resume_from_content_uri(state, uri, subpath, file_id)?
+                            }
+                            unknown => anyhow::bail!("Unknon URI schema: {unknown}"),
+                        };
+
+                        anyhow::Ok(file)
+                    })
+                    .collect::<Result<_, _>>()?;
+
+                let xfer = OutgoingTransfer::new_with_uuid(
+                    transfer.peer.parse().context("Failed to parse peer IP")?,
+                    files,
+                    transfer.uuid,
+                    &state.config,
+                )
+                .context("Failed to create transfer")?;
+
+                let sync = state
+                    .storage
+                    .transfer_sync_state(xfer.id())
+                    .context("Failed to fetch transfer sync state")?
+                    .context("Missing sync state for transfer")?;
+
+                let mut file_sync = HashMap::new();
+                for file_id in xfer.files().keys() {
+                    let sync = state
+                        .storage
+                        .outgoing_file_sync_state(xfer.id(), file_id.as_ref())
+                        .context("Failed to fetch file sync state")?
+                        .context("Missing sync state for file")?;
+
+                    file_sync.insert(
+                        file_id.clone(),
+                        OutgoingFileSync {
+                            local: sync.local_state,
+                            remote: sync.remote_state,
+                        },
+                    );
+                }
+
+                let xstate = OutgoingState {
+                    xfer: Arc::new(xfer),
+                    conn: None,
+                    xfer_sync: TransferSync {
+                        local: sync.local_state,
+                        remote: sync.remote_state,
+                    },
+                    file_sync,
+                };
+                anyhow::Ok(xstate)
+            };
+
+            match restore_transfer() {
+                Ok(xstate) => Some((xstate.xfer.id(), xstate)),
+                Err(err) => {
+                    error!(
+                        logger,
+                        "Failed to restore transfer {}: {err}", transfer.uuid
+                    );
+
+                    None
+                }
+            }
+        })
+        .collect();
+
+    for xstate in xfers.values() {
+        let logger = logger.clone();
+        let stop = stop.clone();
+
+        let task = {
+            let logger = logger.clone();
+            let state = state.clone();
+            let xfer = xstate.xfer.clone();
+
+            ws::client::run(state, xfer, logger)
+        };
+
+        tokio::spawn(async move {
+            tokio::select! {
+                biased;
+
+                _ = stop.cancelled() => {
+                    warn!(logger, "Aborting transfer resume");
+                },
+                _ = task => (),
+            }
+        });
+    }
+
+    xfers
+}
+
+fn file_to_resume_from_path_uri(
+    uri: &url::Url,
+    subpath: FileSubPath,
+    file_id: FileId,
+) -> anyhow::Result<FileToSend> {
+    let fullpath = uri
+        .to_file_path()
+        .ok()
+        .context("Failed to extract file path")?;
+
+    let meta = fs::symlink_metadata(&fullpath)
+        .with_context(|| format!("Failed to load file: {}", file_id))?;
+
+    anyhow::ensure!(!meta.is_dir(), "Invalid file type");
+
+    FileToSend::new_to_send(subpath, fullpath, meta, file_id.clone())
+        .with_context(|| format!("Failed to restore file {file_id} from DB"))
+}
+
+#[cfg(unix)]
+fn file_to_resume_from_content_uri(
+    state: &State,
+    uri: url::Url,
+    subpath: FileSubPath,
+    file_id: FileId,
+) -> anyhow::Result<FileToSend> {
+    let callback = state
+        .fdresolv
+        .as_ref()
+        .context("Encountered content uri but FD resovler callback is missing")?;
+
+    let fd = callback(uri.as_str()).with_context(|| format!("Failed to fetch FD for: {uri}"))?;
+
+    FileToSend::new_from_fd(subpath, uri, fd, file_id.clone())
+        .with_context(|| format!("Failed to restore file {file_id} from DB"))
 }
 
 fn extract_directory_mapping(
