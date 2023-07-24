@@ -1,7 +1,7 @@
 use rusqlite::{params, types::FromSql, Connection, OptionalExtension, ToSql};
 use uuid::Uuid;
 
-use crate::QueryResult;
+use crate::{QueryResult, TransferType};
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
@@ -459,4 +459,33 @@ pub(super) fn incoming_file_set_remote_state(
         params![tid, file_id, state],
     )?;
     Ok(if count > 0 { Some(()) } else { None })
+}
+
+pub(super) struct RecTransfer {
+    pub tid: String,
+    pub peer: String,
+}
+
+pub(super) fn transfers_to_resume(
+    conn: &Connection,
+    ty: TransferType,
+) -> crate::Result<Vec<RecTransfer>> {
+    let res = conn
+        .prepare(
+            r#"
+            SELECT t.id as tid, peer
+            FROM transfers t
+            INNER JOIN sync_transfer st ON st.transfer_id = t.id
+            WHERE t.is_outgoing = ?1
+            "#,
+        )?
+        .query_map(params![ty as u32], |r| {
+            Ok(RecTransfer {
+                tid: r.get("tid")?,
+                peer: r.get("peer")?,
+            })
+        })?
+        .collect::<QueryResult<_>>()?;
+
+    Ok(res)
 }

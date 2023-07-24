@@ -198,6 +198,11 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         });
         socket.send(Message::from(&msg)).await?;
 
+        self.state
+            .transfer_manager
+            .incoming_rejection_ack(self.xfer.id(), &file_id)
+            .await?;
+
         if let Some(FileTask {
             job: task,
             events,
@@ -217,25 +222,14 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
             }
         }
 
-        if let Some(file) = self.xfer.files().get(&file_id) {
-            self.state.moose.service_quality_transfer_file(
-                Err(drop_core::Status::FileRejected as i32),
-                drop_analytics::Phase::End,
-                self.xfer.id().to_string(),
-                0,
-                Some(file.info()),
-            );
-
-            self.state
-                .event_tx
-                .send(crate::Event::FileDownloadRejected {
-                    transfer_id: self.xfer.id(),
-                    file_id,
-                    by_peer: false,
-                })
-                .await
-                .expect("Event channel should be open");
-        }
+        let file = &self.xfer.files()[&file_id];
+        self.state.moose.service_quality_transfer_file(
+            Err(drop_core::Status::FileRejected as i32),
+            drop_analytics::Phase::End,
+            self.xfer.id().to_string(),
+            0,
+            Some(file.info()),
+        );
 
         Ok(())
     }
@@ -346,6 +340,17 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     async fn on_close(&mut self, by_peer: bool) {
         debug!(self.logger, "ServerHandler::on_close(by_peer: {})", by_peer);
 
+        if by_peer {
+            self.state
+                .event_tx
+                .send(crate::Event::IncomingTransferCanceled(
+                    self.xfer.clone(),
+                    by_peer,
+                ))
+                .await
+                .expect("Could not send a file cancelled event, channel closed");
+        }
+
         self.xfer
             .files()
             .values()
@@ -365,15 +370,6 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
             });
 
         self.on_stop().await;
-
-        self.state
-            .event_tx
-            .send(crate::Event::IncomingTransferCanceled(
-                self.xfer.clone(),
-                by_peer,
-            ))
-            .await
-            .expect("Could not send a file cancelled event, channel closed");
     }
 
     async fn on_recv(
@@ -424,28 +420,6 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         });
 
         futures::future::join_all(tasks).await;
-    }
-
-    async fn finalize_failure(self, err: anyhow::Error) {
-        error!(self.logger, "Server failed to handle WS message: {:?}", err);
-
-        let err = match err.downcast::<crate::Error>() {
-            Ok(err) => err,
-            Err(err) => err.downcast::<warp::Error>().map_or_else(
-                |err| crate::Error::BadTransferState(err.to_string()),
-                Into::into,
-            ),
-        };
-
-        self.state
-            .event_tx
-            .send(crate::Event::IncomingTransferFailed(
-                self.xfer.clone(),
-                err,
-                true,
-            ))
-            .await
-            .expect("Event channel should always be open");
     }
 
     async fn finalize_success(self) {}

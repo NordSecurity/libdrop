@@ -301,11 +301,7 @@ impl HandlerLoop<'_> {
             if !task.is_finished() {
                 task.abort();
 
-                let file = self
-                    .xfer
-                    .files()
-                    .get(&file_id)
-                    .expect("File should exists since we have a transfer task running");
+                let file = &self.xfer.files()[&file_id];
 
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
@@ -548,10 +544,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         });
 
         futures::future::join_all(tasks).await;
-    }
-
-    async fn finalize_failure(self, err: anyhow::Error) {
-        error!(self.logger, "Server failed to handle WS message: {:?}", err);
     }
 
     async fn finalize_success(self) {

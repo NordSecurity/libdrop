@@ -315,7 +315,16 @@ impl RunContext<'_> {
 
         let xfer = Arc::new(xfer);
 
-        let job = handle_client(&self.state, self.logger, self.socket, handler, xfer);
+        let job = async {
+            let xfer_id = xfer.id();
+
+            handle_client(&self.state, self.logger, self.socket, handler, xfer).await;
+            let _ = self
+                .state
+                .transfer_manager
+                .incoming_disconnect(xfer_id)
+                .await;
+        };
 
         tokio::select! {
             biased;
@@ -394,7 +403,7 @@ async fn handle_client(
     handler.on_stop().await;
 
     if let Err(err) = result {
-        handler.finalize_failure(err).await
+        info!(logger, "WS connection broke for {}: {err:?}", xfer.id());
     } else {
         let task = async {
             // Drain messages

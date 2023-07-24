@@ -12,7 +12,6 @@ use std::{
 };
 
 use anyhow::Context;
-use drop_storage::sync;
 use futures::{SinkExt, StreamExt};
 use hyper::{http::HeaderValue, StatusCode};
 use slog::{debug, error, info, warn, Logger};
@@ -59,15 +58,12 @@ pub(crate) async fn run(state: Arc<State>, xfer: Arc<OutgoingTransfer>, logger: 
     loop {
         let cf = connect_to_peer(&state, &xfer, &logger).await;
         if cf.is_break() {
-            let _ = state
-                .transfer_manager
-                .outgoing
-                .lock()
-                .await
-                .remove(&xfer.id());
-
-            if let Err(err) = state.storage.trasnfer_sync_clear(xfer.id()) {
-                error!(logger, "Failed to clear transfer sync data: {err}");
+            if let Err(err) = state.transfer_manager.outgoing_remove(xfer.id()).await {
+                warn!(
+                    logger,
+                    "Failed to clear sync state for {}: {err}",
+                    xfer.id()
+                );
             }
 
             return;
@@ -112,16 +108,7 @@ async fn connect_to_peer(
         Version::V5 => ctx.run(v5::HandlerInit::new(state, logger)).await,
     };
 
-    if let Some(state) = state
-        .transfer_manager
-        .outgoing
-        .lock()
-        .await
-        .get_mut(&xfer.id())
-    {
-        let _ = state.conn.take();
-    }
-
+    let _ = state.transfer_manager.outgoing_disconnect(xfer.id()).await;
     control
 }
 
@@ -260,46 +247,18 @@ impl RunContext<'_> {
         &mut self,
         handler: &mut impl HandlerInit,
     ) -> crate::Result<Option<UnboundedReceiver<ClientReq>>> {
-        let state = if let Some(state) = self.state.storage.transfer_sync_state(self.xfer.id())? {
-            state
-        } else {
-            return Ok(None);
-        };
-
         handler.start(&mut self.socket, self.xfer).await?;
 
-        match (state.local_state, state.remote_state) {
-            (sync::TransferState::New, _) => self.state.storage.update_transfer_sync_states(
-                self.xfer.id(),
-                Some(sync::TransferState::Active),
-                Some(sync::TransferState::Active),
-            )?,
-            (_, sync::TransferState::New) => self.state.storage.update_transfer_sync_states(
-                self.xfer.id(),
-                Some(sync::TransferState::Active),
-                None,
-            )?,
-            _ => (),
-        }
-
         let (tx, rx) = mpsc::unbounded_channel();
-
-        match state.local_state {
-            sync::TransferState::Canceled => {
-                drop(tx);
-            }
-            _ => {
-                reject_transfer_files(self.state, self.xfer, &tx, self.logger);
-
-                self.state
-                    .transfer_manager
-                    .outgoing
-                    .lock()
-                    .await
-                    .get_mut(&self.xfer.id())
-                    .expect("Missing transfer data")
-                    .conn = Some(tx);
-            }
+        match self
+            .state
+            .transfer_manager
+            .outgoing_connected(self.xfer.id(), tx)
+            .await
+        {
+            Ok(()) => (),
+            Err(crate::Error::BadTransfer) => return Ok(None),
+            Err(err) => return Err(err),
         }
 
         Ok(Some(rx))
@@ -308,7 +267,25 @@ impl RunContext<'_> {
     async fn run(mut self, mut handler: impl HandlerInit) -> ControlFlow<()> {
         let mut api_req_rx = match self.start(&mut handler).await {
             Ok(Some(rx)) => rx,
-            Ok(None) => return ControlFlow::Break(()),
+            Ok(None) => {
+                let task = async {
+                    self.socket
+                        .close(None)
+                        .await
+                        .context("Failed to close WS")?;
+                    self.drain_socket()
+                        .await
+                        .context("Failed to drain socket")?;
+                    anyhow::Ok(())
+                };
+                if let Err(err) = task.await {
+                    error!(self.logger, "Failed to close socket on start: {err:?}");
+                } else {
+                    info!(self.logger, "Socket closed on start");
+                }
+
+                return ControlFlow::Break(());
+            }
             Err(err) => {
                 error!(
                     self.logger,
@@ -366,7 +343,12 @@ impl RunContext<'_> {
         handler.on_stop().await;
 
         if let Err(err) = result {
-            handler.finalize_failure(err).await;
+            info!(
+                self.logger,
+                "WS connection broke for {}: {err:?}",
+                self.xfer.id()
+            );
+
             ControlFlow::Continue(())
         } else {
             if let Err(err) = self.drain_socket().await {
@@ -376,19 +358,6 @@ impl RunContext<'_> {
                 );
             } else {
                 debug!(self.logger, "WS client disconnected");
-            }
-
-            if let Err(err) = self
-                .state
-                .transfer_manager
-                .outgoing_remove(self.xfer.id())
-                .await
-            {
-                warn!(
-                    self.logger,
-                    "Failed to clear sync state for {}: {err}",
-                    self.xfer.id()
-                );
             }
 
             ControlFlow::Break(())
@@ -506,33 +475,6 @@ async fn acquire_throttle_permit<'a>(
         Err(err) => {
             error!(logger, "Throttle semaphore failed: {err}");
             None
-        }
-    }
-}
-
-fn reject_transfer_files(
-    state: &State,
-    xfer: &Arc<OutgoingTransfer>,
-    req_send: &mpsc::UnboundedSender<ClientReq>,
-    logger: &Logger,
-) {
-    let files = match state.storage.outgoing_files_to_reject(xfer.id()) {
-        Ok(files) => files,
-        Err(err) => {
-            warn!(logger, "Failed to fetch files to reject: {err}");
-            return;
-        }
-    };
-
-    for file_id in files {
-        info!(logger, "Rejecting file: {file_id}");
-
-        if xfer.files().get(&file_id).is_some() {
-            let _ = req_send.send(ClientReq::Reject {
-                file: file_id.into(),
-            });
-        } else {
-            warn!(logger, "Missing file: {file_id}");
         }
     }
 }

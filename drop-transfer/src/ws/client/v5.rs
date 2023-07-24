@@ -107,11 +107,7 @@ impl HandlerLoop<'_> {
             if !task.job.is_finished() {
                 task.job.abort();
 
-                let file = self
-                    .xfer
-                    .files()
-                    .get(&file_id)
-                    .expect("File should exists since we have a transfer task running");
+                let file = &self.xfer.files()[&file_id];
 
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
@@ -334,12 +330,7 @@ impl HandlerLoop<'_> {
                     task.job.abort();
                 }
 
-                let file = self
-                    .xfer
-                    .files()
-                    .get(&file_id)
-                    .expect("File should exists since we have a transfer task running");
-
+                let file = &self.xfer.files()[&file_id];
                 task.events
                     .stop(crate::Event::FileUploadFailed(
                         self.xfer.clone(),
@@ -441,7 +432,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             }
             Message::Close(_) => {
                 debug!(self.logger, "Got CLOSE frame");
-                self.on_close(true).await;
                 return Ok(ControlFlow::Break(()));
             }
             Message::Ping(_) => {
@@ -468,10 +458,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         });
 
         futures::future::join_all(tasks).await;
-    }
-
-    async fn finalize_failure(self, err: anyhow::Error) {
-        error!(self.logger, "Client failed on WS loop: {err:?}");
     }
 
     fn recv_timeout(&mut self) -> Option<Duration> {
