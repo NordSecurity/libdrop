@@ -890,7 +890,7 @@ fn restore_incoming(
                 Err(err) => {
                     error!(
                         logger,
-                        "Failed to restore transfer {}: {err}", transfer.uuid
+                        "Failed to restore transfer {}: {err:?}", transfer.uuid
                     );
 
                     None
