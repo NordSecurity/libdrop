@@ -1,12 +1,6 @@
 use std::{
-    cmp::Ordering,
-    collections::HashMap,
-    fs, io,
-    net::IpAddr,
-    ops::ControlFlow,
-    path::PathBuf,
-    sync::Arc,
-    time::{Duration, Instant},
+    cmp::Ordering, collections::HashMap, fs, io, net::IpAddr, path::PathBuf, sync::Arc,
+    time::Duration,
 };
 
 use anyhow::Context;
@@ -20,7 +14,7 @@ use tokio::{
 };
 use warp::ws::{Message, WebSocket};
 
-use super::{handler, ServerReq};
+use super::handler;
 use crate::{
     file,
     protocol::v4,
@@ -42,7 +36,6 @@ pub struct HandlerLoop<'a> {
     logger: &'a slog::Logger,
     msg_tx: Sender<Message>,
     xfer: Arc<IncomingTransfer>,
-    last_recv: Instant,
     jobs: HashMap<FileId, FileTask>,
     checksums: HashMap<FileId, Arc<AsyncCell<[u8; 32]>>>,
 }
@@ -185,7 +178,6 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             state,
             msg_tx,
             xfer,
-            last_recv: Instant::now(),
             jobs: HashMap::new(),
             logger,
             checksums,
@@ -198,106 +190,6 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
 }
 
 impl HandlerLoop<'_> {
-    fn issue_download(
-        &mut self,
-        _: &mut WebSocket,
-        task: super::FileXferTask,
-    ) -> anyhow::Result<()> {
-        let is_running = self
-            .jobs
-            .get(task.file.id())
-            .map_or(false, |state| !state.job.is_finished());
-
-        if is_running {
-            return Ok(());
-        }
-
-        let full_csum_cell = self
-            .checksums
-            .get(task.file.id())
-            .context("Missing file checksum cell")?
-            .clone();
-
-        let file_id = task.file.id().clone();
-        let state = FileTask::start(
-            self.msg_tx.clone(),
-            self.state.clone(),
-            task,
-            full_csum_cell,
-            self.logger.clone(),
-        );
-
-        self.jobs.insert(file_id, state);
-
-        Ok(())
-    }
-
-    async fn issue_cancel(
-        &mut self,
-        socket: &mut WebSocket,
-        file_id: FileId,
-    ) -> anyhow::Result<()> {
-        debug!(self.logger, "ServerHandler::issue_cancel");
-
-        let msg = v4::ServerMsg::Cancel(v4::Cancel {
-            file: file_id.clone(),
-        });
-        socket.send(Message::from(&msg)).await?;
-
-        self.on_cancel(file_id, false).await;
-
-        Ok(())
-    }
-
-    async fn issue_reject(
-        &mut self,
-        socket: &mut WebSocket,
-        file_id: FileId,
-    ) -> anyhow::Result<()> {
-        debug!(self.logger, "ServerHandler::issue_cancel");
-
-        let msg = v4::ServerMsg::Cancel(v4::Cancel {
-            file: file_id.clone(),
-        });
-        socket.send(Message::from(&msg)).await?;
-
-        self.state
-            .transfer_manager
-            .incoming_rejection_ack(self.xfer.id(), &file_id)
-            .await?;
-
-        if let Some(FileTask {
-            job: task,
-            events,
-            chunks_tx: _,
-            csum_tx: _,
-        }) = self.jobs.remove(&file_id)
-        {
-            if !task.is_finished() {
-                task.abort();
-
-                events
-                    .stop(crate::Event::FileDownloadCancelled(
-                        self.xfer.clone(),
-                        file_id.clone(),
-                        false,
-                    ))
-                    .await;
-            }
-        }
-
-        let file = &self.xfer.files()[&file_id];
-        self.state.moose.service_quality_transfer_file(
-            Err(drop_core::Status::FileRejected as i32),
-            drop_analytics::Phase::End,
-            self.xfer.id().to_string(),
-            0,
-            Some(file.info()),
-        );
-
-        Ok(())
-    }
-
     async fn on_chunk(
         &mut self,
         socket: &mut WebSocket,
@@ -422,12 +314,102 @@ impl HandlerLoop<'_> {
 
 #[async_trait::async_trait]
 impl handler::HandlerLoop for HandlerLoop<'_> {
-    async fn on_req(&mut self, ws: &mut WebSocket, req: ServerReq) -> anyhow::Result<()> {
-        match req {
-            ServerReq::Download { task } => self.issue_download(ws, *task)?,
-            ServerReq::Cancel { file } => self.issue_cancel(ws, file).await?,
-            ServerReq::Reject { file } => self.issue_reject(ws, file).await?,
+    async fn issue_download(
+        &mut self,
+        _: &mut WebSocket,
+        task: super::FileXferTask,
+    ) -> anyhow::Result<()> {
+        let is_running = self
+            .jobs
+            .get(task.file.id())
+            .map_or(false, |state| !state.job.is_finished());
+
+        if is_running {
+            return Ok(());
         }
+
+        let full_csum_cell = self
+            .checksums
+            .get(task.file.id())
+            .context("Missing file checksum cell")?
+            .clone();
+
+        let file_id = task.file.id().clone();
+        let state = FileTask::start(
+            self.msg_tx.clone(),
+            self.state.clone(),
+            task,
+            full_csum_cell,
+            self.logger.clone(),
+        );
+
+        self.jobs.insert(file_id, state);
+
+        Ok(())
+    }
+
+    async fn issue_cancel(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+    ) -> anyhow::Result<()> {
+        debug!(self.logger, "ServerHandler::issue_cancel");
+
+        let msg = v4::ServerMsg::Cancel(v4::Cancel {
+            file: file_id.clone(),
+        });
+        socket.send(Message::from(&msg)).await?;
+
+        self.on_cancel(file_id, false).await;
+
+        Ok(())
+    }
+
+    async fn issue_reject(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+    ) -> anyhow::Result<()> {
+        debug!(self.logger, "ServerHandler::issue_cancel");
+
+        let msg = v4::ServerMsg::Cancel(v4::Cancel {
+            file: file_id.clone(),
+        });
+        socket.send(Message::from(&msg)).await?;
+
+        self.state
+            .transfer_manager
+            .incoming_rejection_ack(self.xfer.id(), &file_id)
+            .await?;
+
+        if let Some(FileTask {
+            job: task,
+            events,
+            chunks_tx: _,
+            csum_tx: _,
+        }) = self.jobs.remove(&file_id)
+        {
+            if !task.is_finished() {
+                task.abort();
+
+                events
+                    .stop(crate::Event::FileDownloadCancelled(
+                        self.xfer.clone(),
+                        file_id.clone(),
+                        false,
+                    ))
+                    .await;
+            }
+        }
+
+        let file = &self.xfer.files()[&file_id];
+        self.state.moose.service_quality_transfer_file(
+            Err(drop_core::Status::FileRejected as i32),
+            drop_analytics::Phase::End,
+            self.xfer.id().to_string(),
+            0,
+            Some(file.info()),
+        );
 
         Ok(())
     }
@@ -467,43 +449,26 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         self.on_stop().await;
     }
 
-    async fn on_recv(
-        &mut self,
-        ws: &mut WebSocket,
-        msg: Message,
-    ) -> anyhow::Result<ControlFlow<()>> {
-        self.last_recv = Instant::now();
+    async fn on_text_msg(&mut self, _: &mut WebSocket, text: &str) -> anyhow::Result<()> {
+        let msg: v4::ClientMsg =
+            serde_json::from_str(text).context("Failed to deserialize json")?;
 
-        if let Ok(json) = msg.to_str() {
-            debug!(self.logger, "Received:\n\t{json}");
-
-            let msg: v4::ClientMsg =
-                serde_json::from_str(json).context("Failed to deserialize json")?;
-
-            match msg {
-                v4::ClientMsg::Error(v4::Error { file, msg }) => self.on_error(file, msg).await,
-                v4::ClientMsg::Cancel(v4::Cancel { file }) => self.on_cancel(file, true).await,
-                v4::ClientMsg::ReportChsum(report) => self.on_checksum(report).await,
-            }
-        } else if msg.is_binary() {
-            let v4::Chunk { file, data } =
-                v4::Chunk::decode(msg.into_bytes()).context("Failed to decode file chunk")?;
-
-            self.on_chunk(ws, file, data).await?;
-        } else if msg.is_close() {
-            debug!(self.logger, "Got CLOSE frame");
-            self.on_close(true).await;
-
-            return Ok(ControlFlow::Break(()));
-        } else if msg.is_ping() {
-            debug!(self.logger, "PING");
-        } else if msg.is_pong() {
-            debug!(self.logger, "PONG");
-        } else {
-            warn!(self.logger, "Server received invalid WS message type");
+        match msg {
+            v4::ClientMsg::Error(v4::Error { file, msg }) => self.on_error(file, msg).await,
+            v4::ClientMsg::Cancel(v4::Cancel { file }) => self.on_cancel(file, true).await,
+            v4::ClientMsg::ReportChsum(report) => self.on_checksum(report).await,
         }
 
-        anyhow::Ok(ControlFlow::Continue(()))
+        Ok(())
+    }
+
+    async fn on_bin_msg(&mut self, ws: &mut WebSocket, bytes: Vec<u8>) -> anyhow::Result<()> {
+        let v4::Chunk { file, data } =
+            v4::Chunk::decode(bytes).context("Failed to decode file chunk")?;
+
+        self.on_chunk(ws, file, data).await?;
+
+        Ok(())
     }
 
     async fn on_stop(&mut self) {
@@ -548,12 +513,12 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         }
     }
 
-    fn recv_timeout(&mut self) -> Option<Duration> {
+    fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration> {
         Some(
             self.state
                 .config
                 .transfer_idle_lifetime
-                .saturating_sub(self.last_recv.elapsed()),
+                .saturating_sub(last_recv_elapsed),
         )
     }
 }

@@ -300,6 +300,7 @@ impl RunContext<'_> {
         let (upload_tx, mut upload_rx) = mpsc::channel(2);
         let mut ping = handler.pinger();
         let mut handler = handler.upgrade(upload_tx, self.xfer.clone());
+        let mut last_recv = Instant::now();
 
         let task = async {
             loop {
@@ -309,7 +310,7 @@ impl RunContext<'_> {
                     // API request
                     req = api_req_rx.recv() => {
                         if let Some(req) = req {
-                            handler.on_req(&mut self.socket, req).await.context("Handler on API req")?;
+                            on_req(&mut self.socket, &mut handler, req).await.context("Handler on API req")?;
                         } else {
                             debug!(self.logger, "Stopping client connection gracefuly");
                             self.socket.close(None).await.context("Failed to close WS")?;
@@ -318,10 +319,11 @@ impl RunContext<'_> {
                         };
                     },
                     // Message received
-                    recv = super::utils::recv(&mut self.socket, handler.recv_timeout()) => {
+                    recv = super::utils::recv(&mut self.socket, handler.recv_timeout(last_recv.elapsed())) => {
                         let msg =  recv?.context("Failed to receive WS message")?;
-                        if handler.on_recv(&mut self.socket, msg).await.context("Handler on recv")?.is_break() {
-                            handler.on_close(true).await;
+                        last_recv = Instant::now();
+
+                        if on_recv(&mut self.socket, &mut handler, msg, self.logger).await.context("Handler on recv")?.is_break() {
                             break;
                         }
                     },
@@ -477,4 +479,44 @@ async fn acquire_throttle_permit<'a>(
             None
         }
     }
+}
+
+async fn on_req(
+    socket: &mut WebSocket,
+    handler: &mut impl HandlerLoop,
+    req: ClientReq,
+) -> anyhow::Result<()> {
+    match req {
+        ClientReq::Reject { file } => handler.issue_reject(socket, file).await?,
+    }
+
+    Ok(())
+}
+
+async fn on_recv(
+    socket: &mut WebSocket,
+    handler: &mut impl HandlerLoop,
+    msg: Message,
+    logger: &slog::Logger,
+) -> anyhow::Result<ControlFlow<()>> {
+    match msg {
+        Message::Text(text) => {
+            debug!(logger, "Received:\n\t{text}");
+            handler.on_text_msg(socket, text).await?;
+        }
+        Message::Close(_) => {
+            debug!(logger, "Got CLOSE frame");
+            handler.on_close(true).await;
+            return Ok(ControlFlow::Break(()));
+        }
+        Message::Ping(_) => {
+            debug!(logger, "PING");
+        }
+        Message::Pong(_) => {
+            debug!(logger, "PONG");
+        }
+        _ => warn!(logger, "Client received invalid WS message type"),
+    }
+
+    Ok(ControlFlow::Continue(()))
 }
