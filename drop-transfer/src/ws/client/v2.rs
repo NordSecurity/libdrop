@@ -1,8 +1,7 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
-    ops::ControlFlow,
     sync::Arc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use anyhow::Context;
@@ -11,7 +10,7 @@ use slog::{debug, error, warn};
 use tokio::{sync::mpsc::Sender, task::JoinHandle};
 use tokio_tungstenite::tungstenite::Message;
 
-use super::{handler, ClientReq, WebSocket};
+use super::{handler, WebSocket};
 use crate::{
     file::FileSubPath, protocol::v2, service::State, transfer::Transfer, ws, File, FileId,
     OutgoingTransfer,
@@ -27,7 +26,6 @@ pub struct HandlerLoop<'a, const PING: bool> {
     logger: &'a slog::Logger,
     upload_tx: Sender<Message>,
     tasks: HashMap<FileSubPath, FileTask>,
-    last_recv: Instant,
     xfer: Arc<OutgoingTransfer>,
 }
 
@@ -71,7 +69,6 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
             upload_tx,
             xfer,
             tasks: HashMap::new(),
-            last_recv: Instant::now(),
         }
     }
 
@@ -81,55 +78,6 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
 }
 
 impl<const PING: bool> HandlerLoop<'_, PING> {
-    async fn issue_reject(
-        &mut self,
-        socket: &mut WebSocket,
-        file_id: FileId,
-    ) -> anyhow::Result<()> {
-        let file_subpath = if let Some(file) = self.xfer.files().get(&file_id) {
-            file.subpath().clone()
-        } else {
-            warn!(self.logger, "Missing file with ID: {file_id:?}");
-            return Ok(());
-        };
-
-        let msg = v2::ClientMsg::Cancel(v2::Download {
-            file: file_subpath.clone(),
-        });
-        socket.send(Message::from(&msg)).await?;
-
-        self.state
-            .transfer_manager
-            .outgoing_rejection_ack(self.xfer.id(), &file_id)
-            .await?;
-
-        if let Some(task) = self.tasks.remove(&file_subpath) {
-            if !task.job.is_finished() {
-                task.job.abort();
-
-                task.events
-                    .stop(crate::Event::FileUploadCancelled(
-                        self.xfer.clone(),
-                        file_id.clone(),
-                        false,
-                    ))
-                    .await;
-            }
-        }
-
-        let file = &self.xfer.files()[&file_id];
-
-        self.state.moose.service_quality_transfer_file(
-            Err(drop_core::Status::FileRejected as i32),
-            drop_analytics::Phase::End,
-            self.xfer.id().to_string(),
-            0,
-            Some(file.info()),
-        );
-
-        Ok(())
-    }
-
     async fn on_cancel(&mut self, file: FileSubPath, by_peer: bool) {
         if let Some(task) = self.tasks.remove(&file) {
             if !task.job.is_finished() {
@@ -279,10 +227,53 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
 
 #[async_trait::async_trait]
 impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
-    async fn on_req(&mut self, socket: &mut WebSocket, req: ClientReq) -> anyhow::Result<()> {
-        match req {
-            ClientReq::Reject { file } => self.issue_reject(socket, file).await,
+    async fn issue_reject(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+    ) -> anyhow::Result<()> {
+        let file_subpath = if let Some(file) = self.xfer.files().get(&file_id) {
+            file.subpath().clone()
+        } else {
+            warn!(self.logger, "Missing file with ID: {file_id:?}");
+            return Ok(());
+        };
+
+        let msg = v2::ClientMsg::Cancel(v2::Download {
+            file: file_subpath.clone(),
+        });
+        socket.send(Message::from(&msg)).await?;
+
+        self.state
+            .transfer_manager
+            .outgoing_rejection_ack(self.xfer.id(), &file_id)
+            .await?;
+
+        if let Some(task) = self.tasks.remove(&file_subpath) {
+            if !task.job.is_finished() {
+                task.job.abort();
+
+                task.events
+                    .stop(crate::Event::FileUploadCancelled(
+                        self.xfer.clone(),
+                        file_id.clone(),
+                        false,
+                    ))
+                    .await;
+            }
         }
+
+        let file = &self.xfer.files()[&file_id];
+
+        self.state.moose.service_quality_transfer_file(
+            Err(drop_core::Status::FileRejected as i32),
+            drop_analytics::Phase::End,
+            self.xfer.id().to_string(),
+            0,
+            Some(file.info()),
+        );
+
+        Ok(())
     }
 
     async fn on_close(&mut self, by_peer: bool) {
@@ -320,48 +311,25 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         self.on_stop().await;
     }
 
-    async fn on_recv(
-        &mut self,
-        _: &mut WebSocket,
-        msg: Message,
-    ) -> anyhow::Result<ControlFlow<()>> {
-        self.last_recv = Instant::now();
+    async fn on_text_msg(&mut self, _: &mut WebSocket, text: String) -> anyhow::Result<()> {
+        let msg: v2::ServerMsg =
+            serde_json::from_str(&text).context("Failed to deserialize server message")?;
 
         match msg {
-            Message::Text(json) => {
-                let msg: v2::ServerMsg =
-                    serde_json::from_str(&json).context("Failed to deserialize server message")?;
-
-                match msg {
-                    v2::ServerMsg::Progress(v2::Progress {
-                        file,
-                        bytes_transfered,
-                    }) => self.on_progress(file, bytes_transfered).await,
-                    v2::ServerMsg::Done(v2::Progress {
-                        file,
-                        bytes_transfered: _,
-                    }) => self.on_done(file).await,
-                    v2::ServerMsg::Error(v2::Error { file, msg }) => self.on_error(file, msg).await,
-                    v2::ServerMsg::Start(v2::Download { file }) => self.on_download(file).await,
-                    v2::ServerMsg::Cancel(v2::Download { file }) => {
-                        self.on_cancel(file, true).await
-                    }
-                }
-            }
-            Message::Close(_) => {
-                debug!(self.logger, "Got CLOSE frame");
-                return Ok(ControlFlow::Break(()));
-            }
-            Message::Ping(_) => {
-                debug!(self.logger, "PING");
-            }
-            Message::Pong(_) => {
-                debug!(self.logger, "PONG");
-            }
-            _ => warn!(self.logger, "Client received invalid WS message type"),
+            v2::ServerMsg::Progress(v2::Progress {
+                file,
+                bytes_transfered,
+            }) => self.on_progress(file, bytes_transfered).await,
+            v2::ServerMsg::Done(v2::Progress {
+                file,
+                bytes_transfered: _,
+            }) => self.on_done(file).await,
+            v2::ServerMsg::Error(v2::Error { file, msg }) => self.on_error(file, msg).await,
+            v2::ServerMsg::Start(v2::Download { file }) => self.on_download(file).await,
+            v2::ServerMsg::Cancel(v2::Download { file }) => self.on_cancel(file, true).await,
         }
 
-        Ok(ControlFlow::Continue(()))
+        Ok(())
     }
 
     async fn on_stop(&mut self) {
@@ -378,13 +346,13 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         futures::future::join_all(tasks).await;
     }
 
-    fn recv_timeout(&mut self) -> Option<Duration> {
+    fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration> {
         if PING {
             Some(
                 self.state
                     .config
                     .transfer_idle_lifetime
-                    .saturating_sub(self.last_recv.elapsed()),
+                    .saturating_sub(last_recv_elapsed),
             )
         } else {
             None
