@@ -269,9 +269,10 @@ pub(super) fn outgoing_files_to_reject(
     let res = conn
         .prepare(
             r#"
-        SELECT sof.path_id
+        SELECT op.path_hash
         FROM sync_outgoing_files sof
         INNER JOIN sync_transfer st USING(sync_id)
+        INNER JOIN outgoing_paths op ON op.id = sof.path_id 
         WHERE st.transfer_id = ?1
             AND sof.local_state = ?2
             AND NOT sof.remote_state = sof.local_state
@@ -292,10 +293,11 @@ pub(super) fn incoming_files_in_flight(
     let res = conn
         .prepare(
             r#"
-        SELECT sifi.base_dir, sif.path_id
+        SELECT sifi.base_dir, ip.path_hash
         FROM sync_incoming_files sif
         INNER JOIN sync_incoming_files_inflight sifi USING(sync_id, path_id)
         INNER JOIN sync_transfer st USING(sync_id)
+        INNER JOIN incoming_paths ip ON ip.id = sif.path_id 
         INNER JOIN transfers t ON t.id = st.transfer_id
         WHERE st.transfer_id = ?1 AND sif.local_state = ?2
         "#,
@@ -320,9 +322,10 @@ pub(super) fn incoming_files_to_reject(
     let res = conn
         .prepare(
             r#"
-        SELECT sif.path_id
+        SELECT ip.path_hash
         FROM sync_incoming_files sif
         INNER JOIN sync_transfer st USING(sync_id)
+        INNER JOIN incoming_paths ip ON ip.id = sif.path_id 
         WHERE st.transfer_id = ?1
             AND sif.local_state = ?2
             AND NOT sif.remote_state = sif.local_state
