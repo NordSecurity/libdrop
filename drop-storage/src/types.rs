@@ -129,12 +129,6 @@ pub struct TransferInfo {
     pub files: TransferFiles,
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Ord, Eq)]
-pub struct IncomingTransferInfo {
-    pub peer: String,
-    pub files: Vec<TransferIncomingPath>,
-}
-
 #[derive(Debug)]
 pub struct FileChecksum {
     pub file_id: FileId,

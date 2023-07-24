@@ -148,6 +148,51 @@ impl TransferManager {
         }
     }
 
+    pub async fn outgoing_connected(
+        &self,
+        transfer_id: Uuid,
+        conn: UnboundedSender<ClientReq>,
+    ) -> crate::Result<()> {
+        let mut lock = self.outgoing.lock().await;
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        match (state.xfer_sync.local, state.xfer_sync.remote) {
+            (sync::TransferState::New, _) => {
+                self.storage.update_transfer_sync_states(
+                    transfer_id,
+                    Some(sync::TransferState::Active),
+                    Some(sync::TransferState::Active),
+                )?;
+
+                state.xfer_sync.local = sync::TransferState::Active;
+                state.xfer_sync.remote = sync::TransferState::Active;
+            }
+            (_, sync::TransferState::New) => {
+                self.storage.update_transfer_sync_states(
+                    transfer_id,
+                    Some(sync::TransferState::Active),
+                    None,
+                )?;
+                state.xfer_sync.remote = sync::TransferState::Active;
+            }
+            _ => (),
+        }
+
+        match state.xfer_sync.local {
+            sync::TransferState::Canceled => {
+                drop(conn);
+            }
+            _ => {
+                state.reject_pending(&conn, &self.logger);
+                state.conn = Some(conn);
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn insert_outgoing(&self, xfer: Arc<OutgoingTransfer>) -> crate::Result<()> {
         let mut lock = self.outgoing.lock().await;
 
@@ -490,10 +535,49 @@ impl TransferManager {
 
         Ok(())
     }
+
+    pub async fn incoming_disconnect(&self, transfer_id: Uuid) -> crate::Result<()> {
+        let mut lock = self.incoming.lock().await;
+        let _ = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?
+            .conn
+            .take();
+        Ok(())
+    }
+
+    pub async fn outgoing_disconnect(&self, transfer_id: Uuid) -> crate::Result<()> {
+        let mut lock = self.outgoing.lock().await;
+        let _ = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?
+            .conn
+            .take();
+        Ok(())
+    }
+}
+
+impl OutgoingState {
+    fn reject_pending(&self, conn: &UnboundedSender<ClientReq>, logger: &Logger) {
+        for file_id in self
+            .file_sync
+            .iter()
+            .filter_map(|(k, v)| match (v.local, v.remote) {
+                (sync::FileState::Rejected, sync::FileState::Alive) => Some(k),
+                _ => None,
+            })
+        {
+            info!(logger, "Rejecting file: {file_id}");
+            let _ = conn.send(ClientReq::Reject {
+                file: file_id.clone(),
+            });
+        }
+    }
 }
 
 impl IncomingState {
-    /// Returs `true` when the new download can be started and `false` in case the downaload is already happening
+    /// Returs `true` when the new download can be started and `false` in case
+    /// the downaload is already happening
     pub fn validate_for_download(&self, file_id: &FileId) -> crate::Result<bool> {
         if matches!(self.xfer_sync.local, sync::TransferState::Canceled) {
             return Err(crate::Error::BadTransfer);
@@ -538,7 +622,8 @@ impl IncomingState {
         Ok(())
     }
 
-    /// Returs `true` when cancel was issued and `false` in case its already canceled
+    /// Returs `true` when cancel was issued and `false` in case its already
+    /// canceled
     pub fn cancel_file(&mut self, storage: &Storage, file_id: &FileId) -> crate::Result<bool> {
         if matches!(self.xfer_sync.local, sync::TransferState::Canceled) {
             return Err(crate::Error::BadTransfer);

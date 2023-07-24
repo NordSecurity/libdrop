@@ -28,7 +28,6 @@ pub trait HandlerLoop {
         msg: Message,
     ) -> anyhow::Result<ControlFlow<()>>;
     async fn on_stop(&mut self);
-    async fn finalize_failure(self, err: anyhow::Error);
 
     fn recv_timeout(&mut self) -> Option<Duration>;
 }

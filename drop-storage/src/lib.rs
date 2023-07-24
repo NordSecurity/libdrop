@@ -7,7 +7,7 @@ use std::{path::Path, vec};
 use include_dir::{include_dir, Dir};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{params, Connection, OptionalExtension, Transaction};
+use rusqlite::{params, Transaction};
 use rusqlite_migration::Migrations;
 use slog::{trace, warn, Logger};
 use types::{
@@ -20,8 +20,7 @@ use uuid::Uuid;
 
 use crate::error::Error;
 pub use crate::types::{
-    FileChecksum, FinishedIncomingFile, IncomingTransferInfo, OutgoingTransferToRetry,
-    TransferInfo, TransferType,
+    FileChecksum, FinishedIncomingFile, OutgoingTransferToRetry, TransferInfo, TransferType,
 };
 
 type Result<T> = std::result::Result<T, Error>;
@@ -210,49 +209,6 @@ impl Storage {
         base_dir: &str,
     ) -> crate::Result<Option<()>> {
         sync::start_incoming_file(&*self.pool.get()?, transfer_id, file_id, base_dir)
-    }
-
-    pub fn incoming_transfer_info(
-        &self,
-        transfer_id: Uuid,
-    ) -> Result<Option<IncomingTransferInfo>> {
-        let mut conn = self.pool.get()?;
-        let conn = conn.transaction()?;
-
-        let record = conn
-            .prepare("SELECT peer FROM transfers WHERE id = ?1 AND is_outgoing = ?2")?
-            .query_row(
-                params![transfer_id.to_string(), TransferType::Incoming as u32],
-                |r| r.get("peer"),
-            )
-            .optional()?;
-
-        let peer = if let Some(record) = record {
-            record
-        } else {
-            return Ok(None);
-        };
-
-        let files = conn
-            .prepare(
-                r#"
-                SELECT relative_path, path_hash, bytes 
-                FROM incoming_paths
-                WHERE transfer_id = ?1
-                "#,
-            )?
-            .query_map(params![transfer_id.to_string()], |r| {
-                Ok(TransferIncomingPath {
-                    file_id: r.get("path_hash")?,
-                    relative_path: r.get("relative_path")?,
-                    size: r.get("bytes")?,
-                })
-            })?
-            .collect::<QueryResult<_>>()?;
-
-        conn.commit()?;
-
-        Ok(Some(IncomingTransferInfo { peer, files }))
     }
 
     fn insert_incoming_path(
@@ -720,7 +676,7 @@ impl Storage {
         let mut conn = self.pool.get()?;
         let conn = conn.transaction()?;
 
-        let rec_transfers = transfers_to_resume(&conn, TransferType::Outgoing)?;
+        let rec_transfers = sync::transfers_to_resume(&conn, TransferType::Outgoing)?;
 
         let mut out = Vec::with_capacity(rec_transfers.len());
         for rec_transfer in rec_transfers {
@@ -769,7 +725,7 @@ impl Storage {
         let mut conn = self.pool.get()?;
         let conn = conn.transaction()?;
 
-        let rec_transfers = transfers_to_resume(&conn, TransferType::Incoming)?;
+        let rec_transfers = sync::transfers_to_resume(&conn, TransferType::Incoming)?;
 
         let mut out = Vec::with_capacity(rec_transfers.len());
         for rec_transfer in rec_transfers {
@@ -1344,32 +1300,6 @@ impl Storage {
 
         Ok(paths)
     }
-}
-
-struct RecTransfer {
-    tid: String,
-    peer: String,
-}
-
-fn transfers_to_resume(conn: &Connection, ty: TransferType) -> crate::Result<Vec<RecTransfer>> {
-    let res = conn
-        .prepare(
-            r#"
-            SELECT t.id as tid, peer
-            FROM transfers t
-            INNER JOIN sync_transfer st ON st.transfer_id = t.id
-            WHERE t.is_outgoing = ?1
-            "#,
-        )?
-        .query_map(params![ty as u32], |r| {
-            Ok(RecTransfer {
-                tid: r.get("tid")?,
-                peer: r.get("peer")?,
-            })
-        })?
-        .collect::<QueryResult<_>>()?;
-
-    Ok(res)
 }
 
 #[cfg(test)]

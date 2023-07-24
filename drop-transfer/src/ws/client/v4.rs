@@ -9,7 +9,7 @@ use anyhow::Context;
 use futures::SinkExt;
 use slog::{debug, error, warn};
 use tokio::{sync::mpsc::Sender, task::JoinHandle};
-use tokio_tungstenite::tungstenite::{self, Message};
+use tokio_tungstenite::tungstenite::Message;
 
 use super::{handler, ClientReq, WebSocket};
 use crate::{protocol::v4, service::State, transfer::Transfer, ws, File, FileId, OutgoingTransfer};
@@ -91,6 +91,11 @@ impl HandlerLoop<'_> {
         });
         socket.send(Message::from(&msg)).await?;
 
+        self.state
+            .transfer_manager
+            .outgoing_rejection_ack(self.xfer.id(), &file_id)
+            .await?;
+
         if let Some(task) = self.tasks.remove(&file_id) {
             if !task.job.is_finished() {
                 task.job.abort();
@@ -105,25 +110,15 @@ impl HandlerLoop<'_> {
             }
         }
 
-        if let Some(file) = self.xfer.files().get(&file_id) {
-            self.state.moose.service_quality_transfer_file(
-                Err(drop_core::Status::FileRejected as i32),
-                drop_analytics::Phase::End,
-                self.xfer.id().to_string(),
-                0,
-                Some(file.info()),
-            );
+        let file = &self.xfer.files()[&file_id];
 
-            self.state
-                .event_tx
-                .send(crate::Event::FileUploadRejected {
-                    transfer_id: self.xfer.id(),
-                    file_id,
-                    by_peer: false,
-                })
-                .await
-                .expect("Event channel should be open");
-        }
+        self.state.moose.service_quality_transfer_file(
+            Err(drop_core::Status::FileRejected as i32),
+            drop_analytics::Phase::End,
+            self.xfer.id().to_string(),
+            0,
+            Some(file.info()),
+        );
 
         Ok(())
     }
@@ -133,11 +128,7 @@ impl HandlerLoop<'_> {
             if !task.job.is_finished() {
                 task.job.abort();
 
-                let file = self
-                    .xfer
-                    .files()
-                    .get(&file_id)
-                    .expect("File should exists since we have a transfer task running");
+                let file = &self.xfer.files()[&file_id];
 
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
@@ -192,9 +183,13 @@ impl HandlerLoop<'_> {
         file_id: FileId,
         limit: u64,
     ) -> anyhow::Result<()> {
-        let f = || {
-            self.ensure_not_rejected(&file_id)?;
-            let xfile = self.xfer.files().get(&file_id).context("File not found")?;
+        let f = async {
+            self.state
+                .transfer_manager
+                .outgoing_ensure_file_not_rejected(self.xfer.id(), &file_id)
+                .await?;
+
+            let xfile = &self.xfer.files()[&file_id];
             let checksum = tokio::task::block_in_place(|| xfile.checksum(limit))?;
 
             anyhow::Ok(v4::ReportChsum {
@@ -204,7 +199,7 @@ impl HandlerLoop<'_> {
             })
         };
 
-        match f() {
+        match f.await {
             Ok(report) => {
                 socket
                     .send(Message::from(&v4::ClientMsg::ReportChsum(report)))
@@ -235,7 +230,10 @@ impl HandlerLoop<'_> {
         offset: u64,
     ) -> anyhow::Result<()> {
         let start = async {
-            self.ensure_not_rejected(&file_id)?;
+            self.state
+                .transfer_manager
+                .outgoing_ensure_file_not_rejected(self.xfer.id(), &file_id)
+                .await?;
 
             match self.tasks.entry(file_id.clone()) {
                 Entry::Occupied(o) => {
@@ -302,12 +300,7 @@ impl HandlerLoop<'_> {
                     task.job.abort();
                 }
 
-                let file = self
-                    .xfer
-                    .files()
-                    .get(&file_id)
-                    .expect("File should exists since we have a transfer task running");
-
+                let file = &self.xfer.files()[&file_id];
                 task.events
                     .stop(crate::Event::FileUploadFailed(
                         self.xfer.clone(),
@@ -322,18 +315,6 @@ impl HandlerLoop<'_> {
             }
         }
     }
-
-    fn ensure_not_rejected(&self, file_id: &FileId) -> crate::Result<()> {
-        let state = self
-            .state
-            .storage
-            .outgoing_file_sync_state(self.xfer.id(), file_id.as_ref())?
-            .ok_or(crate::Error::BadFileId)?;
-        if matches!(state.local_state, drop_storage::sync::FileState::Rejected) {
-            return Err(crate::Error::Rejected);
-        }
-        Ok(())
-    }
 }
 
 #[async_trait::async_trait]
@@ -346,6 +327,17 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
     async fn on_close(&mut self, by_peer: bool) {
         debug!(self.logger, "ClientHandler::on_close(by_peer: {})", by_peer);
+
+        if by_peer {
+            self.state
+                .event_tx
+                .send(crate::Event::OutgoingTransferCanceled(
+                    self.xfer.clone(),
+                    by_peer,
+                ))
+                .await
+                .expect("Could not send a transfer cancelled event, channel closed");
+        }
 
         self.xfer
             .files()
@@ -366,15 +358,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             });
 
         self.on_stop().await;
-
-        self.state
-            .event_tx
-            .send(crate::Event::OutgoingTransferCanceled(
-                self.xfer.clone(),
-                by_peer,
-            ))
-            .await
-            .expect("Could not send a transfer cancelled event, channel closed");
     }
 
     async fn on_recv(
@@ -412,7 +395,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             }
             Message::Close(_) => {
                 debug!(self.logger, "Got CLOSE frame");
-                self.on_close(true).await;
                 return Ok(ControlFlow::Break(()));
             }
             Message::Ping(_) => {
@@ -439,28 +421,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         });
 
         futures::future::join_all(tasks).await;
-    }
-
-    async fn finalize_failure(self, err: anyhow::Error) {
-        error!(self.logger, "Client failed on WS loop: {err:?}");
-
-        let err = match err.downcast::<crate::Error>() {
-            Ok(err) => err,
-            Err(err) => err.downcast::<tungstenite::Error>().map_or_else(
-                |err| crate::Error::BadTransferState(err.to_string()),
-                Into::into,
-            ),
-        };
-
-        self.state
-            .event_tx
-            .send(crate::Event::OutgoingTransferFailed(
-                self.xfer.clone(),
-                err,
-                false,
-            ))
-            .await
-            .expect("Event channel should always be open");
     }
 
     fn recv_timeout(&mut self) -> Option<Duration> {
