@@ -348,13 +348,12 @@ async fn main() -> anyhow::Result<()> {
     let task_result = listen(&mut service, storage, &mut rx, out_dir).await;
     info!("Stopping the service");
 
-    let stop_result = service.stop().await.context("Failed to stop");
+    service.stop().await;
 
     // Drain events
     while rx.recv().await.is_some() {}
 
     task_result?;
-    stop_result?;
 
     Ok(())
 }

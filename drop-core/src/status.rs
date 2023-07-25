@@ -4,7 +4,6 @@ pub enum Status {
     Canceled = 1,
     BadPath = 2,
     BadFile = 3,
-    ServiceStop = 6,
     BadTransfer = 7,
     BadTransferState = 8,
     BadFileId = 9,

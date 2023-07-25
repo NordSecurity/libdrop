@@ -10,8 +10,6 @@ pub enum Error {
     BadPath(String),
     #[error("Could not open file")]
     BadFile,
-    #[error("Service failed to stop")]
-    ServiceStop,
     #[error("Transfer not found")]
     BadTransfer,
     #[error("Invalid transfer state: {0}")]
@@ -82,7 +80,6 @@ impl From<&Error> for u32 {
             Error::Canceled => Status::Canceled as _,
             Error::BadPath(_) => Status::BadPath as _,
             Error::BadFile => Status::BadFile as _,
-            Error::ServiceStop => Status::ServiceStop as _,
             Error::BadTransfer => Status::BadTransfer as _,
             Error::BadTransferState(_) => Status::BadTransferState as _,
             Error::BadFileId => Status::BadFileId as _,

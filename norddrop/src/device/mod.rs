@@ -207,8 +207,8 @@ impl NordDropFFI {
                 .take()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
                 .stop()
-                .await
-                .map_err(|_| ffi::types::NORDDROP_RES_INSTANCE_STOP)
+                .await;
+            Ok(())
         })
     }
 
