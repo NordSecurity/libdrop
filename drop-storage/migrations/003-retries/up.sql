@@ -1,5 +1,8 @@
 -- Add migration script here
 
+PRAGMA foreign_keys = ON;
+
+
 ALTER TABLE outgoing_paths RENAME COLUMN base_path TO uri;
 
 UPDATE outgoing_paths SET uri = 'file:///' || uri || '/' || relative_path;
