@@ -169,13 +169,15 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                     Some(file.info()),
                 );
 
-                events
-                    .stop(crate::Event::FileDownloadCancelled(
-                        self.xfer.clone(),
-                        file.id().clone(),
-                        by_peer,
-                    ))
-                    .await;
+                if by_peer {
+                    events
+                        .stop(crate::Event::FileDownloadCancelled(
+                            self.xfer.clone(),
+                            file.id().clone(),
+                            by_peer,
+                        ))
+                        .await;
+                }
             }
         }
     }

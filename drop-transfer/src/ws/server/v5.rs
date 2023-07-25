@@ -233,13 +233,15 @@ impl HandlerLoop<'_> {
                     Some(file.info()),
                 );
 
-                events
-                    .stop(crate::Event::FileDownloadCancelled(
-                        self.xfer.clone(),
-                        file_id,
-                        by_peer,
-                    ))
-                    .await;
+                if by_peer {
+                    events
+                        .stop(crate::Event::FileDownloadCancelled(
+                            self.xfer.clone(),
+                            file_id,
+                            by_peer,
+                        ))
+                        .await;
+                }
             }
         }
     }
