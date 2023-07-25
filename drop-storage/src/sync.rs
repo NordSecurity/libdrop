@@ -346,12 +346,13 @@ pub(super) fn stop_incoming_file(
 
     let count = conn.execute(
         r#"
-        DELETE FROM sync_incoming_files_inflight sifi
-        WHERE sifi.sync_id, sifi.path_id IN (
-            SELECT st.sync_id, ip.id
-            FROM sync_transfer st
+        DELETE FROM sync_incoming_files_inflight
+        WHERE ROWID IN (
+            SELECT sifi.ROWID
+            FROM sync_incoming_files_inflight sifi
+            INNER JOIN sync_transfer st USING(sync_id)
             INNER JOIN transfers t ON t.id = st.transfer_id
-            INNER JOIN incoming_paths ip ON t.id = ip.transfer_id
+            INNER JOIN incoming_paths ip ON t.id = ip.transfer_id AND sifi.path_id = ip.id
             WHERE st.transfer_id = ?1 AND ip.path_hash = ?2
         )
         "#,
