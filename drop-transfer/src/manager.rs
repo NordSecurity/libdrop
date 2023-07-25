@@ -1041,7 +1041,7 @@ fn file_to_resume_from_path_uri(
 
     anyhow::ensure!(!meta.is_dir(), "Invalid file type");
 
-    FileToSend::new_to_send(subpath, fullpath, meta, file_id.clone())
+    FileToSend::new(subpath, fullpath, meta, file_id.clone())
         .with_context(|| format!("Failed to restore file {file_id} from DB"))
 }
 
