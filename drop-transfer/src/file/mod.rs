@@ -120,25 +120,27 @@ impl FileToSend {
     pub fn from_path(path: impl Into<PathBuf>, config: &DropConfig) -> Result<Vec<Self>, Error> {
         let path = path.into();
         let meta = fs::symlink_metadata(&path)?;
-        let file_id = file_id_from_path(&path)?;
+        let abspath = crate::utils::make_path_absolute(&path)?;
+        let file_id = file_id_from_path(&abspath)?;
 
         let files = if meta.is_dir() {
             Self::walk(&path, config)?
         } else {
-            let file = Self::new_to_send(FileSubPath::from_file_name(&path)?, path, meta, file_id)?;
+            let file = Self::new(FileSubPath::from_file_name(&path)?, abspath, meta, file_id)?;
             vec![file]
         };
 
         Ok(files)
     }
 
-    pub(crate) fn new_to_send(
+    pub(crate) fn new(
         subpath: FileSubPath,
-        path: PathBuf,
+        abspath: PathBuf,
         meta: fs::Metadata,
         file_id: FileId,
     ) -> Result<Self, Error> {
         assert!(!meta.is_dir(), "Did not expect directory metadata");
+        assert!(abspath.is_absolute(), "Expecting absolute path only");
 
         let mut options = OpenOptions::new();
         options.read(true);
@@ -146,7 +148,7 @@ impl FileToSend {
         options.custom_flags(libc::O_NOFOLLOW);
 
         // Check if we are allowed to read the file
-        let mut file = options.open(&path)?;
+        let mut file = options.open(&abspath)?;
         let mut buf = vec![0u8; HEADER_SIZE];
         let header_len = file.read(&mut buf)?;
         let mime_type = infer::get(&buf[0..header_len])
@@ -157,7 +159,7 @@ impl FileToSend {
             file_id,
             subpath,
             meta: Hidden(meta),
-            source: FileSource::Path(Hidden(path)),
+            source: FileSource::Path(Hidden(abspath)),
             mime_type: Some(Hidden(mime_type)),
         })
     }
@@ -251,8 +253,10 @@ impl FileToSend {
             let subpath = FileSubPath::from_path(subpath)?;
 
             let path = entry.into_path();
-            let file_id = file_id_from_path(&path)?;
-            let file = Self::new_to_send(subpath, path, meta, file_id)?;
+            let abspath = crate::utils::make_path_absolute(&path)?;
+            let file_id = file_id_from_path(&abspath)?;
+
+            let file = Self::new(subpath, abspath, meta, file_id)?;
             files.push(file);
         }
 
@@ -283,9 +287,8 @@ pub fn checksum(reader: &mut impl io::Read) -> io::Result<[u8; 32]> {
 }
 
 fn file_id_from_path(path: impl AsRef<Path>) -> crate::Result<FileId> {
-    let abs = crate::utils::make_path_absolute(path)?;
     let mut hash = sha2::Sha256::new();
-    hash.update(abs.to_string_lossy().as_bytes());
+    hash.update(path.as_ref().to_string_lossy().as_bytes());
     Ok(FileId::from(hash))
 }
 
