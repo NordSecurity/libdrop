@@ -1,10 +1,9 @@
-use std::{fs, ops::ControlFlow, path::PathBuf, sync::Arc, time::Duration};
+use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use tokio::sync::mpsc::Sender;
 use warp::ws::{Message, WebSocket};
 
-use super::ServerReq;
-use crate::{transfer::IncomingTransfer, utils::Hidden, ws};
+use crate::{transfer::IncomingTransfer, utils::Hidden, ws, FileId};
 
 #[async_trait::async_trait]
 pub trait HandlerInit {
@@ -26,18 +25,22 @@ pub trait HandlerInit {
 
 #[async_trait::async_trait]
 pub trait HandlerLoop {
-    async fn on_req(&mut self, ws: &mut WebSocket, req: ServerReq) -> anyhow::Result<()>;
-    async fn on_close(&mut self, by_peer: bool);
-    async fn on_recv(
+    async fn issue_download(
         &mut self,
         ws: &mut WebSocket,
-        msg: Message,
-    ) -> anyhow::Result<ControlFlow<()>>;
+        task: super::FileXferTask,
+    ) -> anyhow::Result<()>;
+    async fn issue_cancel(&mut self, ws: &mut WebSocket, file: FileId) -> anyhow::Result<()>;
+    async fn issue_reject(&mut self, ws: &mut WebSocket, file: FileId) -> anyhow::Result<()>;
+
+    async fn on_close(&mut self, by_peer: bool);
+    async fn on_text_msg(&mut self, ws: &mut WebSocket, text: &str) -> anyhow::Result<()>;
+    async fn on_bin_msg(&mut self, ws: &mut WebSocket, bytes: Vec<u8>) -> anyhow::Result<()>;
+
     async fn on_stop(&mut self);
-    async fn finalize_failure(self, err: anyhow::Error);
     async fn finalize_success(self);
 
-    fn recv_timeout(&mut self) -> Option<Duration>;
+    fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration>;
 }
 
 pub trait Request {

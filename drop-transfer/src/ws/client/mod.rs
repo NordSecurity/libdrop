@@ -4,8 +4,7 @@ mod v4;
 mod v5;
 
 use std::{
-    collections::hash_map::Entry,
-    fs, io,
+    io,
     net::{IpAddr, SocketAddr},
     ops::ControlFlow,
     sync::Arc,
@@ -28,15 +27,13 @@ use tokio_tungstenite::{
     tungstenite::{self, client::IntoClientRequest, protocol::Role, Message},
     WebSocketStream,
 };
-use tokio_util::sync::CancellationToken;
 
 use self::handler::{HandlerInit, HandlerLoop, Uploader};
 use super::events::FileEventTx;
 use crate::{
     auth,
     error::ResultExt,
-    file::{File, FileId, FileSubPath, FileToSend},
-    manager::{OutgoingState, Rejections, TransferGuard},
+    file::{File, FileId},
     protocol,
     service::State,
     transfer::Transfer,
@@ -47,7 +44,6 @@ use crate::{
 pub type WebSocket = WebSocketStream<TcpStream>;
 
 pub enum ClientReq {
-    Cancel { file: FileId },
     Reject { file: FileId },
 }
 
@@ -62,84 +58,16 @@ pub(crate) async fn run(state: Arc<State>, xfer: Arc<OutgoingTransfer>, logger: 
     loop {
         let cf = connect_to_peer(&state, &xfer, &logger).await;
         if cf.is_break() {
+            if let Err(err) = state.transfer_manager.outgoing_remove(xfer.id()).await {
+                warn!(
+                    logger,
+                    "Failed to clear sync state for {}: {err}",
+                    xfer.id()
+                );
+            }
+
             return;
         }
-    }
-}
-
-pub(crate) async fn resume(state: &Arc<State>, stop: &CancellationToken, logger: &Logger) {
-    let transfers = match state.storage.transfers_to_retry() {
-        Ok(transfers) => transfers,
-        Err(err) => {
-            error!(logger, "Failed to restore pedning transfers form DB: {err}");
-            return;
-        }
-    };
-
-    for transfer in transfers {
-        let task = {
-            let state = state.clone();
-            let logger = logger.clone();
-
-            async move {
-                let restore_transfer = || {
-                    let files = transfer
-                        .files
-                        .into_iter()
-                        .map(|dbfile| {
-                            let file_id: FileId = dbfile.file_id.into();
-                            let subpath: FileSubPath = dbfile.subpath.into();
-                            let uri = dbfile.uri;
-
-                            let file = match uri.scheme() {
-                                "file" => file_to_resume_from_path_uri(&uri, subpath, file_id)?,
-                                #[cfg(unix)]
-                                "content" => {
-                                    file_to_resume_from_content_uri(&state, uri, subpath, file_id)?
-                                }
-                                unknown => anyhow::bail!("Unknon URI schema: {unknown}"),
-                            };
-
-                            anyhow::Ok(file)
-                        })
-                        .collect::<Result<_, _>>()?;
-
-                    let xfer = OutgoingTransfer::new_with_uuid(
-                        transfer.peer.parse().context("Failed to parse peer IP")?,
-                        files,
-                        transfer.uuid,
-                        &state.config,
-                    )
-                    .context("Failed to create transfer")?;
-
-                    anyhow::Ok(xfer)
-                };
-
-                let xfer = match restore_transfer() {
-                    Ok(xfer) => xfer,
-                    Err(err) => {
-                        error!(logger, "Failed to restore transfer: {err}");
-                        return;
-                    }
-                };
-
-                run(state, Arc::new(xfer), logger).await
-            }
-        };
-
-        let logger = logger.clone();
-        let stop = stop.clone();
-
-        tokio::spawn(async move {
-            tokio::select! {
-                biased;
-
-                _ = stop.cancelled() => {
-                    warn!(logger, "Aborting transfer resume");
-                },
-                _ = task => (),
-            }
-        });
     }
 }
 
@@ -173,12 +101,15 @@ async fn connect_to_peer(
     };
 
     use protocol::Version;
-    match ver {
+    let control = match ver {
         Version::V1 => ctx.run(v2::HandlerInit::<false>::new(state, logger)).await,
         Version::V2 => ctx.run(v2::HandlerInit::<true>::new(state, logger)).await,
         Version::V4 => ctx.run(v4::HandlerInit::new(state, logger)).await,
         Version::V5 => ctx.run(v5::HandlerInit::new(state, logger)).await,
-    }
+    };
+
+    let _ = state.transfer_manager.outgoing_disconnect(xfer.id()).await;
+    control
 }
 
 async fn establish_ws_conn(
@@ -315,45 +246,46 @@ impl RunContext<'_> {
     async fn start(
         &mut self,
         handler: &mut impl HandlerInit,
-    ) -> crate::Result<UnboundedReceiver<ClientReq>> {
+    ) -> crate::Result<Option<UnboundedReceiver<ClientReq>>> {
         handler.start(&mut self.socket, self.xfer).await?;
 
         let (tx, rx) = mpsc::unbounded_channel();
-
         match self
             .state
             .transfer_manager
-            .outgoing
-            .lock()
+            .outgoing_connected(self.xfer.id(), tx)
             .await
-            .entry(self.xfer.id())
         {
-            Entry::Occupied(_) => {
-                return Err(crate::Error::BadTransferState(
-                    "Transfer already exists".into(),
-                ))
-            }
-            Entry::Vacant(entry) => entry.insert(OutgoingState {
-                xfer: self.xfer.clone(),
-                conn: tx,
-                rejections: Rejections::new(self.xfer.clone()),
-            }),
-        };
+            Ok(()) => (),
+            Err(crate::Error::BadTransfer) => return Ok(None),
+            Err(err) => return Err(err),
+        }
 
-        self.state
-            .event_tx
-            .send(Event::RequestQueued(self.xfer.clone()))
-            .await
-            .expect("Could not send a RequestQueued event, channel closed");
-
-        Ok(rx)
+        Ok(Some(rx))
     }
 
     async fn run(mut self, mut handler: impl HandlerInit) -> ControlFlow<()> {
-        let _guard = TransferGuard::new(self.state.clone(), self.xfer.id());
-
         let mut api_req_rx = match self.start(&mut handler).await {
-            Ok(rx) => rx,
+            Ok(Some(rx)) => rx,
+            Ok(None) => {
+                let task = async {
+                    self.socket
+                        .close(None)
+                        .await
+                        .context("Failed to close WS")?;
+                    self.drain_socket()
+                        .await
+                        .context("Failed to drain socket")?;
+                    anyhow::Ok(())
+                };
+                if let Err(err) = task.await {
+                    error!(self.logger, "Failed to close socket on start: {err:?}");
+                } else {
+                    info!(self.logger, "Socket closed on start");
+                }
+
+                return ControlFlow::Break(());
+            }
             Err(err) => {
                 error!(
                     self.logger,
@@ -361,13 +293,6 @@ impl RunContext<'_> {
                     self.xfer.id(),
                     err
                 );
-
-                self.state
-                    .event_tx
-                    .send(Event::OutgoingTransferFailed(self.xfer.clone(), err, false))
-                    .await
-                    .expect("Failed to send TransferFailed event");
-
                 return ControlFlow::Continue(());
             }
         };
@@ -375,6 +300,7 @@ impl RunContext<'_> {
         let (upload_tx, mut upload_rx) = mpsc::channel(2);
         let mut ping = handler.pinger();
         let mut handler = handler.upgrade(upload_tx, self.xfer.clone());
+        let mut last_recv = Instant::now();
 
         let task = async {
             loop {
@@ -384,7 +310,7 @@ impl RunContext<'_> {
                     // API request
                     req = api_req_rx.recv() => {
                         if let Some(req) = req {
-                            handler.on_req(&mut self.socket, req).await.context("Handler on API req")?;
+                            on_req(&mut self.socket, &mut handler, req).await.context("Handler on API req")?;
                         } else {
                             debug!(self.logger, "Stopping client connection gracefuly");
                             self.socket.close(None).await.context("Failed to close WS")?;
@@ -393,14 +319,12 @@ impl RunContext<'_> {
                         };
                     },
                     // Message received
-                    recv = super::utils::recv(&mut self.socket, handler.recv_timeout()) => {
-                        match recv? {
-                            Some(msg) => {
-                                if handler.on_recv(&mut self.socket, msg).await.context("Handler on recv")?.is_break() {
-                                    break;
-                                }
-                            },
-                            None => break,
+                    recv = super::utils::recv(&mut self.socket, handler.recv_timeout(last_recv.elapsed())) => {
+                        let msg =  recv?.context("Failed to receive WS message")?;
+                        last_recv = Instant::now();
+
+                        if on_recv(&mut self.socket, &mut handler, msg, self.logger).await.context("Handler on recv")?.is_break() {
+                            break;
                         }
                     },
                     // Message to send down the wire
@@ -421,16 +345,15 @@ impl RunContext<'_> {
         handler.on_stop().await;
 
         if let Err(err) = result {
-            handler.finalize_failure(err).await;
+            info!(
+                self.logger,
+                "WS connection broke for {}: {err:?}",
+                self.xfer.id()
+            );
+
             ControlFlow::Continue(())
         } else {
-            let task = async {
-                // Drain messages
-                while self.socket.next().await.transpose()?.is_some() {}
-                anyhow::Ok(())
-            };
-
-            if let Err(err) = task.await {
+            if let Err(err) = self.drain_socket().await {
                 warn!(
                     self.logger,
                     "Failed to gracefully close the client connection: {err}"
@@ -441,6 +364,11 @@ impl RunContext<'_> {
 
             ControlFlow::Break(())
         }
+    }
+
+    async fn drain_socket(&mut self) -> crate::Result<()> {
+        while self.socket.next().await.transpose()?.is_some() {}
+        Ok(())
     }
 }
 
@@ -553,39 +481,42 @@ async fn acquire_throttle_permit<'a>(
     }
 }
 
-fn file_to_resume_from_path_uri(
-    uri: &url::Url,
-    subpath: FileSubPath,
-    file_id: FileId,
-) -> anyhow::Result<FileToSend> {
-    let fullpath = uri
-        .to_file_path()
-        .ok()
-        .context("Failed to extract file path")?;
+async fn on_req(
+    socket: &mut WebSocket,
+    handler: &mut impl HandlerLoop,
+    req: ClientReq,
+) -> anyhow::Result<()> {
+    match req {
+        ClientReq::Reject { file } => handler.issue_reject(socket, file).await?,
+    }
 
-    let meta = fs::symlink_metadata(&fullpath)
-        .with_context(|| format!("Failed to load file: {}", file_id))?;
-
-    anyhow::ensure!(!meta.is_dir(), "Invalid file type");
-
-    FileToSend::new_to_send(subpath, fullpath, meta, file_id.clone())
-        .with_context(|| format!("Failed to restore file {file_id} from DB"))
+    Ok(())
 }
 
-#[cfg(unix)]
-fn file_to_resume_from_content_uri(
-    state: &State,
-    uri: url::Url,
-    subpath: FileSubPath,
-    file_id: FileId,
-) -> anyhow::Result<FileToSend> {
-    let callback = state
-        .fdresolv
-        .as_ref()
-        .context("Encountered content uri but FD resovler callback is missing")?;
+async fn on_recv(
+    socket: &mut WebSocket,
+    handler: &mut impl HandlerLoop,
+    msg: Message,
+    logger: &slog::Logger,
+) -> anyhow::Result<ControlFlow<()>> {
+    match msg {
+        Message::Text(text) => {
+            debug!(logger, "Received:\n\t{text}");
+            handler.on_text_msg(socket, text).await?;
+        }
+        Message::Close(_) => {
+            debug!(logger, "Got CLOSE frame");
+            handler.on_close(true).await;
+            return Ok(ControlFlow::Break(()));
+        }
+        Message::Ping(_) => {
+            debug!(logger, "PING");
+        }
+        Message::Pong(_) => {
+            debug!(logger, "PONG");
+        }
+        _ => warn!(logger, "Client received invalid WS message type"),
+    }
 
-    let fd = callback(uri.as_str()).with_context(|| format!("Failed to fetch FD for: {uri}"))?;
-
-    FileToSend::new_from_fd(subpath, uri, fd, file_id.clone())
-        .with_context(|| format!("Failed to restore file {file_id} from DB"))
+    Ok(ControlFlow::Continue(()))
 }

@@ -6,6 +6,7 @@
 * Add `norddrop_set_fd_resolver_callback()` function for providing the content URI callback for Android
 * Add `max_requests_per_sec` config option to limit the requests on per-peer basis
 * Add file descriptors resolver callback based on content URI - Unix platform only
+* Fix database foreign keys not being enabled
 
 ---
 <br>
