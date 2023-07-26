@@ -617,16 +617,6 @@ impl FileXferTask {
                 offset,
                 tmp_location,
             } => {
-                let transfer_time = Instant::now();
-
-                state.moose.service_quality_transfer_file(
-                    Ok(()),
-                    drop_analytics::Phase::Start,
-                    self.xfer.id().to_string(),
-                    0,
-                    Some(self.file.info()),
-                );
-
                 events
                     .start(crate::Event::FileDownloadStarted(
                         self.xfer.clone(),
@@ -657,14 +647,7 @@ impl FileXferTask {
                     warn!(logger, "Failed to store download finish: {err}");
                 }
 
-                state.moose.service_quality_transfer_file(
-                    result.to_status(),
-                    drop_analytics::Phase::End,
-                    self.xfer.id().to_string(),
-                    transfer_time.elapsed().as_millis() as i32,
-                    Some(self.file.info()),
-                );
-
+                let status = result.to_status();
                 let event = match result {
                     Ok(dst_location) => Some(Event::FileDownloadSuccess(
                         self.xfer.clone(),
@@ -685,7 +668,7 @@ impl FileXferTask {
                 };
 
                 if let Some(event) = event {
-                    events.stop(event).await;
+                    events.stop(event, status).await;
                 }
             }
         }

@@ -35,7 +35,7 @@ pub struct TransferInfo {
     pub file_count: i32,
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct FileInfo {
     pub mime_type: String,
     pub extension: String,

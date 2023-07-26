@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::Context;
+use drop_core::Status;
 use futures::SinkExt;
 use slog::{debug, error};
 use tokio::{sync::mpsc::Sender, task::JoinHandle};
@@ -83,22 +84,11 @@ impl HandlerLoop<'_> {
             if !task.job.is_finished() {
                 task.job.abort();
 
-                let file = &self.xfer.files()[&file_id];
-
-                self.state.moose.service_quality_transfer_file(
-                    Err(u32::from(&crate::Error::Canceled) as i32),
-                    drop_analytics::Phase::End,
-                    self.xfer.id().to_string(),
-                    0,
-                    Some(file.info()),
-                );
-
                 task.events
-                    .stop(crate::Event::FileUploadCancelled(
-                        self.xfer.clone(),
-                        file.id().clone(),
-                        by_peer,
-                    ))
+                    .stop(
+                        crate::Event::FileUploadCancelled(self.xfer.clone(), file_id, by_peer),
+                        Err(Status::Canceled as _),
+                    )
                     .await;
             }
         }
@@ -120,7 +110,7 @@ impl HandlerLoop<'_> {
         let event = crate::Event::FileUploadSuccess(self.xfer.clone(), file_id.clone());
 
         if let Some(task) = self.tasks.remove(&file_id) {
-            task.events.stop(event).await;
+            task.events.stop(event, Ok(())).await;
         } else if !self.done.contains(&file_id) {
             self.state
                 .event_tx
@@ -255,15 +245,15 @@ impl HandlerLoop<'_> {
                     task.job.abort();
                 }
 
-                let file = &self.xfer.files()[&file_id];
+                let err =
+                    crate::Error::BadTransferState(format!("Receiver reported an error: {msg}"));
+                let status = i32::from(&err);
+
                 task.events
-                    .stop(crate::Event::FileUploadFailed(
-                        self.xfer.clone(),
-                        file.id().clone(),
-                        crate::Error::BadTransferState(format!(
-                            "Receiver reported an error: {msg}"
-                        )),
-                    ))
+                    .stop(
+                        crate::Event::FileUploadFailed(self.xfer.clone(), file_id.clone(), err),
+                        Err(status),
+                    )
                     .await;
 
                 self.done.insert(file_id);
@@ -294,24 +284,17 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
                 task.job.abort();
 
                 task.events
-                    .stop(crate::Event::FileUploadCancelled(
-                        self.xfer.clone(),
-                        file_id.clone(),
-                        false,
-                    ))
+                    .stop(
+                        crate::Event::FileUploadCancelled(
+                            self.xfer.clone(),
+                            file_id.clone(),
+                            false,
+                        ),
+                        Err(Status::FileRejected as _),
+                    )
                     .await;
             }
         }
-
-        let file = &self.xfer.files()[&file_id];
-
-        self.state.moose.service_quality_transfer_file(
-            Err(drop_core::Status::FileRejected as i32),
-            drop_analytics::Phase::End,
-            self.xfer.id().to_string(),
-            0,
-            Some(file.info()),
-        );
 
         Ok(())
     }
@@ -328,24 +311,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
                 .await
                 .expect("Could not send a transfer cancelled event, channel closed");
         }
-
-        self.xfer
-            .files()
-            .values()
-            .filter(|file| {
-                self.tasks
-                    .get(file.id())
-                    .map_or(false, |task| !task.job.is_finished())
-            })
-            .for_each(|file| {
-                self.state.moose.service_quality_transfer_file(
-                    Err(u32::from(&crate::Error::Canceled) as i32),
-                    drop_analytics::Phase::End,
-                    self.xfer.id().to_string(),
-                    0,
-                    Some(file.info()),
-                )
-            });
 
         self.on_stop().await;
     }
@@ -446,7 +411,11 @@ impl FileTask {
         file_id: FileId,
         offset: u64,
     ) -> anyhow::Result<Self> {
-        let events = Arc::new(ws::events::FileEventTx::new(&state));
+        let events = Arc::new(ws::events::FileEventTx::new(
+            &state,
+            xfer.id(),
+            xfer.files()[&file_id].info(),
+        ));
 
         let uploader = Uploader {
             sink,

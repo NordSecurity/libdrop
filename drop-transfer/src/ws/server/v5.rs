@@ -6,6 +6,7 @@ use std::{
 use anyhow::Context;
 use async_cell::sync::AsyncCell;
 use drop_config::DropConfig;
+use drop_core::Status;
 use futures::{SinkExt, StreamExt};
 use slog::{debug, error, info, warn};
 use tokio::{
@@ -223,23 +224,16 @@ impl HandlerLoop<'_> {
             if !task.is_finished() {
                 task.abort();
 
-                let file = &self.xfer.files()[&file_id];
-
-                self.state.moose.service_quality_transfer_file(
-                    Err(u32::from(&crate::Error::Canceled) as i32),
-                    drop_analytics::Phase::End,
-                    self.xfer.id().to_string(),
-                    0,
-                    Some(file.info()),
-                );
-
                 if by_peer {
                     events
-                        .stop(crate::Event::FileDownloadCancelled(
-                            self.xfer.clone(),
-                            file_id,
-                            by_peer,
-                        ))
+                        .stop(
+                            crate::Event::FileDownloadCancelled(
+                                self.xfer.clone(),
+                                file_id,
+                                by_peer,
+                            ),
+                            Err(Status::Canceled as _),
+                        )
                         .await;
                 }
             }
@@ -271,24 +265,17 @@ impl HandlerLoop<'_> {
                 task.abort();
 
                 events
-                    .stop(crate::Event::FileDownloadCancelled(
-                        self.xfer.clone(),
-                        file_id.clone(),
-                        by_peer,
-                    ))
+                    .stop(
+                        crate::Event::FileDownloadCancelled(
+                            self.xfer.clone(),
+                            file_id.clone(),
+                            by_peer,
+                        ),
+                        Err(Status::FileRejected as _),
+                    )
                     .await;
             }
         }
-
-        let file = &self.xfer.files()[&file_id];
-
-        self.state.moose.service_quality_transfer_file(
-            Err(drop_core::Status::FileRejected as i32),
-            drop_analytics::Phase::End,
-            self.xfer.id().to_string(),
-            0,
-            Some(file.info()),
-        );
 
         if by_peer {
             self.state
@@ -320,14 +307,15 @@ impl HandlerLoop<'_> {
                 if !task.is_finished() {
                     task.abort();
 
+                    let err =
+                        crate::Error::BadTransferState(format!("Sender reported an error: {msg}"));
+                    let status = i32::from(&err);
+
                     events
-                        .stop(crate::Event::FileDownloadFailed(
-                            self.xfer.clone(),
-                            file_id,
-                            crate::Error::BadTransferState(format!(
-                                "Sender reported an error: {msg}"
-                            )),
-                        ))
+                        .stop(
+                            crate::Event::FileDownloadFailed(self.xfer.clone(), file_id, err),
+                            Err(status),
+                        )
                         .await;
                 }
             }
@@ -456,24 +444,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
                 .await
                 .expect("Could not send a file cancelled event, channel closed");
         }
-
-        self.xfer
-            .files()
-            .values()
-            .filter(|file| {
-                self.jobs
-                    .get(file.id())
-                    .map_or(false, |state| !state.job.is_finished())
-            })
-            .for_each(|file| {
-                self.state.moose.service_quality_transfer_file(
-                    Err(u32::from(&crate::Error::Canceled) as i32),
-                    drop_analytics::Phase::End,
-                    self.xfer.id().to_string(),
-                    0,
-                    Some(file.info()),
-                );
-            });
 
         self.on_stop().await;
     }
@@ -718,7 +688,7 @@ impl FileTask {
         full_csum: Arc<AsyncCell<[u8; 32]>>,
         logger: slog::Logger,
     ) -> Self {
-        let events = Arc::new(FileEventTx::new(&state));
+        let events = Arc::new(FileEventTx::new(&state, task.xfer.id(), task.file.info()));
         let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
         let (csum_tx, csum_rx) = mpsc::channel(4);
 
