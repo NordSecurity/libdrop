@@ -6873,4 +6873,93 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario33",
+        "Create transfer by specifing relative file path. Expect file to be resolved and stored in the DB",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    action.NewTransfer(
+                        "172.20.0.15", ["../tmp/testfile-small"]
+                    ),  # CWD is /src
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.15",
+                        "created_at": "*",
+                        "states": [
+                            {
+                                "created_at": "*",
+                                "state": "cancel",
+                                "by_peer": false
+                            }
+                        ],
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "base_path": "/tmp",
+                                "bytes": 1048576,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                    action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "init",
+                            "phase": "start",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }""",
+                            """{
+                            "type": "batch",
+                            "phase": "start",
+                            "transfer_id": "*",
+                            "info": {
+                                "mime_type_list": "unknown",
+                                "extension_list": "none",
+                                "file_size_list": "1024",
+                                "transfer_size_kb": 1024,
+                                "file_count": 1
+                            }
+                        }""",
+                            """{
+                            "type": "init",
+                            "phase": "end",
+                            "result": 0,
+                            "app_version": "*",
+                            "prod": false
+                        }""",
+                        ]
+                    ),
+                ]
+            ),
+        },
+    ),
 ]
