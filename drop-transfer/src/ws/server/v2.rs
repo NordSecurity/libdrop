@@ -2,10 +2,9 @@ use std::{
     collections::HashMap,
     fs,
     net::IpAddr,
-    ops::ControlFlow,
     path::PathBuf,
     sync::Arc,
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, SystemTime},
 };
 
 use anyhow::Context;
@@ -19,7 +18,7 @@ use tokio::{
 };
 use warp::ws::{Message, WebSocket};
 
-use super::{handler, ServerReq};
+use super::handler;
 use crate::{
     file::FileSubPath,
     protocol::v2,
@@ -41,7 +40,6 @@ pub struct HandlerLoop<'a, const PING: bool> {
     logger: &'a slog::Logger,
     msg_tx: Sender<Message>,
     xfer: Arc<IncomingTransfer>,
-    last_recv: Instant,
     jobs: HashMap<FileSubPath, FileTask>,
 }
 
@@ -116,7 +114,6 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
             state,
             msg_tx,
             xfer,
-            last_recv: Instant::now(),
             jobs: HashMap::new(),
             logger,
         })
@@ -128,7 +125,102 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
 }
 
 impl<const PING: bool> HandlerLoop<'_, PING> {
-    fn issue_download(
+    async fn on_chunk(
+        &mut self,
+        socket: &mut WebSocket,
+        file: FileSubPath,
+        chunk: Vec<u8>,
+    ) -> anyhow::Result<()> {
+        if let Some(task) = self.jobs.get(&file) {
+            if let Err(err) = task.chunks_tx.send(chunk) {
+                let msg = v2::Error {
+                    msg: format!("Failed to consue chunk for file: {file:?}, msg: {err}",),
+                    file: Some(file),
+                };
+
+                socket
+                    .send(Message::from(&v2::ServerMsg::Error(msg)))
+                    .await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn on_cancel(&mut self, file: FileSubPath, by_peer: bool) {
+        if let Some(FileTask {
+            job: task,
+            events,
+            chunks_tx: _,
+        }) = self.jobs.remove(&file)
+        {
+            if !task.is_finished() {
+                task.abort();
+                let file = self
+                    .xfer
+                    .file_by_subpath(&file)
+                    .expect("File should exists since we have a transfer task running");
+
+                self.state.moose.service_quality_transfer_file(
+                    Err(u32::from(&crate::Error::Canceled) as i32),
+                    drop_analytics::Phase::End,
+                    self.xfer.id().to_string(),
+                    0,
+                    Some(file.info()),
+                );
+
+                if by_peer {
+                    events
+                        .stop(crate::Event::FileDownloadCancelled(
+                            self.xfer.clone(),
+                            file.id().clone(),
+                            by_peer,
+                        ))
+                        .await;
+                }
+            }
+        }
+    }
+
+    async fn on_error(&mut self, file: Option<FileSubPath>, msg: String) {
+        error!(
+            self.logger,
+            "Client reported and error: file: {:?}, message: {}", file, msg
+        );
+
+        if let Some(file) = file {
+            if let Some(FileTask {
+                job: task,
+                events,
+                chunks_tx: _,
+            }) = self.jobs.remove(&file)
+            {
+                if !task.is_finished() {
+                    task.abort();
+
+                    let file = self
+                        .xfer
+                        .file_by_subpath(&file)
+                        .expect("File should exists since we have a transfer task running");
+
+                    events
+                        .stop(crate::Event::FileDownloadFailed(
+                            self.xfer.clone(),
+                            file.id().clone(),
+                            crate::Error::BadTransferState(format!(
+                                "Sender reported an error: {msg}"
+                            )),
+                        ))
+                        .await;
+                }
+            }
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
+    async fn issue_download(
         &mut self,
         _: &mut WebSocket,
         task: super::FileXferTask,
@@ -198,6 +290,11 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         });
         socket.send(Message::from(&msg)).await?;
 
+        self.state
+            .transfer_manager
+            .incoming_rejection_ack(self.xfer.id(), &file_id)
+            .await?;
+
         if let Some(FileTask {
             job: task,
             events,
@@ -217,134 +314,31 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
             }
         }
 
-        if let Some(file) = self.xfer.files().get(&file_id) {
-            self.state.moose.service_quality_transfer_file(
-                Err(drop_core::Status::FileRejected as i32),
-                drop_analytics::Phase::End,
-                self.xfer.id().to_string(),
-                0,
-                Some(file.info()),
-            );
-
-            self.state
-                .event_tx
-                .send(crate::Event::FileDownloadRejected {
-                    transfer_id: self.xfer.id(),
-                    file_id,
-                    by_peer: false,
-                })
-                .await
-                .expect("Event channel should be open");
-        }
-
-        Ok(())
-    }
-
-    async fn on_chunk(
-        &mut self,
-        socket: &mut WebSocket,
-        file: FileSubPath,
-        chunk: Vec<u8>,
-    ) -> anyhow::Result<()> {
-        if let Some(task) = self.jobs.get(&file) {
-            if let Err(err) = task.chunks_tx.send(chunk) {
-                let msg = v2::Error {
-                    msg: format!("Failed to consue chunk for file: {file:?}, msg: {err}",),
-                    file: Some(file),
-                };
-
-                socket
-                    .send(Message::from(&v2::ServerMsg::Error(msg)))
-                    .await?;
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn on_cancel(&mut self, file: FileSubPath, by_peer: bool) {
-        if let Some(FileTask {
-            job: task,
-            events,
-            chunks_tx: _,
-        }) = self.jobs.remove(&file)
-        {
-            if !task.is_finished() {
-                task.abort();
-                let file = self
-                    .xfer
-                    .file_by_subpath(&file)
-                    .expect("File should exists since we have a transfer task running");
-
-                self.state.moose.service_quality_transfer_file(
-                    Err(u32::from(&crate::Error::Canceled) as i32),
-                    drop_analytics::Phase::End,
-                    self.xfer.id().to_string(),
-                    0,
-                    Some(file.info()),
-                );
-
-                events
-                    .stop(crate::Event::FileDownloadCancelled(
-                        self.xfer.clone(),
-                        file.id().clone(),
-                        by_peer,
-                    ))
-                    .await;
-            }
-        }
-    }
-
-    async fn on_error(&mut self, file: Option<FileSubPath>, msg: String) {
-        error!(
-            self.logger,
-            "Client reported and error: file: {:?}, message: {}", file, msg
+        let file = &self.xfer.files()[&file_id];
+        self.state.moose.service_quality_transfer_file(
+            Err(drop_core::Status::FileRejected as i32),
+            drop_analytics::Phase::End,
+            self.xfer.id().to_string(),
+            0,
+            Some(file.info()),
         );
-
-        if let Some(file) = file {
-            if let Some(FileTask {
-                job: task,
-                events,
-                chunks_tx: _,
-            }) = self.jobs.remove(&file)
-            {
-                if !task.is_finished() {
-                    task.abort();
-
-                    let file = self
-                        .xfer
-                        .file_by_subpath(&file)
-                        .expect("File should exists since we have a transfer task running");
-
-                    events
-                        .stop(crate::Event::FileDownloadFailed(
-                            self.xfer.clone(),
-                            file.id().clone(),
-                            crate::Error::BadTransferState(format!(
-                                "Sender reported an error: {msg}"
-                            )),
-                        ))
-                        .await;
-                }
-            }
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
-    async fn on_req(&mut self, ws: &mut WebSocket, req: ServerReq) -> anyhow::Result<()> {
-        match req {
-            ServerReq::Download { task } => self.issue_download(ws, *task)?,
-            ServerReq::Cancel { file } => self.issue_cancel(ws, file).await?,
-            ServerReq::Reject { file } => self.issue_reject(ws, file).await?,
-        }
 
         Ok(())
     }
 
     async fn on_close(&mut self, by_peer: bool) {
         debug!(self.logger, "ServerHandler::on_close(by_peer: {})", by_peer);
+
+        if by_peer {
+            self.state
+                .event_tx
+                .send(crate::Event::IncomingTransferCanceled(
+                    self.xfer.clone(),
+                    by_peer,
+                ))
+                .await
+                .expect("Could not send a file cancelled event, channel closed");
+        }
 
         self.xfer
             .files()
@@ -365,51 +359,27 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
             });
 
         self.on_stop().await;
-
-        self.state
-            .event_tx
-            .send(crate::Event::IncomingTransferCanceled(
-                self.xfer.clone(),
-                by_peer,
-            ))
-            .await
-            .expect("Could not send a file cancelled event, channel closed");
     }
 
-    async fn on_recv(
-        &mut self,
-        ws: &mut WebSocket,
-        msg: Message,
-    ) -> anyhow::Result<ControlFlow<()>> {
-        self.last_recv = Instant::now();
+    async fn on_text_msg(&mut self, _: &mut WebSocket, text: &str) -> anyhow::Result<()> {
+        let msg: v2::ClientMsg =
+            serde_json::from_str(text).context("Failed to deserialize json")?;
 
-        if let Ok(json) = msg.to_str() {
-            let msg: v2::ClientMsg =
-                serde_json::from_str(json).context("Failed to deserialize json")?;
-
-            match msg {
-                v2::ClientMsg::Error(v2::Error { file, msg }) => self.on_error(file, msg).await,
-                v2::ClientMsg::Cancel(v2::Download { file }) => self.on_cancel(file, true).await,
-            }
-        } else if msg.is_binary() {
-            let v2::Chunk { file, data } =
-                v2::Chunk::decode(msg.into_bytes()).context("Failed to decode file chunk")?;
-
-            self.on_chunk(ws, file, data).await?;
-        } else if msg.is_close() {
-            debug!(self.logger, "Got CLOSE frame");
-            self.on_close(true).await;
-
-            return Ok(ControlFlow::Break(()));
-        } else if msg.is_ping() {
-            debug!(self.logger, "PING");
-        } else if msg.is_pong() {
-            debug!(self.logger, "PONG");
-        } else {
-            warn!(self.logger, "Server received invalid WS message type");
+        match msg {
+            v2::ClientMsg::Error(v2::Error { file, msg }) => self.on_error(file, msg).await,
+            v2::ClientMsg::Cancel(v2::Download { file }) => self.on_cancel(file, true).await,
         }
 
-        anyhow::Ok(ControlFlow::Continue(()))
+        Ok(())
+    }
+
+    async fn on_bin_msg(&mut self, ws: &mut WebSocket, bytes: Vec<u8>) -> anyhow::Result<()> {
+        let v2::Chunk { file, data } =
+            v2::Chunk::decode(bytes).context("Failed to decode file chunk")?;
+
+        self.on_chunk(ws, file, data).await?;
+
+        Ok(())
     }
 
     async fn on_stop(&mut self) {
@@ -426,37 +396,15 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         futures::future::join_all(tasks).await;
     }
 
-    async fn finalize_failure(self, err: anyhow::Error) {
-        error!(self.logger, "Server failed to handle WS message: {:?}", err);
-
-        let err = match err.downcast::<crate::Error>() {
-            Ok(err) => err,
-            Err(err) => err.downcast::<warp::Error>().map_or_else(
-                |err| crate::Error::BadTransferState(err.to_string()),
-                Into::into,
-            ),
-        };
-
-        self.state
-            .event_tx
-            .send(crate::Event::IncomingTransferFailed(
-                self.xfer.clone(),
-                err,
-                true,
-            ))
-            .await
-            .expect("Event channel should always be open");
-    }
-
     async fn finalize_success(self) {}
 
-    fn recv_timeout(&mut self) -> Option<Duration> {
+    fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration> {
         if PING {
             Some(
                 self.state
                     .config
                     .transfer_idle_lifetime
-                    .saturating_sub(self.last_recv.elapsed()),
+                    .saturating_sub(last_recv_elapsed),
             )
         } else {
             None

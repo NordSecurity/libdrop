@@ -1,12 +1,6 @@
 use std::{
-    cmp::Ordering,
-    collections::HashMap,
-    fs, io,
-    net::IpAddr,
-    ops::ControlFlow,
-    path::PathBuf,
-    sync::Arc,
-    time::{Duration, Instant},
+    cmp::Ordering, collections::HashMap, fs, io, net::IpAddr, path::PathBuf, sync::Arc,
+    time::Duration,
 };
 
 use anyhow::Context;
@@ -20,7 +14,7 @@ use tokio::{
 };
 use warp::ws::{Message, WebSocket};
 
-use super::{handler, ServerReq};
+use super::handler;
 use crate::{
     file::{self, FileToRecv},
     protocol::v5 as prot,
@@ -42,7 +36,6 @@ pub struct HandlerLoop<'a> {
     logger: &'a slog::Logger,
     msg_tx: Sender<Message>,
     xfer: Arc<IncomingTransfer>,
-    last_recv: Instant,
     jobs: HashMap<FileId, FileTask>,
     checksums: HashMap<FileId, Arc<AsyncCell<[u8; 32]>>>,
 }
@@ -185,7 +178,6 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             state,
             msg_tx,
             xfer,
-            last_recv: Instant::now(),
             jobs: HashMap::new(),
             logger,
             checksums,
@@ -198,72 +190,6 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
 }
 
 impl HandlerLoop<'_> {
-    fn issue_download(
-        &mut self,
-        _: &mut WebSocket,
-        task: super::FileXferTask,
-    ) -> anyhow::Result<()> {
-        let is_running = self
-            .jobs
-            .get(task.file.id())
-            .map_or(false, |state| !state.job.is_finished());
-
-        if is_running {
-            return Ok(());
-        }
-
-        let full_csum_cell = self
-            .checksums
-            .get(task.file.id())
-            .context("Missing file checksum cell")?
-            .clone();
-
-        let file_id = task.file.id().clone();
-        let state = FileTask::start(
-            self.msg_tx.clone(),
-            self.state.clone(),
-            task,
-            full_csum_cell,
-            self.logger.clone(),
-        );
-
-        self.jobs.insert(file_id, state);
-
-        Ok(())
-    }
-
-    async fn issue_cancel(
-        &mut self,
-        socket: &mut WebSocket,
-        file_id: FileId,
-    ) -> anyhow::Result<()> {
-        debug!(self.logger, "ServerHandler::issue_cancel");
-
-        let msg = prot::ServerMsg::Cancel(prot::Cancel {
-            file: file_id.clone(),
-        });
-        socket.send(Message::from(&msg)).await?;
-
-        self.on_cancel(file_id, false).await;
-
-        Ok(())
-    }
-
-    async fn issue_reject(
-        &mut self,
-        socket: &mut WebSocket,
-        file_id: FileId,
-    ) -> anyhow::Result<()> {
-        let msg = prot::ServerMsg::Reject(prot::Reject {
-            file: file_id.clone(),
-        });
-        socket.send(Message::from(&msg)).await?;
-
-        self.on_reject(file_id, false).await;
-
-        Ok(())
-    }
-
     async fn on_chunk(
         &mut self,
         socket: &mut WebSocket,
@@ -297,11 +223,7 @@ impl HandlerLoop<'_> {
             if !task.is_finished() {
                 task.abort();
 
-                let file = self
-                    .xfer
-                    .files()
-                    .get(&file_id)
-                    .expect("File should exists since we have a transfer task running");
+                let file = &self.xfer.files()[&file_id];
 
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
@@ -311,41 +233,32 @@ impl HandlerLoop<'_> {
                     Some(file.info()),
                 );
 
-                events
-                    .stop(crate::Event::FileDownloadCancelled(
-                        self.xfer.clone(),
-                        file_id,
-                        by_peer,
-                    ))
-                    .await;
+                if by_peer {
+                    events
+                        .stop(crate::Event::FileDownloadCancelled(
+                            self.xfer.clone(),
+                            file_id,
+                            by_peer,
+                        ))
+                        .await;
+                }
             }
         }
     }
 
     async fn on_reject(&mut self, file_id: FileId, by_peer: bool) {
+        info!(self.logger, "Rejecting file {file_id}, by_peer?: {by_peer}");
+
         if by_peer {
-            if let Some(xstate) = self
+            if let Err(err) = self
                 .state
                 .transfer_manager
-                .incoming
-                .lock()
+                .incoming_rejection_recv(self.xfer.id(), &file_id)
                 .await
-                .get_mut(&self.xfer.id())
             {
-                match xstate.rejections.reject(file_id.clone()) {
-                    Ok(true) => (),
-                    res => {
-                        debug!(
-                            self.logger,
-                            "Failed to run rejection procedure on peers request: {res:?}"
-                        );
-                        return;
-                    }
-                }
+                error!(self.logger, "Failed to handler file rejection: {err}");
             }
         }
-
-        info!(self.logger, "Rejecting file {file_id}, by_peer?: {by_peer}");
 
         if let Some(FileTask {
             job: task,
@@ -367,11 +280,7 @@ impl HandlerLoop<'_> {
             }
         }
 
-        let file = self
-            .xfer
-            .files()
-            .get(&file_id)
-            .expect("File should exists since we have a transfer task running");
+        let file = &self.xfer.files()[&file_id];
 
         self.state.moose.service_quality_transfer_file(
             Err(drop_core::Status::FileRejected as i32),
@@ -381,15 +290,17 @@ impl HandlerLoop<'_> {
             Some(file.info()),
         );
 
-        self.state
-            .event_tx
-            .send(crate::Event::FileDownloadRejected {
-                transfer_id: self.xfer.id(),
-                file_id,
-                by_peer,
-            })
-            .await
-            .expect("Event channel should be open");
+        if by_peer {
+            self.state
+                .event_tx
+                .send(crate::Event::FileDownloadRejected {
+                    transfer_id: self.xfer.id(),
+                    file_id,
+                    by_peer,
+                })
+                .await
+                .expect("Event channel should be open");
+        }
     }
 
     async fn on_error(&mut self, file_id: Option<FileId>, msg: String) {
@@ -462,18 +373,89 @@ impl HandlerLoop<'_> {
 
 #[async_trait::async_trait]
 impl handler::HandlerLoop for HandlerLoop<'_> {
-    async fn on_req(&mut self, ws: &mut WebSocket, req: ServerReq) -> anyhow::Result<()> {
-        match req {
-            ServerReq::Download { task } => self.issue_download(ws, *task)?,
-            ServerReq::Cancel { file } => self.issue_cancel(ws, file).await?,
-            ServerReq::Reject { file } => self.issue_reject(ws, file).await?,
+    async fn issue_download(
+        &mut self,
+        _: &mut WebSocket,
+        task: super::FileXferTask,
+    ) -> anyhow::Result<()> {
+        let is_running = self
+            .jobs
+            .get(task.file.id())
+            .map_or(false, |state| !state.job.is_finished());
+
+        if is_running {
+            return Ok(());
         }
+
+        let full_csum_cell = self
+            .checksums
+            .get(task.file.id())
+            .context("Missing file checksum cell")?
+            .clone();
+
+        let file_id = task.file.id().clone();
+        let state = FileTask::start(
+            self.msg_tx.clone(),
+            self.state.clone(),
+            task,
+            full_csum_cell,
+            self.logger.clone(),
+        );
+
+        self.jobs.insert(file_id, state);
+
+        Ok(())
+    }
+
+    async fn issue_cancel(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+    ) -> anyhow::Result<()> {
+        debug!(self.logger, "ServerHandler::issue_cancel");
+
+        let msg = prot::ServerMsg::Cancel(prot::Cancel {
+            file: file_id.clone(),
+        });
+        socket.send(Message::from(&msg)).await?;
+
+        self.on_cancel(file_id, false).await;
+
+        Ok(())
+    }
+
+    async fn issue_reject(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+    ) -> anyhow::Result<()> {
+        let msg = prot::ServerMsg::Reject(prot::Reject {
+            file: file_id.clone(),
+        });
+        socket.send(Message::from(&msg)).await?;
+
+        self.state
+            .transfer_manager
+            .incoming_rejection_ack(self.xfer.id(), &file_id)
+            .await?;
+        self.on_reject(file_id, false).await;
 
         Ok(())
     }
 
     async fn on_close(&mut self, by_peer: bool) {
         debug!(self.logger, "ServerHandler::on_close(by_peer: {})", by_peer);
+
+        if by_peer {
+            self.state
+                .event_tx
+                .send(crate::Event::IncomingTransferCanceled(
+                    self.xfer.clone(),
+                    by_peer,
+                ))
+                .await
+                .expect("Could not send a file cancelled event, channel closed");
+        }
 
         self.xfer
             .files()
@@ -494,55 +476,28 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             });
 
         self.on_stop().await;
-
-        self.state
-            .event_tx
-            .send(crate::Event::IncomingTransferCanceled(
-                self.xfer.clone(),
-                by_peer,
-            ))
-            .await
-            .expect("Could not send a file cancelled event, channel closed");
     }
 
-    async fn on_recv(
-        &mut self,
-        ws: &mut WebSocket,
-        msg: Message,
-    ) -> anyhow::Result<ControlFlow<()>> {
-        self.last_recv = Instant::now();
+    async fn on_text_msg(&mut self, _: &mut WebSocket, text: &str) -> anyhow::Result<()> {
+        let msg: prot::ClientMsg =
+            serde_json::from_str(text).context("Failed to deserialize json")?;
 
-        if let Ok(json) = msg.to_str() {
-            debug!(self.logger, "Received:\n\t{json}");
-
-            let msg: prot::ClientMsg =
-                serde_json::from_str(json).context("Failed to deserialize json")?;
-
-            match msg {
-                prot::ClientMsg::Error(prot::Error { file, msg }) => self.on_error(file, msg).await,
-                prot::ClientMsg::Cancel(prot::Cancel { file }) => self.on_cancel(file, true).await,
-                prot::ClientMsg::ReportChsum(report) => self.on_checksum(report).await,
-                prot::ClientMsg::Reject(prot::Reject { file }) => self.on_reject(file, true).await,
-            }
-        } else if msg.is_binary() {
-            let prot::Chunk { file, data } =
-                prot::Chunk::decode(msg.into_bytes()).context("Failed to decode file chunk")?;
-
-            self.on_chunk(ws, file, data).await?;
-        } else if msg.is_close() {
-            debug!(self.logger, "Got CLOSE frame");
-            self.on_close(true).await;
-
-            return Ok(ControlFlow::Break(()));
-        } else if msg.is_ping() {
-            debug!(self.logger, "PING");
-        } else if msg.is_pong() {
-            debug!(self.logger, "PONG");
-        } else {
-            warn!(self.logger, "Server received invalid WS message type");
+        match msg {
+            prot::ClientMsg::Error(prot::Error { file, msg }) => self.on_error(file, msg).await,
+            prot::ClientMsg::Cancel(prot::Cancel { file }) => self.on_cancel(file, true).await,
+            prot::ClientMsg::ReportChsum(report) => self.on_checksum(report).await,
+            prot::ClientMsg::Reject(prot::Reject { file }) => self.on_reject(file, true).await,
         }
+        Ok(())
+    }
 
-        anyhow::Ok(ControlFlow::Continue(()))
+    async fn on_bin_msg(&mut self, ws: &mut WebSocket, bytes: Vec<u8>) -> anyhow::Result<()> {
+        let prot::Chunk { file, data } =
+            prot::Chunk::decode(bytes).context("Failed to decode file chunk")?;
+
+        self.on_chunk(ws, file, data).await?;
+
+        Ok(())
     }
 
     async fn on_stop(&mut self) {
@@ -557,28 +512,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         });
 
         futures::future::join_all(tasks).await;
-    }
-
-    async fn finalize_failure(self, err: anyhow::Error) {
-        error!(self.logger, "Server failed to handle WS message: {:?}", err);
-
-        let err = match err.downcast::<crate::Error>() {
-            Ok(err) => err,
-            Err(err) => err.downcast::<warp::Error>().map_or_else(
-                |err| crate::Error::BadTransferState(err.to_string()),
-                Into::into,
-            ),
-        };
-
-        self.state
-            .event_tx
-            .send(crate::Event::IncomingTransferFailed(
-                self.xfer.clone(),
-                err,
-                true,
-            ))
-            .await
-            .expect("Event channel should always be open");
     }
 
     async fn finalize_success(self) {
@@ -609,12 +542,12 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         }
     }
 
-    fn recv_timeout(&mut self) -> Option<Duration> {
+    fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration> {
         Some(
             self.state
                 .config
                 .transfer_idle_lifetime
-                .saturating_sub(self.last_recv.elapsed()),
+                .saturating_sub(last_recv_elapsed),
         )
     }
 }

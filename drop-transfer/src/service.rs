@@ -17,16 +17,8 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    auth,
-    error::ResultExt,
-    file::File,
-    transfer::Transfer,
-    ws::{
-        self,
-        client::ClientReq,
-        server::{FileXferTask, ServerReq},
-    },
-    Error, Event, FileId, TransferManager,
+    auth, error::ResultExt, file::File, manager, transfer::Transfer, ws, Error, Event, FileId,
+    TransferManager,
 };
 
 pub(super) struct State {
@@ -84,7 +76,7 @@ impl Service {
             let state = Arc::new(State {
                 throttle: Semaphore::new(config.max_uploads_in_flight),
                 event_tx,
-                transfer_manager: Default::default(),
+                transfer_manager: TransferManager::new(storage.clone(), logger.clone()),
                 moose: moose.clone(),
                 config,
                 auth: auth.clone(),
@@ -94,10 +86,10 @@ impl Service {
             });
 
             let stop = CancellationToken::new();
+            manager::resume(&state, stop.clone(), &logger).await;
+
             let join_handle =
                 ws::server::start(addr, stop.clone(), state.clone(), auth, logger.clone())?;
-
-            ws::client::resume(&state, &stop, &logger).await;
 
             Ok(Self {
                 state,
@@ -186,31 +178,27 @@ impl Service {
             xfer.info(),
         );
 
-        if let Err(err) = self.state.storage.insert_transfer(&xfer.storage_info()) {
-            error!(self.logger, "Failed to insert transfer into storage: {err}",);
+        let xfer = Arc::new(xfer);
+        if let Err(err) = self
+            .state
+            .transfer_manager
+            .insert_outgoing(xfer.clone())
+            .await
+        {
+            self.state
+                .event_tx
+                .send(Event::OutgoingTransferFailed(xfer.clone(), err, true))
+                .await
+                .expect("Event channel should be open");
+
+            return;
         }
 
-        let xfer = Arc::new(xfer);
-        let stop_job = {
-            let state = self.state.clone();
-            let xfer = xfer.clone();
-            let logger = self.logger.clone();
-
-            async move {
-                // Stop the download job
-                warn!(logger, "Aborting transfer download");
-
-                state
-                    .event_tx
-                    .send(Event::OutgoingTransferFailed(
-                        xfer,
-                        crate::Error::Canceled,
-                        true,
-                    ))
-                    .await
-                    .expect("Failed to send TransferFailed event");
-            }
-        };
+        self.state
+            .event_tx
+            .send(Event::RequestQueued(xfer.clone()))
+            .await
+            .expect("Could not send a RequestQueued event, channel closed");
 
         let client_job = ws::client::run(self.state.clone(), xfer, self.logger.clone());
         let stop = self.stop.clone();
@@ -219,9 +207,7 @@ impl Service {
             tokio::select! {
                 biased;
 
-                _ = stop.cancelled() => {
-                    stop_job.await;
-                },
+                _ = stop.cancelled() => (),
                 _ = client_job => (),
             }
         });
@@ -241,156 +227,169 @@ impl Service {
             parent_dir.display()
         );
 
-        let fetch_xfer = async {
-            let mut lock = self.state.transfer_manager.incoming.lock().await;
+        let mut lock = self.state.transfer_manager.incoming.lock().await;
 
-            let state = lock.get_mut(&uuid).ok_or(Error::BadTransfer)?;
-            state.rejections.ensure_not_rejected(file_id)?;
-
-            let file = state.xfer.files().get(file_id).ok_or(Error::BadFileId)?;
-
-            Ok((state.xfer.clone(), file.clone(), state.conn.clone()))
+        let task = async {
+            let state = lock.get_mut(&uuid).ok_or(crate::Error::BadTransfer)?;
+            let started = state.validate_for_download(file_id)?;
+            Ok((state, started))
         };
 
-        let (xfer, file, channel) = moose_try_file!(self.state.moose, fetch_xfer.await, uuid, None);
-        let file_info = file.info();
+        let (state, started) = moose_try_file!(self.state.moose, task.await, uuid, None);
 
-        let dispatch_task = || {
-            // Path validation
-            if parent_dir.components().any(|x| x == Component::ParentDir) {
-                return Err(Error::BadPath(
-                    "Path should not contain a reference to parrent directory".into(),
-                ));
-            }
+        if started {
+            let file_info = state.xfer.files()[file_id].info();
 
-            // Check if target directory is a symlink
-            if parent_dir.ancestors().any(Path::is_symlink) {
-                return Err(Error::BadPath(
-                    "Destination should not contain directory symlinks".into(),
-                ));
-            }
+            let mut task = || {
+                validate_dest_path(parent_dir)?;
+                state.start_download(&self.state.storage, file_id, parent_dir)?;
+                Ok(())
+            };
 
-            fs::create_dir_all(parent_dir).map_err(|ioerr| Error::BadPath(ioerr.to_string()))?;
-
-            let task = FileXferTask::new(file, xfer, parent_dir.into());
-            channel
-                .send(ServerReq::Download {
-                    task: Box::new(task),
-                })
-                .map_err(|err| Error::BadTransferState(err.to_string()))?;
-
-            Ok(())
-        };
-
-        moose_try_file!(self.state.moose, dispatch_task(), uuid, Some(file_info));
-
+            moose_try_file!(self.state.moose, task(), uuid, Some(file_info));
+        }
         Ok(())
     }
 
     /// Cancel a single file in a transfer
-    pub async fn cancel(&mut self, xfer_uuid: Uuid, file: FileId) -> crate::Result<()> {
-        {
-            let lock = self.state.transfer_manager.incoming.lock().await;
-            if let Some(state) = lock.get(&xfer_uuid) {
-                state.rejections.ensure_not_rejected(&file)?;
-                state
-                    .conn
-                    .send(ServerReq::Cancel { file })
-                    .map_err(|err| Error::BadTransferState(err.to_string()))?;
+    pub async fn cancel(&mut self, transfer_id: Uuid, file: FileId) -> crate::Result<()> {
+        let mut lock = self.state.transfer_manager.incoming.lock().await;
 
-                return Ok(());
-            }
-        }
-        {
-            let lock = self.state.transfer_manager.outgoing.lock().await;
-            if let Some(state) = lock.get(&xfer_uuid) {
-                state.rejections.ensure_not_rejected(&file)?;
-                state
-                    .conn
-                    .send(ClientReq::Cancel { file })
-                    .map_err(|err| Error::BadTransferState(err.to_string()))?;
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+        let cancelled = state.cancel_file(&self.state.storage, &file)?;
 
-                return Ok(());
-            }
+        if cancelled {
+            let xfer = state.xfer.clone();
+            drop(lock);
+
+            self.state
+                .event_tx
+                .send(crate::Event::FileDownloadCancelled(xfer, file, false))
+                .await
+                .expect("Event channel should be open");
         }
 
-        Err(Error::BadTransfer)
+        Ok(())
     }
 
     /// Reject a single file in a transfer. After rejection the file can no
     /// logner be transfered
     pub async fn reject(&self, transfer_id: Uuid, file: FileId) -> crate::Result<()> {
         {
-            let mut lock = self.state.transfer_manager.incoming.lock().await;
-            if let Some(state) = lock.get_mut(&transfer_id) {
-                if !state.rejections.reject(file.clone())? {
-                    return Err(crate::Error::Rejected);
-                }
+            match self
+                .state
+                .transfer_manager
+                .outgoing_rejection_post(transfer_id, &file)
+                .await
+            {
+                Ok(()) => {
+                    self.state
+                        .event_tx
+                        .send(crate::Event::FileUploadRejected {
+                            transfer_id,
+                            file_id: file,
+                            by_peer: false,
+                        })
+                        .await
+                        .expect("Event channel should be open");
 
-                state
-                    .conn
-                    .send(ServerReq::Reject { file })
-                    .map_err(|err| Error::BadTransferState(err.to_string()))?;
-                return Ok(());
+                    return Ok(());
+                }
+                Err(crate::Error::BadTransfer) => (),
+                Err(err) => return Err(err),
             }
         }
         {
-            let mut lock = self.state.transfer_manager.outgoing.lock().await;
-            if let Some(state) = lock.get_mut(&transfer_id) {
-                if !state.rejections.reject(file.clone())? {
-                    return Err(crate::Error::Rejected);
-                }
+            match self
+                .state
+                .transfer_manager
+                .incoming_rejection_post(transfer_id, &file)
+                .await
+            {
+                Ok(()) => {
+                    self.state
+                        .event_tx
+                        .send(crate::Event::FileDownloadRejected {
+                            transfer_id,
+                            file_id: file,
+                            by_peer: false,
+                        })
+                        .await
+                        .expect("Event channel should be open");
 
-                state
-                    .conn
-                    .send(ClientReq::Reject { file })
-                    .map_err(|err| Error::BadTransferState(err.to_string()))?;
-                return Ok(());
+                    return Ok(());
+                }
+                Err(crate::Error::BadTransfer) => (),
+                Err(err) => return Err(err),
             }
         }
 
-        Err(Error::BadTransfer)
+        Err(crate::Error::BadTransfer)
     }
 
     /// Cancel all of the files in a transfer
     pub async fn cancel_all(&mut self, transfer_id: Uuid) -> crate::Result<()> {
         {
-            let mut lock = self.state.transfer_manager.incoming.lock().await;
-            if let Some(state) = lock.remove(&transfer_id) {
-                state.xfer.files().values().for_each(|file| {
-                    let status: u32 = From::from(&Error::Canceled);
+            match self
+                .state
+                .transfer_manager
+                .outgoing_issue_close(transfer_id)
+                .await
+            {
+                Ok(xfer) => {
+                    self.state
+                        .event_tx
+                        .send(crate::Event::OutgoingTransferCanceled(xfer, false))
+                        .await
+                        .expect("Event channel should be open");
 
-                    self.state.moose.service_quality_transfer_file(
-                        Err(status as _),
-                        drop_analytics::Phase::End,
-                        state.xfer.id().to_string(),
-                        0,
-                        Some(file.info()),
-                    )
-                });
-
-                return Ok(());
+                    return Ok(());
+                }
+                Err(crate::Error::BadTransfer) => (),
+                Err(err) => return Err(err),
             }
         }
         {
-            let mut lock = self.state.transfer_manager.outgoing.lock().await;
-            if let Some(state) = lock.remove(&transfer_id) {
-                state.xfer.files().values().for_each(|file| {
-                    let status: u32 = From::from(&Error::Canceled);
+            match self
+                .state
+                .transfer_manager
+                .incoming_issue_close(transfer_id)
+                .await
+            {
+                Ok(xfer) => {
+                    self.state
+                        .event_tx
+                        .send(crate::Event::IncomingTransferCanceled(xfer, false))
+                        .await
+                        .expect("Event channel should be open");
 
-                    self.state.moose.service_quality_transfer_file(
-                        Err(status as _),
-                        drop_analytics::Phase::End,
-                        state.xfer.id().to_string(),
-                        0,
-                        Some(file.info()),
-                    )
-                });
-
-                return Ok(());
+                    return Ok(());
+                }
+                Err(crate::Error::BadTransfer) => (),
+                Err(err) => return Err(err),
             }
         }
 
-        Err(Error::BadTransfer)
+        Err(crate::Error::BadTransfer)
     }
+}
+
+fn validate_dest_path(parent_dir: &Path) -> crate::Result<()> {
+    if parent_dir.components().any(|x| x == Component::ParentDir) {
+        return Err(crate::Error::BadPath(
+            "Path should not contain a reference to parrent directory".into(),
+        ));
+    }
+
+    if parent_dir.ancestors().any(Path::is_symlink) {
+        return Err(crate::Error::BadPath(
+            "Destination should not contain directory symlinks".into(),
+        ));
+    }
+
+    fs::create_dir_all(parent_dir).map_err(|ioerr| crate::Error::BadPath(ioerr.to_string()))?;
+
+    Ok(())
 }

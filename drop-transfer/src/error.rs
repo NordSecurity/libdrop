@@ -127,3 +127,9 @@ impl From<walkdir::Error> for Error {
             .unwrap_or_else(|| Error::BadPath("Filesystem loop detected".into()))
     }
 }
+
+impl From<drop_storage::error::Error> for Error {
+    fn from(_: drop_storage::error::Error) -> Self {
+        Self::StorageError
+    }
+}

@@ -4,10 +4,11 @@ mod v4;
 mod v5;
 
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::HashMap,
     fs,
     io::{self, Write},
     net::{IpAddr, SocketAddr},
+    ops::ControlFlow,
     path::{Path, PathBuf},
     sync::Arc,
     time::Instant,
@@ -37,8 +38,7 @@ use crate::{
     auth,
     error::ResultExt,
     event::DownloadSuccess,
-    file::{self, FileSubPath, FileToRecv},
-    manager::{IncomingState, Rejections, TransferGuard},
+    file::{self, FileToRecv},
     protocol,
     quarantine::PathExt,
     service::State,
@@ -316,28 +316,22 @@ impl RunContext<'_> {
 
         let xfer = Arc::new(xfer);
 
-        let stop_job = async {
-            // Stop the download job
-            info!(self.logger, "Aborting transfer download");
+        let job = async {
+            let xfer_id = xfer.id();
 
-            self.state
-                .event_tx
-                .send(Event::IncomingTransferFailed(
-                    xfer.clone(),
-                    Error::Canceled,
-                    true,
-                ))
-                .await
-                .expect("Failed to send TransferFailed event");
+            handle_client(&self.state, self.logger, self.socket, handler, xfer).await;
+            let _ = self
+                .state
+                .transfer_manager
+                .incoming_disconnect(xfer_id)
+                .await;
         };
-
-        let job = handle_client(&self.state, self.logger, self.socket, handler, xfer.clone());
 
         tokio::select! {
             biased;
 
             _ = self.stop.cancelled() => {
-                stop_job.await;
+                info!(self.logger, "Aborting transfer download");
             },
             _ = job => (),
         };
@@ -351,28 +345,25 @@ async fn handle_client(
     mut handler: impl handler::HandlerInit,
     xfer: Arc<IncomingTransfer>,
 ) {
-    let xfer_id = xfer.id();
-    let _guard = TransferGuard::new(state.clone(), xfer_id);
     let (req_send, mut req_rx) = mpsc::unbounded_channel();
 
-    if let Err(err) = init_client_handler(state, &xfer, req_send, logger).await {
+    if let Err(err) = init_client_handler(state, &xfer, req_send).await {
         error!(logger, "Failed to init trasfer: {err:?}");
-
         let _ = handler.on_error(&mut socket, err).await;
-        let _ = socket.close().await;
-
         return;
     }
 
     let mut ping = handler.pinger();
 
     let (send_tx, mut send_rx) = mpsc::channel(2);
-    let mut handler = if let Some(handler) = handler.upgrade(&mut socket, send_tx, xfer).await {
-        handler
-    } else {
-        let _ = socket.close().await;
-        return;
-    };
+    let mut handler =
+        if let Some(handler) = handler.upgrade(&mut socket, send_tx, xfer.clone()).await {
+            handler
+        } else {
+            return;
+        };
+
+    let mut last_recv = Instant::now();
 
     let task = async {
         loop {
@@ -382,23 +373,22 @@ async fn handle_client(
                 // API request
                 req = req_rx.recv() => {
                     if let Some(req) = req {
-                        handler.on_req(&mut socket, req).await?;
+                        on_req(&mut socket, &mut handler, req).await?;
                     } else {
                         debug!(logger, "Stoppping server connection gracefuly");
+                        socket.send(Message::close()).await?;
                         handler.on_close(false).await;
                         break;
                     }
                 },
                 // Message received
-                recv = super::utils::recv(&mut socket, handler.recv_timeout()) => {
-                    match recv? {
-                        Some(msg) => {
-                            if handler.on_recv(&mut socket, msg).await?.is_break() {
-                                break;
-                            }
-                        },
-                        None => break,
-                    };
+                recv = super::utils::recv(&mut socket, handler.recv_timeout(last_recv.elapsed())) => {
+                    let msg =  recv?.context("Failed to receive WS message")?;
+                    last_recv = Instant::now();
+
+                    if on_recv(&mut socket, &mut handler, msg, logger).await?.is_break() {
+                        break;
+                    }
                 },
                 // Message to send down the wire
                 msg = send_rx.recv() => {
@@ -417,13 +407,11 @@ async fn handle_client(
     handler.on_stop().await;
 
     if let Err(err) = result {
-        handler.finalize_failure(err).await;
+        info!(logger, "WS connection broke for {}: {err:?}", xfer.id());
     } else {
         let task = async {
-            socket.send(Message::close()).await?;
             // Drain messages
             while socket.next().await.transpose()?.is_some() {}
-
             socket.close().await
         };
 
@@ -434,6 +422,14 @@ async fn handle_client(
             );
         } else {
             debug!(logger, "WS client disconnected");
+        }
+
+        if let Err(err) = state.transfer_manager.incoming_remove(xfer.id()).await {
+            warn!(
+                logger,
+                "Failed to clear sync state for {}: {err}",
+                xfer.id()
+            );
         }
 
         handler.finalize_success().await;
@@ -760,57 +756,13 @@ async fn init_client_handler(
     state: &State,
     xfer: &Arc<IncomingTransfer>,
     req_send: mpsc::UnboundedSender<ServerReq>,
-    logger: &Logger,
 ) -> anyhow::Result<()> {
-    match state
+    let is_new = state
         .transfer_manager
-        .incoming
-        .lock()
-        .await
-        .entry(xfer.id())
-    {
-        Entry::Occupied(_) => anyhow::bail!("Failed to insert a new transfer"),
-        Entry::Vacant(entry) => entry.insert(IncomingState {
-            xfer: xfer.clone(),
-            conn: req_send.clone(),
-            dir_mappings: Default::default(),
-            rejections: Rejections::new(xfer.clone()),
-        }),
-    };
+        .register_incoming(xfer.clone(), req_send)
+        .await?;
 
-    let existing_info = match state.storage.incoming_transfer_info(xfer.id()) {
-        Ok(info) => info,
-        Err(err) => {
-            error!(
-                logger,
-                "DB failed upon checking if transfer is a resume: {err:?}",
-            );
-            // Fall back to treating it as a new one
-            None
-        }
-    };
-
-    let current_info = xfer.storage_info();
-    if let Some(existing_info) = existing_info {
-        ensure_resume_matches_existing_transfer(current_info, existing_info)
-            .with_context(|| format!("Failed to validate transfer {} resume", xfer.id()))?;
-
-        info!(
-            logger,
-            "Transfer {} resume. Resuming started files",
-            xfer.id()
-        );
-
-        register_finished_paths(state, xfer, logger).await;
-
-        if let Err(err) = resume_transfer_files(state, xfer, &req_send, logger) {
-            warn!(logger, "Failed to resume started files: {err:?}");
-        }
-    } else {
-        if let Err(err) = state.storage.insert_transfer(&current_info) {
-            error!(logger, "Failed to insert transfer into the DB: {err:?}");
-        }
-
+    if is_new {
         state
             .event_tx
             .send(Event::RequestReceived(xfer.clone()))
@@ -821,72 +773,43 @@ async fn init_client_handler(
     Ok(())
 }
 
-fn ensure_resume_matches_existing_transfer(
-    current_info: drop_storage::TransferInfo,
-    mut existing_info: drop_storage::IncomingTransferInfo,
+async fn on_req(
+    socket: &mut WebSocket,
+    handler: &mut impl HandlerLoop,
+    req: ServerReq,
 ) -> anyhow::Result<()> {
-    // Check if the transfer matches
-    anyhow::ensure!(
-        current_info.peer == existing_info.peer,
-        "Peers do not match",
-    );
-
-    match current_info.files {
-        drop_storage::types::TransferFiles::Incoming(mut files) => {
-            files.sort();
-            existing_info.files.sort();
-
-            anyhow::ensure!(files == existing_info.files, "Files do not match",);
-        }
-        drop_storage::types::TransferFiles::Outgoing(_) => {
-            panic!("Transfer handled by the server cannot be outgoing")
-        }
-    }
-    Ok(())
-}
-
-fn resume_transfer_files(
-    state: &State,
-    xfer: &Arc<IncomingTransfer>,
-    req_send: &mpsc::UnboundedSender<ServerReq>,
-    logger: &Logger,
-) -> anyhow::Result<()> {
-    let files = state
-        .storage
-        .incoming_files_to_resume(xfer.id())
-        .context("Failed to fetch files to resume")?;
-
-    for file in files {
-        info!(logger, "Resuming file: {}", file.file_id);
-
-        let xfile = FileToRecv::new(file.file_id.into(), From::from(&file.subpath), file.size);
-        let task = FileXferTask::new(xfile, xfer.clone(), file.basepath.into());
-
-        let _ = req_send.send(ServerReq::Download {
-            task: Box::new(task),
-        });
+    match req {
+        ServerReq::Download { task } => handler.issue_download(socket, *task).await?,
+        ServerReq::Cancel { file } => handler.issue_cancel(socket, file).await?,
+        ServerReq::Reject { file } => handler.issue_reject(socket, file).await?,
     }
 
     Ok(())
 }
 
-async fn register_finished_paths(state: &State, xfer: &IncomingTransfer, logger: &Logger) {
-    let paths = match state.storage.finished_incoming_files(xfer.id()) {
-        Ok(paths) => paths,
-        Err(err) => {
-            warn!(logger, "Failed to fetch finished paths: {err:?}");
-            return;
-        }
-    };
+async fn on_recv(
+    socket: &mut WebSocket,
+    handler: &mut impl HandlerLoop,
+    msg: Message,
+    logger: &slog::Logger,
+) -> anyhow::Result<ControlFlow<()>> {
+    if let Ok(text) = msg.to_str() {
+        debug!(logger, "Received:\n\t{text}");
+        handler.on_text_msg(socket, text).await?;
+    } else if msg.is_binary() {
+        handler.on_bin_msg(socket, msg.into_bytes()).await?;
+    } else if msg.is_close() {
+        debug!(logger, "Got CLOSE frame");
+        handler.on_close(true).await;
 
-    let mut lock = state.transfer_manager.incoming.lock().await;
-
-    if let Some(xstate) = lock.get_mut(&xfer.id()) {
-        for path in paths {
-            let subpath = FileSubPath::from(path.subpath);
-            xstate
-                .dir_mappings
-                .register_preexisting_final_path(&subpath, &path.final_path);
-        }
+        return Ok(ControlFlow::Break(()));
+    } else if msg.is_ping() {
+        debug!(logger, "PING");
+    } else if msg.is_pong() {
+        debug!(logger, "PONG");
+    } else {
+        warn!(logger, "Server received invalid WS message type");
     }
+
+    anyhow::Ok(ControlFlow::Continue(()))
 }
