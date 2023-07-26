@@ -649,6 +649,14 @@ impl FileXferTask {
                     )
                     .await;
 
+                if let Err(err) = state
+                    .transfer_manager
+                    .incoming_finsh_download(self.xfer.id(), self.file.id())
+                    .await
+                {
+                    warn!(logger, "Failed to store download finish: {err}");
+                }
+
                 state.moose.service_quality_transfer_file(
                     result.to_status(),
                     drop_analytics::Phase::End,

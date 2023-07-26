@@ -43,7 +43,7 @@ pub struct OutgoingFileSync {
 
 pub struct IncomingState {
     pub xfer: Arc<IncomingTransfer>,
-    pub conn: Option<UnboundedSender<ServerReq>>,
+    conn: Option<UnboundedSender<ServerReq>>,
     pub dir_mappings: DirMapping,
     xfer_sync: TransferSync,
     file_sync: HashMap<FileId, IncomingFileSync>,
@@ -51,7 +51,7 @@ pub struct IncomingState {
 
 pub struct OutgoingState {
     pub xfer: Arc<OutgoingTransfer>,
-    pub conn: Option<UnboundedSender<ClientReq>>,
+    conn: Option<UnboundedSender<ClientReq>>,
     xfer_sync: TransferSync,
     file_sync: HashMap<FileId, OutgoingFileSync>,
 }
@@ -450,6 +450,37 @@ impl TransferManager {
         }
         self.storage.trasnfer_sync_clear(transfer_id)?;
         lock.remove(&transfer_id);
+
+        Ok(())
+    }
+
+    pub async fn incoming_finsh_download(
+        &self,
+        transfer_id: Uuid,
+        file_id: &FileId,
+    ) -> crate::Result<()> {
+        let mut lock = self.incoming.lock().await;
+
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        if matches!(state.xfer_sync.local, sync::TransferState::Canceled) {
+            return Err(crate::Error::BadTransfer);
+        }
+
+        let state = state
+            .file_sync
+            .get_mut(file_id)
+            .ok_or(crate::Error::BadFileId)?;
+
+        if matches!(state.local, sync::FileState::Rejected) {
+            return Err(crate::Error::Rejected);
+        }
+
+        self.storage
+            .stop_incoming_file(transfer_id, file_id.as_ref())?;
+        let _ = state.in_flight.take();
 
         Ok(())
     }
