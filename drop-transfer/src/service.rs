@@ -36,7 +36,7 @@ pub(super) struct State {
 pub struct Service {
     pub(super) state: Arc<State>,
     pub(crate) stop: CancellationToken,
-    join_handle: JoinHandle<()>,
+    server_task: JoinHandle<()>,
     pub(super) logger: Logger,
 }
 
@@ -86,14 +86,14 @@ impl Service {
             });
 
             let stop = CancellationToken::new();
-            manager::resume(&state, stop.clone(), &logger).await;
 
-            let join_handle =
+            manager::resume(&state, stop.clone(), &logger).await;
+            let server_task =
                 ws::server::start(addr, stop.clone(), state.clone(), auth, logger.clone())?;
 
             Ok(Self {
                 state,
-                join_handle,
+                server_task,
                 stop,
                 logger,
             })
@@ -105,19 +105,19 @@ impl Service {
         res
     }
 
-    pub async fn stop(self) -> Result<(), Error> {
-        let task = async {
-            self.stop.cancel();
-            self.join_handle.await.map_err(|_| Error::ServiceStop)
-        };
+    pub async fn stop(self) {
+        self.stop.cancel();
 
-        let res = task.await;
+        if let Err(err) = self.server_task.await {
+            warn!(
+                self.logger,
+                "Failed to wait for server task to finish: {err}"
+            );
+        }
 
         self.state
             .moose
-            .service_quality_initialization_init(res.to_status(), drop_analytics::Phase::End);
-
-        res
+            .service_quality_initialization_init(Ok(()), drop_analytics::Phase::End);
     }
 
     pub fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<(), Error> {
