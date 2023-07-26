@@ -31,13 +31,8 @@ use tokio_tungstenite::{
 use self::handler::{HandlerInit, HandlerLoop, Uploader};
 use super::events::FileEventTx;
 use crate::{
-    auth,
-    file::{File, FileId},
-    protocol,
-    service::State,
-    transfer::Transfer,
-    ws::Pinger,
-    Event, OutgoingTransfer,
+    auth, file::FileId, protocol, service::State, transfer::Transfer, ws::Pinger, Event,
+    OutgoingTransfer,
 };
 
 pub type WebSocket = WebSocketStream<TcpStream>;
@@ -374,7 +369,7 @@ impl RunContext<'_> {
 async fn start_upload(
     state: Arc<State>,
     logger: slog::Logger,
-    events: Arc<FileEventTx>,
+    events: Arc<FileEventTx<OutgoingTransfer>>,
     mut uploader: impl Uploader,
     xfer: Arc<OutgoingTransfer>,
     file_id: FileId,
@@ -385,9 +380,7 @@ async fn start_upload(
         .context("File not found")?
         .clone();
 
-    events
-        .start(Event::FileUploadStarted(xfer.clone(), xfile.id().clone()))
-        .await;
+    events.start().await;
 
     let upload_job = async move {
         let send_file = async {
@@ -424,11 +417,7 @@ async fn start_upload(
                 );
 
                 uploader.error(err.to_string()).await;
-
-                let status = Err(i32::from(&err));
-                events
-                    .stop(Event::FileUploadFailed(xfer.clone(), file_id, err), status)
-                    .await;
+                events.failed(err).await;
             }
         };
     };

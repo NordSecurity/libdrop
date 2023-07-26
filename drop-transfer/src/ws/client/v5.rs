@@ -5,7 +5,6 @@ use std::{
 };
 
 use anyhow::Context;
-use drop_core::Status;
 use futures::SinkExt;
 use slog::{debug, error, info};
 use tokio::{sync::mpsc::Sender, task::JoinHandle};
@@ -13,7 +12,8 @@ use tokio_tungstenite::tungstenite::Message;
 
 use super::{handler, WebSocket};
 use crate::{
-    protocol::v5 as prot, service::State, transfer::Transfer, ws, File, FileId, OutgoingTransfer,
+    protocol::v5 as prot, service::State, transfer::Transfer, ws::events::FileEventTx, FileId,
+    OutgoingTransfer,
 };
 
 pub struct HandlerInit<'a> {
@@ -32,7 +32,7 @@ pub struct HandlerLoop<'a> {
 
 struct FileTask {
     job: JoinHandle<()>,
-    events: Arc<ws::events::FileEventTx>,
+    events: Arc<FileEventTx<OutgoingTransfer>>,
 }
 
 struct Uploader {
@@ -85,17 +85,7 @@ impl HandlerLoop<'_> {
         if let Some(task) = self.tasks.remove(&file_id) {
             if !task.job.is_finished() {
                 task.job.abort();
-
-                task.events
-                    .stop(
-                        crate::Event::FileUploadCancelled(
-                            self.xfer.clone(),
-                            file_id.clone(),
-                            by_peer,
-                        ),
-                        Err(Status::Canceled as _),
-                    )
-                    .await;
+                task.events.cancelled(by_peer).await;
             }
         }
     }
@@ -117,17 +107,7 @@ impl HandlerLoop<'_> {
         if let Some(task) = self.tasks.remove(&file_id) {
             if !task.job.is_finished() {
                 task.job.abort();
-
-                task.events
-                    .stop(
-                        crate::Event::FileUploadCancelled(
-                            self.xfer.clone(),
-                            file_id.clone(),
-                            by_peer,
-                        ),
-                        Err(Status::FileRejected as _),
-                    )
-                    .await;
+                task.events.cancelled_on_rejection(by_peer).await;
             }
         }
 
@@ -146,22 +126,16 @@ impl HandlerLoop<'_> {
 
     async fn on_progress(&self, file_id: FileId, transfered: u64) {
         if let Some(task) = self.tasks.get(&file_id) {
-            task.events
-                .emit(crate::Event::FileUploadProgress(
-                    self.xfer.clone(),
-                    file_id,
-                    transfered,
-                ))
-                .await;
+            task.events.progress(transfered).await;
         }
     }
 
     async fn on_done(&mut self, file_id: FileId) {
-        let event = crate::Event::FileUploadSuccess(self.xfer.clone(), file_id.clone());
-
         if let Some(task) = self.tasks.remove(&file_id) {
-            task.events.stop(event, Ok(())).await;
+            task.events.success().await;
         } else if !self.done.contains(&file_id) {
+            let event = crate::Event::FileUploadSuccess(self.xfer.clone(), file_id.clone());
+
             self.state
                 .event_tx
                 .send(event)
@@ -297,15 +271,10 @@ impl HandlerLoop<'_> {
                     task.job.abort();
                 }
 
-                let err =
-                    crate::Error::BadTransferState(format!("Receiver reported an error: {msg}"));
-                let status = i32::from(&err);
-
                 task.events
-                    .stop(
-                        crate::Event::FileUploadFailed(self.xfer.clone(), file_id.clone(), err),
-                        Err(status),
-                    )
+                    .failed(crate::Error::BadTransferState(format!(
+                        "Receiver reported an error: {msg}"
+                    )))
                     .await;
 
                 self.done.insert(file_id);
@@ -447,11 +416,7 @@ impl FileTask {
         file_id: FileId,
         offset: u64,
     ) -> anyhow::Result<Self> {
-        let events = Arc::new(ws::events::FileEventTx::new(
-            &state,
-            xfer.id(),
-            xfer.files()[&file_id].info(),
-        ));
+        let events = Arc::new(FileEventTx::new(&state, xfer.clone(), file_id.clone()));
 
         let uploader = Uploader {
             sink,
