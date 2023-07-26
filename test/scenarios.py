@@ -1276,6 +1276,40 @@ scenarios = [
         },
     ),
     Scenario(
+        "scenario4-13",
+        "Send a request with one file to a peer that's offline. Cancel the transfer from the sender side immediately. Expect no events on the receiver once it comes online",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.Wait(event.FinishTransferCanceled(0, False)),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Sleep(8),
+                    action.Start("172.20.0.15"),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
         "scenario5",
         "Try to send file to an offline peer. Expect silent retries",
         {
@@ -2128,6 +2162,29 @@ scenarios = [
     #         ),
     #     },
     # ),
+    Scenario(
+        "scenario10-3",
+        "Start file transfer to offline peer, expect a queued event and nothing more",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    action.NewTransfer("172.20.0.100", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.NoEvent(),
+                ]
+            ),
+        },
+    ),
     Scenario(
         "scenario11",
         "Send a couple of file simultaneously and see if libdrop freezes",
@@ -5162,11 +5219,15 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.RejectTransferFile(0, FILES["testfile-big"].id),
-                    action.Wait(
-                        event.FinishFileRejected(0, FILES["testfile-big"].id, False)
-                    ),
-                    action.Wait(
-                        event.FinishFileCanceled(0, FILES["testfile-big"].id, False)
+                    action.WaitRacy(
+                        [
+                            event.FinishFileRejected(
+                                0, FILES["testfile-big"].id, False
+                            ),
+                            event.FinishFileCanceled(
+                                0, FILES["testfile-big"].id, False
+                            ),
+                        ]
                     ),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
@@ -5190,11 +5251,11 @@ scenarios = [
                     ),
                     action.Download(0, FILES["testfile-big"].id, "/tmp/received/27-3"),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
-                    action.Wait(
-                        event.FinishFileCanceled(0, FILES["testfile-big"].id, True)
-                    ),
-                    action.Wait(
-                        event.FinishFileRejected(0, FILES["testfile-big"].id, True)
+                    action.WaitRacy(
+                        [
+                            event.FinishFileRejected(0, FILES["testfile-big"].id, True),
+                            event.FinishFileCanceled(0, FILES["testfile-big"].id, True),
+                        ]
                     ),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
