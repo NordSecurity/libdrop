@@ -6,7 +6,6 @@ use std::{
 use anyhow::Context;
 use async_cell::sync::AsyncCell;
 use drop_config::DropConfig;
-use drop_core::Status;
 use futures::{SinkExt, StreamExt};
 use slog::{debug, error, info, warn};
 use tokio::{
@@ -53,7 +52,7 @@ struct Downloader {
 struct FileTask {
     job: JoinHandle<()>,
     chunks_tx: UnboundedSender<Vec<u8>>,
-    events: Arc<FileEventTx>,
+    events: Arc<FileEventTx<IncomingTransfer>>,
     csum_tx: mpsc::Sender<v4::ReportChsum>,
 }
 
@@ -225,16 +224,7 @@ impl HandlerLoop<'_> {
                 task.abort();
 
                 if by_peer {
-                    events
-                        .stop(
-                            crate::Event::FileDownloadCancelled(
-                                self.xfer.clone(),
-                                file_id,
-                                by_peer,
-                            ),
-                            Err(Status::Canceled as _),
-                        )
-                        .await;
+                    events.cancelled(by_peer).await;
                 }
             }
         }
@@ -256,15 +246,10 @@ impl HandlerLoop<'_> {
             {
                 if !task.is_finished() {
                     task.abort();
-
-                    let err =
-                        crate::Error::BadTransferState(format!("Sender reported an error: {msg}"));
-                    let status = i32::from(&err);
                     events
-                        .stop(
-                            crate::Event::FileDownloadFailed(self.xfer.clone(), file_id, err),
-                            Err(status),
-                        )
+                        .failed(crate::Error::BadTransferState(format!(
+                            "Sender reported an error: {msg}"
+                        )))
                         .await;
                 }
             }
@@ -387,17 +372,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         {
             if !task.is_finished() {
                 task.abort();
-
-                events
-                    .stop(
-                        crate::Event::FileDownloadCancelled(
-                            self.xfer.clone(),
-                            file_id.clone(),
-                            false,
-                        ),
-                        Err(Status::FileRejected as _),
-                    )
-                    .await;
+                events.cancelled_on_rejection(false).await;
             }
         }
 
@@ -661,7 +636,11 @@ impl FileTask {
         full_csum: Arc<AsyncCell<[u8; 32]>>,
         logger: slog::Logger,
     ) -> Self {
-        let events = Arc::new(FileEventTx::new(&state, task.xfer.id(), task.file.info()));
+        let events = Arc::new(FileEventTx::new(
+            &state,
+            task.xfer.clone(),
+            task.file.id().clone(),
+        ));
         let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
         let (csum_tx, csum_rx) = mpsc::channel(4);
 

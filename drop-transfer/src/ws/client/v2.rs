@@ -5,7 +5,6 @@ use std::{
 };
 
 use anyhow::Context;
-use drop_core::Status;
 use futures::SinkExt;
 use slog::{debug, error, warn};
 use tokio::{sync::mpsc::Sender, task::JoinHandle};
@@ -13,8 +12,12 @@ use tokio_tungstenite::tungstenite::Message;
 
 use super::{handler, WebSocket};
 use crate::{
-    file::FileSubPath, protocol::v2, service::State, transfer::Transfer, ws, File, FileId,
-    OutgoingTransfer,
+    file::FileSubPath,
+    protocol::v2,
+    service::State,
+    transfer::Transfer,
+    ws::{self, events::FileEventTx},
+    File, FileId, OutgoingTransfer,
 };
 
 pub struct HandlerInit<'a, const PING: bool = true> {
@@ -37,7 +40,7 @@ struct Uploader {
 
 struct FileTask {
     job: JoinHandle<()>,
-    events: Arc<ws::events::FileEventTx>,
+    events: Arc<FileEventTx<OutgoingTransfer>>,
 }
 
 impl<'a, const PING: bool> HandlerInit<'a, PING> {
@@ -83,57 +86,20 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         if let Some(task) = self.tasks.remove(&file) {
             if !task.job.is_finished() {
                 task.job.abort();
-
-                let file = self
-                    .xfer
-                    .file_by_subpath(&file)
-                    .expect("File should exist since we have a transfer task running");
-
-                let status = Err(i32::from(&crate::Error::Canceled));
-                task.events
-                    .stop(
-                        crate::Event::FileUploadCancelled(
-                            self.xfer.clone(),
-                            file.id().clone(),
-                            by_peer,
-                        ),
-                        status,
-                    )
-                    .await;
+                task.events.cancelled(by_peer).await;
             }
         }
     }
 
     async fn on_progress(&self, file: FileSubPath, transfered: u64) {
         if let Some(task) = self.tasks.get(&file) {
-            let file = self
-                .xfer
-                .file_by_subpath(&file)
-                .expect("File should exist since we have a transfer task running");
-
-            task.events
-                .emit(crate::Event::FileUploadProgress(
-                    self.xfer.clone(),
-                    file.id().clone(),
-                    transfered,
-                ))
-                .await;
+            task.events.progress(transfered).await;
         }
     }
 
     async fn on_done(&mut self, file: FileSubPath) {
         if let Some(task) = self.tasks.remove(&file) {
-            let file = self
-                .xfer
-                .file_by_subpath(&file)
-                .expect("File should exist since we have a transfer task running");
-
-            task.events
-                .stop(
-                    crate::Event::FileUploadSuccess(self.xfer.clone(), file.id().clone()),
-                    Ok(()),
-                )
-                .await;
+            task.events.success().await;
         }
     }
 
@@ -203,19 +169,10 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                     task.job.abort();
                 }
 
-                let file = self
-                    .xfer
-                    .file_by_subpath(&file)
-                    .expect("File should exist since we have a transfer task running");
-
-                let err =
-                    crate::Error::BadTransferState(format!("Receiver reported an error: {msg}"));
-                let status = Err(i32::from(&err));
                 task.events
-                    .stop(
-                        crate::Event::FileUploadFailed(self.xfer.clone(), file.id().clone(), err),
-                        status,
-                    )
+                    .failed(crate::Error::BadTransferState(format!(
+                        "Receiver reported an error: {msg}"
+                    )))
                     .await;
             }
         }
@@ -249,17 +206,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         if let Some(task) = self.tasks.remove(&file_subpath) {
             if !task.job.is_finished() {
                 task.job.abort();
-
-                task.events
-                    .stop(
-                        crate::Event::FileUploadCancelled(
-                            self.xfer.clone(),
-                            file_id.clone(),
-                            false,
-                        ),
-                        Err(Status::FileRejected as _),
-                    )
-                    .await;
+                task.events.cancelled_on_rejection(false).await;
             }
         }
 
@@ -383,11 +330,7 @@ impl FileTask {
             .id()
             .clone();
 
-        let events = Arc::new(ws::events::FileEventTx::new(
-            state,
-            xfer.id(),
-            xfer.files()[&file_id].info(),
-        ));
+        let events = Arc::new(FileEventTx::new(state, xfer.clone(), file_id.clone()));
 
         let job = super::start_upload(
             state.clone(),
