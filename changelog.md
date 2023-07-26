@@ -8,6 +8,7 @@
 * Add file descriptors resolver callback based on content URI - Unix platform only
 * Fix database foreign keys not being enabled
 * Remove `ServiceStop` error
+* Disallow file cancels from the sending side
 
 ---
 <br>
