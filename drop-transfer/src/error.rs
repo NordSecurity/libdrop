@@ -103,6 +103,12 @@ impl From<&Error> for u32 {
     }
 }
 
+impl From<&Error> for i32 {
+    fn from(value: &Error) -> Self {
+        u32::from(value) as _
+    }
+}
+
 pub trait ResultExt {
     fn to_status(&self) -> Result<(), i32>;
 }

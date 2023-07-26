@@ -32,7 +32,6 @@ use self::handler::{HandlerInit, HandlerLoop, Uploader};
 use super::events::FileEventTx;
 use crate::{
     auth,
-    error::ResultExt,
     file::{File, FileId},
     protocol,
     service::State,
@@ -391,16 +390,6 @@ async fn start_upload(
         .await;
 
     let upload_job = async move {
-        let transfer_time = Instant::now();
-
-        state.moose.service_quality_transfer_file(
-            Ok(()),
-            drop_analytics::Phase::Start,
-            xfer.id().to_string(),
-            0,
-            Some(xfile.info()),
-        );
-
         let send_file = async {
             let _permit = acquire_throttle_permit(&logger, &state.throttle, &file_id)
                 .await
@@ -425,17 +414,7 @@ async fn start_upload(
             }
         };
 
-        let result = send_file.await;
-
-        state.moose.service_quality_transfer_file(
-            result.to_status(),
-            drop_analytics::Phase::End,
-            xfer.id().to_string(),
-            transfer_time.elapsed().as_millis() as i32,
-            Some(xfile.info()),
-        );
-
-        match result {
+        match send_file.await {
             Ok(()) => (),
             Err(crate::Error::Canceled) => (),
             Err(err) => {
@@ -445,8 +424,10 @@ async fn start_upload(
                 );
 
                 uploader.error(err.to_string()).await;
+
+                let status = Err(i32::from(&err));
                 events
-                    .stop(Event::FileUploadFailed(xfer.clone(), file_id, err))
+                    .stop(Event::FileUploadFailed(xfer.clone(), file_id, err), status)
                     .await;
             }
         };
