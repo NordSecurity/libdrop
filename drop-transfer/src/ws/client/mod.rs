@@ -31,14 +31,8 @@ use tokio_tungstenite::{
 use self::handler::{HandlerInit, HandlerLoop, Uploader};
 use super::events::FileEventTx;
 use crate::{
-    auth,
-    error::ResultExt,
-    file::{File, FileId},
-    protocol,
-    service::State,
-    transfer::Transfer,
-    ws::Pinger,
-    Event, OutgoingTransfer,
+    auth, file::FileId, protocol, service::State, transfer::Transfer, ws::Pinger, Event,
+    OutgoingTransfer,
 };
 
 pub type WebSocket = WebSocketStream<TcpStream>;
@@ -375,7 +369,7 @@ impl RunContext<'_> {
 async fn start_upload(
     state: Arc<State>,
     logger: slog::Logger,
-    events: Arc<FileEventTx>,
+    events: Arc<FileEventTx<OutgoingTransfer>>,
     mut uploader: impl Uploader,
     xfer: Arc<OutgoingTransfer>,
     file_id: FileId,
@@ -386,21 +380,9 @@ async fn start_upload(
         .context("File not found")?
         .clone();
 
-    events
-        .start(Event::FileUploadStarted(xfer.clone(), xfile.id().clone()))
-        .await;
+    events.start().await;
 
     let upload_job = async move {
-        let transfer_time = Instant::now();
-
-        state.moose.service_quality_transfer_file(
-            Ok(()),
-            drop_analytics::Phase::Start,
-            xfer.id().to_string(),
-            0,
-            Some(xfile.info()),
-        );
-
         let send_file = async {
             let _permit = acquire_throttle_permit(&logger, &state.throttle, &file_id)
                 .await
@@ -425,17 +407,7 @@ async fn start_upload(
             }
         };
 
-        let result = send_file.await;
-
-        state.moose.service_quality_transfer_file(
-            result.to_status(),
-            drop_analytics::Phase::End,
-            xfer.id().to_string(),
-            transfer_time.elapsed().as_millis() as i32,
-            Some(xfile.info()),
-        );
-
-        match result {
+        match send_file.await {
             Ok(()) => (),
             Err(crate::Error::Canceled) => (),
             Err(err) => {
@@ -445,9 +417,7 @@ async fn start_upload(
                 );
 
                 uploader.error(err.to_string()).await;
-                events
-                    .stop(Event::FileUploadFailed(xfer.clone(), file_id, err))
-                    .await;
+                events.failed(err).await;
             }
         };
     };
