@@ -3481,6 +3481,18 @@ scenarios = [
                             }
                         }""",
                             """{
+                            "type": "file",
+                            "phase": "end",
+                            "result": 8,
+                            "transfer_id": "*",
+                            "transfer_time": "*",
+                            "info": {
+                                "mime_type": "unknown",
+                                "extension": "none",
+                                "size_kb": 10240
+                            }
+                        }""",
+                            """{
                             "type": "init",
                             "phase": "end",
                             "result": 0,
