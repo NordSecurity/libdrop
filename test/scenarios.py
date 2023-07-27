@@ -2036,158 +2036,9 @@ scenarios = [
             ),
         },
     ),
-    # Could become relevant, if we add events fro transfers being stopped/retried
-    # Scenario(
-    #     "scenario10-1",
-    #     "Start file transfer then stop drop instance on the sender side",
-    #     {
-    #         "ren": ActionList(
-    #             [
-    #                 action.Start("172.20.0.5"),
-    #                 action.ConfigureNetwork(),
-    #                 action.WaitForAnotherPeer(),
-    #                 action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
-    #                 action.Wait(
-    #                     event.Queued(
-    #                         0,
-    #                         {
-    #                             event.File(
-    #                                 FILES["testfile-big"].id, "testfile-big", 10485760
-    #                             ),
-    #                         },
-    #                     )
-    #                 ),
-    #                 action.Wait(event.Start(0, FILES["testfile-big"].id)),
-    #                 action.Stop(),
-    #                 action.Wait(
-    #                     event.FinishFailedTransfer(
-    #                         0,
-    #                         Error.CANCELED,
-    #                     )
-    #                 ),
-    #                 action.NoEvent(),
-    #             ]
-    #         ),
-    #         "stimpy": ActionList(
-    #             [
-    #                 action.Start("172.20.0.15"),
-    #                 action.ConfigureNetwork(),
-    #                 action.Wait(
-    #                     event.Receive(
-    #                         0,
-    #                         "172.20.0.5",
-    #                         {
-    #                             event.File(
-    #                                 FILES["testfile-big"].id, "testfile-big", 10485760
-    #                             ),
-    #                         },
-    #                     )
-    #                 ),
-    #                 action.Download(
-    #                     0,
-    #                     FILES["testfile-big"].id,
-    #                     "/tmp/received",
-    #                 ),
-    #                 action.Wait(event.Start(0, FILES["testfile-big"].id)),
-    #                 action.Wait(
-    #                     event.FinishFailedTransfer(
-    #                         0,
-    #                         Error.WS_SERVER,
-    #                     )
-    #                 ),
-    #                 action.NoEvent(),
-    #                 action.Stop(),
-    #             ]
-    #         ),
-    #     },
-    # ),
-    # Scenario(
-    #     "scenario10-2",
-    #     "Start file transfer then stop drop instance on the receiver side",
-    #     {
-    #         "ren": ActionList(
-    #             [
-    #                 action.Start("172.20.0.5"),
-    #                 action.ConfigureNetwork(),
-    #                 action.WaitForAnotherPeer(),
-    #                 action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
-    #                 action.Wait(
-    #                     event.Queued(
-    #                         0,
-    #                         {
-    #                             event.File(
-    #                                 FILES["testfile-big"].id, "testfile-big", 10485760
-    #                             ),
-    #                         },
-    #                     )
-    #                 ),
-    #                 action.Wait(event.Start(0, FILES["testfile-big"].id)),
-    #                 action.Wait(
-    #                     event.FinishFailedTransfer(0, Error.WS_CLIENT, ignore_os=True)
-    #                 ),
-    #                 action.NoEvent(),
-    #                 action.Stop(),
-    #             ]
-    #         ),
-    #         "stimpy": ActionList(
-    #             [
-    #                 action.Start("172.20.0.15"),
-    #                 action.ConfigureNetwork(),
-    #                 action.Wait(
-    #                     event.Receive(
-    #                         0,
-    #                         "172.20.0.5",
-    #                         {
-    #                             event.File(
-    #                                 FILES["testfile-big"].id, "testfile-big", 10485760
-    #                             ),
-    #                         },
-    #                     )
-    #                 ),
-    #                 action.Download(
-    #                     0,
-    #                     FILES["testfile-big"].id,
-    #                     "/tmp/received",
-    #                 ),
-    #                 action.Wait(event.Start(0, FILES["testfile-big"].id)),
-    #                 action.Stop(),
-    #                 action.Wait(
-    #                     event.FinishFailedTransfer(
-    #                         0,
-    #                         Error.CANCELED,
-    #                     )
-    #                 ),
-    #                 action.NoEvent(),
-    #             ]
-    #         ),
-    #     },
-    # ),
-    Scenario(
-        "scenario10-3",
-        "Start file transfer to offline peer, expect a queued event and nothing more",
-        {
-            "ren": ActionList(
-                [
-                    action.Start("172.20.0.5"),
-                    action.NewTransfer("172.20.0.100", ["/tmp/testfile-big"]),
-                    action.Wait(
-                        event.Queued(
-                            0,
-                            {
-                                event.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
-                                ),
-                            },
-                        )
-                    ),
-                    action.NoEvent(),
-                ]
-            ),
-        },
-    ),
     Scenario(
         "scenario11",
-        "Send a couple of file simultaneously and see if libdrop freezes",
+        "Send a bunch of file simultaneously and see if libdrop freezes",
         {
             "ren": ActionList(
                 [
@@ -6140,6 +5991,407 @@ scenarios = [
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-6",
+        "Start file transfer to offline peer, stop the sender, start the sender and the receiver, expect the transfer to be resumed",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-6-ren.sqlite"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.Stop(),
+                    action.Sleep(4),
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-6-ren.sqlite"),
+                    action.NoEvent(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Sleep(4),
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-7",
+        "Start file transfer to offline peer, reject the transfer, start the sender and the receiver, expect the transfer not to happen",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-7-ren.sqlite"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.RejectTransferFile(0, FILES["testfile-big"].id),
+                    action.Stop(),
+                    action.Sleep(4),
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-7-ren.sqlite"),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-big"].id, False)
+                    ),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Sleep(4),
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-big"].id, True)
+                    ),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-8",
+        "Start file transfer to offline peer, cancel the transfer, start the sender and the receiver, expect the transfer to work",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-8-ren.sqlite"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.Stop(),
+                    action.Sleep(4),
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-8-ren.sqlite"),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Sleep(4),
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(
+                        event.FinishTransferCanceled(0, True),
+                    ),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-9",
+        "Complete a transfer, restart both sides, expect nothing to happen",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-9-ren.sqlite"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-small"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.Stop(),
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-9-ren.sqlite"),
+                    action.NoEvent(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15", dbpath="/tmp/db/29-9-stimpy.sqlite"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-small"].id,
+                        "/tmp/received",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-small"].id,
+                            "/tmp/received/testfile-small",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/testfile-small", 1048576),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.Stop(),
+                    action.Start("172.20.0.15", dbpath="/tmp/db/29-9-stimpy.sqlite"),
+                    action.NoEvent(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-10",
+        "Send a transfer request, wait for it to arrive, stop the sender, accept on the receiver, start the sender, expect the transfer to be resumed",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-10-ren.sqlite"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Stop(),
+                    action.Sleep(3),
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-10-ren.sqlite"),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-small"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15", dbpath="/tmp/db/29-10-stimpy.sqlite"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Sleep(1),
+                    action.Download(
+                        0,
+                        FILES["testfile-small"].id,
+                        "/tmp/received",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-small"].id,
+                            "/tmp/received/testfile-small",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/testfile-small", 1048576),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-12",
+        "Send a transfer request, wait for it to arrive, stop the sender, reject on the receiver, start the sender, expect the transfer to not be resumed",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-12-ren.sqlite"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Stop(),
+                    action.Sleep(3),
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-12-ren.sqlite"),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-small"].id, True)
+                    ),
+                    action.NoEvent(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15", dbpath="/tmp/db/29-12-stimpy.sqlite"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Sleep(1),
+                    action.RejectTransferFile(0, FILES["testfile-small"].id),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-small"].id, False)
+                    ),
+                    action.NoEvent(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-11",
+        "Send a transfer request, wait for it to arrive, stop the sender, cancel on the receiver, start the sender, expect the transfer to not be resumed",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-11-ren.sqlite"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Stop(),
+                    action.Sleep(3),
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-11-ren.sqlite"),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15", dbpath="/tmp/db/29-11-stimpy.sqlite"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Sleep(1),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
                 ]
             ),
         },
