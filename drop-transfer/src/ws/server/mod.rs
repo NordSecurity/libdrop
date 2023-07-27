@@ -36,8 +36,6 @@ use warp::{
 use super::events::FileEventTx;
 use crate::{
     auth,
-    error::ResultExt,
-    event::DownloadSuccess,
     file::{self, FileToRecv},
     protocol,
     quarantine::PathExt,
@@ -75,7 +73,7 @@ struct StreamCtx<'a> {
     state: &'a State,
     tmp_loc: &'a Hidden<PathBuf>,
     stream: &'a mut UnboundedReceiver<Vec<u8>>,
-    events: &'a FileEventTx,
+    events: &'a FileEventTx<IncomingTransfer>,
 }
 
 pub(crate) fn start(
@@ -475,13 +473,7 @@ impl FileXferTask {
 
             // Announce initial state of the transfer
             downloader.progress(bytes_received).await?;
-            events
-                .emit(crate::Event::FileDownloadProgress(
-                    self.xfer.clone(),
-                    self.file.id().clone(),
-                    bytes_received,
-                ))
-                .await;
+            events.progress(bytes_received).await;
 
             while bytes_received < self.file.size() {
                 let chunk = stream.recv().await.ok_or(crate::Error::Canceled)?;
@@ -498,13 +490,7 @@ impl FileXferTask {
                 if last_progress + REPORT_PROGRESS_THRESHOLD <= bytes_received {
                     // send progress to the caller
                     downloader.progress(bytes_received).await?;
-                    events
-                        .emit(crate::Event::FileDownloadProgress(
-                            self.xfer.clone(),
-                            self.file.id().clone(),
-                            bytes_received,
-                        ))
-                        .await;
+                    events.progress(bytes_received).await;
 
                     last_progress = bytes_received;
                 }
@@ -585,7 +571,7 @@ impl FileXferTask {
     async fn run(
         mut self,
         state: Arc<State>,
-        events: Arc<FileEventTx>,
+        events: Arc<FileEventTx<IncomingTransfer>>,
         mut downloader: impl Downloader,
         mut stream: UnboundedReceiver<Vec<u8>>,
         logger: Logger,
@@ -617,23 +603,7 @@ impl FileXferTask {
                 offset,
                 tmp_location,
             } => {
-                let transfer_time = Instant::now();
-
-                state.moose.service_quality_transfer_file(
-                    Ok(()),
-                    drop_analytics::Phase::Start,
-                    self.xfer.id().to_string(),
-                    0,
-                    Some(self.file.info()),
-                );
-
-                events
-                    .start(crate::Event::FileDownloadStarted(
-                        self.xfer.clone(),
-                        self.file.id().clone(),
-                        self.base_dir.to_string_lossy().to_string(),
-                    ))
-                    .await;
+                events.start(self.base_dir.to_string_lossy()).await;
 
                 let result = self
                     .stream_file(
@@ -657,35 +627,13 @@ impl FileXferTask {
                     warn!(logger, "Failed to store download finish: {err}");
                 }
 
-                state.moose.service_quality_transfer_file(
-                    result.to_status(),
-                    drop_analytics::Phase::End,
-                    self.xfer.id().to_string(),
-                    transfer_time.elapsed().as_millis() as i32,
-                    Some(self.file.info()),
-                );
-
-                let event = match result {
-                    Ok(dst_location) => Some(Event::FileDownloadSuccess(
-                        self.xfer.clone(),
-                        DownloadSuccess {
-                            id: self.file.id().clone(),
-                            final_path: Hidden(dst_location.into_boxed_path()),
-                        },
-                    )),
-                    Err(crate::Error::Canceled) => None,
+                match result {
+                    Ok(dst_location) => events.success(dst_location).await,
+                    Err(crate::Error::Canceled) => (),
                     Err(err) => {
                         let _ = downloader.error(err.to_string()).await;
-                        Some(Event::FileDownloadFailed(
-                            self.xfer.clone(),
-                            self.file.id().clone(),
-                            err,
-                        ))
+                        events.failed(err).await;
                     }
-                };
-
-                if let Some(event) = event {
-                    events.stop(event).await;
                 }
             }
         }

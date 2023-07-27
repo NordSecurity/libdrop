@@ -53,7 +53,7 @@ struct Downloader {
 struct FileTask {
     job: JoinHandle<()>,
     chunks_tx: UnboundedSender<Vec<u8>>,
-    events: Arc<FileEventTx>,
+    events: Arc<FileEventTx<IncomingTransfer>>,
 }
 
 impl<'a, const PING: bool> HandlerInit<'a, PING> {
@@ -156,27 +156,8 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         {
             if !task.is_finished() {
                 task.abort();
-                let file = self
-                    .xfer
-                    .file_by_subpath(&file)
-                    .expect("File should exists since we have a transfer task running");
-
-                self.state.moose.service_quality_transfer_file(
-                    Err(u32::from(&crate::Error::Canceled) as i32),
-                    drop_analytics::Phase::End,
-                    self.xfer.id().to_string(),
-                    0,
-                    Some(file.info()),
-                );
-
                 if by_peer {
-                    events
-                        .stop(crate::Event::FileDownloadCancelled(
-                            self.xfer.clone(),
-                            file.id().clone(),
-                            by_peer,
-                        ))
-                        .await;
+                    events.cancelled(by_peer).await;
                 }
             }
         }
@@ -198,19 +179,10 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                 if !task.is_finished() {
                     task.abort();
 
-                    let file = self
-                        .xfer
-                        .file_by_subpath(&file)
-                        .expect("File should exists since we have a transfer task running");
-
                     events
-                        .stop(crate::Event::FileDownloadFailed(
-                            self.xfer.clone(),
-                            file.id().clone(),
-                            crate::Error::BadTransferState(format!(
-                                "Sender reported an error: {msg}"
-                            )),
-                        ))
+                        .failed(crate::Error::BadTransferState(format!(
+                            "Sender reported an error: {msg}"
+                        )))
                         .await;
                 }
             }
@@ -303,25 +275,9 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         {
             if !task.is_finished() {
                 task.abort();
-
-                events
-                    .stop(crate::Event::FileDownloadCancelled(
-                        self.xfer.clone(),
-                        file_id.clone(),
-                        false,
-                    ))
-                    .await;
+                events.cancelled_on_rejection(false).await;
             }
         }
-
-        let file = &self.xfer.files()[&file_id];
-        self.state.moose.service_quality_transfer_file(
-            Err(drop_core::Status::FileRejected as i32),
-            drop_analytics::Phase::End,
-            self.xfer.id().to_string(),
-            0,
-            Some(file.info()),
-        );
 
         Ok(())
     }
@@ -339,24 +295,6 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
                 .await
                 .expect("Could not send a file cancelled event, channel closed");
         }
-
-        self.xfer
-            .files()
-            .values()
-            .filter(|file| {
-                self.jobs
-                    .get(file.subpath())
-                    .map_or(false, |state| !state.job.is_finished())
-            })
-            .for_each(|file| {
-                self.state.moose.service_quality_transfer_file(
-                    Err(u32::from(&crate::Error::Canceled) as i32),
-                    drop_analytics::Phase::End,
-                    self.xfer.id().to_string(),
-                    0,
-                    Some(file.info()),
-                );
-            });
 
         self.on_stop().await;
     }
@@ -521,7 +459,11 @@ impl FileTask {
         task: super::FileXferTask,
         logger: slog::Logger,
     ) -> Self {
-        let events = Arc::new(FileEventTx::new(&state));
+        let events = Arc::new(FileEventTx::new(
+            &state,
+            task.xfer.clone(),
+            task.file.id().clone(),
+        ));
         let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
 
         let downloader = Downloader {
