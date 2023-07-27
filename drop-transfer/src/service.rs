@@ -17,8 +17,13 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    auth, error::ResultExt, file::File, manager, transfer::Transfer, ws, Error, Event, FileId,
-    TransferManager,
+    auth,
+    error::ResultExt,
+    file::File,
+    manager,
+    transfer::Transfer,
+    ws::{self, FileEventTxFactory},
+    Error, Event, FileId, TransferManager,
 };
 
 pub(super) struct State {
@@ -75,8 +80,12 @@ impl Service {
         let task = async {
             let state = Arc::new(State {
                 throttle: Semaphore::new(config.max_uploads_in_flight),
+                transfer_manager: TransferManager::new(
+                    storage.clone(),
+                    FileEventTxFactory::new(event_tx.clone(), moose.clone()),
+                    logger.clone(),
+                ),
                 event_tx,
-                transfer_manager: TransferManager::new(storage.clone(), logger.clone()),
                 moose: moose.clone(),
                 config,
                 auth: auth.clone(),
@@ -253,20 +262,18 @@ impl Service {
 
     /// Cancel a single file in a transfer
     pub async fn cancel(&mut self, transfer_id: Uuid, file: FileId) -> crate::Result<()> {
-        let mut lock = self.state.transfer_manager.incoming.lock().await;
+        let res = self
+            .state
+            .transfer_manager
+            .incoming_cancel_file(transfer_id, &file)
+            .await?;
 
-        let state = lock
-            .get_mut(&transfer_id)
-            .ok_or(crate::Error::BadTransfer)?;
-        let cancelled = state.cancel_file(&self.state.storage, &file)?;
-
-        if cancelled {
-            let xfer = state.xfer.clone();
-            drop(lock);
+        if let Some(res) = res {
+            res.events.cancel_silent().await;
 
             self.state
                 .event_tx
-                .send(crate::Event::FileDownloadCancelled(xfer, file, false))
+                .send(crate::Event::FileDownloadCancelled(res.xfer, file, false))
                 .await
                 .expect("Event channel should be open");
         }
@@ -284,7 +291,9 @@ impl Service {
                 .outgoing_rejection_post(transfer_id, &file)
                 .await
             {
-                Ok(()) => {
+                Ok(res) => {
+                    res.events.cancelled_on_rejection(false).await;
+
                     self.state
                         .event_tx
                         .send(crate::Event::FileUploadRejected {
@@ -308,7 +317,9 @@ impl Service {
                 .incoming_rejection_post(transfer_id, &file)
                 .await
             {
-                Ok(()) => {
+                Ok(res) => {
+                    res.events.cancelled_on_rejection(false).await;
+
                     self.state
                         .event_tx
                         .send(crate::Event::FileDownloadRejected {
@@ -338,10 +349,12 @@ impl Service {
                 .outgoing_issue_close(transfer_id)
                 .await
             {
-                Ok(xfer) => {
+                Ok(res) => {
+                    futures::future::join_all(res.events.iter().map(|ev| ev.cancel_silent())).await;
+
                     self.state
                         .event_tx
-                        .send(crate::Event::OutgoingTransferCanceled(xfer, false))
+                        .send(crate::Event::OutgoingTransferCanceled(res.xfer, false))
                         .await
                         .expect("Event channel should be open");
 
@@ -358,10 +371,12 @@ impl Service {
                 .incoming_issue_close(transfer_id)
                 .await
             {
-                Ok(xfer) => {
+                Ok(res) => {
+                    futures::future::join_all(res.events.iter().map(|ev| ev.cancel_silent())).await;
+
                     self.state
                         .event_tx
-                        .send(crate::Event::IncomingTransferCanceled(xfer, false))
+                        .send(crate::Event::IncomingTransferCanceled(res.xfer, false))
                         .await
                         .expect("Event channel should be open");
 

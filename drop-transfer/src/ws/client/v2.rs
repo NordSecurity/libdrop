@@ -330,12 +330,15 @@ impl FileTask {
             .id()
             .clone();
 
-        let events = Arc::new(FileEventTx::new(state, xfer.clone(), file_id.clone()));
+        let events = state
+            .transfer_manager
+            .outgoing_file_events(xfer.id(), &file_id)
+            .await?;
 
         let job = super::start_upload(
             state.clone(),
             logger.clone(),
-            Arc::clone(&events),
+            events.clone(),
             uploader,
             xfer,
             file_id,
