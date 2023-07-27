@@ -6289,6 +6289,114 @@ scenarios = [
         },
     ),
     Scenario(
+        "scenario29-12",
+        "Send a transfer request, wait for it to arrive, stop the sender, reject on the receiver, start the sender, expect the transfer to not be resumed",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-12-ren.sqlite"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Stop(),
+                    action.Sleep(3),
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-12-ren.sqlite"),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-small"].id, True)
+                    ),
+                    action.NoEvent(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15", dbpath="/tmp/db/29-12-stimpy.sqlite"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Sleep(1),
+                    action.RejectTransferFile(0, FILES["testfile-small"].id),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-small"].id, False)
+                    ),
+                    action.NoEvent(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-11",
+        "Send a transfer request, wait for it to arrive, stop the sender, cancel on the receiver, start the sender, expect the transfer to not be resumed",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-11-ren.sqlite"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Stop(),
+                    action.Sleep(3),
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-11-ren.sqlite"),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15", dbpath="/tmp/db/29-11-stimpy.sqlite"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Sleep(1),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
         "scenario30",
         "Trigger DDoS protection. Expect some transfers to fail",
         {
