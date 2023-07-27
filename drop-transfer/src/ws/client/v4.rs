@@ -385,7 +385,10 @@ impl FileTask {
         file_id: FileId,
         offset: u64,
     ) -> anyhow::Result<Self> {
-        let events = Arc::new(FileEventTx::new(&state, xfer.clone(), file_id.clone()));
+        let events = state
+            .transfer_manager
+            .outgoing_file_events(xfer.id(), &file_id)
+            .await?;
 
         let uploader = Uploader {
             sink,
