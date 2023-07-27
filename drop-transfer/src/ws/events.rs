@@ -100,9 +100,20 @@ impl<T: Transfer> FileEventTx<T> {
             .expect("Event channel shouldn't be closed");
     }
 
-    pub async fn stop_silent(&self) {
+    pub async fn cancel_silent(&self) {
         let mut lock = self.inner.write().await;
-        lock.started = None;
+
+        if let Some(started) = lock.started.take() {
+            let info = self.file_info();
+
+            lock.moose.service_quality_transfer_file(
+                Err(Status::Canceled as _),
+                drop_analytics::Phase::End,
+                self.xfer.id().to_string(),
+                started.elapsed().as_millis() as _,
+                info,
+            );
+        }
     }
 }
 

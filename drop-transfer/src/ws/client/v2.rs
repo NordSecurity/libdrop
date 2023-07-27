@@ -258,7 +258,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
             task.job.abort();
 
             async move {
-                task.events.stop_silent().await;
+                task.events.cancel_silent().await;
             }
         });
 

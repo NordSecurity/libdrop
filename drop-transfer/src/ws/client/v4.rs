@@ -322,7 +322,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             task.job.abort();
 
             async move {
-                task.events.stop_silent().await;
+                task.events.cancel_silent().await;
             }
         });
 
