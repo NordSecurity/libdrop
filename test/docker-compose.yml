@@ -12,6 +12,8 @@ x-peer: &peer-common
   working_dir: /src
   cap_add:
       - NET_ADMIN
+  environment:
+    - RUST_BACKTRACE=1
 
 services:
   ren:
