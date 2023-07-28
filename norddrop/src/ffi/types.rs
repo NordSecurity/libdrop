@@ -1,10 +1,6 @@
-use std::{
-    ffi::{c_int, c_void},
-    panic,
-};
+use std::ffi::{c_int, c_void};
 
 use libc::c_char;
-use serde::Serialize;
 use slog::Level;
 
 use crate::device::Result as DevResult;
@@ -212,15 +208,3 @@ unsafe impl Send for norddrop_event_cb {}
 
 unsafe impl Sync for norddrop_logger_cb {}
 unsafe impl Send for norddrop_logger_cb {}
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "type", content = "data")]
-pub enum PanicError {
-    Panic(String),
-}
-
-impl From<&panic::PanicInfo<'_>> for PanicError {
-    fn from(p: &panic::PanicInfo) -> PanicError {
-        PanicError::Panic(p.to_string())
-    }
-}

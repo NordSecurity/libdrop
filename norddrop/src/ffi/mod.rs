@@ -5,19 +5,16 @@ use std::{
     collections::HashMap,
     ffi::{CStr, CString},
     fmt, panic,
-    sync::{Mutex, Once},
+    sync::Mutex,
 };
 
 use libc::c_char;
-use slog::{error, o, warn, Drain, Logger, KV};
+use slog::{error, o, Drain, Logger, KV};
 
 use self::types::{
     norddrop_event_cb, norddrop_log_level, norddrop_logger_cb, norddrop_pubkey_cb, norddrop_result,
 };
-use crate::{
-    device::{NordDropFFI, Result as DevResult},
-    ffi::types::PanicError,
-};
+use crate::device::{NordDropFFI, Result as DevResult};
 
 /// Cehck if res is ok, else return early by converting Error into
 /// norddrop_result
@@ -29,9 +26,6 @@ macro_rules! ffi_try {
         }
     };
 }
-
-/// cbindgen:ignore
-static PANIC_HOOK: Once = Once::new();
 
 extern "C" {
     fn fortify_source();
@@ -720,29 +714,6 @@ pub unsafe extern "C" fn norddrop_new(
     fortify_source();
 
     let logger = Logger::root(logger_cb.filter_level(log_level.into()).fuse(), o!());
-
-    PANIC_HOOK.call_once(|| {
-        let logger = logger.clone();
-
-        panic::set_hook(Box::new(move |info: &panic::PanicInfo| {
-            error!(logger, "{}", info);
-
-            let res = CString::new(
-                serde_json::to_string(&PanicError::from(info))
-                    .unwrap_or_else(|_| String::from("event_to_json error")),
-            );
-
-            match res {
-                Ok(s) => {
-                    let callback = event_cb.callback();
-                    let callback_data = event_cb.callback_data();
-
-                    (callback)(callback_data, s.as_ptr())
-                }
-                Err(e) => warn!(logger, "Failed to create CString: {}", e),
-            }
-        }));
-    });
 
     let result = panic::catch_unwind(move || {
         if privkey.is_null() {
