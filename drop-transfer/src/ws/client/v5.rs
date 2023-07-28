@@ -307,6 +307,8 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
     async fn on_close(&mut self, by_peer: bool) {
         debug!(self.logger, "ClientHandler::on_close(by_peer: {})", by_peer);
 
+        self.on_stop().await;
+
         if by_peer {
             self.state
                 .event_tx
@@ -317,8 +319,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
                 .await
                 .expect("Could not send a transfer cancelled event, channel closed");
         }
-
-        self.on_stop().await;
     }
 
     async fn on_text_msg(&mut self, socket: &mut WebSocket, text: String) -> anyhow::Result<()> {
