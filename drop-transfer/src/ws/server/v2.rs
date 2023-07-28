@@ -212,7 +212,8 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
             self.state.clone(),
             task,
             self.logger.clone(),
-        );
+        )
+        .await?;
 
         self.jobs.insert(subpath, state);
 
@@ -327,7 +328,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
             task.job.abort();
 
             async move {
-                task.events.stop_silent().await;
+                task.events.cancel_silent().await;
             }
         });
 
@@ -453,17 +454,17 @@ impl handler::Downloader for Downloader {
 }
 
 impl FileTask {
-    fn start(
+    async fn start(
         msg_tx: Sender<Message>,
         state: Arc<State>,
         task: super::FileXferTask,
         logger: slog::Logger,
-    ) -> Self {
-        let events = Arc::new(FileEventTx::new(
-            &state,
-            task.xfer.clone(),
-            task.file.id().clone(),
-        ));
+    ) -> anyhow::Result<Self> {
+        let events = state
+            .transfer_manager
+            .incoming_file_events(task.xfer.id(), task.file.id())
+            .await?;
+
         let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
 
         let downloader = Downloader {
@@ -474,11 +475,11 @@ impl FileTask {
         };
         let job = tokio::spawn(task.run(state, Arc::clone(&events), downloader, chunks_rx, logger));
 
-        Self {
+        Ok(Self {
             job,
             chunks_tx,
             events,
-        }
+        })
     }
 }
 

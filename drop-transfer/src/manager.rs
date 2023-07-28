@@ -21,22 +21,38 @@ use crate::{
         self,
         client::ClientReq,
         server::{FileXferTask, ServerReq},
+        FileEventTx, FileEventTxFactory, IncomingFileEventTx, OutgoingFileEventTx,
     },
     File, FileId, FileToRecv, FileToSend, Transfer,
 };
 
-pub struct TransferSync {
+pub struct CloseResult<T: Transfer> {
+    pub xfer: Arc<T>,
+    pub events: Vec<Arc<FileEventTx<T>>>,
+}
+
+pub struct FileCancelResult {
+    pub xfer: Arc<IncomingTransfer>,
+    pub events: Arc<IncomingFileEventTx>,
+}
+
+pub struct RejectionResult<T: Transfer> {
+    pub xfer: Arc<T>,
+    pub events: Arc<FileEventTx<T>>,
+}
+
+struct TransferSync {
     local: sync::TransferState,
     remote: sync::TransferState,
 }
 
-pub struct IncomingFileSync {
+struct IncomingFileSync {
     local: sync::FileState,
     remote: sync::FileState,
-    pub in_flight: Option<PathBuf>,
+    in_flight: Option<PathBuf>,
 }
 
-pub struct OutgoingFileSync {
+struct OutgoingFileSync {
     local: sync::FileState,
     remote: sync::FileState,
 }
@@ -47,6 +63,7 @@ pub struct IncomingState {
     pub dir_mappings: DirMapping,
     xfer_sync: TransferSync,
     file_sync: HashMap<FileId, IncomingFileSync>,
+    events: HashMap<FileId, Arc<IncomingFileEventTx>>,
 }
 
 pub struct OutgoingState {
@@ -54,6 +71,7 @@ pub struct OutgoingState {
     conn: Option<UnboundedSender<ClientReq>>,
     xfer_sync: TransferSync,
     file_sync: HashMap<FileId, OutgoingFileSync>,
+    events: HashMap<FileId, Arc<OutgoingFileEventTx>>,
 }
 
 /// Transfer manager is responsible for keeping track of all ongoing or pending
@@ -63,6 +81,7 @@ pub struct TransferManager {
     pub outgoing: Mutex<HashMap<Uuid, OutgoingState>>,
     storage: Arc<Storage>,
     logger: Logger,
+    event_factory: FileEventTxFactory,
 }
 
 #[derive(Default)]
@@ -71,12 +90,13 @@ pub struct DirMapping {
 }
 
 impl TransferManager {
-    pub fn new(storage: Arc<Storage>, logger: Logger) -> Self {
+    pub fn new(storage: Arc<Storage>, event_factory: FileEventTxFactory, logger: Logger) -> Self {
         Self {
             incoming: Default::default(),
             outgoing: Default::default(),
             storage,
             logger,
+            event_factory,
         }
     }
 
@@ -141,6 +161,7 @@ impl TransferManager {
                         })
                         .collect(),
                     xfer,
+                    events: HashMap::new(),
                 });
 
                 Ok(true)
@@ -231,6 +252,7 @@ impl TransferManager {
                         })
                         .collect(),
                     xfer,
+                    events: HashMap::new(),
                 });
             }
         };
@@ -238,11 +260,43 @@ impl TransferManager {
         Ok(())
     }
 
+    pub async fn incoming_file_events(
+        &self,
+        transfer_id: Uuid,
+        file_id: &FileId,
+    ) -> crate::Result<Arc<IncomingFileEventTx>> {
+        let mut lock = self.incoming.lock().await;
+
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        state.ensure_not_cancelled()?;
+
+        Ok(state.file_events(&self.event_factory, file_id))
+    }
+
+    pub async fn outgoing_file_events(
+        &self,
+        transfer_id: Uuid,
+        file_id: &FileId,
+    ) -> crate::Result<Arc<OutgoingFileEventTx>> {
+        let mut lock = self.outgoing.lock().await;
+
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        state.ensure_not_cancelled()?;
+
+        Ok(state.file_events(&self.event_factory, file_id))
+    }
+
     pub async fn outgoing_rejection_post(
         &self,
         transfer_id: Uuid,
         file_id: &FileId,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<RejectionResult<OutgoingTransfer>> {
         let mut lock = self.outgoing.lock().await;
 
         let state = lock
@@ -280,7 +334,10 @@ impl TransferManager {
             }
         }
 
-        Ok(())
+        Ok(RejectionResult {
+            xfer: state.xfer.clone(),
+            events: state.file_events(&self.event_factory, file_id),
+        })
     }
 
     pub async fn outgoing_rejection_ack(
@@ -342,7 +399,7 @@ impl TransferManager {
         &self,
         transfer_id: Uuid,
         file_id: &FileId,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<RejectionResult<IncomingTransfer>> {
         let mut lock = self.incoming.lock().await;
 
         let state = lock
@@ -384,7 +441,10 @@ impl TransferManager {
             }
         }
 
-        Ok(())
+        Ok(RejectionResult {
+            xfer: state.xfer.clone(),
+            events: state.file_events(&self.event_factory, file_id),
+        })
     }
 
     pub async fn incoming_rejection_ack(
@@ -488,16 +548,14 @@ impl TransferManager {
     pub async fn incoming_issue_close(
         &self,
         transfer_id: Uuid,
-    ) -> crate::Result<Arc<IncomingTransfer>> {
+    ) -> crate::Result<CloseResult<IncomingTransfer>> {
         let mut lock = self.incoming.lock().await;
 
         let state = lock
             .get_mut(&transfer_id)
             .ok_or(crate::Error::BadTransfer)?;
 
-        if matches!(state.xfer_sync.local, sync::TransferState::Canceled) {
-            return Err(crate::Error::BadTransfer);
-        }
+        state.ensure_not_cancelled()?;
 
         self.storage.update_transfer_sync_states(
             transfer_id,
@@ -510,22 +568,25 @@ impl TransferManager {
             val.in_flight.take();
         }
 
-        Ok(state.xfer.clone())
+        let res = CloseResult {
+            xfer: state.xfer.clone(),
+            events: state.events.values().cloned().collect(),
+        };
+
+        Ok(res)
     }
 
     pub async fn outgoing_issue_close(
         &self,
         transfer_id: Uuid,
-    ) -> crate::Result<Arc<OutgoingTransfer>> {
+    ) -> crate::Result<CloseResult<OutgoingTransfer>> {
         let mut lock = self.outgoing.lock().await;
 
         let state = lock
             .get_mut(&transfer_id)
             .ok_or(crate::Error::BadTransfer)?;
 
-        if matches!(state.xfer_sync.local, sync::TransferState::Canceled) {
-            return Err(crate::Error::BadTransfer);
-        }
+        state.ensure_not_cancelled()?;
 
         self.storage.update_transfer_sync_states(
             transfer_id,
@@ -535,7 +596,12 @@ impl TransferManager {
         state.xfer_sync.local = sync::TransferState::Canceled;
         let _ = state.conn.take();
 
-        Ok(state.xfer.clone())
+        let res = CloseResult {
+            xfer: state.xfer.clone(),
+            events: state.events.values().cloned().collect(),
+        };
+
+        Ok(res)
     }
 
     pub async fn outgoing_ensure_file_not_rejected(
@@ -577,6 +643,49 @@ impl TransferManager {
         Ok(())
     }
 
+    pub async fn incoming_cancel_file(
+        &self,
+        transfer_id: Uuid,
+        file_id: &FileId,
+    ) -> crate::Result<Option<FileCancelResult>> {
+        let mut lock = self.incoming.lock().await;
+
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+        state.ensure_not_cancelled()?;
+
+        let sync = state
+            .file_sync
+            .get_mut(file_id)
+            .ok_or(crate::Error::BadFileId)?;
+
+        if matches!(sync.local, sync::FileState::Rejected) {
+            return Err(crate::Error::Rejected);
+        }
+
+        let cancelled = if sync.in_flight.is_some() {
+            self.storage
+                .stop_incoming_file(state.xfer.id(), file_id.as_ref())?;
+            let _ = sync.in_flight.take();
+
+            if let Some(conn) = &state.conn {
+                let _ = conn.send(ServerReq::Cancel {
+                    file: file_id.clone(),
+                });
+            }
+
+            true
+        } else {
+            false
+        };
+
+        Ok(cancelled.then(|| FileCancelResult {
+            xfer: state.xfer.clone(),
+            events: state.file_events(&self.event_factory, file_id),
+        }))
+    }
+
     pub async fn outgoing_disconnect(&self, transfer_id: Uuid) -> crate::Result<()> {
         let mut lock = self.outgoing.lock().await;
         let _ = lock
@@ -603,6 +712,29 @@ impl OutgoingState {
                 file: file_id.clone(),
             });
         }
+    }
+
+    fn ensure_not_cancelled(&self) -> crate::Result<()> {
+        if matches!(
+            self.xfer_sync.local,
+            drop_storage::sync::TransferState::Canceled
+        ) {
+            return Err(crate::Error::BadTransfer);
+        }
+        Ok(())
+    }
+
+    fn file_events(
+        &mut self,
+        factory: &FileEventTxFactory,
+        file_id: &FileId,
+    ) -> Arc<OutgoingFileEventTx> {
+        self.events
+            .entry(file_id.clone())
+            .or_insert_with_key(|file_id| {
+                Arc::new(factory.create(self.xfer.clone(), file_id.clone()))
+            })
+            .clone()
     }
 }
 
@@ -653,38 +785,27 @@ impl IncomingState {
         Ok(())
     }
 
-    /// Returs `true` when cancel was issued and `false` in case its already
-    /// canceled
-    pub fn cancel_file(&mut self, storage: &Storage, file_id: &FileId) -> crate::Result<bool> {
-        if matches!(self.xfer_sync.local, sync::TransferState::Canceled) {
+    fn file_events(
+        &mut self,
+        factory: &FileEventTxFactory,
+        file_id: &FileId,
+    ) -> Arc<IncomingFileEventTx> {
+        self.events
+            .entry(file_id.clone())
+            .or_insert_with_key(|file_id| {
+                Arc::new(factory.create(self.xfer.clone(), file_id.clone()))
+            })
+            .clone()
+    }
+
+    fn ensure_not_cancelled(&self) -> crate::Result<()> {
+        if matches!(
+            self.xfer_sync.local,
+            drop_storage::sync::TransferState::Canceled
+        ) {
             return Err(crate::Error::BadTransfer);
         }
-
-        let state = self
-            .file_sync
-            .get_mut(file_id)
-            .ok_or(crate::Error::BadFileId)?;
-
-        if matches!(state.local, sync::FileState::Rejected) {
-            return Err(crate::Error::Rejected);
-        }
-
-        let canceled = if state.in_flight.is_some() {
-            storage.stop_incoming_file(self.xfer.id(), file_id.as_ref())?;
-            let _ = state.in_flight.take();
-
-            if let Some(conn) = &self.conn {
-                let _ = conn.send(ServerReq::Cancel {
-                    file: file_id.clone(),
-                });
-            }
-
-            true
-        } else {
-            false
-        };
-
-        Ok(canceled)
+        Ok(())
     }
 
     fn reject_pending(&self, conn: &UnboundedSender<ServerReq>, logger: &Logger) {
@@ -901,6 +1022,7 @@ fn restore_incoming(
                         remote: sync.remote_state,
                     },
                     file_sync,
+                    events: HashMap::new(),
                 };
 
                 let paths = storage
@@ -1012,6 +1134,7 @@ fn restore_outgoing(
                         remote: sync.remote_state,
                     },
                     file_sync,
+                    events: HashMap::new(),
                 };
                 anyhow::Ok(xstate)
             };

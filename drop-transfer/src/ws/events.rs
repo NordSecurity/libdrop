@@ -4,7 +4,7 @@ use drop_analytics::{FileInfo, Moose};
 use drop_core::Status;
 use tokio::sync::{mpsc::Sender, RwLock};
 
-use crate::{service::State, Event, File, FileId, IncomingTransfer, OutgoingTransfer, Transfer};
+use crate::{Event, File, FileId, IncomingTransfer, OutgoingTransfer, Transfer};
 
 struct FileEventTxInner {
     tx: Sender<Event>,
@@ -12,25 +12,39 @@ struct FileEventTxInner {
     started: Option<Instant>,
 }
 
+pub type IncomingFileEventTx = FileEventTx<IncomingTransfer>;
+pub type OutgoingFileEventTx = FileEventTx<OutgoingTransfer>;
+
 pub struct FileEventTx<T: Transfer> {
     inner: RwLock<FileEventTxInner>,
     xfer: Arc<T>,
     file_id: FileId,
 }
 
-impl<T: Transfer> FileEventTx<T> {
-    pub(crate) fn new(state: &State, xfer: Arc<T>, file_id: FileId) -> Self {
-        Self {
+pub struct FileEventTxFactory {
+    events: Sender<Event>,
+    moose: Arc<dyn Moose>,
+}
+
+impl FileEventTxFactory {
+    pub fn new(events: Sender<Event>, moose: Arc<dyn Moose>) -> Self {
+        Self { events, moose }
+    }
+
+    pub fn create<T: Transfer>(&self, xfer: Arc<T>, file_id: FileId) -> FileEventTx<T> {
+        FileEventTx {
             inner: RwLock::new(FileEventTxInner {
-                tx: state.event_tx.clone(),
-                moose: state.moose.clone(),
+                tx: self.events.clone(),
+                moose: self.moose.clone(),
                 started: None,
             }),
             xfer,
             file_id,
         }
     }
+}
 
+impl<T: Transfer> FileEventTx<T> {
     fn file_info(&self) -> Option<FileInfo> {
         Some(self.xfer.files()[&self.file_id].info())
     }
@@ -100,9 +114,20 @@ impl<T: Transfer> FileEventTx<T> {
             .expect("Event channel shouldn't be closed");
     }
 
-    pub async fn stop_silent(&self) {
+    pub async fn cancel_silent(&self) {
         let mut lock = self.inner.write().await;
-        lock.started = None;
+
+        if let Some(started) = lock.started.take() {
+            let info = self.file_info();
+
+            lock.moose.service_quality_transfer_file(
+                Err(Status::Canceled as _),
+                drop_analytics::Phase::End,
+                self.xfer.id().to_string(),
+                started.elapsed().as_millis() as _,
+                info,
+            );
+        }
     }
 }
 
