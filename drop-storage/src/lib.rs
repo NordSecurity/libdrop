@@ -759,7 +759,7 @@ impl Storage {
         Ok(out)
     }
 
-    pub fn incoming_files_to_resume(&self, transfer_id: Uuid) -> Result<Vec<sync::FileInFilght>> {
+    pub fn incoming_files_to_resume(&self, transfer_id: Uuid) -> Result<Vec<sync::FileInFlight>> {
         sync::incoming_files_in_flight(&*self.pool.get()?, transfer_id)
     }
 
