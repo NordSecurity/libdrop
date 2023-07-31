@@ -2,12 +2,10 @@ pub mod error;
 pub mod sync;
 pub mod types;
 
-use std::{path::Path, vec};
+use std::{path::Path, sync::Mutex, vec};
 
 use include_dir::{include_dir, Dir};
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{params, Transaction};
+use rusqlite::{params, Connection, Transaction};
 use rusqlite_migration::Migrations;
 use slog::{trace, warn, Logger};
 use types::{
@@ -27,7 +25,7 @@ type Result<T> = std::result::Result<T, Error>;
 type QueryResult<T> = std::result::Result<T, rusqlite::Error>;
 // SQLite storage wrapper
 pub struct Storage {
-    pool: Pool<SqliteConnectionManager>,
+    conn: Mutex<Connection>,
     logger: Logger,
 }
 
@@ -35,13 +33,8 @@ const MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
 impl Storage {
     pub fn new(logger: Logger, path: &str) -> Result<Self> {
-        let manager = match path {
-            ":memory:" => SqliteConnectionManager::memory(),
-            _ => SqliteConnectionManager::file(path),
-        };
-        let pool = Pool::new(manager)?;
+        let mut conn = Connection::open(path)?;
 
-        let mut conn = pool.get()?;
         Migrations::from_directory(&MIGRATIONS_DIR)
             .map_err(|e| {
                 Error::InternalError(format!("Failed to gather migrations from directory: {e}"))
@@ -49,7 +42,10 @@ impl Storage {
             .to_latest(&mut conn)
             .map_err(|e| Error::InternalError(format!("Failed to run migrations: {e}")))?;
 
-        Ok(Self { logger, pool })
+        Ok(Self {
+            logger,
+            conn: Mutex::new(conn),
+        })
     }
 
     pub fn insert_transfer(&self, transfer: &TransferInfo) -> Result<()> {
@@ -66,7 +62,7 @@ impl Storage {
             "transfer_type" => transfer_type_int,
         );
 
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn.lock().expect("Failed to acquire a lock");
         let conn = conn.transaction()?;
 
         conn.execute(
@@ -114,7 +110,7 @@ impl Storage {
         remote: Option<sync::TransferState>,
         local: Option<sync::TransferState>,
     ) -> Result<()> {
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn.lock().expect("Failed to acquire a lock");
         let conn = conn.transaction()?;
 
         if let Some(remote) = remote {
@@ -129,11 +125,13 @@ impl Storage {
     }
 
     pub fn transfer_sync_state(&self, transfer_id: Uuid) -> crate::Result<Option<sync::Transfer>> {
-        sync::transfer_state(&*self.pool.get()?, transfer_id)
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
+        sync::transfer_state(&conn, transfer_id)
     }
 
     pub fn trasnfer_sync_clear(&self, transfer_id: Uuid) -> crate::Result<Option<()>> {
-        sync::transfer_clear(&*self.pool.get()?, transfer_id)
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
+        sync::transfer_clear(&conn, transfer_id)
     }
 
     pub fn outgoing_file_sync_state(
@@ -141,7 +139,8 @@ impl Storage {
         transfer_id: Uuid,
         file_id: &str,
     ) -> crate::Result<Option<sync::File>> {
-        sync::outgoing_file_state(&*self.pool.get()?, transfer_id, file_id)
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
+        sync::outgoing_file_state(&conn, transfer_id, file_id)
     }
 
     pub fn update_outgoing_file_sync_states(
@@ -151,7 +150,7 @@ impl Storage {
         remote: Option<sync::FileState>,
         local: Option<sync::FileState>,
     ) -> crate::Result<()> {
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn.lock().expect("Failed to acquire a lock");
         let conn = conn.transaction()?;
 
         if let Some(remote) = remote {
@@ -170,7 +169,8 @@ impl Storage {
         transfer_id: Uuid,
         file_id: &str,
     ) -> crate::Result<Option<sync::File>> {
-        sync::incoming_file_state(&*self.pool.get()?, transfer_id, file_id)
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
+        sync::incoming_file_state(&conn, transfer_id, file_id)
     }
 
     pub fn update_incoming_file_sync_states(
@@ -180,7 +180,7 @@ impl Storage {
         remote: Option<sync::FileState>,
         local: Option<sync::FileState>,
     ) -> crate::Result<()> {
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn.lock().expect("Failed to acquire a lock");
         let conn = conn.transaction()?;
 
         if let Some(remote) = remote {
@@ -199,7 +199,8 @@ impl Storage {
         transfer_id: Uuid,
         file_id: &str,
     ) -> crate::Result<Option<()>> {
-        sync::stop_incoming_file(&*self.pool.get()?, transfer_id, file_id)
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
+        sync::stop_incoming_file(&conn, transfer_id, file_id)
     }
 
     pub fn start_incoming_file(
@@ -208,7 +209,8 @@ impl Storage {
         file_id: &str,
         base_dir: &str,
     ) -> crate::Result<Option<()>> {
-        sync::start_incoming_file(&*self.pool.get()?, transfer_id, file_id, base_dir)
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
+        sync::start_incoming_file(&conn, transfer_id, file_id, base_dir)
     }
 
     fn insert_incoming_path(
@@ -257,7 +259,7 @@ impl Storage {
             "file_id" => file_id,
         );
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         conn.execute(
             "UPDATE incoming_paths SET checksum = ?3 WHERE transfer_id = ?1 AND path_hash = ?2",
             params![tid, file_id, checksum],
@@ -273,7 +275,7 @@ impl Storage {
             "Fetching checksums";
             "transfer_id" => &tid);
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         let out = conn
             .prepare(
                 "SELECT path_hash as file_id, checksum FROM incoming_paths WHERE transfer_id = ?1",
@@ -297,7 +299,7 @@ impl Storage {
             "Inserting transfer active state";
             "transfer_id" => &tid);
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         conn.execute(
             "INSERT INTO transfer_active_states (transfer_id) VALUES (?1)",
             params![tid],
@@ -315,7 +317,7 @@ impl Storage {
             "transfer_id" => &tid,
             "error" => error);
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         conn.execute(
             "INSERT INTO transfer_failed_states (transfer_id, status_code) VALUES (?1, ?2)",
             params![tid, error],
@@ -333,7 +335,7 @@ impl Storage {
             "transfer_id" => &tid,
             "by_peer" => by_peer);
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         conn.execute(
             "INSERT INTO transfer_cancel_states (transfer_id, by_peer) VALUES (?1, ?2)",
             params![tid, by_peer],
@@ -355,7 +357,7 @@ impl Storage {
             "transfer_id" => &tid,
             "file_id" => file_id);
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         conn.execute(
             "INSERT INTO outgoing_path_pending_states (path_id) VALUES ((SELECT id FROM \
              outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
@@ -378,7 +380,7 @@ impl Storage {
             "transfer_id" => &tid,
             "file_id" => file_id);
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         conn.execute(
             "INSERT INTO incoming_path_pending_states (path_id) VALUES ((SELECT id FROM \
              incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
@@ -401,7 +403,7 @@ impl Storage {
             "transfer_id" => &tid,
             "path_id" => path_id);
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         conn.execute(
             "INSERT INTO outgoing_path_started_states (path_id, bytes_sent) VALUES ((SELECT id \
              FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
@@ -426,7 +428,7 @@ impl Storage {
             "path_id" => path_id,
             "base_dir" => base_dir);
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         conn.execute(
             "INSERT INTO incoming_path_started_states (path_id, base_dir, bytes_received) VALUES \
              ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
@@ -453,7 +455,7 @@ impl Storage {
             "by_peer" => by_peer,
             "bytes_sent" => bytes_sent);
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         conn.execute(
             "INSERT INTO outgoing_path_cancel_states (path_id, by_peer, bytes_sent) VALUES \
              ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
@@ -480,7 +482,7 @@ impl Storage {
             "by_peer" => by_peer,
             "bytes_received" => bytes_received);
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         conn.execute(
             "INSERT INTO incoming_path_cancel_states (path_id, by_peer, bytes_received) VALUES \
              ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
@@ -507,7 +509,7 @@ impl Storage {
             "error" => error,
             "bytes_received" => bytes_received);
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         conn.execute(
             "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) \
              VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), \
@@ -534,7 +536,7 @@ impl Storage {
             "error" => error,
             "bytes_sent" => bytes_sent);
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         conn.execute(
             "INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent) VALUES \
              ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
@@ -556,7 +558,7 @@ impl Storage {
             "transfer_id" => &tid,
             "path_id" => path_id);
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         conn.execute(
             "INSERT INTO outgoing_path_completed_states (path_id) VALUES ((SELECT id FROM \
              outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
@@ -580,7 +582,7 @@ impl Storage {
             "path_id" => path_id,
             "final_path" => final_path);
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         conn.execute(
             "INSERT INTO incoming_path_completed_states (path_id, final_path) VALUES ((SELECT id \
              FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
@@ -598,7 +600,7 @@ impl Storage {
     ) -> Result<()> {
         let tid = transfer_id.to_string();
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         conn.execute(
             "INSERT INTO outgoing_path_reject_states (path_id, by_peer) VALUES ((SELECT id FROM \
              outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
@@ -616,7 +618,7 @@ impl Storage {
     ) -> Result<()> {
         let tid = transfer_id.to_string();
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         conn.execute(
             "INSERT INTO incoming_path_reject_states (path_id, by_peer) VALUES ((SELECT id FROM \
              incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
@@ -627,7 +629,7 @@ impl Storage {
     }
 
     pub fn purge_transfers_until(&self, until_timestamp: i64) -> Result<()> {
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
 
         trace!(
             self.logger,
@@ -642,38 +644,27 @@ impl Storage {
         Ok(())
     }
 
-    fn purge_transfer(&self, transfer_id: String) -> Result<()> {
-        let conn = self.pool.get()?;
-
-        trace!(
-            self.logger,
-            "Purging transfer";
-            "transfer_id" => transfer_id.clone());
-
-        conn.execute("DELETE FROM transfers WHERE id = ?1", params![transfer_id])?;
-
-        Ok(())
-    }
-
     pub fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<()> {
         trace!(
             self.logger,
             "Purging transfers";
             "transfer_ids" => format!("{:?}", transfer_ids));
 
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
         for id in transfer_ids {
-            self.purge_transfer(id)?;
+            conn.execute("DELETE FROM transfers WHERE id = ?1", params![id])?;
         }
 
         Ok(())
     }
 
     pub fn outgoing_files_to_reject(&self, transfer_id: Uuid) -> Result<Vec<String>> {
-        sync::outgoing_files_to_reject(&*self.pool.get()?, transfer_id)
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
+        sync::outgoing_files_to_reject(&conn, transfer_id)
     }
 
     pub fn outgoing_transfers_to_resume(&self) -> Result<Vec<OutgoingTransferToRetry>> {
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn.lock().expect("Failed to acquire a lock");
         let conn = conn.transaction()?;
 
         let rec_transfers = sync::transfers_to_resume(&conn, TransferType::Outgoing)?;
@@ -722,7 +713,7 @@ impl Storage {
     }
 
     pub fn incoming_transfers_to_resume(&self) -> crate::Result<Vec<IncomingTransferToRetry>> {
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn.lock().expect("Failed to acquire a lock");
         let conn = conn.transaction()?;
 
         let rec_transfers = sync::transfers_to_resume(&conn, TransferType::Incoming)?;
@@ -760,15 +751,17 @@ impl Storage {
     }
 
     pub fn incoming_files_to_resume(&self, transfer_id: Uuid) -> Result<Vec<sync::FileInFlight>> {
-        sync::incoming_files_in_flight(&*self.pool.get()?, transfer_id)
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
+        sync::incoming_files_in_flight(&conn, transfer_id)
     }
 
     pub fn incoming_files_to_reject(&self, transfer_id: Uuid) -> Result<Vec<String>> {
-        sync::incoming_files_to_reject(&*self.pool.get()?, transfer_id)
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
+        sync::incoming_files_to_reject(&conn, transfer_id)
     }
 
     pub fn finished_incoming_files(&self, transfer_id: Uuid) -> Result<Vec<FinishedIncomingFile>> {
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
 
         let paths = conn
             .prepare(
@@ -791,7 +784,7 @@ impl Storage {
     }
 
     pub fn transfers_since(&self, since_timestamp: i64) -> Result<Vec<Transfer>> {
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
 
         trace!(
             self.logger,
@@ -827,12 +820,18 @@ impl Storage {
         for transfer in &mut transfers {
             match transfer.transfer_type {
                 DbTransferType::Incoming(_) => {
-                    transfer.transfer_type =
-                        DbTransferType::Incoming(self.get_incoming_paths(transfer.id)?)
+                    transfer.transfer_type = DbTransferType::Incoming(Self::get_incoming_paths(
+                        &conn,
+                        transfer.id,
+                        &self.logger,
+                    )?)
                 }
                 DbTransferType::Outgoing(_) => {
-                    transfer.transfer_type =
-                        DbTransferType::Outgoing(self.get_outgoing_paths(transfer.id)?)
+                    transfer.transfer_type = DbTransferType::Outgoing(Self::get_outgoing_paths(
+                        &conn,
+                        transfer.id,
+                        &self.logger,
+                    )?)
                 }
             }
 
@@ -889,7 +888,11 @@ impl Storage {
                 })?
                 .collect::<QueryResult<Vec<TransferStateEvent>>>()?,
             );
+        }
 
+        drop(conn);
+
+        for transfer in &mut transfers {
             transfer
                 .states
                 .sort_by(|a, b| a.created_at.cmp(&b.created_at));
@@ -899,7 +902,7 @@ impl Storage {
     }
 
     pub fn remove_transfer_file(&self, transfer_id: Uuid, file_id: &str) -> Result<Option<()>> {
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
 
         let tid = transfer_id.to_string();
 
@@ -954,7 +957,7 @@ impl Storage {
             "transfer_id" => &tid
         );
 
-        let conn = self.pool.get()?;
+        let conn = self.conn.lock().expect("Failed to acquire a lock");
 
         let out = conn
             .prepare(
@@ -976,16 +979,19 @@ impl Storage {
         Ok(out)
     }
 
-    fn get_outgoing_paths(&self, transfer_id: Uuid) -> Result<Vec<OutgoingPath>> {
+    fn get_outgoing_paths(
+        conn: &Connection,
+        transfer_id: Uuid,
+        logger: &slog::Logger,
+    ) -> Result<Vec<OutgoingPath>> {
         let tid = transfer_id.to_string();
 
         trace!(
-            self.logger,
+            logger,
             "Fetching outgoing paths for transfer";
             "transfer_id" => &tid
         );
 
-        let conn = self.pool.get()?;
         let mut paths: Vec<_> = conn
             .prepare(
                 r#"
@@ -1157,15 +1163,19 @@ impl Storage {
         Ok(paths)
     }
 
-    fn get_incoming_paths(&self, transfer_id: Uuid) -> Result<Vec<IncomingPath>> {
+    fn get_incoming_paths(
+        conn: &Connection,
+        transfer_id: Uuid,
+        logger: &slog::Logger,
+    ) -> Result<Vec<IncomingPath>> {
         let tid = transfer_id.to_string();
 
         trace!(
-            self.logger,
+            logger,
             "Fetching incoming paths for transfer";
-            "transfer_id" => &tid);
+            "transfer_id" => &tid
+        );
 
-        let conn = self.pool.get()?;
         let mut paths = conn
             .prepare(
                 r#"

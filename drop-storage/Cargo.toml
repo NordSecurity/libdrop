@@ -7,8 +7,6 @@ edition = "2021"
 
 [dependencies]
 thiserror = "*"
-r2d2 = "0.8.10"
-r2d2_sqlite = "0.22.0"
 rusqlite_migration = { version = "1.1.0-alpha.2", features = ["from-directory"] }
 include_dir = "0.7.3"
 slog = { workspace = true }
