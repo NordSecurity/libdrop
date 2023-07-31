@@ -252,6 +252,25 @@ class FinishFileRejected(Event):
         return f"FinishFileRejected(transfer={print_uuid(self._uuid_slot)}, file={self._file}, by_peer={self._by_peer})"
 
 
+class Paused(Event):
+    def __init__(self, uuid_slot: int, file: str):
+        self._uuid_slot = uuid_slot
+        self._file = file
+
+    def __eq__(self, rhs):
+        if not isinstance(rhs, Paused):
+            return False
+        if self._uuid_slot != rhs._uuid_slot:
+            return False
+        if self._file != rhs._file:
+            return False
+
+        return True
+
+    def __str__(self):
+        return f"Paused(transfer={print_uuid(self._uuid_slot)}, file={self._file})"
+
+
 class FinishFileFailed(Event):
     def __init__(
         self,
@@ -311,21 +330,6 @@ class FinishFailedTransfer(Event):
 
     def __str__(self):
         return f"FinishFailedTransfer(transfer={print_uuid(self._uuid_slot)}, status={self._status}, os_err={self._os_err})"
-
-
-class Panic(Event):
-    def __init__(self, info: str):
-        self._info = info
-
-    def __eq__(self, rhs):
-        if not isinstance(rhs, Panic):
-            return False
-        if self._info != rhs._info:
-            return False
-        return True
-
-    def __str__(self):
-        return f"Panic(info={self._info})"
 
 
 class RuntimeError(Event):
