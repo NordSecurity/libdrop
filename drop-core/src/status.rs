@@ -24,6 +24,7 @@ pub enum Status {
     DbLost = 32,
     FileChecksumMismatch = 33,
     FileRejected = 34,
+    FilePaused = 35,
 }
 
 impl serde::Serialize for Status {

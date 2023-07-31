@@ -5534,6 +5534,7 @@ scenarios = [
                         "/tmp/received/29-1",
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -5578,6 +5579,7 @@ scenarios = [
                         )
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Wait(
@@ -5745,6 +5747,7 @@ scenarios = [
                         "/tmp/received/29-3",
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -5809,6 +5812,7 @@ scenarios = [
                         event.FinishFileRejected(0, FILES["testfile-bulk-01"].id, True)
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Wait(
@@ -5971,6 +5975,9 @@ scenarios = [
                         event.Start(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
                     ),
                     action.Wait(
+                        event.Paused(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
+                    ),
+                    action.Wait(
                         event.Start(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
                     ),
                     action.Wait(
@@ -6055,12 +6062,12 @@ scenarios = [
                         )
                     ),
                     action.RejectTransferFile(0, FILES["testfile-big"].id),
-                    action.Stop(),
-                    action.Sleep(4),
-                    action.Start("172.20.0.5", dbpath="/tmp/db/29-7-ren.sqlite"),
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-big"].id, False)
                     ),
+                    action.Stop(),
+                    action.Sleep(4),
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-7-ren.sqlite"),
                 ]
             ),
             "stimpy": ActionList(

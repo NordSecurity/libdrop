@@ -23,7 +23,11 @@ impl<'a> StorageDispatch<'a> {
     }
 
     pub fn handle_event(&mut self, event: &crate::Event) -> Result<(), Error> {
-        let event = Into::<Event>::into(event);
+        let event: Event = match event.into() {
+            Some(event) => event,
+            None => return Ok(()),
+        };
+
         match event {
             Event::Pending { transfer_info } => match &transfer_info.files {
                 TransferFiles::Incoming(files) => {
@@ -178,9 +182,9 @@ impl<'a> StorageDispatch<'a> {
     }
 }
 
-impl From<&crate::Event> for Event {
+impl From<&crate::Event> for Option<Event> {
     fn from(event: &crate::Event) -> Self {
-        match event {
+        let ev = match event {
             crate::Event::RequestReceived(transfer) => Event::Pending {
                 transfer_info: transfer.storage_info(),
             },
@@ -281,6 +285,10 @@ impl From<&crate::Event> for Event {
                 file_id: file_id.to_string(),
                 by_peer: *by_peer,
             },
-        }
+            crate::Event::FileUploadPaused { .. } => return None,
+            crate::Event::FileDownloadPaused { .. } => return None,
+        };
+
+        Some(ev)
     }
 }

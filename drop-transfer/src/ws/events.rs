@@ -196,6 +196,17 @@ impl FileEventTx<IncomingTransfer> {
         )
         .await
     }
+
+    pub async fn pause(&self) {
+        self.stop(
+            crate::Event::FileDownloadPaused {
+                transfer_id: self.xfer.id(),
+                file_id: self.file_id.clone(),
+            },
+            Err(Status::FilePaused as _),
+        )
+        .await
+    }
 }
 
 impl FileEventTx<OutgoingTransfer> {
@@ -237,6 +248,17 @@ impl FileEventTx<OutgoingTransfer> {
         self.stop(
             crate::Event::FileUploadSuccess(self.xfer.clone(), self.file_id.clone()),
             Ok(()),
+        )
+        .await
+    }
+
+    pub async fn pause(&self) {
+        self.stop(
+            crate::Event::FileUploadPaused {
+                transfer_id: self.xfer.id(),
+                file_id: self.file_id.clone(),
+            },
+            Err(Status::FilePaused as _),
         )
         .await
     }
