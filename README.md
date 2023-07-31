@@ -22,6 +22,10 @@ Testsuite takes a long time to complete so running specific tests might be prefe
 cd test
 docker compose down && SCENARIO="SCENARIO_NAME" LIB_PATH=PATH_TO_LIB_BINARY docker compose up ren stimpy george
 ```
+Note: When building libdrop for tests, use the `moose_file` flag, otherwise tests related to checking events will fail.
+```
+cargo build --features moose_file
+```
 
 ## udrop
 
