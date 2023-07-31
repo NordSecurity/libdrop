@@ -286,6 +286,8 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     async fn on_close(&mut self, by_peer: bool) {
         debug!(self.logger, "ServerHandler::on_close(by_peer: {})", by_peer);
 
+        self.on_stop().await;
+
         if by_peer {
             self.state
                 .event_tx
@@ -296,8 +298,6 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
                 .await
                 .expect("Could not send a file cancelled event, channel closed");
         }
-
-        self.on_stop().await;
     }
 
     async fn on_text_msg(&mut self, _: &mut WebSocket, text: &str) -> anyhow::Result<()> {
