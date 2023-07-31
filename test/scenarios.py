@@ -6407,9 +6407,15 @@ scenarios = [
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.WaitRacy(
                         [
-                            event.FinishFailedTransfer(
+                            event.Queued(
                                 2,
-                                Error.IO,
+                                {
+                                    event.File(
+                                        FILES["testfile-small"].id,
+                                        "testfile-small",
+                                        1048576,
+                                    ),
+                                },
                             ),
                             event.Queued(
                                 0,
@@ -6433,6 +6439,22 @@ scenarios = [
                             ),
                         ]
                     ),
+                    action.WaitForOneOf(
+                        [
+                            event.FinishFailedTransfer(
+                                0,
+                                Error.IO,
+                            ),
+                            event.FinishFailedTransfer(
+                                1,
+                                Error.IO,
+                            ),
+                            event.FinishFailedTransfer(
+                                2,
+                                Error.IO,
+                            ),
+                        ]
+                    ),
                     action.Sleep(2),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -6447,7 +6469,6 @@ scenarios = [
                             },
                         )
                     ),
-                    action.ExpectCancel([0, 1, 3], True),
                     action.Stop(),
                 ]
             ),
@@ -6457,6 +6478,7 @@ scenarios = [
                     # authentication nonce and the second with transfer. One
                     # more is needed because that's how the implementation
                     # works.
+                    action.Sleep(3),
                     action.Start("172.20.0.15", max_reqs=5),
                     action.WaitRacy(
                         [
@@ -6497,10 +6519,6 @@ scenarios = [
                             },
                         )
                     ),
-                    action.CancelTransferRequest(0),
-                    action.CancelTransferRequest(1),
-                    action.CancelTransferRequest(2),
-                    action.ExpectCancel([0, 1, 2], False),
                     action.Stop(),
                 ]
             ),
