@@ -261,6 +261,23 @@ class Wait(Action):
         return f"Wait({str(self._event)})"
 
 
+class WaitForOneOf(Action):
+    def __init__(self, events: typing.List[Event]):
+        self._events: typing.List[Event] = events
+
+    async def run(self, drop: ffi.Drop):
+        e = await drop._events.wait_for_any_event(100, ignore_progress=True)
+
+        if e is None:
+            raise Exception(f"Expected one of {self._events} but got nothing")
+
+        if e not in self._events:
+            raise Exception(f"Expected one of {self._events} but got {e}")
+
+    def __str__(self):
+        return f"WaitForOneOf({', '.join(str(e) for e in self._events)})"
+
+
 class WaitRacy(Action):
     def __init__(self, events: typing.List[Event]):
         self._events: typing.List[Event] = events
