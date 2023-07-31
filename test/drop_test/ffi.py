@@ -517,10 +517,7 @@ def new_event(event_str: str) -> event.Event:
     event_type = deserialized["type"]
     event_data = deserialized["data"]
 
-    if event_type == "Panic":
-        return event.Panic(event_data)
-
-    elif event_type == "RequestReceived":
+    if event_type == "RequestReceived":
         transfer: str = event_data["transfer"]
 
         event.UUIDS_LOCK.acquire()
@@ -606,6 +603,15 @@ def new_event(event_str: str) -> event.Event:
             transfer_slot,
             {event.File(f["id"], f["path"], f["size"]) for f in event_data["files"]},
         )
+
+    elif event_type == "TransferPaused":
+        transfer = event_data["transfer"]
+
+        event.UUIDS_LOCK.acquire()
+        transfer_slot = event.UUIDS.index(transfer)
+        event.UUIDS_LOCK.release()
+
+        return event.Paused(transfer_slot, event_data["file"])
 
     elif event_type == "RuntimeError":
         status = event_data["status"]
