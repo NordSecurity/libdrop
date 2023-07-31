@@ -108,6 +108,10 @@ pub enum Event {
     RuntimeError {
         status: drop_core::Status,
     },
+    TransferPaused {
+        transfer: String,
+        file: String,
+    },
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -272,6 +276,20 @@ impl From<drop_transfer::Event> for Event {
                     file: file_id.to_string(),
                     by_peer,
                 },
+            },
+            drop_transfer::Event::FileUploadPaused {
+                transfer_id,
+                file_id,
+            } => Self::TransferPaused {
+                transfer: transfer_id.to_string(),
+                file: file_id.to_string(),
+            },
+            drop_transfer::Event::FileDownloadPaused {
+                transfer_id,
+                file_id,
+            } => Self::TransferPaused {
+                transfer: transfer_id.to_string(),
+                file: file_id.to_string(),
             },
         }
     }

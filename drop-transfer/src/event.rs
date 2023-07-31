@@ -35,6 +35,15 @@ pub enum Event {
     FileUploadFailed(Arc<OutgoingTransfer>, FileId, Error),
     FileDownloadFailed(Arc<IncomingTransfer>, FileId, Error),
 
+    FileUploadPaused {
+        transfer_id: Uuid,
+        file_id: FileId,
+    },
+    FileDownloadPaused {
+        transfer_id: Uuid,
+        file_id: FileId,
+    },
+
     FileUploadRejected {
         transfer_id: Uuid,
         file_id: FileId,

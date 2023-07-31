@@ -402,11 +402,13 @@ async fn handle_client(
     };
 
     let result = task.await;
-    handler.on_stop().await;
 
     if let Err(err) = result {
         info!(logger, "WS connection broke for {}: {err:?}", xfer.id());
+        handler.on_conn_break().await;
     } else {
+        handler.on_stop().await;
+
         let task = async {
             // Drain messages
             while socket.next().await.transpose()?.is_some() {}
