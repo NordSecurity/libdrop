@@ -135,12 +135,12 @@ impl TransferManager {
                 Ok(false)
             }
             Entry::Vacant(vacc) => {
-                self.storage.insert_transfer(&xfer.storage_info())?;
+                self.storage.insert_transfer(&xfer.storage_info());
                 self.storage.update_transfer_sync_states(
                     xfer.id(),
                     Some(sync::TransferState::Active),
                     Some(sync::TransferState::Active),
-                )?;
+                );
 
                 vacc.insert(IncomingState {
                     conn: Some(conn),
@@ -188,7 +188,7 @@ impl TransferManager {
                     transfer_id,
                     Some(sync::TransferState::Active),
                     Some(sync::TransferState::Active),
-                )?;
+                );
 
                 state.xfer_sync.local = sync::TransferState::Active;
                 state.xfer_sync.remote = sync::TransferState::Active;
@@ -198,7 +198,7 @@ impl TransferManager {
                     transfer_id,
                     Some(sync::TransferState::Active),
                     None,
-                )?;
+                );
                 state.xfer_sync.remote = sync::TransferState::Active;
             }
             _ => (),
@@ -233,7 +233,7 @@ impl TransferManager {
                 ));
             }
             Entry::Vacant(entry) => {
-                self.storage.insert_transfer(&xfer.storage_info())?;
+                self.storage.insert_transfer(&xfer.storage_info());
 
                 entry.insert(OutgoingState {
                     conn: None,
@@ -326,7 +326,7 @@ impl TransferManager {
                     file_id.as_ref(),
                     None,
                     Some(sync::FileState::Rejected),
-                )?;
+                );
                 sync.local = sync::FileState::Rejected;
 
                 if let Some(conn) = &state.conn {
@@ -364,7 +364,7 @@ impl TransferManager {
             file_id.as_ref(),
             Some(sync::FileState::Rejected),
             None,
-        )?;
+        );
         sync.remote = sync::FileState::Rejected;
 
         Ok(())
@@ -391,7 +391,7 @@ impl TransferManager {
             file_id.as_ref(),
             Some(sync::FileState::Rejected),
             Some(sync::FileState::Rejected),
-        )?;
+        );
         sync.remote = sync::FileState::Rejected;
         sync.local = sync::FileState::Rejected;
 
@@ -429,9 +429,9 @@ impl TransferManager {
                     file_id.as_ref(),
                     None,
                     Some(sync::FileState::Rejected),
-                )?;
+                );
                 self.storage
-                    .stop_incoming_file(state.xfer.id(), file_id.as_ref())?;
+                    .stop_incoming_file(state.xfer.id(), file_id.as_ref());
 
                 sync.local = sync::FileState::Rejected;
                 let _ = sync.in_flight.take();
@@ -471,7 +471,7 @@ impl TransferManager {
             file_id.as_ref(),
             Some(sync::FileState::Rejected),
             None,
-        )?;
+        );
         sync.remote = sync::FileState::Rejected;
 
         Ok(())
@@ -498,7 +498,7 @@ impl TransferManager {
             file_id.as_ref(),
             Some(sync::FileState::Rejected),
             Some(sync::FileState::Rejected),
-        )?;
+        );
         sync.remote = sync::FileState::Rejected;
         sync.local = sync::FileState::Rejected;
         sync.in_flight.take();
@@ -511,7 +511,7 @@ impl TransferManager {
         if !lock.contains_key(&transfer_id) {
             return Err(crate::Error::BadTransfer);
         }
-        self.storage.trasnfer_sync_clear(transfer_id)?;
+        self.storage.trasnfer_sync_clear(transfer_id);
         lock.remove(&transfer_id);
 
         Ok(())
@@ -542,7 +542,7 @@ impl TransferManager {
         }
 
         self.storage
-            .stop_incoming_file(transfer_id, file_id.as_ref())?;
+            .stop_incoming_file(transfer_id, file_id.as_ref());
         let _ = state.in_flight.take();
 
         Ok(())
@@ -564,7 +564,7 @@ impl TransferManager {
             transfer_id,
             None,
             Some(drop_storage::sync::TransferState::Canceled),
-        )?;
+        );
         state.xfer_sync.local = sync::TransferState::Canceled;
         let _ = state.conn.take();
         for val in state.file_sync.values_mut() {
@@ -595,7 +595,7 @@ impl TransferManager {
             transfer_id,
             None,
             Some(drop_storage::sync::TransferState::Canceled),
-        )?;
+        );
         state.xfer_sync.local = sync::TransferState::Canceled;
         let _ = state.conn.take();
 
@@ -630,7 +630,7 @@ impl TransferManager {
         if !lock.contains_key(&transfer_id) {
             return Err(crate::Error::BadTransfer);
         }
-        self.storage.trasnfer_sync_clear(transfer_id)?;
+        self.storage.trasnfer_sync_clear(transfer_id);
         lock.remove(&transfer_id);
 
         Ok(())
@@ -669,7 +669,7 @@ impl TransferManager {
 
         let cancelled = if sync.in_flight.is_some() {
             self.storage
-                .stop_incoming_file(state.xfer.id(), file_id.as_ref())?;
+                .stop_incoming_file(state.xfer.id(), file_id.as_ref());
             let _ = sync.in_flight.take();
 
             if let Some(conn) = &state.conn {
@@ -770,7 +770,7 @@ impl IncomingState {
                 self.xfer.id(),
                 file_id.as_ref(),
                 &parent_dir.to_string_lossy(),
-            )?
+            )
             .is_none()
         {
             warn!(logger, "Failed to store started file state into the DB");
@@ -964,16 +964,7 @@ fn restore_incoming(
     config: &DropConfig,
     logger: &Logger,
 ) -> HashMap<Uuid, IncomingState> {
-    let transfers = match storage.incoming_transfers_to_resume() {
-        Ok(transfers) => transfers,
-        Err(err) => {
-            error!(
-                logger,
-                "Failed to restore incoming pedning transfers form DB: {err}"
-            );
-            return HashMap::new();
-        }
-    };
+    let transfers = storage.incoming_transfers_to_resume();
 
     transfers
         .into_iter()
@@ -997,7 +988,6 @@ fn restore_incoming(
 
                 let sync = storage
                     .transfer_sync_state(xfer.id())
-                    .context("Failed to fetch transfer sync state")?
                     .context("Missing sync state for transfer")?;
 
                 let mut file_sync = HashMap::new();
@@ -1005,7 +995,6 @@ fn restore_incoming(
                 for file_id in xfer.files().keys() {
                     let sync = storage
                         .incoming_file_sync_state(xfer.id(), file_id.as_ref())
-                        .context("Failed to fetch file sync state")?
                         .context("Missing sync state for file")?;
 
                     file_sync.insert(
@@ -1018,9 +1007,7 @@ fn restore_incoming(
                     );
                 }
 
-                let in_flights = storage
-                    .incoming_files_to_resume(xfer.id())
-                    .context("Failed to fetch file to resume")?;
+                let in_flights = storage.incoming_files_to_resume(xfer.id());
 
                 for file in in_flights {
                     if let Some(state) = file_sync.get_mut(&file.file_id) {
@@ -1040,9 +1027,7 @@ fn restore_incoming(
                     events: HashMap::new(),
                 };
 
-                let paths = storage
-                    .finished_incoming_files(xstate.xfer.id())
-                    .context("Failed to fetch finished paths")?;
+                let paths = storage.finished_incoming_files(xstate.xfer.id());
                 for path in paths {
                     let subpath = FileSubPath::from(path.subpath);
                     xstate
@@ -1074,17 +1059,7 @@ fn restore_outgoing(
     alive_sender: &mpsc::Sender<()>,
     logger: &Logger,
 ) -> HashMap<Uuid, OutgoingState> {
-    let transfers = match state.storage.outgoing_transfers_to_resume() {
-        Ok(transfers) => transfers,
-        Err(err) => {
-            error!(
-                logger,
-                "Failed to restore pedning outgoing transfers form DB: {err}"
-            );
-
-            return HashMap::new();
-        }
-    };
+    let transfers = state.storage.outgoing_transfers_to_resume();
 
     let xfers: HashMap<_, _> = transfers
         .into_iter()
@@ -1122,7 +1097,6 @@ fn restore_outgoing(
                 let sync = state
                     .storage
                     .transfer_sync_state(xfer.id())
-                    .context("Failed to fetch transfer sync state")?
                     .context("Missing sync state for transfer")?;
 
                 let mut file_sync = HashMap::new();
@@ -1130,7 +1104,6 @@ fn restore_outgoing(
                     let sync = state
                         .storage
                         .outgoing_file_sync_state(xfer.id(), file_id.as_ref())
-                        .context("Failed to fetch file sync state")?
                         .context("Missing sync state for file")?;
 
                     file_sync.insert(

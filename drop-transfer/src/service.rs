@@ -8,7 +8,7 @@ use std::{
 use drop_analytics::Moose;
 use drop_config::DropConfig;
 use drop_storage::Storage;
-use slog::{debug, error, warn, Logger};
+use slog::{debug, warn, Logger};
 use tokio::{
     sync::{mpsc, Semaphore},
     task::JoinHandle,
@@ -138,37 +138,16 @@ impl Service {
             .service_quality_initialization_init(Ok(()), drop_analytics::Phase::End);
     }
 
-    pub fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<(), Error> {
-        if let Err(e) = self.state.storage.purge_transfers(transfer_ids) {
-            error!(self.logger, "Failed to purge transfers: {e}");
-            return Err(Error::StorageError);
-        }
-
-        Ok(())
+    pub fn purge_transfers(&self, transfer_ids: Vec<String>) {
+        self.state.storage.purge_transfers(transfer_ids);
     }
 
-    pub fn purge_transfers_until(&self, until_timestamp: i64) -> Result<(), Error> {
-        if let Err(e) = self.state.storage.purge_transfers_until(until_timestamp) {
-            error!(self.logger, "Failed to purge transfers until: {e}");
-            return Err(Error::StorageError);
-        }
-
-        Ok(())
+    pub fn purge_transfers_until(&self, until_timestamp: i64) {
+        self.state.storage.purge_transfers_until(until_timestamp);
     }
 
-    pub fn transfers_since(
-        &self,
-        since_timestamp: i64,
-    ) -> Result<Vec<drop_storage::types::Transfer>, Error> {
-        let result = self.state.storage.transfers_since(since_timestamp);
-
-        match result {
-            Err(e) => {
-                error!(self.logger, "Failed to get transfers since: {e}");
-                Err(Error::StorageError)
-            }
-            Ok(transfers) => Ok(transfers),
-        }
+    pub fn transfers_since(&self, since_timestamp: i64) -> Vec<drop_storage::types::Transfer> {
+        self.state.storage.transfers_since(since_timestamp)
     }
 
     pub fn remove_transfer_file(&self, transfer_id: Uuid, file_id: &FileId) -> crate::Result<()> {
@@ -177,14 +156,13 @@ impl Service {
             .storage
             .remove_transfer_file(transfer_id, file_id.as_ref())
         {
-            Ok(Some(())) => Ok(()),
-            Ok(None) => {
-                warn!(self.logger, "File {file_id} not removed from {transfer_id}");
+            Some(_) => Ok(()),
+            None => {
+                warn!(
+                    self.logger,
+                    "File {} not found in transfer {}", file_id, transfer_id
+                );
                 Err(Error::InvalidArgument)
-            }
-            Err(err) => {
-                error!(self.logger, "Failed to remove transfer file: {err}");
-                Err(Error::StorageError)
             }
         }
     }

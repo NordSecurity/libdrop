@@ -228,14 +228,9 @@ impl NordDropFFI {
                 .await
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
-                .purge_transfers(transfer_ids)
-                .map_err(|err| {
-                    error!(self.logger, "Failed to purge transfers: {:?}", err);
-                    match err {
-                        drop_transfer::Error::StorageError => ffi::types::NORDDROP_RES_DB_ERROR,
-                        _ => ffi::types::NORDDROP_RES_DB_ERROR,
-                    }
-                })
+                .purge_transfers(transfer_ids);
+
+            Ok(())
         })
     }
 
@@ -261,14 +256,9 @@ impl NordDropFFI {
                 .await
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
-                .purge_transfers_until(until_timestamp)
-                .map_err(|err| {
-                    error!(self.logger, "Failed to purge transfers: {:?}", err);
-                    match err {
-                        drop_transfer::Error::StorageError => ffi::types::NORDDROP_RES_DB_ERROR,
-                        _ => ffi::types::NORDDROP_RES_DB_ERROR,
-                    }
-                })
+                .purge_transfers_until(until_timestamp);
+
+            Ok(())
         })
     }
 
@@ -289,19 +279,15 @@ impl NordDropFFI {
         }
 
         let result = self.rt.block_on(async {
-            self.instance
+            let transfers = self
+                .instance
                 .lock()
                 .await
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
-                .transfers_since(since_timestamp)
-                .map_err(|err| {
-                    error!(self.logger, "Failed to get transfers: {:?}", err);
-                    match err {
-                        drop_transfer::Error::StorageError => ffi::types::NORDDROP_RES_DB_ERROR,
-                        _ => ffi::types::NORDDROP_RES_DB_ERROR,
-                    }
-                })
+                .transfers_since(since_timestamp);
+
+            Ok::<Vec<drop_storage::types::Transfer>, ffi::types::norddrop_result>(transfers)
         })?;
 
         let result =
@@ -329,7 +315,6 @@ impl NordDropFFI {
 
         match res {
             Ok(()) => Ok(()),
-            Err(drop_transfer::Error::StorageError) => Err(ffi::types::NORDDROP_RES_DB_ERROR),
             Err(drop_transfer::Error::InvalidArgument) => Err(ffi::types::NORDDROP_RES_BAD_INPUT),
             Err(_) => Err(ffi::types::NORDDROP_RES_ERROR),
         }
