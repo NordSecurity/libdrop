@@ -264,7 +264,6 @@ class Wait(Action):
 class WaitForOneOf(Action):
     def __init__(self, events: typing.List[Event]):
         self._events: typing.List[Event] = events
-        self._found_event = False
 
     async def run(self, drop: ffi.Drop):
         e = await drop._events.wait_for_any_event(100, ignore_progress=True)
@@ -274,12 +273,6 @@ class WaitForOneOf(Action):
 
         if e not in self._events:
             raise Exception(f"Expected one of {self._events} but got {e}")
-        else:
-            if self._found_event:
-                raise Exception(
-                    f"Expected one of {self._events} but got {e} in addition"
-                )
-            self._found_event = True
 
     def __str__(self):
         return f"WaitForOneOf({', '.join(str(e) for e in self._events)})"
