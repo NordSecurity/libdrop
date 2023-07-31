@@ -266,7 +266,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         if let Some(task) = self.tasks.remove(&file_id) {
             if !task.job.is_finished() {
                 task.job.abort();
-                task.events.cancelled_on_rejection(false).await;
+                task.events.cancelled_on_rejection().await;
             }
         }
 

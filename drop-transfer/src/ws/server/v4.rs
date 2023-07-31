@@ -373,7 +373,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         {
             if !task.is_finished() {
                 task.abort();
-                events.cancelled_on_rejection(false).await;
+                events.cancelled_on_rejection().await;
             }
         }
 

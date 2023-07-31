@@ -253,7 +253,7 @@ impl HandlerLoop<'_> {
         {
             if !task.is_finished() {
                 task.abort();
-                events.cancelled_on_rejection(by_peer).await;
+                events.cancelled_on_rejection().await;
             }
         }
 
