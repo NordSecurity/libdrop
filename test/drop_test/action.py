@@ -542,7 +542,9 @@ class AssertMooseEvents(Action):
 
     async def run(self, drop: ffi.Drop):
         if not os.path.exists(self._events_file):
-            raise Exception("Moose events file not found")
+            raise Exception(
+                f"Moose events file not found at '{self._events_file}', maybe libdrop was built without `--features moose_file`?"
+            )
 
         events = json.loads(open(self._events_file).read())
 
