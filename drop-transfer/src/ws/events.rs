@@ -129,6 +129,22 @@ impl<T: Transfer> FileEventTx<T> {
             );
         }
     }
+
+    pub async fn cancelled_on_rejection(&self) {
+        let mut lock = self.inner.write().await;
+
+        if let Some(started) = lock.started.take() {
+            let info = self.file_info();
+
+            lock.moose.service_quality_transfer_file(
+                Err(Status::FileRejected as _),
+                drop_analytics::Phase::End,
+                self.xfer.id().to_string(),
+                started.elapsed().as_millis() as _,
+                info,
+            );
+        }
+    }
 }
 
 impl FileEventTx<IncomingTransfer> {
@@ -163,14 +179,6 @@ impl FileEventTx<IncomingTransfer> {
         self.stop(
             crate::Event::FileDownloadCancelled(self.xfer.clone(), self.file_id.clone(), by_peer),
             Err(Status::Canceled as _),
-        )
-        .await
-    }
-
-    pub async fn cancelled_on_rejection(&self, by_peer: bool) {
-        self.stop(
-            crate::Event::FileDownloadCancelled(self.xfer.clone(), self.file_id.clone(), by_peer),
-            Err(Status::FileRejected as _),
         )
         .await
     }
@@ -221,14 +229,6 @@ impl FileEventTx<OutgoingTransfer> {
         self.stop(
             crate::Event::FileUploadCancelled(self.xfer.clone(), self.file_id.clone(), by_peer),
             Err(Status::Canceled as _),
-        )
-        .await
-    }
-
-    pub async fn cancelled_on_rejection(&self, by_peer: bool) {
-        self.stop(
-            crate::Event::FileUploadCancelled(self.xfer.clone(), self.file_id.clone(), by_peer),
-            Err(Status::FileRejected as _),
         )
         .await
     }

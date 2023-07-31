@@ -276,7 +276,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         {
             if !task.is_finished() {
                 task.abort();
-                events.cancelled_on_rejection(false).await;
+                events.cancelled_on_rejection().await;
             }
         }
 
