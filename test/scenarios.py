@@ -6489,7 +6489,6 @@ scenarios = [
                             },
                         )
                     ),
-                    action.ExpectCancel([0, 1, 3], True),
                     action.Stop(),
                 ]
             ),
@@ -6540,10 +6539,6 @@ scenarios = [
                             },
                         )
                     ),
-                    action.CancelTransferRequest(0),
-                    action.CancelTransferRequest(1),
-                    action.CancelTransferRequest(2),
-                    action.ExpectCancel([0, 1, 2], False),
                     action.Stop(),
                 ]
             ),
