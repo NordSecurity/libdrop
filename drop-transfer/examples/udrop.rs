@@ -216,6 +216,14 @@ async fn listen(
             } => {
                 info!("[EVENT] FileUploadRejected {transfer_id}: {file_id}, by_peer?: {by_peer}")
             }
+            Event::FileUploadPaused {
+                transfer_id,
+                file_id,
+            } => info!("[EVENT] FileUploadPaused {transfer_id}: {file_id}"),
+            Event::FileDownloadPaused {
+                transfer_id,
+                file_id,
+            } => info!("[EVENT] FileDownloadPaused {transfer_id}: {file_id}"),
         }
     }
 

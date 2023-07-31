@@ -487,6 +487,20 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         }
     }
 
+    async fn on_conn_break(&mut self) {
+        debug!(self.logger, "Waiting for background jobs to pause");
+
+        let tasks = self.jobs.drain().map(|(_, task)| {
+            task.job.abort();
+
+            async move {
+                task.events.pause().await;
+            }
+        });
+
+        futures::future::join_all(tasks).await;
+    }
+
     fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration> {
         Some(
             self.state
