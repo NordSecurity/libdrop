@@ -292,7 +292,7 @@ impl Service {
                 .await
             {
                 Ok(res) => {
-                    res.events.cancelled_on_rejection(false).await;
+                    res.events.cancelled_on_rejection().await;
 
                     self.state
                         .event_tx
@@ -318,7 +318,7 @@ impl Service {
                 .await
             {
                 Ok(res) => {
-                    res.events.cancelled_on_rejection(false).await;
+                    res.events.cancelled_on_rejection().await;
 
                     self.state
                         .event_tx

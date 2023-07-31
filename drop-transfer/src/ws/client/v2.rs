@@ -206,7 +206,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         if let Some(task) = self.tasks.remove(&file_subpath) {
             if !task.job.is_finished() {
                 task.job.abort();
-                task.events.cancelled_on_rejection(false).await;
+                task.events.cancelled_on_rejection().await;
             }
         }
 
