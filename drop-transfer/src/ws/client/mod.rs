@@ -336,7 +336,6 @@ impl RunContext<'_> {
         };
 
         let result = task.await;
-        handler.on_stop().await;
 
         if let Err(err) = result {
             info!(
@@ -344,9 +343,12 @@ impl RunContext<'_> {
                 "WS connection broke for {}: {err:?}",
                 self.xfer.id()
             );
+            handler.on_conn_break().await;
 
             ControlFlow::Continue(())
         } else {
+            handler.on_stop().await;
+
             if let Err(err) = self.drain_socket().await {
                 warn!(
                     self.logger,
