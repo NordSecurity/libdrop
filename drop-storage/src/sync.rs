@@ -65,7 +65,7 @@ pub struct File {
 }
 
 #[derive(Debug, Clone)]
-pub struct FileInFilght {
+pub struct FileInFlight {
     pub base_dir: String,
     pub file_id: String,
 }
@@ -289,7 +289,7 @@ pub(super) fn outgoing_files_to_reject(
 pub(super) fn incoming_files_in_flight(
     conn: &Connection,
     transfer_id: Uuid,
-) -> super::Result<Vec<FileInFilght>> {
+) -> super::Result<Vec<FileInFlight>> {
     let tid = transfer_id.to_string();
 
     let res = conn
@@ -305,7 +305,7 @@ pub(super) fn incoming_files_in_flight(
         "#,
         )?
         .query_map(params![tid, FileState::Alive], |r| {
-            Ok(FileInFilght {
+            Ok(FileInFlight {
                 base_dir: r.get(0)?,
                 file_id: r.get(1)?,
             })
