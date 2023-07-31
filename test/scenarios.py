@@ -5084,15 +5084,8 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.RejectTransferFile(0, FILES["testfile-big"].id),
-                    action.WaitRacy(
-                        [
-                            event.FinishFileRejected(
-                                0, FILES["testfile-big"].id, False
-                            ),
-                            event.FinishFileCanceled(
-                                0, FILES["testfile-big"].id, False
-                            ),
-                        ]
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-big"].id, False)
                     ),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
@@ -5116,11 +5109,8 @@ scenarios = [
                     ),
                     action.Download(0, FILES["testfile-big"].id, "/tmp/received/27-3"),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
-                    action.WaitRacy(
-                        [
-                            event.FinishFileRejected(0, FILES["testfile-big"].id, True),
-                            event.FinishFileCanceled(0, FILES["testfile-big"].id, True),
-                        ]
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-big"].id, True)
                     ),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
@@ -5151,11 +5141,8 @@ scenarios = [
                         )
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
-                    action.WaitRacy(
-                        [
-                            event.FinishFileRejected(0, FILES["testfile-big"].id, True),
-                            event.FinishFileCanceled(0, FILES["testfile-big"].id, True),
-                        ]
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-big"].id, True)
                     ),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
@@ -5180,15 +5167,8 @@ scenarios = [
                     action.Download(0, FILES["testfile-big"].id, "/tmp/received/27-4"),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.RejectTransferFile(0, FILES["testfile-big"].id),
-                    action.WaitRacy(
-                        [
-                            event.FinishFileRejected(
-                                0, FILES["testfile-big"].id, False
-                            ),
-                            event.FinishFileCanceled(
-                                0, FILES["testfile-big"].id, False
-                            ),
-                        ]
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-big"].id, False)
                     ),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
