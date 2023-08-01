@@ -41,6 +41,7 @@ pub(super) struct State {
 pub struct Service {
     pub(super) state: Arc<State>,
     pub(crate) stop: CancellationToken,
+    pub(crate) client_stopped: (mpsc::Sender<()>, mpsc::Receiver<()>),
     server_task: JoinHandle<()>,
     pub(super) logger: Logger,
 }
@@ -95,14 +96,16 @@ impl Service {
             });
 
             let stop = CancellationToken::new();
+            let client_stopped = mpsc::channel(1);
 
-            manager::resume(&state, stop.clone(), &logger).await;
+            manager::resume(&state, stop.clone(), &client_stopped.0, &logger).await;
             let server_task =
                 ws::server::start(addr, stop.clone(), state.clone(), auth, logger.clone())?;
 
             Ok(Self {
                 state,
                 server_task,
+                client_stopped,
                 stop,
                 logger,
             })
@@ -123,6 +126,12 @@ impl Service {
                 "Failed to wait for server task to finish: {err}"
             );
         }
+
+        // Drop the sender and wait for the receiver to get the notification about last
+        // sender being dropped. Based on <https://tokio.rs/tokio/topics/shutdown>
+        let (send, mut recv) = self.client_stopped;
+        drop(send);
+        let _ = recv.recv().await;
 
         self.state
             .moose
@@ -209,7 +218,12 @@ impl Service {
             .await
             .expect("Could not send a RequestQueued event, channel closed");
 
-        let client_job = ws::client::run(self.state.clone(), xfer, self.logger.clone());
+        let client_job = ws::client::run(
+            self.state.clone(),
+            xfer,
+            self.client_stopped.0.clone(),
+            self.logger.clone(),
+        );
         let stop = self.stop.clone();
 
         tokio::spawn(async move {

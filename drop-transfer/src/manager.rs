@@ -9,7 +9,10 @@ use anyhow::Context;
 use drop_config::DropConfig;
 use drop_storage::{sync, Storage};
 use slog::{error, info, warn, Logger};
-use tokio::sync::{mpsc::UnboundedSender, Mutex};
+use tokio::sync::{
+    mpsc::{self, UnboundedSender},
+    Mutex,
+};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -918,7 +921,12 @@ impl DirMapping {
     }
 }
 
-pub(crate) async fn resume(state: &Arc<State>, stop: CancellationToken, logger: &Logger) {
+pub(crate) async fn resume(
+    state: &Arc<State>,
+    stop: CancellationToken,
+    alive_sender: &mpsc::Sender<()>,
+    logger: &Logger,
+) {
     let incoming = {
         let state = state.clone();
         let logger = logger.clone();
@@ -930,7 +938,8 @@ pub(crate) async fn resume(state: &Arc<State>, stop: CancellationToken, logger: 
     let outgoing = {
         let state = state.clone();
         let logger = logger.clone();
-        tokio::task::spawn_blocking(move || restore_outgoing(&state, &stop, &logger))
+        let alive_sender = alive_sender.clone();
+        tokio::task::spawn_blocking(move || restore_outgoing(&state, &stop, &alive_sender, &logger))
     };
 
     match incoming.await {
@@ -1056,6 +1065,7 @@ fn restore_incoming(
 fn restore_outgoing(
     state: &Arc<State>,
     stop: &CancellationToken,
+    alive_sender: &mpsc::Sender<()>,
     logger: &Logger,
 ) -> HashMap<Uuid, OutgoingState> {
     let transfers = match state.storage.outgoing_transfers_to_resume() {
@@ -1162,7 +1172,7 @@ fn restore_outgoing(
             let state = state.clone();
             let xfer = xstate.xfer.clone();
 
-            ws::client::run(state, xfer, logger)
+            ws::client::run(state, xfer, alive_sender.clone(), logger)
         };
 
         tokio::spawn(async move {
