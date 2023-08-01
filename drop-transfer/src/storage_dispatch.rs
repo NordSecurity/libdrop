@@ -22,7 +22,7 @@ impl<'a> StorageDispatch<'a> {
         }
     }
 
-    pub fn handle_event(&mut self, event: &crate::Event) -> Result<(), Error> {
+    pub async fn handle_event(&mut self, event: &crate::Event) -> Result<(), Error> {
         let event: Event = match event.into() {
             Some(event) => event,
             None => return Ok(()),
@@ -34,12 +34,14 @@ impl<'a> StorageDispatch<'a> {
                     for file in files {
                         self.storage
                             .insert_incoming_path_pending_state(transfer_info.id, &file.file_id)
+                            .await
                     }
                 }
                 TransferFiles::Outgoing(files) => {
                     for file in files {
                         self.storage
                             .insert_outgoing_path_pending_state(transfer_info.id, &file.file_id)
+                            .await
                     }
                 }
             },
@@ -47,17 +49,21 @@ impl<'a> StorageDispatch<'a> {
             Event::FileUploadStarted {
                 transfer_id,
                 file_id,
-            } => self
-                .storage
-                .insert_outgoing_path_started_state(transfer_id, &file_id),
+            } => {
+                self.storage
+                    .insert_outgoing_path_started_state(transfer_id, &file_id)
+                    .await
+            }
 
             Event::FileDownloadStarted {
                 transfer_id,
                 file_id,
                 base_dir,
-            } => self
-                .storage
-                .insert_incoming_path_started_state(transfer_id, &file_id, &base_dir),
+            } => {
+                self.storage
+                    .insert_incoming_path_started_state(transfer_id, &file_id, &base_dir)
+                    .await
+            }
 
             Event::FileCanceled {
                 transfer_type,
@@ -67,21 +73,15 @@ impl<'a> StorageDispatch<'a> {
             } => match transfer_type {
                 TransferType::Incoming => {
                     let progress = self.get_file_progress(transfer_id, &file_id);
-                    self.storage.insert_incoming_path_cancel_state(
-                        transfer_id,
-                        &file_id,
-                        by_peer,
-                        progress,
-                    )
+                    self.storage
+                        .insert_incoming_path_cancel_state(transfer_id, &file_id, by_peer, progress)
+                        .await
                 }
                 TransferType::Outgoing => {
                     let progress = self.get_file_progress(transfer_id, &file_id);
-                    self.storage.insert_outgoing_path_cancel_state(
-                        transfer_id,
-                        &file_id,
-                        by_peer,
-                        progress,
-                    )
+                    self.storage
+                        .insert_outgoing_path_cancel_state(transfer_id, &file_id, by_peer, progress)
+                        .await
                 }
             },
 
@@ -89,34 +89,40 @@ impl<'a> StorageDispatch<'a> {
                 transfer_id,
                 file_id,
                 final_path,
-            } => self.storage.insert_incoming_path_completed_state(
-                transfer_id,
-                &file_id,
-                &final_path,
-            ),
+            } => {
+                self.storage
+                    .insert_incoming_path_completed_state(transfer_id, &file_id, &final_path)
+                    .await
+            }
 
             Event::FileUploadComplete {
                 transfer_id,
                 file_id,
-            } => self
-                .storage
-                .insert_outgoing_path_completed_state(transfer_id, &file_id),
+            } => {
+                self.storage
+                    .insert_outgoing_path_completed_state(transfer_id, &file_id)
+                    .await
+            }
 
             Event::TransferCanceled {
                 transfer_type: _,
                 transfer_info,
                 by_peer,
-            } => self
-                .storage
-                .insert_transfer_cancel_state(transfer_info.id, by_peer),
+            } => {
+                self.storage
+                    .insert_transfer_cancel_state(transfer_info.id, by_peer)
+                    .await
+            }
 
             Event::TransferFailed {
                 transfer_type: _,
                 transfer_info,
                 error_code,
-            } => self
-                .storage
-                .insert_transfer_failed_state(transfer_info.id, error_code),
+            } => {
+                self.storage
+                    .insert_transfer_failed_state(transfer_info.id, error_code)
+                    .await
+            }
 
             Event::FileFailed {
                 transfer_type,
@@ -126,18 +132,26 @@ impl<'a> StorageDispatch<'a> {
             } => {
                 let progress = self.get_file_progress(transfer_id, &file_id);
                 match transfer_type {
-                    TransferType::Incoming => self.storage.insert_incoming_path_failed_state(
-                        transfer_id,
-                        &file_id,
-                        error_code,
-                        progress,
-                    ),
-                    TransferType::Outgoing => self.storage.insert_outgoing_path_failed_state(
-                        transfer_id,
-                        &file_id,
-                        error_code,
-                        progress,
-                    ),
+                    TransferType::Incoming => {
+                        self.storage
+                            .insert_incoming_path_failed_state(
+                                transfer_id,
+                                &file_id,
+                                error_code,
+                                progress,
+                            )
+                            .await
+                    }
+                    TransferType::Outgoing => {
+                        self.storage
+                            .insert_outgoing_path_failed_state(
+                                transfer_id,
+                                &file_id,
+                                error_code,
+                                progress,
+                            )
+                            .await
+                    }
                 }
             }
 
@@ -161,10 +175,12 @@ impl<'a> StorageDispatch<'a> {
                 TransferType::Incoming => {
                     self.storage
                         .insert_incoming_path_reject_state(transfer_id, &file_id, by_peer)
+                        .await
                 }
                 TransferType::Outgoing => {
                     self.storage
                         .insert_outgoing_path_reject_state(transfer_id, &file_id, by_peer)
+                        .await
                 }
             },
         }

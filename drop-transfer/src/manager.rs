@@ -135,12 +135,14 @@ impl TransferManager {
                 Ok(false)
             }
             Entry::Vacant(vacc) => {
-                self.storage.insert_transfer(&xfer.storage_info());
-                self.storage.update_transfer_sync_states(
-                    xfer.id(),
-                    Some(sync::TransferState::Active),
-                    Some(sync::TransferState::Active),
-                );
+                self.storage.insert_transfer(&xfer.storage_info()).await;
+                self.storage
+                    .update_transfer_sync_states(
+                        xfer.id(),
+                        Some(sync::TransferState::Active),
+                        Some(sync::TransferState::Active),
+                    )
+                    .await;
 
                 vacc.insert(IncomingState {
                     conn: Some(conn),
@@ -184,21 +186,25 @@ impl TransferManager {
 
         match (state.xfer_sync.local, state.xfer_sync.remote) {
             (sync::TransferState::New, _) => {
-                self.storage.update_transfer_sync_states(
-                    transfer_id,
-                    Some(sync::TransferState::Active),
-                    Some(sync::TransferState::Active),
-                );
+                self.storage
+                    .update_transfer_sync_states(
+                        transfer_id,
+                        Some(sync::TransferState::Active),
+                        Some(sync::TransferState::Active),
+                    )
+                    .await;
 
                 state.xfer_sync.local = sync::TransferState::Active;
                 state.xfer_sync.remote = sync::TransferState::Active;
             }
             (_, sync::TransferState::New) => {
-                self.storage.update_transfer_sync_states(
-                    transfer_id,
-                    Some(sync::TransferState::Active),
-                    None,
-                );
+                self.storage
+                    .update_transfer_sync_states(
+                        transfer_id,
+                        Some(sync::TransferState::Active),
+                        None,
+                    )
+                    .await;
                 state.xfer_sync.remote = sync::TransferState::Active;
             }
             _ => (),
@@ -233,7 +239,7 @@ impl TransferManager {
                 ));
             }
             Entry::Vacant(entry) => {
-                self.storage.insert_transfer(&xfer.storage_info());
+                self.storage.insert_transfer(&xfer.storage_info()).await;
 
                 entry.insert(OutgoingState {
                     conn: None,
@@ -321,12 +327,14 @@ impl TransferManager {
         match sync.local {
             sync::FileState::Rejected => return Err(crate::Error::Rejected),
             sync::FileState::Alive => {
-                self.storage.update_outgoing_file_sync_states(
-                    state.xfer.id(),
-                    file_id.as_ref(),
-                    None,
-                    Some(sync::FileState::Rejected),
-                );
+                self.storage
+                    .update_outgoing_file_sync_states(
+                        state.xfer.id(),
+                        file_id.as_ref(),
+                        None,
+                        Some(sync::FileState::Rejected),
+                    )
+                    .await;
                 sync.local = sync::FileState::Rejected;
 
                 if let Some(conn) = &state.conn {
@@ -359,12 +367,14 @@ impl TransferManager {
             .get_mut(file_id)
             .ok_or(crate::Error::BadFileId)?;
 
-        self.storage.update_outgoing_file_sync_states(
-            transfer_id,
-            file_id.as_ref(),
-            Some(sync::FileState::Rejected),
-            None,
-        );
+        self.storage
+            .update_outgoing_file_sync_states(
+                transfer_id,
+                file_id.as_ref(),
+                Some(sync::FileState::Rejected),
+                None,
+            )
+            .await;
         sync.remote = sync::FileState::Rejected;
 
         Ok(())
@@ -386,12 +396,14 @@ impl TransferManager {
             .get_mut(file_id)
             .ok_or(crate::Error::BadFileId)?;
 
-        self.storage.update_outgoing_file_sync_states(
-            transfer_id,
-            file_id.as_ref(),
-            Some(sync::FileState::Rejected),
-            Some(sync::FileState::Rejected),
-        );
+        self.storage
+            .update_outgoing_file_sync_states(
+                transfer_id,
+                file_id.as_ref(),
+                Some(sync::FileState::Rejected),
+                Some(sync::FileState::Rejected),
+            )
+            .await;
         sync.remote = sync::FileState::Rejected;
         sync.local = sync::FileState::Rejected;
 
@@ -424,14 +436,17 @@ impl TransferManager {
         match sync.local {
             sync::FileState::Rejected => return Err(crate::Error::Rejected),
             sync::FileState::Alive => {
-                self.storage.update_incoming_file_sync_states(
-                    state.xfer.id(),
-                    file_id.as_ref(),
-                    None,
-                    Some(sync::FileState::Rejected),
-                );
                 self.storage
-                    .stop_incoming_file(state.xfer.id(), file_id.as_ref());
+                    .update_incoming_file_sync_states(
+                        state.xfer.id(),
+                        file_id.as_ref(),
+                        None,
+                        Some(sync::FileState::Rejected),
+                    )
+                    .await;
+                self.storage
+                    .stop_incoming_file(state.xfer.id(), file_id.as_ref())
+                    .await;
 
                 sync.local = sync::FileState::Rejected;
                 let _ = sync.in_flight.take();
@@ -466,12 +481,14 @@ impl TransferManager {
             .get_mut(file_id)
             .ok_or(crate::Error::BadFileId)?;
 
-        self.storage.update_incoming_file_sync_states(
-            transfer_id,
-            file_id.as_ref(),
-            Some(sync::FileState::Rejected),
-            None,
-        );
+        self.storage
+            .update_incoming_file_sync_states(
+                transfer_id,
+                file_id.as_ref(),
+                Some(sync::FileState::Rejected),
+                None,
+            )
+            .await;
         sync.remote = sync::FileState::Rejected;
 
         Ok(())
@@ -493,12 +510,14 @@ impl TransferManager {
             .get_mut(file_id)
             .ok_or(crate::Error::BadFileId)?;
 
-        self.storage.update_incoming_file_sync_states(
-            transfer_id,
-            file_id.as_ref(),
-            Some(sync::FileState::Rejected),
-            Some(sync::FileState::Rejected),
-        );
+        self.storage
+            .update_incoming_file_sync_states(
+                transfer_id,
+                file_id.as_ref(),
+                Some(sync::FileState::Rejected),
+                Some(sync::FileState::Rejected),
+            )
+            .await;
         sync.remote = sync::FileState::Rejected;
         sync.local = sync::FileState::Rejected;
         sync.in_flight.take();
@@ -511,7 +530,7 @@ impl TransferManager {
         if !lock.contains_key(&transfer_id) {
             return Err(crate::Error::BadTransfer);
         }
-        self.storage.transfer_sync_clear(transfer_id);
+        self.storage.transfer_sync_clear(transfer_id).await;
         lock.remove(&transfer_id);
 
         Ok(())
@@ -542,7 +561,8 @@ impl TransferManager {
         }
 
         self.storage
-            .stop_incoming_file(transfer_id, file_id.as_ref());
+            .stop_incoming_file(transfer_id, file_id.as_ref())
+            .await;
         let _ = state.in_flight.take();
 
         Ok(())
@@ -560,11 +580,13 @@ impl TransferManager {
 
         state.ensure_not_cancelled()?;
 
-        self.storage.update_transfer_sync_states(
-            transfer_id,
-            None,
-            Some(drop_storage::sync::TransferState::Canceled),
-        );
+        self.storage
+            .update_transfer_sync_states(
+                transfer_id,
+                None,
+                Some(drop_storage::sync::TransferState::Canceled),
+            )
+            .await;
         state.xfer_sync.local = sync::TransferState::Canceled;
         let _ = state.conn.take();
         for val in state.file_sync.values_mut() {
@@ -591,11 +613,13 @@ impl TransferManager {
 
         state.ensure_not_cancelled()?;
 
-        self.storage.update_transfer_sync_states(
-            transfer_id,
-            None,
-            Some(drop_storage::sync::TransferState::Canceled),
-        );
+        self.storage
+            .update_transfer_sync_states(
+                transfer_id,
+                None,
+                Some(drop_storage::sync::TransferState::Canceled),
+            )
+            .await;
         state.xfer_sync.local = sync::TransferState::Canceled;
         let _ = state.conn.take();
 
@@ -630,7 +654,7 @@ impl TransferManager {
         if !lock.contains_key(&transfer_id) {
             return Err(crate::Error::BadTransfer);
         }
-        self.storage.transfer_sync_clear(transfer_id);
+        self.storage.transfer_sync_clear(transfer_id).await;
         lock.remove(&transfer_id);
 
         Ok(())
@@ -669,7 +693,8 @@ impl TransferManager {
 
         let cancelled = if sync.in_flight.is_some() {
             self.storage
-                .stop_incoming_file(state.xfer.id(), file_id.as_ref());
+                .stop_incoming_file(state.xfer.id(), file_id.as_ref())
+                .await;
             let _ = sync.in_flight.take();
 
             if let Some(conn) = &state.conn {
@@ -758,7 +783,7 @@ impl IncomingState {
         Ok(state.in_flight.is_none())
     }
 
-    pub fn start_download(
+    pub async fn start_download(
         &mut self,
         storage: &Storage,
         file_id: &FileId,
@@ -771,6 +796,7 @@ impl IncomingState {
                 file_id.as_ref(),
                 &parent_dir.to_string_lossy(),
             )
+            .await
             .is_none()
         {
             warn!(logger, "Failed to store started file state into the DB");
@@ -933,214 +959,194 @@ pub(crate) async fn resume(
     alive_sender: &mpsc::Sender<()>,
     logger: &Logger,
 ) {
-    let incoming = {
-        let state = state.clone();
-        let logger = logger.clone();
-        tokio::task::spawn_blocking(move || {
-            restore_incoming(&state.storage, &state.config, &logger)
-        })
-    };
-
-    let outgoing = {
-        let state = state.clone();
-        let logger = logger.clone();
-        let alive_sender = alive_sender.clone();
-        tokio::task::spawn_blocking(move || restore_outgoing(&state, &stop, &alive_sender, &logger))
-    };
-
-    match incoming.await {
-        Ok(incoming) => *state.transfer_manager.incoming.lock().await = incoming,
-        Err(err) => error!(logger, "Failed to join incoming resume task: {err}"),
-    }
-
-    match outgoing.await {
-        Ok(outgoing) => *state.transfer_manager.outgoing.lock().await = outgoing,
-        Err(err) => error!(logger, "Failed to join outgoing resume task: {err}"),
-    }
+    *state.transfer_manager.incoming.lock().await =
+        restore_incoming(&state.storage, &state.config, &logger).await;
+    *state.transfer_manager.outgoing.lock().await =
+        restore_outgoing(&state, &stop, &alive_sender, &logger).await;
 }
 
-fn restore_incoming(
+async fn restore_incoming(
     storage: &Storage,
     config: &DropConfig,
     logger: &Logger,
 ) -> HashMap<Uuid, IncomingState> {
-    let transfers = storage.incoming_transfers_to_resume();
+    let transfers = storage.incoming_transfers_to_resume().await;
 
-    transfers
-        .into_iter()
-        .filter_map(|transfer| {
-            let restore_transfer = || {
-                let files = transfer
-                    .files
-                    .into_iter()
-                    .map(|dbfile| {
-                        FileToRecv::new(dbfile.file_id.into(), dbfile.subpath.into(), dbfile.size)
-                    })
-                    .collect();
+    let mut xfers = HashMap::new();
+    for transfer in transfers {
+        let restore_transfer = || async {
+            let files = transfer
+                .files
+                .into_iter()
+                .map(|dbfile| {
+                    FileToRecv::new(dbfile.file_id.into(), dbfile.subpath.into(), dbfile.size)
+                })
+                .collect();
 
-                let xfer = IncomingTransfer::new_with_uuid(
-                    transfer.peer.parse().context("Failed to parse peer IP")?,
-                    files,
-                    transfer.uuid,
-                    config,
-                )
-                .context("Failed to create transfer")?;
+            let xfer = IncomingTransfer::new_with_uuid(
+                transfer.peer.parse().context("Failed to parse peer IP")?,
+                files,
+                transfer.uuid,
+                config,
+            )
+            .context("Failed to create transfer")?;
 
+            let sync = storage
+                .transfer_sync_state(xfer.id())
+                .await
+                .context("Missing sync state for transfer")?;
+
+            let mut file_sync = HashMap::new();
+
+            for file_id in xfer.files().keys() {
                 let sync = storage
-                    .transfer_sync_state(xfer.id())
-                    .context("Missing sync state for transfer")?;
+                    .incoming_file_sync_state(xfer.id(), file_id.as_ref())
+                    .await
+                    .context("Missing sync state for file")?;
 
-                let mut file_sync = HashMap::new();
-
-                for file_id in xfer.files().keys() {
-                    let sync = storage
-                        .incoming_file_sync_state(xfer.id(), file_id.as_ref())
-                        .context("Missing sync state for file")?;
-
-                    file_sync.insert(
-                        file_id.clone(),
-                        IncomingFileSync {
-                            local: sync.local_state,
-                            remote: sync.remote_state,
-                            in_flight: None,
-                        },
-                    );
-                }
-
-                let in_flights = storage.incoming_files_to_resume(xfer.id());
-
-                for file in in_flights {
-                    if let Some(state) = file_sync.get_mut(&file.file_id) {
-                        state.in_flight = Some(file.base_dir.into());
-                    }
-                }
-
-                let mut xstate = IncomingState {
-                    xfer: Arc::new(xfer),
-                    conn: None,
-                    dir_mappings: Default::default(),
-                    xfer_sync: TransferSync {
+                file_sync.insert(
+                    file_id.clone(),
+                    IncomingFileSync {
                         local: sync.local_state,
                         remote: sync.remote_state,
+                        in_flight: None,
                     },
-                    file_sync,
-                    events: HashMap::new(),
-                };
+                );
+            }
 
-                let paths = storage.finished_incoming_files(xstate.xfer.id());
-                for path in paths {
-                    let subpath = FileSubPath::from(path.subpath);
-                    xstate
-                        .dir_mappings
-                        .register_preexisting_final_path(&subpath, &path.final_path);
-                }
+            let in_flights = storage.incoming_files_to_resume(xfer.id()).await;
 
-                anyhow::Ok(xstate)
-            };
-
-            match restore_transfer() {
-                Ok(xstate) => Some((xstate.xfer.id(), xstate)),
-                Err(err) => {
-                    error!(
-                        logger,
-                        "Failed to restore transfer {}: {err:?}", transfer.uuid
-                    );
-
-                    None
+            for file in in_flights {
+                if let Some(state) = file_sync.get_mut(&file.file_id) {
+                    state.in_flight = Some(file.base_dir.into());
                 }
             }
-        })
-        .collect()
+
+            let mut xstate = IncomingState {
+                xfer: Arc::new(xfer),
+                conn: None,
+                dir_mappings: Default::default(),
+                xfer_sync: TransferSync {
+                    local: sync.local_state,
+                    remote: sync.remote_state,
+                },
+                file_sync,
+                events: HashMap::new(),
+            };
+
+            let paths = storage.finished_incoming_files(xstate.xfer.id()).await;
+            for path in paths {
+                let subpath = FileSubPath::from(path.subpath);
+                xstate
+                    .dir_mappings
+                    .register_preexisting_final_path(&subpath, &path.final_path);
+            }
+
+            anyhow::Ok(xstate)
+        };
+
+        match restore_transfer().await {
+            Ok(xstate) => {
+                xfers.insert(xstate.xfer.id(), xstate);
+            }
+            Err(err) => {
+                error!(
+                    logger,
+                    "Failed to restore transfer {}: {err:?}", transfer.uuid
+                );
+            }
+        }
+    }
+
+    xfers
 }
 
-fn restore_outgoing(
+async fn restore_outgoing(
     state: &Arc<State>,
     stop: &CancellationToken,
     alive_sender: &mpsc::Sender<()>,
     logger: &Logger,
 ) -> HashMap<Uuid, OutgoingState> {
-    let transfers = state.storage.outgoing_transfers_to_resume();
+    let transfers = state.storage.outgoing_transfers_to_resume().await;
 
-    let xfers: HashMap<_, _> = transfers
-        .into_iter()
-        .filter_map(|transfer| {
-            let restore_transfer = || {
-                let files = transfer
-                    .files
-                    .into_iter()
-                    .map(|dbfile| {
-                        let file_id: FileId = dbfile.file_id.into();
-                        let subpath: FileSubPath = dbfile.subpath.into();
-                        let uri = dbfile.uri;
+    let mut xfers = HashMap::new();
+    for transfer in transfers {
+        let restore_transfer = || async move {
+            let files = transfer
+                .files
+                .into_iter()
+                .map(|dbfile| {
+                    let file_id: FileId = dbfile.file_id.into();
+                    let subpath: FileSubPath = dbfile.subpath.into();
+                    let uri = dbfile.uri;
 
-                        let file = match uri.scheme() {
-                            "file" => file_to_resume_from_path_uri(&uri, subpath, file_id)?,
-                            #[cfg(unix)]
-                            "content" => {
-                                file_to_resume_from_content_uri(state, uri, subpath, file_id)?
-                            }
-                            unknown => anyhow::bail!("Unknon URI schema: {unknown}"),
-                        };
+                    let file = match uri.scheme() {
+                        "file" => file_to_resume_from_path_uri(&uri, subpath, file_id)?,
+                        #[cfg(unix)]
+                        "content" => file_to_resume_from_content_uri(state, uri, subpath, file_id)?,
+                        unknown => anyhow::bail!("Unknon URI schema: {unknown}"),
+                    };
 
-                        anyhow::Ok(file)
-                    })
-                    .collect::<Result<_, _>>()?;
+                    anyhow::Ok(file)
+                })
+                .collect::<Result<_, _>>()?;
 
-                let xfer = OutgoingTransfer::new_with_uuid(
-                    transfer.peer.parse().context("Failed to parse peer IP")?,
-                    files,
-                    transfer.uuid,
-                    &state.config,
-                )
-                .context("Failed to create transfer")?;
+            let xfer = OutgoingTransfer::new_with_uuid(
+                transfer.peer.parse().context("Failed to parse peer IP")?,
+                files,
+                transfer.uuid,
+                &state.config,
+            )
+            .context("Failed to create transfer")?;
 
+            let sync = state
+                .storage
+                .transfer_sync_state(xfer.id())
+                .await
+                .context("Missing sync state for transfer")?;
+
+            let mut file_sync = HashMap::new();
+            for file_id in xfer.files().keys() {
                 let sync = state
                     .storage
-                    .transfer_sync_state(xfer.id())
-                    .context("Missing sync state for transfer")?;
+                    .outgoing_file_sync_state(xfer.id(), file_id.as_ref())
+                    .await
+                    .context("Missing sync state for file")?;
 
-                let mut file_sync = HashMap::new();
-                for file_id in xfer.files().keys() {
-                    let sync = state
-                        .storage
-                        .outgoing_file_sync_state(xfer.id(), file_id.as_ref())
-                        .context("Missing sync state for file")?;
-
-                    file_sync.insert(
-                        file_id.clone(),
-                        OutgoingFileSync {
-                            local: sync.local_state,
-                            remote: sync.remote_state,
-                        },
-                    );
-                }
-
-                let xstate = OutgoingState {
-                    xfer: Arc::new(xfer),
-                    conn: None,
-                    xfer_sync: TransferSync {
+                file_sync.insert(
+                    file_id.clone(),
+                    OutgoingFileSync {
                         local: sync.local_state,
                         remote: sync.remote_state,
                     },
-                    file_sync,
-                    events: HashMap::new(),
-                };
-                anyhow::Ok(xstate)
-            };
-
-            match restore_transfer() {
-                Ok(xstate) => Some((xstate.xfer.id(), xstate)),
-                Err(err) => {
-                    error!(
-                        logger,
-                        "Failed to restore transfer {}: {err}", transfer.uuid
-                    );
-
-                    None
-                }
+                );
             }
-        })
-        .collect();
+
+            let xstate = OutgoingState {
+                xfer: Arc::new(xfer),
+                conn: None,
+                xfer_sync: TransferSync {
+                    local: sync.local_state,
+                    remote: sync.remote_state,
+                },
+                file_sync,
+                events: HashMap::new(),
+            };
+            anyhow::Ok(xstate)
+        };
+
+        match restore_transfer().await {
+            Ok(xstate) => {
+                xfers.insert(xstate.xfer.id(), xstate);
+            }
+            Err(err) => {
+                error!(
+                    logger,
+                    "Failed to restore transfer {}: {err}", transfer.uuid
+                );
+            }
+        }
+    }
 
     for xstate in xfers.values() {
         let logger = logger.clone();

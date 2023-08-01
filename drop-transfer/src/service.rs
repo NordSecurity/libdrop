@@ -216,13 +216,15 @@ impl Service {
         if started {
             let file_info = state.xfer.files()[file_id].info();
 
-            let mut task = || {
+            let task = async {
                 validate_dest_path(parent_dir)?;
-                state.start_download(&self.state.storage, file_id, parent_dir, &self.logger)?;
+                state
+                    .start_download(&self.state.storage, file_id, parent_dir, &self.logger)
+                    .await?;
                 Ok(())
             };
 
-            moose_try_file!(self.state.moose, task(), uuid, Some(file_info));
+            moose_try_file!(self.state.moose, task.await, uuid, Some(file_info));
         }
         Ok(())
     }
