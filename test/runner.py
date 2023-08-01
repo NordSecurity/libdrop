@@ -7,6 +7,10 @@ import sys
 import os
 import json
 
+STDERR_ERR_PATTERNS = [
+    "DB Error",
+]
+
 
 def run():
     print("*** Test suite launched", flush=True)
@@ -50,10 +54,19 @@ def run():
         status_json = json.loads(status_json)
 
         failed = []
+
+        decoded_stderr = stderr.decode("unicode_escape")
+        stderr_captured_error = stderr_captured_error = [
+            pattern for pattern in STDERR_ERR_PATTERNS if pattern in decoded_stderr
+        ]
+
         for item in status_json:
+
             service: str = item["Service"]
 
-            if service in scenario.runners() and item["ExitCode"] != 0:
+            if service in scenario.runners() and (
+                item["ExitCode"] != 0 or stderr_captured_error
+            ):
                 failed.append(service)
 
         if failed:
@@ -67,7 +80,7 @@ def run():
             print(stdout.decode("unicode_escape"))
 
             print(f"---STDERR---")
-            print(stderr.decode("unicode_escape"))
+            print(decoded_stderr)
 
             print(f"------------")
             print("", flush=True)

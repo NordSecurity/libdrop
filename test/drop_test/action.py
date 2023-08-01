@@ -69,6 +69,28 @@ class Action:
         raise NotImplementedError("run() on base Action class")
 
 
+class Parallel(Action):
+    def __init__(self, actions: typing.List[Action]):
+        self._actions = actions
+
+    async def run(self, drop: ffi.Drop):
+        from concurrent.futures import ThreadPoolExecutor
+
+        await asyncio.gather(*[action.run(drop) for action in self._actions])
+
+
+class Repeated(Action):
+    def __init__(self, actions: typing.List[Action], times: int):
+        self._actions = actions
+        self._times = times
+
+    async def run(self, drop: ffi.Drop):
+        print(f"Running {self._times} times")
+        for _ in range(self._times):
+            for action in self._actions:
+                await action.run(drop)
+
+
 class NewTransferFails(Action):
     def __init__(self, peer: str, path: str):
         self._peer: str = peer
