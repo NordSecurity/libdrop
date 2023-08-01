@@ -106,8 +106,7 @@ async def main():
         await script.run(runner, drop)
         logger.info("Action completed properly")
         cleanup_files(config.FILES)
-    except Exception as e:
-        logger.critical(f"Action didn't complete as expected: {e}")
+    except Exception as e:        
         cleanup_files(config.FILES)
         exit_code = 1
 

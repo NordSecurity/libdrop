@@ -2047,36 +2047,25 @@ scenarios = [
                     # fmt: off
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-01"]),
                     action.Wait(event.Queued(0, { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
-
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-02"]),
                     action.Wait(event.Queued(1, { event.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760), })),
-
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-03"]),
                     action.Wait(event.Queued(2, { event.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760), })),
-
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-04"]),
                     action.Wait(event.Queued(3, { event.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760), })),
-
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-05"]),
                     action.Wait(event.Queued(4, { event.File(FILES["testfile-bulk-05"].id, "testfile-bulk-05", 10485760), })),
-
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-06"]),
                     action.Wait(event.Queued(5, { event.File(FILES["testfile-bulk-06"].id, "testfile-bulk-06", 10485760), })),
-
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-07"]),
                     action.Wait(event.Queued(6, { event.File(FILES["testfile-bulk-07"].id, "testfile-bulk-07", 10485760), })),
-
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-08"]),
                     action.Wait(event.Queued(7, { event.File(FILES["testfile-bulk-08"].id, "testfile-bulk-08", 10485760), })),
-
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-09"]),
                     action.Wait(event.Queued(8, { event.File(FILES["testfile-bulk-09"].id, "testfile-bulk-09", 10485760), })),
-
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-bulk-10"]),
                     action.Wait(event.Queued(9, { event.File(FILES["testfile-bulk-10"].id, "testfile-bulk-10", 10485760), })),
-
                     # fmt: on
-
                     # fmt: off
                     action.WaitRacy(
                         [
@@ -2090,7 +2079,6 @@ scenarios = [
                             event.Start(7, FILES["testfile-bulk-08"].id),
                             event.Start(8, FILES["testfile-bulk-09"].id),
                             event.Start(9, FILES["testfile-bulk-10"].id),
-
                             event.FinishFileUploaded(0, FILES["testfile-bulk-01"].id),
                             event.FinishFileUploaded(1, FILES["testfile-bulk-02"].id),
                             event.FinishFileUploaded(2, FILES["testfile-bulk-03"].id),
@@ -2128,7 +2116,6 @@ scenarios = [
                         ]
                     ),
                     # fmt: on
-
                     # fmt: off
                     action.Download(0, FILES["testfile-bulk-01"].id, "/tmp/received"),
                     action.Download(1, FILES["testfile-bulk-02"].id, "/tmp/received"),
@@ -2141,7 +2128,6 @@ scenarios = [
                     action.Download(8, FILES["testfile-bulk-09"].id, "/tmp/received"),
                     action.Download(9, FILES["testfile-bulk-10"].id, "/tmp/received"),
                     # fmt: on
-
                     # fmt: off
                     action.WaitRacy(
                         [
@@ -2155,7 +2141,6 @@ scenarios = [
                             event.Start(7, FILES["testfile-bulk-08"].id),
                             event.Start(8, FILES["testfile-bulk-09"].id),
                             event.Start(9, FILES["testfile-bulk-10"].id),
-
                             event.FinishFileDownloaded(0, FILES["testfile-bulk-01"].id, "/tmp/received/testfile-bulk-01"),
                             event.FinishFileDownloaded(1, FILES["testfile-bulk-02"].id, "/tmp/received/testfile-bulk-02"),
                             event.FinishFileDownloaded(2, FILES["testfile-bulk-03"].id, "/tmp/received/testfile-bulk-03"),
@@ -6979,6 +6964,32 @@ scenarios = [
                         }""",
                         ]
                     ),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario34",
+        "Read/Write to database multiple times to exercise the concurrency",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    action.Repeated(
+                        [
+                            action.Parallel(
+                                [
+                                    action.NewTransfer(
+                                        "172.20.0.15", ["/tmp/testfile-small"]
+                                    ),
+                                    action.PurgeTransfersUntil(int(time.time() + 10)),
+                                    action.AssertTransfers([]),
+                                ]
+                            ),
+                        ],
+                        1000,
+                    ),
+                    action.Stop(),
                 ]
             ),
         },
