@@ -228,6 +228,7 @@ impl NordDropFFI {
                 .await
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+                .storage()
                 .purge_transfers(transfer_ids);
 
             Ok(())
@@ -256,6 +257,7 @@ impl NordDropFFI {
                 .await
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+                .storage()
                 .purge_transfers_until(until_timestamp);
 
             Ok(())
@@ -285,6 +287,7 @@ impl NordDropFFI {
                 .await
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+                .storage()
                 .transfers_since(since_timestamp);
 
             Ok::<Vec<drop_storage::types::Transfer>, ffi::types::norddrop_result>(transfers)
@@ -311,12 +314,12 @@ impl NordDropFFI {
             .blocking_lock()
             .as_ref()
             .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
-            .remove_transfer_file(transfer_id, &(file_id.into()));
+            .storage()
+            .remove_transfer_file(transfer_id, file_id);
 
         match res {
-            Ok(()) => Ok(()),
-            Err(drop_transfer::Error::InvalidArgument) => Err(ffi::types::NORDDROP_RES_BAD_INPUT),
-            Err(_) => Err(ffi::types::NORDDROP_RES_ERROR),
+            Some(_) => Ok(()),
+            None => Err(ffi::types::NORDDROP_RES_BAD_INPUT),
         }
     }
 

@@ -138,33 +138,8 @@ impl Service {
             .service_quality_initialization_init(Ok(()), drop_analytics::Phase::End);
     }
 
-    pub fn purge_transfers(&self, transfer_ids: Vec<String>) {
-        self.state.storage.purge_transfers(transfer_ids);
-    }
-
-    pub fn purge_transfers_until(&self, until_timestamp: i64) {
-        self.state.storage.purge_transfers_until(until_timestamp);
-    }
-
-    pub fn transfers_since(&self, since_timestamp: i64) -> Vec<drop_storage::types::Transfer> {
-        self.state.storage.transfers_since(since_timestamp)
-    }
-
-    pub fn remove_transfer_file(&self, transfer_id: Uuid, file_id: &FileId) -> crate::Result<()> {
-        match self
-            .state
-            .storage
-            .remove_transfer_file(transfer_id, file_id.as_ref())
-        {
-            Some(_) => Ok(()),
-            None => {
-                warn!(
-                    self.logger,
-                    "File {} not found in transfer {}", file_id, transfer_id
-                );
-                Err(Error::InvalidArgument)
-            }
-        }
+    pub fn storage(&self) -> &Storage {
+        &self.state.storage
     }
 
     pub async fn send_request(&mut self, xfer: crate::OutgoingTransfer) {
