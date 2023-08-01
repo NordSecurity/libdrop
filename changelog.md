@@ -9,6 +9,7 @@
 * Fix database foreign keys not being enabled
 * Remove `ServiceStop` error
 * Disallow file cancels from the sending side
+* Introduce `TransferPaused` event signaling file download being paused because of peer disconnection
 
 ---
 <br>
