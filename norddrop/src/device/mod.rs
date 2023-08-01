@@ -151,7 +151,7 @@ impl NordDropFFI {
             while let Some(e) = rx.recv().await {
                 debug!(event_logger, "emitting event: {:#?}", e);
 
-                if let Err(err) = dispatch.handle_event(&e) {
+                if let Err(err) = dispatch.handle_event(&e).await {
                     error!(event_logger, "Failed to handle database event: {err}");
                 }
 
@@ -229,7 +229,8 @@ impl NordDropFFI {
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
                 .storage()
-                .purge_transfers(transfer_ids);
+                .purge_transfers(transfer_ids)
+                .await;
 
             Ok(())
         })
@@ -258,7 +259,8 @@ impl NordDropFFI {
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
                 .storage()
-                .purge_transfers_until(until_timestamp);
+                .purge_transfers_until(until_timestamp)
+                .await;
 
             Ok(())
         })
@@ -288,7 +290,8 @@ impl NordDropFFI {
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
                 .storage()
-                .transfers_since(since_timestamp);
+                .transfers_since(since_timestamp)
+                .await;
 
             Ok::<Vec<drop_storage::types::Transfer>, ffi::types::norddrop_result>(transfers)
         })?;
@@ -309,13 +312,18 @@ impl NordDropFFI {
             "remove_transfer_file() transfer_id: {transfer_id}, file_id: {file_id}",
         );
 
-        let res = self
-            .instance
-            .blocking_lock()
-            .as_ref()
-            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
-            .storage()
-            .remove_transfer_file(transfer_id, file_id);
+        let res = self.rt.block_on(async {
+            Ok::<Option<()>, ffi::types::norddrop_result>(
+                self.instance
+                    .lock()
+                    .await
+                    .as_ref()
+                    .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+                    .storage()
+                    .remove_transfer_file(transfer_id, file_id)
+                    .await,
+            )
+        })?;
 
         match res {
             Some(_) => Ok(()),

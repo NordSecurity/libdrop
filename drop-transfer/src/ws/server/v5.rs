@@ -106,7 +106,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
         xfer: Arc<IncomingTransfer>,
     ) -> Option<Self::Loop> {
         let task = async {
-            let checksums = self.state.storage.fetch_checksums(xfer.id());
+            let checksums = self.state.storage.fetch_checksums(xfer.id()).await;
 
             let mut checksum_map = HashMap::new();
             let mut to_fetch = Vec::new();
@@ -310,7 +310,9 @@ impl HandlerLoop<'_> {
             let file_id = report.file.clone();
 
             tokio::spawn(async move {
-                storage.save_checksum(transfer_id, file_id.as_ref(), &report.checksum)
+                storage
+                    .save_checksum(transfer_id, file_id.as_ref(), &report.checksum)
+                    .await;
             });
         // Requests made by the download task
         } else if let Some(job) = self.jobs.get_mut(&report.file) {
@@ -451,7 +453,11 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
     }
 
     async fn finalize_success(self) {
-        let files = self.state.storage.fetch_temp_locations(self.xfer.id());
+        let files = self
+            .state
+            .storage
+            .fetch_temp_locations(self.xfer.id())
+            .await;
         for file in files {
             let file_id = FileId::from(file.file_id);
 
