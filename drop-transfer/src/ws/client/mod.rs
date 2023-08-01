@@ -48,7 +48,12 @@ struct RunContext<'a> {
     xfer: &'a Arc<OutgoingTransfer>,
 }
 
-pub(crate) async fn run(state: Arc<State>, xfer: Arc<OutgoingTransfer>, logger: Logger) {
+pub(crate) async fn run(
+    state: Arc<State>,
+    xfer: Arc<OutgoingTransfer>,
+    _alive_guard: mpsc::Sender<()>,
+    logger: Logger,
+) {
     loop {
         let cf = connect_to_peer(&state, &xfer, &logger).await;
         if cf.is_break() {
