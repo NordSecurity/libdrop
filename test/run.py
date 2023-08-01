@@ -101,15 +101,19 @@ async def main():
     drop = ffi.Drop(lib, ffi.KeysCtx(runner))
     logger.info(f"NordDrop version: {drop.version}")
 
+    exit_code = 0
     try:
         await script.run(runner, drop)
         logger.info("Action completed properly")
         cleanup_files(config.FILES)
-        sys.exit(0)
     except Exception as e:
         logger.critical(f"Action didn't complete as expected: {e}")
         cleanup_files(config.FILES)
-        sys.exit(1)
+        exit_code = 1
+
+    del drop
+
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":

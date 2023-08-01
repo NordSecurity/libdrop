@@ -496,6 +496,12 @@ class Drop:
 
         return ctypes.string_at(version).decode("utf-8")
 
+    def __del__(self):
+        err = self._lib.norddrop_destroy(self._instance)
+        if err != 0:
+            err_type = LibResult(err).name
+            raise Exception(f"norddrop_destory has failed with code: {err}({err_type})")
+
 
 class IncomingRequestEntry:
     def __init__(self, id, path):
