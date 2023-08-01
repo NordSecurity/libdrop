@@ -4,6 +4,7 @@ import json
 import typing
 import logging
 from enum import IntEnum
+from threading import Lock
 
 from . import event
 from .logger import logger
@@ -63,23 +64,27 @@ class EventsDontMatch(Exception):
 class EventQueue:
     def __init__(self):
         self._events: typing.List[event.Event] = []
+        self._lock = Lock()
 
     def callback(self, ctx, s: str):
         if DEBUG_PRINT_EVENT:
             print("--- event: ", s, flush=True)
-        self._events.append(new_event(s))
+
+        with self._lock:
+            self._events.append(new_event(s))
 
     async def wait_for_any_event(self, duration: int, ignore_progress: bool = False):
         for _ in range(0, duration):
-            if ignore_progress:
-                self._events = [
-                    ev for ev in self._events if not isinstance(ev, event.Progress)
-                ]
+            with self._lock:
+                if ignore_progress:
+                    self._events = [
+                        ev for ev in self._events if not isinstance(ev, event.Progress)
+                    ]
 
-            if len(self._events) > 0:
-                e = self._events[0]
-                self._events = self._events[1:]
-                return e
+                if len(self._events) > 0:
+                    e = self._events[0]
+                    self._events = self._events[1:]
+                    return e
 
             await asyncio.sleep(1)
 
@@ -90,19 +95,20 @@ class EventQueue:
     ) -> None:
         # TODO: a better solution would be to have infinite loop with a timeout check for all wait commands
         for _ in range(100):
-            while len(self._events) > 0:
-                e = self._events[0]
-                self._events = self._events[1:]
+            with self._lock:
+                while len(self._events) > 0:
+                    e = self._events[0]
+                    self._events = self._events[1:]
 
-                if ignore_progress and isinstance(e, event.Progress):
-                    continue
+                    if ignore_progress and isinstance(e, event.Progress):
+                        continue
 
-                if e == target_event:
-                    return
+                    if e == target_event:
+                        return
 
-                raise Exception(
-                    f"Unexpected event:\n{str(e)}\nwhile looking for:\n{str(target_event)}\n"
-                )
+                    raise Exception(
+                        f"Unexpected event:\n{str(e)}\nwhile looking for:\n{str(target_event)}\n"
+                    )
 
             await asyncio.sleep(1)
 
@@ -120,28 +126,30 @@ class EventQueue:
         # TODO: a better solution would be to have infinite loop with a timeout check for all wait commands
         while i < 100:
             i += 1
-            while len(self._events) > 0:
-                e = self._events[0]
-                self._events = self._events[1:]
 
-                if ignore_progress and isinstance(e, event.Progress):
-                    continue
+            with self._lock:
+                while len(self._events) > 0:
+                    e = self._events[0]
+                    self._events = self._events[1:]
 
-                found = False
-                for te in target_events:
-                    if te == e:
-                        found = True
-                        success.append(te)
-                        break
+                    if ignore_progress and isinstance(e, event.Progress):
+                        continue
 
-                if not found:
-                    raise Exception(
-                        f"Unexpected event1:\n{str(e)}\nwhile looking for(racy):\n{', '.join(str(e) for e in target_events if e not in success)}\n"
-                    )
+                    found = False
+                    for te in target_events:
+                        if te == e:
+                            found = True
+                            success.append(te)
+                            break
 
-                i -= 1
-                if len(success) == len(target_events):
-                    return
+                    if not found:
+                        raise Exception(
+                            f"Unexpected event1:\n{str(e)}\nwhile looking for(racy):\n{', '.join(str(e) for e in target_events if e not in success)}\n"
+                        )
+
+                    i -= 1
+                    if len(success) == len(target_events):
+                        return
 
             await asyncio.sleep(1)
 
