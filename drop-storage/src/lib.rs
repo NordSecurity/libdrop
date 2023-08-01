@@ -154,7 +154,7 @@ impl Storage {
         }
     }
 
-    pub fn trasnfer_sync_clear(&self, transfer_id: Uuid) -> Option<()> {
+    pub fn transfer_sync_clear(&self, transfer_id: Uuid) -> Option<()> {
         let task = || {
             sync::transfer_clear(
                 &self.conn.lock().expect("Failed to acquire a lock"),
