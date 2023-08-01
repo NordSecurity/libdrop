@@ -511,7 +511,7 @@ impl TransferManager {
         if !lock.contains_key(&transfer_id) {
             return Err(crate::Error::BadTransfer);
         }
-        self.storage.trasnfer_sync_clear(transfer_id);
+        self.storage.transfer_sync_clear(transfer_id);
         lock.remove(&transfer_id);
 
         Ok(())
@@ -630,7 +630,7 @@ impl TransferManager {
         if !lock.contains_key(&transfer_id) {
             return Err(crate::Error::BadTransfer);
         }
-        self.storage.trasnfer_sync_clear(transfer_id);
+        self.storage.transfer_sync_clear(transfer_id);
         lock.remove(&transfer_id);
 
         Ok(())
