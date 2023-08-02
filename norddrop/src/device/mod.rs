@@ -151,10 +151,7 @@ impl NordDropFFI {
             while let Some(e) = rx.recv().await {
                 debug!(event_logger, "emitting event: {:#?}", e);
 
-                if let Err(err) = dispatch.handle_event(&e) {
-                    error!(event_logger, "Failed to handle database event: {err}");
-                }
-
+                dispatch.handle_event(&e).await;
                 // Android team reported problems with the event ordering.
                 // The events where dispatched in different order than where emitted.
                 // To fix that we need to process the events sequentially.
@@ -228,14 +225,11 @@ impl NordDropFFI {
                 .await
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+                .storage()
                 .purge_transfers(transfer_ids)
-                .map_err(|err| {
-                    error!(self.logger, "Failed to purge transfers: {:?}", err);
-                    match err {
-                        drop_transfer::Error::StorageError => ffi::types::NORDDROP_RES_DB_ERROR,
-                        _ => ffi::types::NORDDROP_RES_DB_ERROR,
-                    }
-                })
+                .await;
+
+            Ok(())
         })
     }
 
@@ -261,14 +255,11 @@ impl NordDropFFI {
                 .await
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+                .storage()
                 .purge_transfers_until(until_timestamp)
-                .map_err(|err| {
-                    error!(self.logger, "Failed to purge transfers: {:?}", err);
-                    match err {
-                        drop_transfer::Error::StorageError => ffi::types::NORDDROP_RES_DB_ERROR,
-                        _ => ffi::types::NORDDROP_RES_DB_ERROR,
-                    }
-                })
+                .await;
+
+            Ok(())
         })
     }
 
@@ -289,19 +280,17 @@ impl NordDropFFI {
         }
 
         let result = self.rt.block_on(async {
-            self.instance
+            let transfers = self
+                .instance
                 .lock()
                 .await
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+                .storage()
                 .transfers_since(since_timestamp)
-                .map_err(|err| {
-                    error!(self.logger, "Failed to get transfers: {:?}", err);
-                    match err {
-                        drop_transfer::Error::StorageError => ffi::types::NORDDROP_RES_DB_ERROR,
-                        _ => ffi::types::NORDDROP_RES_DB_ERROR,
-                    }
-                })
+                .await;
+
+            Ok::<Vec<_>, ffi::types::norddrop_result>(transfers)
         })?;
 
         let result =
@@ -320,18 +309,22 @@ impl NordDropFFI {
             "remove_transfer_file() transfer_id: {transfer_id}, file_id: {file_id}",
         );
 
-        let res = self
-            .instance
-            .blocking_lock()
-            .as_ref()
-            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
-            .remove_transfer_file(transfer_id, &(file_id.into()));
+        let res = self.rt.block_on(async {
+            Ok::<Option<()>, ffi::types::norddrop_result>(
+                self.instance
+                    .lock()
+                    .await
+                    .as_ref()
+                    .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+                    .storage()
+                    .remove_transfer_file(transfer_id, file_id)
+                    .await,
+            )
+        })?;
 
         match res {
-            Ok(()) => Ok(()),
-            Err(drop_transfer::Error::StorageError) => Err(ffi::types::NORDDROP_RES_DB_ERROR),
-            Err(drop_transfer::Error::InvalidArgument) => Err(ffi::types::NORDDROP_RES_BAD_INPUT),
-            Err(_) => Err(ffi::types::NORDDROP_RES_ERROR),
+            Some(_) => Ok(()),
+            None => Err(ffi::types::NORDDROP_RES_BAD_INPUT),
         }
     }
 

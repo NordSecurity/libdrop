@@ -8,7 +8,7 @@ use std::{
 use drop_analytics::Moose;
 use drop_config::DropConfig;
 use drop_storage::Storage;
-use slog::{debug, error, warn, Logger};
+use slog::{debug, warn, Logger};
 use tokio::{
     sync::{mpsc, Semaphore},
     task::JoinHandle,
@@ -138,55 +138,8 @@ impl Service {
             .service_quality_initialization_init(Ok(()), drop_analytics::Phase::End);
     }
 
-    pub fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<(), Error> {
-        if let Err(e) = self.state.storage.purge_transfers(transfer_ids) {
-            error!(self.logger, "Failed to purge transfers: {e}");
-            return Err(Error::StorageError);
-        }
-
-        Ok(())
-    }
-
-    pub fn purge_transfers_until(&self, until_timestamp: i64) -> Result<(), Error> {
-        if let Err(e) = self.state.storage.purge_transfers_until(until_timestamp) {
-            error!(self.logger, "Failed to purge transfers until: {e}");
-            return Err(Error::StorageError);
-        }
-
-        Ok(())
-    }
-
-    pub fn transfers_since(
-        &self,
-        since_timestamp: i64,
-    ) -> Result<Vec<drop_storage::types::Transfer>, Error> {
-        let result = self.state.storage.transfers_since(since_timestamp);
-
-        match result {
-            Err(e) => {
-                error!(self.logger, "Failed to get transfers since: {e}");
-                Err(Error::StorageError)
-            }
-            Ok(transfers) => Ok(transfers),
-        }
-    }
-
-    pub fn remove_transfer_file(&self, transfer_id: Uuid, file_id: &FileId) -> crate::Result<()> {
-        match self
-            .state
-            .storage
-            .remove_transfer_file(transfer_id, file_id.as_ref())
-        {
-            Ok(Some(())) => Ok(()),
-            Ok(None) => {
-                warn!(self.logger, "File {file_id} not removed from {transfer_id}");
-                Err(Error::InvalidArgument)
-            }
-            Err(err) => {
-                error!(self.logger, "Failed to remove transfer file: {err}");
-                Err(Error::StorageError)
-            }
-        }
+    pub fn storage(&self) -> &Storage {
+        &self.state.storage
     }
 
     pub async fn send_request(&mut self, xfer: crate::OutgoingTransfer) {
@@ -263,13 +216,15 @@ impl Service {
         if started {
             let file_info = state.xfer.files()[file_id].info();
 
-            let mut task = || {
+            let task = async {
                 validate_dest_path(parent_dir)?;
-                state.start_download(&self.state.storage, file_id, parent_dir, &self.logger)?;
+                state
+                    .start_download(&self.state.storage, file_id, parent_dir, &self.logger)
+                    .await?;
                 Ok(())
             };
 
-            moose_try_file!(self.state.moose, task(), uuid, Some(file_info));
+            moose_try_file!(self.state.moose, task.await, uuid, Some(file_info));
         }
         Ok(())
     }

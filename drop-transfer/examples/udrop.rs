@@ -15,7 +15,7 @@ use drop_config::DropConfig;
 use drop_storage::Storage;
 use drop_transfer::{auth, Event, File, FileToSend, OutgoingTransfer, Service, Transfer};
 use slog::{o, Drain, Logger};
-use slog_scope::{error, info};
+use slog_scope::info;
 use tokio::sync::mpsc;
 
 const PRIV_KEY: [u8; SECRET_KEY_LENGTH] = [
@@ -38,9 +38,7 @@ async fn listen(
     let mut active_file_downloads = BTreeMap::new();
     let mut storage = drop_transfer::StorageDispatch::new(&storage);
     while let Some(ev) = rx.recv().await {
-        if let Err(e) = tokio::task::block_in_place(|| storage.handle_event(&ev)) {
-            error!("Failed to handle storage event: {e}");
-        }
+        storage.handle_event(&ev).await;
         match ev {
             Event::RequestReceived(xfer) => {
                 let xfid = xfer.id();
