@@ -6983,9 +6983,9 @@ scenarios = [
                                         "172.20.0.15", ["/tmp/testfile-small"]
                                     ),
                                     action.PurgeTransfersUntil(int(time.time() + 10)),
-                                    action.AssertTransfers([]),
                                 ]
                             ),
+                            action.AssertTransfers([]),
                         ],
                         1000,
                     ),
