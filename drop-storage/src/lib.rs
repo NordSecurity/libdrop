@@ -2,12 +2,13 @@ pub mod error;
 pub mod sync;
 pub mod types;
 
-use std::{path::Path, sync::Mutex, vec};
+use std::{path::Path, vec};
 
 use include_dir::{include_dir, Dir};
 use rusqlite::{params, Connection, Transaction};
 use rusqlite_migration::Migrations;
-use slog::{trace, warn, Logger};
+use slog::{error, trace, warn, Logger};
+use tokio::sync::Mutex;
 use types::{
     DbTransferType, IncomingFileToRetry, IncomingPath, IncomingPathStateEvent,
     IncomingPathStateEventData, IncomingTransferToRetry, OutgoingFileToRetry, OutgoingPath,
@@ -48,7 +49,7 @@ impl Storage {
         })
     }
 
-    pub fn insert_transfer(&self, transfer: &TransferInfo) -> Result<()> {
+    pub async fn insert_transfer(&self, transfer: &TransferInfo) {
         let transfer_type_int = match &transfer.files {
             TransferFiles::Incoming(_) => TransferType::Incoming as u32,
             TransferFiles::Outgoing(_) => TransferType::Outgoing as u32,
@@ -62,194 +63,290 @@ impl Storage {
             "transfer_type" => transfer_type_int,
         );
 
-        let mut conn = self.conn.lock().expect("Failed to acquire a lock");
-        let conn = conn.transaction()?;
+        let task = async {
+            let mut conn = self.conn.lock().await;
+            let conn = conn.transaction()?;
 
-        conn.execute(
-            "INSERT INTO transfers (id, peer, is_outgoing) VALUES (?1, ?2, ?3)",
-            params![tid, transfer.peer, transfer_type_int],
-        )?;
+            conn.execute(
+                "INSERT INTO transfers (id, peer, is_outgoing) VALUES (?1, ?2, ?3)",
+                params![tid, transfer.peer, transfer_type_int],
+            )?;
 
-        let is_incoming = match &transfer.files {
-            TransferFiles::Incoming(files) => {
-                trace!(
-                    self.logger,
-                    "Inserting transfer::Incoming files len {}",
-                    files.len()
-                );
+            let is_incoming = match &transfer.files {
+                TransferFiles::Incoming(files) => {
+                    trace!(
+                        self.logger,
+                        "Inserting transfer::Incoming files len {}",
+                        files.len()
+                    );
 
-                for file in files {
-                    Self::insert_incoming_path(&conn, transfer.id, file)?;
+                    for file in files {
+                        Self::insert_incoming_path(&self.logger, &conn, transfer.id, file);
+                    }
+                    true
                 }
-                true
-            }
-            TransferFiles::Outgoing(files) => {
-                trace!(
-                    self.logger,
-                    "Inserting transfer::Outgoing files len {}",
-                    files.len()
-                );
+                TransferFiles::Outgoing(files) => {
+                    trace!(
+                        self.logger,
+                        "Inserting transfer::Outgoing files len {}",
+                        files.len()
+                    );
 
-                for file in files {
-                    Self::insert_outgoing_path(&conn, transfer.id, file)?;
+                    for file in files {
+                        Self::insert_outgoing_path(&self.logger, &conn, transfer.id, file);
+                    }
+                    false
                 }
-                false
-            }
+            };
+
+            sync::insert_transfer(&conn, transfer.id, is_incoming)?;
+
+            conn.commit()?;
+
+            Ok::<(), Error>(())
         };
 
-        sync::insert_transfer(&conn, transfer.id, is_incoming)?;
-
-        conn.commit()?;
-
-        Ok(())
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert transfer"; "error" => %e);
+        }
     }
 
-    pub fn update_transfer_sync_states(
+    pub async fn update_transfer_sync_states(
         &self,
         transfer_id: Uuid,
         remote: Option<sync::TransferState>,
         local: Option<sync::TransferState>,
-    ) -> Result<()> {
-        let mut conn = self.conn.lock().expect("Failed to acquire a lock");
-        let conn = conn.transaction()?;
+    ) {
+        let task = async {
+            let mut conn = self.conn.lock().await;
+            let conn = conn.transaction()?;
 
-        if let Some(remote) = remote {
-            sync::transfer_set_remote_state(&conn, transfer_id, remote)?;
+            if let Some(remote) = remote {
+                sync::transfer_set_remote_state(&conn, transfer_id, remote)?;
+            }
+            if let Some(local) = local {
+                sync::transfer_set_local_state(&conn, transfer_id, local)?;
+            }
+
+            conn.commit()?;
+
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to update transfer sync states"; "error" => %e);
         }
-        if let Some(local) = local {
-            sync::transfer_set_local_state(&conn, transfer_id, local)?;
+    }
+
+    pub async fn transfer_sync_state(&self, transfer_id: Uuid) -> Option<sync::Transfer> {
+        let task = async {
+            let conn = self.conn.lock().await;
+            sync::transfer_state(&conn, transfer_id)
+        };
+
+        match task.await {
+            Ok(state) => state,
+            Err(e) => {
+                error!(self.logger, "Failed to get transfer sync state"; "error" => %e);
+                None
+            }
         }
-
-        conn.commit()?;
-        Ok(())
     }
 
-    pub fn transfer_sync_state(&self, transfer_id: Uuid) -> crate::Result<Option<sync::Transfer>> {
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        sync::transfer_state(&conn, transfer_id)
+    pub async fn transfer_sync_clear(&self, transfer_id: Uuid) -> Option<()> {
+        let task = async {
+            let conn = self.conn.lock().await;
+            sync::transfer_clear(&conn, transfer_id)
+        };
+
+        match task.await {
+            Ok(state) => state,
+            Err(e) => {
+                error!(self.logger, "Failed to clear transfer sync state"; "error" => %e);
+                None
+            }
+        }
     }
 
-    pub fn trasnfer_sync_clear(&self, transfer_id: Uuid) -> crate::Result<Option<()>> {
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        sync::transfer_clear(&conn, transfer_id)
-    }
-
-    pub fn outgoing_file_sync_state(
+    pub async fn outgoing_file_sync_state(
         &self,
         transfer_id: Uuid,
         file_id: &str,
-    ) -> crate::Result<Option<sync::File>> {
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        sync::outgoing_file_state(&conn, transfer_id, file_id)
+    ) -> Option<sync::File> {
+        let task = async {
+            let conn = self.conn.lock().await;
+            sync::outgoing_file_state(&conn, transfer_id, file_id)
+        };
+
+        match task.await {
+            Ok(state) => state,
+            Err(e) => {
+                error!(self.logger, "Failed to get outgoing file sync state"; "error" => %e);
+                None
+            }
+        }
     }
 
-    pub fn update_outgoing_file_sync_states(
+    pub async fn update_outgoing_file_sync_states(
         &self,
         transfer_id: Uuid,
         file_id: &str,
         remote: Option<sync::FileState>,
         local: Option<sync::FileState>,
-    ) -> crate::Result<()> {
-        let mut conn = self.conn.lock().expect("Failed to acquire a lock");
-        let conn = conn.transaction()?;
+    ) {
+        let task = async {
+            let mut conn = self.conn.lock().await;
+            let conn = conn.transaction()?;
 
-        if let Some(remote) = remote {
-            sync::outgoing_file_set_remote_state(&conn, transfer_id, file_id, remote)?;
-        }
-        if let Some(local) = local {
-            sync::outgoing_file_set_local_state(&conn, transfer_id, file_id, local)?;
-        }
+            if let Some(remote) = remote {
+                sync::outgoing_file_set_remote_state(&conn, transfer_id, file_id, remote)?;
+            }
+            if let Some(local) = local {
+                sync::outgoing_file_set_local_state(&conn, transfer_id, file_id, local)?;
+            }
 
-        conn.commit()?;
-        Ok(())
+            conn.commit()?;
+
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to update outgoing file sync states"; "error" => %e);
+        }
     }
 
-    pub fn incoming_file_sync_state(
+    pub async fn incoming_file_sync_state(
         &self,
         transfer_id: Uuid,
         file_id: &str,
-    ) -> crate::Result<Option<sync::File>> {
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        sync::incoming_file_state(&conn, transfer_id, file_id)
+    ) -> Option<sync::File> {
+        let task = async {
+            let conn = self.conn.lock().await;
+            sync::incoming_file_state(&conn, transfer_id, file_id)
+        };
+
+        match task.await {
+            Ok(state) => state,
+            Err(e) => {
+                error!(self.logger, "Failed to get incoming file sync state"; "error" => %e);
+                None
+            }
+        }
     }
 
-    pub fn update_incoming_file_sync_states(
+    pub async fn update_incoming_file_sync_states(
         &self,
         transfer_id: Uuid,
         file_id: &str,
         remote: Option<sync::FileState>,
         local: Option<sync::FileState>,
-    ) -> crate::Result<()> {
-        let mut conn = self.conn.lock().expect("Failed to acquire a lock");
-        let conn = conn.transaction()?;
+    ) {
+        let task = async {
+            let mut conn = self.conn.lock().await;
+            let conn = conn.transaction()?;
 
-        if let Some(remote) = remote {
-            sync::incoming_file_set_remote_state(&conn, transfer_id, file_id, remote)?;
-        }
-        if let Some(local) = local {
-            sync::incoming_file_set_local_state(&conn, transfer_id, file_id, local)?;
-        }
+            if let Some(remote) = remote {
+                sync::incoming_file_set_remote_state(&conn, transfer_id, file_id, remote)?;
+            }
+            if let Some(local) = local {
+                sync::incoming_file_set_local_state(&conn, transfer_id, file_id, local)?;
+            }
 
-        conn.commit()?;
-        Ok(())
+            conn.commit()?;
+
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to update incoming file sync states"; "error" => %e);
+        }
     }
 
-    pub fn stop_incoming_file(
-        &self,
-        transfer_id: Uuid,
-        file_id: &str,
-    ) -> crate::Result<Option<()>> {
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        sync::stop_incoming_file(&conn, transfer_id, file_id)
+    pub async fn stop_incoming_file(&self, transfer_id: Uuid, file_id: &str) -> Option<()> {
+        let task = async {
+            let conn = self.conn.lock().await;
+            sync::stop_incoming_file(&conn, transfer_id, file_id)
+        };
+
+        match task.await {
+            Ok(state) => state,
+            Err(e) => {
+                error!(self.logger, "Failed to stop incoming file sync state"; "error" => %e);
+                None
+            }
+        }
     }
 
-    pub fn start_incoming_file(
+    pub async fn start_incoming_file(
         &self,
         transfer_id: Uuid,
         file_id: &str,
         base_dir: &str,
-    ) -> crate::Result<Option<()>> {
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        sync::start_incoming_file(&conn, transfer_id, file_id, base_dir)
+    ) -> Option<()> {
+        let task = async {
+            let conn = self.conn.lock().await;
+            sync::start_incoming_file(&conn, transfer_id, file_id, base_dir)
+        };
+
+        match task.await {
+            Ok(state) => state,
+            Err(e) => {
+                error!(self.logger, "Failed to start incoming file sync state"; "error" => %e);
+                None
+            }
+        }
     }
 
     fn insert_incoming_path(
+        logger: &Logger,
         conn: &Transaction<'_>,
         transfer_id: Uuid,
         path: &TransferIncomingPath,
-    ) -> Result<()> {
+    ) {
         let tid = transfer_id.to_string();
 
-        conn.execute(
-            "INSERT INTO incoming_paths (transfer_id, relative_path, path_hash, bytes)
+        let task = || {
+            conn.execute(
+                "INSERT INTO incoming_paths (transfer_id, relative_path, path_hash, bytes)
             VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO NOTHING",
-            params![tid, path.relative_path, path.file_id, path.size],
-        )?;
+                params![tid, path.relative_path, path.file_id, path.size],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task() {
+            error!(logger, "Failed to insert incoming path"; "error" => %e);
+        }
     }
 
     fn insert_outgoing_path(
+        logger: &Logger,
         conn: &Transaction<'_>,
         transfer_id: Uuid,
         path: &TransferOutgoingPath,
-    ) -> Result<()> {
+    ) {
         let tid = transfer_id.to_string();
-
         let uri = path.uri.as_str();
 
-        conn.execute(
-            r#"
+        let task = || {
+            conn.execute(
+                r#"
             INSERT INTO outgoing_paths (transfer_id, relative_path, path_hash, bytes, uri)
             VALUES (?1, ?2, ?3, ?4, ?5)
             "#,
-            params![tid, path.relative_path, path.file_id, path.size, uri,],
-        )?;
+                params![tid, path.relative_path, path.file_id, path.size, uri,],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task() {
+            error!(logger, "Failed to insert outgoing path"; "error" => %e);
+        }
     }
 
-    pub fn save_checksum(&self, transfer_id: Uuid, file_id: &str, checksum: &[u8]) -> Result<()> {
+    pub async fn save_checksum(&self, transfer_id: Uuid, file_id: &str, checksum: &[u8]) {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -259,39 +356,56 @@ impl Storage {
             "file_id" => file_id,
         );
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        conn.execute(
-            "UPDATE incoming_paths SET checksum = ?3 WHERE transfer_id = ?1 AND path_hash = ?2",
-            params![tid, file_id, checksum],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "UPDATE incoming_paths SET checksum = ?3 WHERE transfer_id = ?1 AND path_hash = ?2",
+                params![tid, file_id, checksum],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to save checksum"; "error" => %e);
+        }
     }
 
-    pub fn fetch_checksums(&self, transfer_id: Uuid) -> Result<Vec<FileChecksum>> {
+    pub async fn fetch_checksums(&self, transfer_id: Uuid) -> Vec<FileChecksum> {
         let tid = transfer_id.to_string();
         trace!(
             self.logger,
             "Fetching checksums";
             "transfer_id" => &tid);
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        let out = conn
-            .prepare(
-                "SELECT path_hash as file_id, checksum FROM incoming_paths WHERE transfer_id = ?1",
-            )?
-            .query_map(params![tid], |row| {
-                Ok(FileChecksum {
-                    file_id: row.get("file_id")?,
-                    checksum: row.get("checksum")?,
-                })
-            })?
-            .collect::<QueryResult<Vec<_>>>()?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            let out = conn
+                .prepare(
+                    "SELECT path_hash as file_id, checksum FROM incoming_paths WHERE transfer_id \
+                     = ?1",
+                )?
+                .query_map(params![tid], |row| {
+                    Ok(FileChecksum {
+                        file_id: row.get("file_id")?,
+                        checksum: row.get("checksum")?,
+                    })
+                })?
+                .collect::<QueryResult<Vec<_>>>()?;
 
-        Ok(out)
+            Ok::<Vec<_>, Error>(out)
+        };
+
+        match task.await {
+            Ok(out) => out,
+            Err(e) => {
+                error!(self.logger, "Failed to fetch checksums"; "error" => %e);
+                vec![]
+            }
+        }
     }
 
-    pub fn insert_transfer_active_state(&self, transfer_id: Uuid) -> Result<()> {
+    pub async fn insert_transfer_active_state(&self, transfer_id: Uuid) {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -299,16 +413,22 @@ impl Storage {
             "Inserting transfer active state";
             "transfer_id" => &tid);
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        conn.execute(
-            "INSERT INTO transfer_active_states (transfer_id) VALUES (?1)",
-            params![tid],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "INSERT INTO transfer_active_states (transfer_id) VALUES (?1)",
+                params![tid],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert transfer active state"; "error" => %e);
+        }
     }
 
-    pub fn insert_transfer_failed_state(&self, transfer_id: Uuid, error: u32) -> Result<()> {
+    pub async fn insert_transfer_failed_state(&self, transfer_id: Uuid, error: u32) {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -317,16 +437,22 @@ impl Storage {
             "transfer_id" => &tid,
             "error" => error);
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        conn.execute(
-            "INSERT INTO transfer_failed_states (transfer_id, status_code) VALUES (?1, ?2)",
-            params![tid, error],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "INSERT INTO transfer_failed_states (transfer_id, status_code) VALUES (?1, ?2)",
+                params![tid, error],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert transfer failed state"; "error" => %e);
+        }
     }
 
-    pub fn insert_transfer_cancel_state(&self, transfer_id: Uuid, by_peer: bool) -> Result<()> {
+    pub async fn insert_transfer_cancel_state(&self, transfer_id: Uuid, by_peer: bool) {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -335,20 +461,22 @@ impl Storage {
             "transfer_id" => &tid,
             "by_peer" => by_peer);
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        conn.execute(
-            "INSERT INTO transfer_cancel_states (transfer_id, by_peer) VALUES (?1, ?2)",
-            params![tid, by_peer],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "INSERT INTO transfer_cancel_states (transfer_id, by_peer) VALUES (?1, ?2)",
+                params![tid, by_peer],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert transfer cancel state"; "error" => %e);
+        }
     }
 
-    pub fn insert_outgoing_path_pending_state(
-        &self,
-        transfer_id: Uuid,
-        file_id: &str,
-    ) -> Result<()> {
+    pub async fn insert_outgoing_path_pending_state(&self, transfer_id: Uuid, file_id: &str) {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -357,21 +485,23 @@ impl Storage {
             "transfer_id" => &tid,
             "file_id" => file_id);
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        conn.execute(
-            "INSERT INTO outgoing_path_pending_states (path_id) VALUES ((SELECT id FROM \
-             outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
-            params![tid, file_id],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "INSERT INTO outgoing_path_pending_states (path_id) VALUES ((SELECT id FROM \
+                 outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
+                params![tid, file_id],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert outgoing path pending state"; "error" => %e);
+        }
     }
 
-    pub fn insert_incoming_path_pending_state(
-        &self,
-        transfer_id: Uuid,
-        file_id: &str,
-    ) -> Result<()> {
+    pub async fn insert_incoming_path_pending_state(&self, transfer_id: Uuid, file_id: &str) {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -380,21 +510,23 @@ impl Storage {
             "transfer_id" => &tid,
             "file_id" => file_id);
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        conn.execute(
-            "INSERT INTO incoming_path_pending_states (path_id) VALUES ((SELECT id FROM \
-             incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
-            params![tid, file_id],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "INSERT INTO incoming_path_pending_states (path_id) VALUES ((SELECT id FROM \
+                 incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
+                params![tid, file_id],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert incoming path pending state"; "error" => %e);
+        }
     }
 
-    pub fn insert_outgoing_path_started_state(
-        &self,
-        transfer_id: Uuid,
-        path_id: &str,
-    ) -> Result<()> {
+    pub async fn insert_outgoing_path_started_state(&self, transfer_id: Uuid, path_id: &str) {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -403,22 +535,28 @@ impl Storage {
             "transfer_id" => &tid,
             "path_id" => path_id);
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        conn.execute(
-            "INSERT INTO outgoing_path_started_states (path_id, bytes_sent) VALUES ((SELECT id \
-             FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
-            params![tid, path_id, 0],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "INSERT INTO outgoing_path_started_states (path_id, bytes_sent) VALUES ((SELECT \
+                 id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
+                params![tid, path_id, 0],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert outgoing path started state"; "error" => %e);
+        }
     }
 
-    pub fn insert_incoming_path_started_state(
+    pub async fn insert_incoming_path_started_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
         base_dir: &str,
-    ) -> Result<()> {
+    ) {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -428,23 +566,30 @@ impl Storage {
             "path_id" => path_id,
             "base_dir" => base_dir);
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        conn.execute(
-            "INSERT INTO incoming_path_started_states (path_id, base_dir, bytes_received) VALUES \
-             ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
-            params![tid, path_id, base_dir, 0],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "INSERT INTO incoming_path_started_states (path_id, base_dir, bytes_received) \
+                 VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = \
+                 ?2), ?3, ?4)",
+                params![tid, path_id, base_dir, 0],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert incoming path started state"; "error" => %e);
+        }
     }
 
-    pub fn insert_outgoing_path_cancel_state(
+    pub async fn insert_outgoing_path_cancel_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
         by_peer: bool,
         bytes_sent: i64,
-    ) -> Result<()> {
+    ) {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -455,23 +600,30 @@ impl Storage {
             "by_peer" => by_peer,
             "bytes_sent" => bytes_sent);
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        conn.execute(
-            "INSERT INTO outgoing_path_cancel_states (path_id, by_peer, bytes_sent) VALUES \
-             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
-            params![tid, path_id, by_peer, bytes_sent],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "INSERT INTO outgoing_path_cancel_states (path_id, by_peer, bytes_sent) VALUES \
+                 ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, \
+                 ?4)",
+                params![tid, path_id, by_peer, bytes_sent],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert outgoing path cancel state"; "error" => %e);
+        }
     }
 
-    pub fn insert_incoming_path_cancel_state(
+    pub async fn insert_incoming_path_cancel_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
         by_peer: bool,
         bytes_received: i64,
-    ) -> Result<()> {
+    ) {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -482,23 +634,30 @@ impl Storage {
             "by_peer" => by_peer,
             "bytes_received" => bytes_received);
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        conn.execute(
-            "INSERT INTO incoming_path_cancel_states (path_id, by_peer, bytes_received) VALUES \
-             ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
-            params![tid, path_id, by_peer, bytes_received],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "INSERT INTO incoming_path_cancel_states (path_id, by_peer, bytes_received) \
+                 VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = \
+                 ?2), ?3, ?4)",
+                params![tid, path_id, by_peer, bytes_received],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert incoming path cancel state"; "error" => %e);
+        }
     }
 
-    pub fn insert_incoming_path_failed_state(
+    pub async fn insert_incoming_path_failed_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
         error: u32,
         bytes_received: i64,
-    ) -> Result<()> {
+    ) {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -509,24 +668,30 @@ impl Storage {
             "error" => error,
             "bytes_received" => bytes_received);
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        conn.execute(
-            "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) \
-             VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), \
-             ?3, ?4)",
-            params![tid, path_id, error, bytes_received],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) \
+                 VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = \
+                 ?2), ?3, ?4)",
+                params![tid, path_id, error, bytes_received],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert incoming path failed state"; "error" => %e);
+        }
     }
 
-    pub fn insert_outgoing_path_failed_state(
+    pub async fn insert_outgoing_path_failed_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
         error: u32,
         bytes_sent: i64,
-    ) -> Result<()> {
+    ) {
         let tid = transfer_id.to_string();
         trace!(
             self.logger,
@@ -536,21 +701,24 @@ impl Storage {
             "error" => error,
             "bytes_sent" => bytes_sent);
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        conn.execute(
-            "INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent) VALUES \
-             ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, ?4)",
-            params![tid, path_id, error, bytes_sent],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent) \
+                 VALUES ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = \
+                 ?2), ?3, ?4)",
+                params![tid, path_id, error, bytes_sent],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert outgoing path failed state"; "error" => %e);
+        }
     }
 
-    pub fn insert_outgoing_path_completed_state(
-        &self,
-        transfer_id: Uuid,
-        path_id: &str,
-    ) -> Result<()> {
+    pub async fn insert_outgoing_path_completed_state(&self, transfer_id: Uuid, path_id: &str) {
         let tid = transfer_id.to_string();
         trace!(
             self.logger,
@@ -558,22 +726,28 @@ impl Storage {
             "transfer_id" => &tid,
             "path_id" => path_id);
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        conn.execute(
-            "INSERT INTO outgoing_path_completed_states (path_id) VALUES ((SELECT id FROM \
-             outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
-            params![tid, path_id],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "INSERT INTO outgoing_path_completed_states (path_id) VALUES ((SELECT id FROM \
+                 outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
+                params![tid, path_id],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert outgoing path completed state"; "error" => %e);
+        }
     }
 
-    pub fn insert_incoming_path_completed_state(
+    pub async fn insert_incoming_path_completed_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
         final_path: &str,
-    ) -> Result<()> {
+    ) {
         let tid = transfer_id.to_string();
         trace!(
             self.logger,
@@ -582,296 +756,385 @@ impl Storage {
             "path_id" => path_id,
             "final_path" => final_path);
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        conn.execute(
-            "INSERT INTO incoming_path_completed_states (path_id, final_path) VALUES ((SELECT id \
-             FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
-            params![tid, path_id, final_path],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "INSERT INTO incoming_path_completed_states (path_id, final_path) VALUES ((SELECT \
+                 id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
+                params![tid, path_id, final_path],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert incoming path completed state"; "error" => %e);
+        }
     }
 
-    pub fn insert_outgoing_path_reject_state(
+    pub async fn insert_outgoing_path_reject_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
         by_peer: bool,
-    ) -> Result<()> {
+    ) {
         let tid = transfer_id.to_string();
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        conn.execute(
-            "INSERT INTO outgoing_path_reject_states (path_id, by_peer) VALUES ((SELECT id FROM \
-             outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
-            params![tid, path_id, by_peer],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "INSERT INTO outgoing_path_reject_states (path_id, by_peer) VALUES ((SELECT id \
+                 FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
+                params![tid, path_id, by_peer],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert outgoing path reject state"; "error" => %e);
+        }
     }
 
-    pub fn insert_incoming_path_reject_state(
+    pub async fn insert_incoming_path_reject_state(
         &self,
         transfer_id: Uuid,
         path_id: &str,
         by_peer: bool,
-    ) -> Result<()> {
+    ) {
         let tid = transfer_id.to_string();
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        conn.execute(
-            "INSERT INTO incoming_path_reject_states (path_id, by_peer) VALUES ((SELECT id FROM \
-             incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
-            params![tid, path_id, by_peer],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "INSERT INTO incoming_path_reject_states (path_id, by_peer) VALUES ((SELECT id \
+                 FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
+                params![tid, path_id, by_peer],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert incoming path reject state"; "error" => %e);
+        }
     }
 
-    pub fn purge_transfers_until(&self, until_timestamp: i64) -> Result<()> {
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-
+    pub async fn purge_transfers_until(&self, until_timestamp: i64) {
         trace!(
             self.logger,
             "Purging transfers until timestamp";
             "until_timestamp" => until_timestamp);
 
-        conn.execute(
-            "DELETE FROM transfers WHERE created_at < datetime(?1, 'unixepoch')",
-            params![until_timestamp],
-        )?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "DELETE FROM transfers WHERE created_at < datetime(?1, 'unixepoch')",
+                params![until_timestamp],
+            )?;
 
-        Ok(())
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to purge transfers"; "error" => %e);
+        }
     }
 
-    pub fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<()> {
+    pub async fn purge_transfers(&self, transfer_ids: Vec<String>) {
         trace!(
             self.logger,
             "Purging transfers";
             "transfer_ids" => format!("{:?}", transfer_ids));
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        for id in transfer_ids {
-            conn.execute("DELETE FROM transfers WHERE id = ?1", params![id])?;
+        let task = async {
+            let conn = self.conn.lock().await;
+            for id in transfer_ids {
+                conn.execute("DELETE FROM transfers WHERE id = ?1", params![id])?;
+            }
+
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to purge transfers"; "error" => %e);
         }
-
-        Ok(())
     }
 
-    pub fn outgoing_files_to_reject(&self, transfer_id: Uuid) -> Result<Vec<String>> {
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        sync::outgoing_files_to_reject(&conn, transfer_id)
+    pub async fn outgoing_files_to_reject(&self, transfer_id: Uuid) -> Vec<String> {
+        let task = async {
+            let conn = self.conn.lock().await;
+            sync::outgoing_files_to_reject(&conn, transfer_id)
+        };
+
+        match task.await {
+            Ok(files) => files,
+            Err(e) => {
+                error!(self.logger, "Failed to get outgoing files to reject"; "error" => %e);
+                vec![]
+            }
+        }
     }
 
-    pub fn outgoing_transfers_to_resume(&self) -> Result<Vec<OutgoingTransferToRetry>> {
-        let mut conn = self.conn.lock().expect("Failed to acquire a lock");
-        let conn = conn.transaction()?;
+    pub async fn outgoing_transfers_to_resume(&self) -> Vec<OutgoingTransferToRetry> {
+        let task = async {
+            let mut conn = self.conn.lock().await;
+            let conn = conn.transaction()?;
 
-        let rec_transfers = sync::transfers_to_resume(&conn, TransferType::Outgoing)?;
+            let rec_transfers = sync::transfers_to_resume(&conn, TransferType::Outgoing)?;
 
-        let mut out = Vec::with_capacity(rec_transfers.len());
-        for rec_transfer in rec_transfers {
-            let files = conn
-                .prepare(
-                    r#"
+            let mut out = Vec::with_capacity(rec_transfers.len());
+            for rec_transfer in rec_transfers {
+                let files = conn
+                    .prepare(
+                        r#"
                     SELECT relative_path, uri, path_hash, bytes 
                     FROM outgoing_paths 
                     WHERE transfer_id = ?1
                     "#,
-                )?
-                .query_map(params![rec_transfer.tid], |r| {
-                    Ok((
-                        r.get("path_hash")?,
-                        r.get::<_, String>("uri")?,
-                        r.get("relative_path")?,
-                        r.get("bytes")?,
-                    ))
-                })?
-                .map(|row| {
-                    let (file_id, uri, subpath, size) = row?;
-                    Ok(OutgoingFileToRetry {
-                        file_id,
-                        uri: uri.parse()?,
-                        subpath,
-                        size,
+                    )?
+                    .query_map(params![rec_transfer.tid], |r| {
+                        Ok((
+                            r.get("path_hash")?,
+                            r.get::<_, String>("uri")?,
+                            r.get("relative_path")?,
+                            r.get("bytes")?,
+                        ))
+                    })?
+                    .map(|row| {
+                        let (file_id, uri, subpath, size) = row?;
+                        Ok(OutgoingFileToRetry {
+                            file_id,
+                            uri: uri.parse()?,
+                            subpath,
+                            size,
+                        })
                     })
-                })
-                .collect::<Result<_>>()?;
+                    .collect::<Result<_>>()?;
 
-            out.push(OutgoingTransferToRetry {
-                uuid: rec_transfer.tid.parse().map_err(|err| {
-                    crate::Error::InternalError(format!("Failed to parse UUID: {err}"))
-                })?,
-                peer: rec_transfer.peer,
-                files,
-            });
+                out.push(OutgoingTransferToRetry {
+                    uuid: rec_transfer.tid.parse().map_err(|err| {
+                        crate::Error::InternalError(format!("Failed to parse UUID: {err}"))
+                    })?,
+                    peer: rec_transfer.peer,
+                    files,
+                });
+            }
+
+            conn.commit()?;
+
+            Ok::<Vec<_>, Error>(out)
+        };
+
+        match task.await {
+            Ok(transfers) => transfers,
+            Err(e) => {
+                error!(self.logger, "Failed to get outgoing transfers to resume"; "error" => %e);
+                vec![]
+            }
         }
-
-        conn.commit()?;
-
-        Ok(out)
     }
 
-    pub fn incoming_transfers_to_resume(&self) -> crate::Result<Vec<IncomingTransferToRetry>> {
-        let mut conn = self.conn.lock().expect("Failed to acquire a lock");
-        let conn = conn.transaction()?;
+    pub async fn incoming_transfers_to_resume(&self) -> Vec<IncomingTransferToRetry> {
+        let task = async {
+            let mut conn = self.conn.lock().await;
+            let conn = conn.transaction()?;
 
-        let rec_transfers = sync::transfers_to_resume(&conn, TransferType::Incoming)?;
+            let rec_transfers = sync::transfers_to_resume(&conn, TransferType::Incoming)?;
 
-        let mut out = Vec::with_capacity(rec_transfers.len());
-        for rec_transfer in rec_transfers {
-            let files = conn
-                .prepare(
-                    r#"
+            let mut out = Vec::with_capacity(rec_transfers.len());
+            for rec_transfer in rec_transfers {
+                let files = conn
+                    .prepare(
+                        r#"
                     SELECT relative_path, path_hash, bytes 
                     FROM incoming_paths 
                     WHERE transfer_id = ?1
                     "#,
-                )?
-                .query_map(params![rec_transfer.tid], |r| {
-                    Ok(IncomingFileToRetry {
-                        file_id: r.get("path_hash")?,
-                        subpath: r.get("relative_path")?,
-                        size: r.get("bytes")?,
-                    })
-                })?
-                .collect::<QueryResult<_>>()?;
+                    )?
+                    .query_map(params![rec_transfer.tid], |r| {
+                        Ok(IncomingFileToRetry {
+                            file_id: r.get("path_hash")?,
+                            subpath: r.get("relative_path")?,
+                            size: r.get("bytes")?,
+                        })
+                    })?
+                    .collect::<QueryResult<_>>()?;
 
-            out.push(IncomingTransferToRetry {
-                uuid: rec_transfer.tid.parse().map_err(|err| {
-                    crate::Error::InternalError(format!("Failed to parse UUID: {err}"))
-                })?,
-                peer: rec_transfer.peer,
-                files,
-            });
+                out.push(IncomingTransferToRetry {
+                    uuid: rec_transfer.tid.parse().map_err(|err| {
+                        crate::Error::InternalError(format!("Failed to parse UUID: {err}"))
+                    })?,
+                    peer: rec_transfer.peer,
+                    files,
+                });
+            }
+
+            conn.commit()?;
+            Ok::<Vec<_>, Error>(out)
+        };
+
+        match task.await {
+            Ok(transfers) => transfers,
+            Err(e) => {
+                error!(self.logger, "Failed to get incoming transfers to resume"; "error" => %e);
+                vec![]
+            }
         }
-
-        conn.commit()?;
-        Ok(out)
     }
 
-    pub fn incoming_files_to_resume(&self, transfer_id: Uuid) -> Result<Vec<sync::FileInFlight>> {
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        sync::incoming_files_in_flight(&conn, transfer_id)
+    pub async fn incoming_files_to_resume(&self, transfer_id: Uuid) -> Vec<sync::FileInFlight> {
+        let task = async {
+            let conn = self.conn.lock().await;
+            sync::incoming_files_in_flight(&conn, transfer_id)
+        };
+
+        match task.await {
+            Ok(files) => files,
+            Err(e) => {
+                error!(self.logger, "Failed to get incoming files to resume"; "error" => %e);
+                vec![]
+            }
+        }
     }
 
-    pub fn incoming_files_to_reject(&self, transfer_id: Uuid) -> Result<Vec<String>> {
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-        sync::incoming_files_to_reject(&conn, transfer_id)
+    pub async fn incoming_files_to_reject(&self, transfer_id: Uuid) -> Vec<String> {
+        let task = async {
+            let conn = self.conn.lock().await;
+            sync::incoming_files_to_reject(&conn, transfer_id)
+        };
+
+        match task.await {
+            Ok(files) => files,
+            Err(e) => {
+                error!(self.logger, "Failed to get incoming files to reject"; "error" => %e);
+                vec![]
+            }
+        }
     }
 
-    pub fn finished_incoming_files(&self, transfer_id: Uuid) -> Result<Vec<FinishedIncomingFile>> {
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
+    pub async fn finished_incoming_files(&self, transfer_id: Uuid) -> Vec<FinishedIncomingFile> {
+        let task = async {
+            let conn = self.conn.lock().await;
 
-        let paths = conn
-            .prepare(
-                r#"
+            let paths = conn
+                .prepare(
+                    r#"
                 SELECT relative_path as subpath, final_path
                 FROM incoming_paths ip
                 INNER JOIN incoming_path_completed_states ipcs ON ip.id = ipcs.path_id
                 WHERE transfer_id = ?1
                 "#,
-            )?
-            .query_map(params![transfer_id.to_string()], |r| {
-                Ok(FinishedIncomingFile {
-                    subpath: r.get("subpath")?,
-                    final_path: r.get("final_path")?,
-                })
-            })?
-            .collect::<QueryResult<_>>()?;
+                )?
+                .query_map(params![transfer_id.to_string()], |r| {
+                    Ok(FinishedIncomingFile {
+                        subpath: r.get("subpath")?,
+                        final_path: r.get("final_path")?,
+                    })
+                })?
+                .collect::<QueryResult<_>>()?;
 
-        Ok(paths)
+            Ok::<Vec<_>, Error>(paths)
+        };
+
+        match task.await {
+            Ok(paths) => paths,
+            Err(e) => {
+                error!(self.logger, "Failed to get finished incoming files"; "error" => %e);
+                vec![]
+            }
+        }
     }
 
-    pub fn transfers_since(&self, since_timestamp: i64) -> Result<Vec<Transfer>> {
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-
+    pub async fn transfers_since(&self, since_timestamp: i64) -> Vec<Transfer> {
         trace!(
-            self.logger,
-            "Fetching transfers since timestamp";
-            "since_timestamp" => since_timestamp);
+        self.logger,
+        "Fetching transfers since timestamp";
+        "since_timestamp" => since_timestamp);
 
-        let mut transfers = conn
-            .prepare(
-                r#"
+        let task = async {
+            let conn = self.conn.lock().await;
+            let mut transfers = conn
+                .prepare(
+                    r#"
                 SELECT id, peer, created_at, is_outgoing FROM transfers
                 WHERE created_at >= datetime(?1, 'unixepoch')
                 "#,
-            )?
-            .query_map(params![since_timestamp], |row| {
-                let transfer_type = match row.get::<_, u32>("is_outgoing")? {
-                    0 => DbTransferType::Incoming(vec![]),
-                    1 => DbTransferType::Outgoing(vec![]),
-                    _ => unreachable!(),
-                };
+                )?
+                .query_map(params![since_timestamp], |row| {
+                    let transfer_type = match row.get::<_, u32>("is_outgoing")? {
+                        0 => DbTransferType::Incoming(vec![]),
+                        1 => DbTransferType::Outgoing(vec![]),
+                        _ => unreachable!(),
+                    };
 
-                let id: String = row.get("id")?;
+                    let id: String = row.get("id")?;
 
-                Ok(Transfer {
-                    id: Uuid::parse_str(&id).map_err(|_| rusqlite::Error::InvalidQuery)?,
-                    peer_id: row.get("peer")?,
-                    transfer_type,
-                    created_at: row.get("created_at")?,
-                    states: vec![],
-                })
-            })?
-            .collect::<QueryResult<Vec<Transfer>>>()?;
+                    Ok(Transfer {
+                        id: Uuid::parse_str(&id).map_err(|_| rusqlite::Error::InvalidQuery)?,
+                        peer_id: row.get("peer")?,
+                        transfer_type,
+                        created_at: row.get("created_at")?,
+                        states: vec![],
+                    })
+                })?
+                .collect::<QueryResult<Vec<Transfer>>>()?;
 
-        for transfer in &mut transfers {
-            match transfer.transfer_type {
-                DbTransferType::Incoming(_) => {
-                    transfer.transfer_type = DbTransferType::Incoming(Self::get_incoming_paths(
-                        &conn,
-                        transfer.id,
-                        &self.logger,
-                    )?)
+            for transfer in &mut transfers {
+                match transfer.transfer_type {
+                    DbTransferType::Incoming(_) => {
+                        transfer.transfer_type = DbTransferType::Incoming(Self::get_incoming_paths(
+                            &conn,
+                            transfer.id,
+                            &self.logger,
+                        ))
+                    }
+                    DbTransferType::Outgoing(_) => {
+                        transfer.transfer_type = DbTransferType::Outgoing(Self::get_outgoing_paths(
+                            &conn,
+                            transfer.id,
+                            &self.logger,
+                        ))
+                    }
                 }
-                DbTransferType::Outgoing(_) => {
-                    transfer.transfer_type = DbTransferType::Outgoing(Self::get_outgoing_paths(
-                        &conn,
-                        transfer.id,
-                        &self.logger,
-                    )?)
-                }
-            }
 
-            let tid = transfer.id.to_string();
+                let tid = transfer.id.to_string();
 
-            transfer.states.extend(
-                conn.prepare(
-                    r#"
+                transfer.states.extend(
+                    conn.prepare(
+                        r#"
                     SELECT created_at FROM transfer_active_states WHERE transfer_id = ?1
                     "#,
-                )?
-                .query_map(params![tid], |row| {
-                    Ok(TransferStateEvent {
-                        transfer_id: transfer.id,
-                        created_at: row.get("created_at")?,
-                        data: types::TransferStateEventData::Active,
-                    })
-                })?
-                .collect::<QueryResult<Vec<TransferStateEvent>>>()?,
-            );
+                    )?
+                    .query_map(params![tid], |row| {
+                        Ok(TransferStateEvent {
+                            transfer_id: transfer.id,
+                            created_at: row.get("created_at")?,
+                            data: types::TransferStateEventData::Active,
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<TransferStateEvent>>>()?,
+                );
 
-            transfer.states.extend(
-                conn.prepare(
-                    r#"
+                transfer.states.extend(
+                    conn.prepare(
+                        r#"
                     SELECT created_at, by_peer FROM transfer_cancel_states WHERE transfer_id = ?1
                     "#,
-                )?
-                .query_map(params![tid], |row| {
-                    Ok(TransferStateEvent {
-                        transfer_id: transfer.id,
-                        created_at: row.get("created_at")?,
-                        data: types::TransferStateEventData::Cancel {
-                            by_peer: row.get("by_peer")?,
-                        },
-                    })
-                })?
-                .collect::<QueryResult<Vec<TransferStateEvent>>>()?,
-            );
+                    )?
+                    .query_map(params![tid], |row| {
+                        Ok(TransferStateEvent {
+                            transfer_id: transfer.id,
+                            created_at: row.get("created_at")?,
+                            data: types::TransferStateEventData::Cancel {
+                                by_peer: row.get("by_peer")?,
+                            },
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<TransferStateEvent>>>()?,
+                );
 
-            transfer.states.extend(
+                transfer.states.extend(
                 conn.prepare(
                     r#"
                     SELECT created_at, status_code FROM transfer_failed_states WHERE transfer_id = ?1
@@ -888,22 +1151,29 @@ impl Storage {
                 })?
                 .collect::<QueryResult<Vec<TransferStateEvent>>>()?,
             );
+            }
+
+            drop(conn);
+
+            for transfer in &mut transfers {
+                transfer
+                    .states
+                    .sort_by(|a, b| a.created_at.cmp(&b.created_at));
+            }
+
+            Ok::<Vec<_>, Error>(transfers)
+        };
+
+        match task.await {
+            Ok(transfers) => transfers,
+            Err(e) => {
+                error!(self.logger, "Failed to get transfers since timestamp"; "error" => %e);
+                vec![]
+            }
         }
-
-        drop(conn);
-
-        for transfer in &mut transfers {
-            transfer
-                .states
-                .sort_by(|a, b| a.created_at.cmp(&b.created_at));
-        }
-
-        Ok(transfers)
     }
 
-    pub fn remove_transfer_file(&self, transfer_id: Uuid, file_id: &str) -> Result<Option<()>> {
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
-
+    pub async fn remove_transfer_file(&self, transfer_id: Uuid, file_id: &str) -> Option<()> {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -913,42 +1183,54 @@ impl Storage {
             "file_id" => file_id,
         );
 
-        let mut count = 0;
-        count += conn
-            .prepare(
-                r#"
+        let task = async {
+            let conn = self.conn.lock().await;
+
+            let mut count = 0;
+            count += conn
+                .prepare(
+                    r#"
                 DELETE FROM outgoing_paths
                 WHERE transfer_id = ?1
                     AND path_hash = ?2
                     AND id IN(SELECT path_id FROM outgoing_path_reject_states)
             "#,
-            )?
-            .execute(params![tid, file_id])?;
-        count += conn
-            .prepare(
-                r#"
+                )?
+                .execute(params![tid, file_id])?;
+            count += conn
+                .prepare(
+                    r#"
                 DELETE FROM incoming_paths
                 WHERE transfer_id = ?1
                     AND path_hash = ?2
                     AND id IN(SELECT path_id FROM incoming_path_reject_states)
             "#,
-            )?
-            .execute(params![tid, file_id])?;
+                )?
+                .execute(params![tid, file_id])?;
 
-        match count {
-            0 => Ok(None),
-            1 => Ok(Some(())),
-            _ => {
-                warn!(
-                    self.logger,
-                    "Deleted a file from both outgoing and incoming paths"
-                );
-                Ok(Some(()))
+            match count {
+                0 => Ok::<Option<()>, Error>(None),
+                1 => Ok(Some(())),
+                _ => {
+                    warn!(
+                        self.logger,
+                        "Deleted a file from both outgoing and incoming paths"
+                    );
+                    Ok(Some(()))
+                }
+            }
+        };
+
+        match task.await {
+            Ok(res) => res,
+            Err(e) => {
+                error!(self.logger, "Failed to remove transfer file"; "error" => %e);
+                None
             }
         }
     }
 
-    pub fn fetch_temp_locations(&self, transfer_id: Uuid) -> Result<Vec<TempFileLocation>> {
+    pub async fn fetch_temp_locations(&self, transfer_id: Uuid) -> Vec<TempFileLocation> {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -957,33 +1239,43 @@ impl Storage {
             "transfer_id" => &tid
         );
 
-        let conn = self.conn.lock().expect("Failed to acquire a lock");
+        let task = async {
+            let conn = self.conn.lock().await;
 
-        let out = conn
-            .prepare(
-                r#"
+            let out = conn
+                .prepare(
+                    r#"
                 SELECT DISTINCT path_hash, base_dir
                 FROM incoming_paths ip
                 INNER JOIN incoming_path_started_states ipss ON ip.id = ipss.path_id 
                 WHERE transfer_id = ?1
                 "#,
-            )?
-            .query_map(params![tid], |row| {
-                Ok(TempFileLocation {
-                    file_id: row.get("path_hash")?,
-                    base_path: row.get("base_dir")?,
-                })
-            })?
-            .collect::<QueryResult<_>>()?;
+                )?
+                .query_map(params![tid], |row| {
+                    Ok(TempFileLocation {
+                        file_id: row.get("path_hash")?,
+                        base_path: row.get("base_dir")?,
+                    })
+                })?
+                .collect::<QueryResult<_>>()?;
 
-        Ok(out)
+            Ok::<Vec<_>, Error>(out)
+        };
+
+        match task.await {
+            Ok(res) => res,
+            Err(e) => {
+                error!(self.logger, "Failed to fetch temporary file locations"; "error" => %e);
+                vec![]
+            }
+        }
     }
 
     fn get_outgoing_paths(
         conn: &Connection,
         transfer_id: Uuid,
         logger: &slog::Logger,
-    ) -> Result<Vec<OutgoingPath>> {
+    ) -> Vec<OutgoingPath> {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -992,182 +1284,192 @@ impl Storage {
             "transfer_id" => &tid
         );
 
-        let mut paths: Vec<_> = conn
-            .prepare(
-                r#"
+        let task = || {
+            let mut paths: Vec<_> = conn
+                .prepare(
+                    r#"
                 SELECT * FROM outgoing_paths WHERE transfer_id = ?1
                 "#,
-            )?
-            .query_map(params![tid], |row| {
-                Ok((
-                    row.get("id")?,
-                    row.get("relative_path")?,
-                    row.get("path_hash")?,
-                    row.get("bytes")?,
-                    row.get("created_at")?,
-                    row.get::<_, String>("uri")?,
-                ))
-            })?
-            .map(|row| {
-                let (id, relative_path, file_id, bytes, created_at, uri) = row?;
+                )?
+                .query_map(params![tid], |row| {
+                    Ok((
+                        row.get("id")?,
+                        row.get("relative_path")?,
+                        row.get("path_hash")?,
+                        row.get("bytes")?,
+                        row.get("created_at")?,
+                        row.get::<_, String>("uri")?,
+                    ))
+                })?
+                .map(|row| {
+                    let (id, relative_path, file_id, bytes, created_at, uri) = row?;
 
-                let mut res = OutgoingPath {
-                    id,
-                    transfer_id,
-                    content_uri: None,
-                    base_path: None,
-                    relative_path,
-                    file_id,
-                    bytes,
-                    created_at,
-                    states: vec![],
-                };
+                    let mut res = OutgoingPath {
+                        id,
+                        transfer_id,
+                        content_uri: None,
+                        base_path: None,
+                        relative_path,
+                        file_id,
+                        bytes,
+                        created_at,
+                        states: vec![],
+                    };
 
-                let uri = url::Url::parse(&uri)?;
+                    let uri = url::Url::parse(&uri)?;
 
-                match uri.scheme() {
-                    "content" => res.content_uri = Some(uri),
-                    "file" => {
-                        let mut path = uri.to_file_path().map_err(|_| {
-                            crate::Error::InvalidUri("Failed to extract file path".to_string())
-                        })?;
+                    match uri.scheme() {
+                        "content" => res.content_uri = Some(uri),
+                        "file" => {
+                            let mut path = uri.to_file_path().map_err(|_| {
+                                crate::Error::InvalidUri("Failed to extract file path".to_string())
+                            })?;
 
-                        let count = Path::new(&res.relative_path).components().count();
-                        for _ in 0..count {
-                            path.pop();
+                            let count = Path::new(&res.relative_path).components().count();
+                            for _ in 0..count {
+                                path.pop();
+                            }
+
+                            res.base_path = Some(path);
                         }
-
-                        res.base_path = Some(path);
+                        unkown => {
+                            return Err(crate::Error::InvalidUri(format!(
+                                "Unknown URI scheme: {unkown}"
+                            )))
+                        }
                     }
-                    unkown => {
-                        return Err(crate::Error::InvalidUri(format!(
-                            "Unknown URI scheme: {unkown}"
-                        )))
-                    }
-                }
 
-                Ok(res)
-            })
-            .collect::<Result<_>>()?;
+                    Ok(res)
+                })
+                .collect::<Result<_>>()?;
 
-        for path in &mut paths {
-            path.states.extend(
-                conn.prepare(
-                    r#"
+            for path in &mut paths {
+                path.states.extend(
+                    conn.prepare(
+                        r#"
                     SELECT * FROM outgoing_path_pending_states WHERE path_id = ?1
                     "#,
-                )?
-                .query_map(params![path.id], |row| {
-                    Ok(OutgoingPathStateEvent {
-                        path_id: row.get("path_id")?,
-                        created_at: row.get("created_at")?,
-                        data: OutgoingPathStateEventData::Pending,
-                    })
-                })?
-                .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
-            );
+                    )?
+                    .query_map(params![path.id], |row| {
+                        Ok(OutgoingPathStateEvent {
+                            path_id: row.get("path_id")?,
+                            created_at: row.get("created_at")?,
+                            data: OutgoingPathStateEventData::Pending,
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
+                );
 
-            path.states.extend(
-                conn.prepare(
-                    r#"
+                path.states.extend(
+                    conn.prepare(
+                        r#"
                     SELECT * FROM outgoing_path_started_states WHERE path_id = ?1
                     "#,
-                )?
-                .query_map(params![path.id], |row| {
-                    Ok(OutgoingPathStateEvent {
-                        path_id: row.get("path_id")?,
-                        created_at: row.get("created_at")?,
-                        data: OutgoingPathStateEventData::Started {
-                            bytes_sent: row.get("bytes_sent")?,
-                        },
-                    })
-                })?
-                .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
-            );
+                    )?
+                    .query_map(params![path.id], |row| {
+                        Ok(OutgoingPathStateEvent {
+                            path_id: row.get("path_id")?,
+                            created_at: row.get("created_at")?,
+                            data: OutgoingPathStateEventData::Started {
+                                bytes_sent: row.get("bytes_sent")?,
+                            },
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
+                );
 
-            path.states.extend(
-                conn.prepare(
-                    r#"
+                path.states.extend(
+                    conn.prepare(
+                        r#"
                     SELECT * FROM outgoing_path_cancel_states WHERE path_id = ?1
                     "#,
-                )?
-                .query_map(params![path.id], |row| {
-                    Ok(OutgoingPathStateEvent {
-                        path_id: row.get("path_id")?,
-                        created_at: row.get("created_at")?,
-                        data: OutgoingPathStateEventData::Cancel {
-                            by_peer: row.get("by_peer")?,
-                            bytes_sent: row.get("bytes_sent")?,
-                        },
-                    })
-                })?
-                .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
-            );
+                    )?
+                    .query_map(params![path.id], |row| {
+                        Ok(OutgoingPathStateEvent {
+                            path_id: row.get("path_id")?,
+                            created_at: row.get("created_at")?,
+                            data: OutgoingPathStateEventData::Cancel {
+                                by_peer: row.get("by_peer")?,
+                                bytes_sent: row.get("bytes_sent")?,
+                            },
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
+                );
 
-            path.states.extend(
-                conn.prepare(
-                    r#"
+                path.states.extend(
+                    conn.prepare(
+                        r#"
                     SELECT * FROM outgoing_path_failed_states WHERE path_id = ?1
                     "#,
-                )?
-                .query_map(params![path.id], |row| {
-                    Ok(OutgoingPathStateEvent {
-                        path_id: row.get("path_id")?,
-                        created_at: row.get("created_at")?,
-                        data: OutgoingPathStateEventData::Failed {
-                            status_code: row.get("status_code")?,
-                            bytes_sent: row.get("bytes_sent")?,
-                        },
-                    })
-                })?
-                .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
-            );
+                    )?
+                    .query_map(params![path.id], |row| {
+                        Ok(OutgoingPathStateEvent {
+                            path_id: row.get("path_id")?,
+                            created_at: row.get("created_at")?,
+                            data: OutgoingPathStateEventData::Failed {
+                                status_code: row.get("status_code")?,
+                                bytes_sent: row.get("bytes_sent")?,
+                            },
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
+                );
 
-            path.states.extend(
-                conn.prepare(
-                    r#"
+                path.states.extend(
+                    conn.prepare(
+                        r#"
                     SELECT * FROM outgoing_path_completed_states WHERE path_id = ?1
                     "#,
-                )?
-                .query_map(params![path.id], |row| {
-                    Ok(OutgoingPathStateEvent {
-                        path_id: row.get("path_id")?,
-                        created_at: row.get("created_at")?,
-                        data: OutgoingPathStateEventData::Completed,
-                    })
-                })?
-                .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
-            );
+                    )?
+                    .query_map(params![path.id], |row| {
+                        Ok(OutgoingPathStateEvent {
+                            path_id: row.get("path_id")?,
+                            created_at: row.get("created_at")?,
+                            data: OutgoingPathStateEventData::Completed,
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
+                );
 
-            path.states.extend(
-                conn.prepare(
-                    r#"
+                path.states.extend(
+                    conn.prepare(
+                        r#"
                     SELECT * FROM outgoing_path_reject_states WHERE path_id = ?1
                     "#,
-                )?
-                .query_map(params![path.id], |row| {
-                    Ok(OutgoingPathStateEvent {
-                        path_id: row.get("path_id")?,
-                        created_at: row.get("created_at")?,
-                        data: OutgoingPathStateEventData::Rejected {
-                            by_peer: row.get("by_peer")?,
-                        },
-                    })
-                })?
-                .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
-            );
+                    )?
+                    .query_map(params![path.id], |row| {
+                        Ok(OutgoingPathStateEvent {
+                            path_id: row.get("path_id")?,
+                            created_at: row.get("created_at")?,
+                            data: OutgoingPathStateEventData::Rejected {
+                                by_peer: row.get("by_peer")?,
+                            },
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
+                );
 
-            path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+                path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+            }
+
+            Ok::<Vec<_>, Error>(paths)
+        };
+
+        match task() {
+            Ok(paths) => paths,
+            Err(e) => {
+                error!(logger, "Failed to get outgoing paths"; "error" => %e);
+                vec![]
+            }
         }
-
-        Ok(paths)
     }
 
     fn get_incoming_paths(
         conn: &Connection,
         transfer_id: Uuid,
         logger: &slog::Logger,
-    ) -> Result<Vec<IncomingPath>> {
+    ) -> Vec<IncomingPath> {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -1176,139 +1478,149 @@ impl Storage {
             "transfer_id" => &tid
         );
 
-        let mut paths = conn
-            .prepare(
-                r#"
+        let task = || {
+            let mut paths = conn
+                .prepare(
+                    r#"
                 SELECT * FROM incoming_paths WHERE transfer_id = ?1
                 "#,
-            )?
-            .query_map(params![tid], |row| {
-                Ok(IncomingPath {
-                    id: row.get("id")?,
-                    transfer_id,
-                    relative_path: row.get("relative_path")?,
-                    file_id: row.get("path_hash")?,
-                    bytes: row.get("bytes")?,
-                    created_at: row.get("created_at")?,
-                    states: vec![],
-                })
-            })?
-            .collect::<QueryResult<Vec<IncomingPath>>>()?;
+                )?
+                .query_map(params![tid], |row| {
+                    Ok(IncomingPath {
+                        id: row.get("id")?,
+                        transfer_id,
+                        relative_path: row.get("relative_path")?,
+                        file_id: row.get("path_hash")?,
+                        bytes: row.get("bytes")?,
+                        created_at: row.get("created_at")?,
+                        states: vec![],
+                    })
+                })?
+                .collect::<QueryResult<Vec<IncomingPath>>>()?;
 
-        for path in &mut paths {
-            path.states.extend(
-                conn.prepare(
-                    r#"
+            for path in &mut paths {
+                path.states.extend(
+                    conn.prepare(
+                        r#"
                     SELECT * FROM incoming_path_pending_states WHERE path_id = ?1
                     "#,
-                )?
-                .query_map(params![path.id], |row| {
-                    Ok(IncomingPathStateEvent {
-                        path_id: row.get("path_id")?,
-                        created_at: row.get("created_at")?,
-                        data: IncomingPathStateEventData::Pending,
-                    })
-                })?
-                .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
-            );
+                    )?
+                    .query_map(params![path.id], |row| {
+                        Ok(IncomingPathStateEvent {
+                            path_id: row.get("path_id")?,
+                            created_at: row.get("created_at")?,
+                            data: IncomingPathStateEventData::Pending,
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
+                );
 
-            path.states.extend(
-                conn.prepare(
-                    r#"
+                path.states.extend(
+                    conn.prepare(
+                        r#"
                     SELECT * FROM incoming_path_started_states WHERE path_id = ?1
                     "#,
-                )?
-                .query_map(params![path.id], |row| {
-                    Ok(IncomingPathStateEvent {
-                        path_id: row.get("path_id")?,
-                        created_at: row.get("created_at")?,
-                        data: IncomingPathStateEventData::Started {
-                            bytes_received: row.get("bytes_received")?,
-                            base_dir: row.get("base_dir")?,
-                        },
-                    })
-                })?
-                .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
-            );
+                    )?
+                    .query_map(params![path.id], |row| {
+                        Ok(IncomingPathStateEvent {
+                            path_id: row.get("path_id")?,
+                            created_at: row.get("created_at")?,
+                            data: IncomingPathStateEventData::Started {
+                                bytes_received: row.get("bytes_received")?,
+                                base_dir: row.get("base_dir")?,
+                            },
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
+                );
 
-            path.states.extend(
-                conn.prepare(
-                    r#"
+                path.states.extend(
+                    conn.prepare(
+                        r#"
                     SELECT * FROM incoming_path_cancel_states WHERE path_id = ?1
                     "#,
-                )?
-                .query_map(params![path.id], |row| {
-                    Ok(IncomingPathStateEvent {
-                        path_id: row.get("path_id")?,
-                        created_at: row.get("created_at")?,
-                        data: IncomingPathStateEventData::Cancel {
-                            by_peer: row.get("by_peer")?,
-                            bytes_received: row.get("bytes_received")?,
-                        },
-                    })
-                })?
-                .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
-            );
+                    )?
+                    .query_map(params![path.id], |row| {
+                        Ok(IncomingPathStateEvent {
+                            path_id: row.get("path_id")?,
+                            created_at: row.get("created_at")?,
+                            data: IncomingPathStateEventData::Cancel {
+                                by_peer: row.get("by_peer")?,
+                                bytes_received: row.get("bytes_received")?,
+                            },
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
+                );
 
-            path.states.extend(
-                conn.prepare(
-                    r#"
+                path.states.extend(
+                    conn.prepare(
+                        r#"
                     SELECT * FROM incoming_path_failed_states WHERE path_id = ?1
                     "#,
-                )?
-                .query_map(params![path.id], |row| {
-                    Ok(IncomingPathStateEvent {
-                        path_id: row.get("path_id")?,
-                        created_at: row.get("created_at")?,
-                        data: IncomingPathStateEventData::Failed {
-                            status_code: row.get("status_code")?,
-                            bytes_received: row.get("bytes_received")?,
-                        },
-                    })
-                })?
-                .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
-            );
+                    )?
+                    .query_map(params![path.id], |row| {
+                        Ok(IncomingPathStateEvent {
+                            path_id: row.get("path_id")?,
+                            created_at: row.get("created_at")?,
+                            data: IncomingPathStateEventData::Failed {
+                                status_code: row.get("status_code")?,
+                                bytes_received: row.get("bytes_received")?,
+                            },
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
+                );
 
-            path.states.extend(
-                conn.prepare(
-                    r#"
+                path.states.extend(
+                    conn.prepare(
+                        r#"
                     SELECT * FROM incoming_path_completed_states WHERE path_id = ?1
                     "#,
-                )?
-                .query_map(params![path.id], |row| {
-                    Ok(IncomingPathStateEvent {
-                        path_id: row.get("path_id")?,
-                        created_at: row.get("created_at")?,
-                        data: IncomingPathStateEventData::Completed {
-                            final_path: row.get("final_path")?,
-                        },
-                    })
-                })?
-                .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
-            );
+                    )?
+                    .query_map(params![path.id], |row| {
+                        Ok(IncomingPathStateEvent {
+                            path_id: row.get("path_id")?,
+                            created_at: row.get("created_at")?,
+                            data: IncomingPathStateEventData::Completed {
+                                final_path: row.get("final_path")?,
+                            },
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
+                );
 
-            path.states.extend(
-                conn.prepare(
-                    r#"
+                path.states.extend(
+                    conn.prepare(
+                        r#"
                     SELECT * FROM incoming_path_reject_states WHERE path_id = ?1
                     "#,
-                )?
-                .query_map(params![path.id], |row| {
-                    Ok(IncomingPathStateEvent {
-                        path_id: row.get("path_id")?,
-                        created_at: row.get("created_at")?,
-                        data: IncomingPathStateEventData::Rejected {
-                            by_peer: row.get("by_peer")?,
-                        },
-                    })
-                })?
-                .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
-            );
+                    )?
+                    .query_map(params![path.id], |row| {
+                        Ok(IncomingPathStateEvent {
+                            path_id: row.get("path_id")?,
+                            created_at: row.get("created_at")?,
+                            data: IncomingPathStateEventData::Rejected {
+                                by_peer: row.get("by_peer")?,
+                            },
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
+                );
 
-            path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+                path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+            }
+
+            Ok::<Vec<_>, Error>(paths)
+        };
+
+        match task() {
+            Ok(paths) => paths,
+            Err(e) => {
+                error!(logger, "Failed to get incoming paths"; "error" => %e);
+                vec![]
+            }
         }
-
-        Ok(paths)
     }
 }
 
@@ -1316,8 +1628,8 @@ impl Storage {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_insert_transfer() {
+    #[tokio::test]
+    async fn test_insert_transfer() {
         let logger = slog::Logger::root(slog::Discard, slog::o!());
         let storage = Storage::new(logger, ":memory:").unwrap();
 
@@ -1342,7 +1654,7 @@ mod tests {
                 ]),
             };
 
-            storage.insert_transfer(&transfer).unwrap();
+            storage.insert_transfer(&transfer).await;
         }
 
         {
@@ -1365,11 +1677,11 @@ mod tests {
                 ]),
             };
 
-            storage.insert_transfer(&transfer).unwrap();
+            storage.insert_transfer(&transfer).await;
         }
 
         {
-            let transfers = storage.transfers_since(0).unwrap();
+            let transfers = storage.transfers_since(0).await;
             assert_eq!(transfers.len(), 2);
 
             let incoming_transfer = &transfers[0];
@@ -1384,15 +1696,15 @@ mod tests {
 
         storage
             .purge_transfers(vec![transfer_id_1.to_string(), transfer_id_2.to_string()])
-            .unwrap();
+            .await;
 
-        let transfers = storage.transfers_since(0).unwrap();
+        let transfers = storage.transfers_since(0).await;
 
         assert_eq!(transfers.len(), 0);
     }
 
-    #[test]
-    fn remove_outgoing_rejected_file() {
+    #[tokio::test]
+    async fn remove_outgoing_rejected_file() {
         let logger = slog::Logger::root(slog::Discard, slog::o!());
         let storage = Storage::new(logger, ":memory:").unwrap();
 
@@ -1417,12 +1729,12 @@ mod tests {
             ]),
         };
 
-        storage.insert_transfer(&transfer).unwrap();
+        storage.insert_transfer(&transfer).await;
         storage
             .insert_outgoing_path_reject_state(transfer_id, "id3", false)
-            .unwrap();
+            .await;
 
-        let transfers = storage.transfers_since(0).unwrap();
+        let transfers = storage.transfers_since(0).await;
         assert_eq!(transfers.len(), 1);
 
         let paths = match &transfers[0].transfer_type {
@@ -1433,14 +1745,14 @@ mod tests {
 
         assert!(storage
             .remove_transfer_file(transfer_id, "id3")
-            .unwrap()
+            .await
             .is_some());
         assert!(storage
             .remove_transfer_file(transfer_id, "id4")
-            .unwrap()
+            .await
             .is_none());
 
-        let transfers = storage.transfers_since(0).unwrap();
+        let transfers = storage.transfers_since(0).await;
         assert_eq!(transfers.len(), 1);
 
         let paths = match &transfers[0].transfer_type {
@@ -1451,8 +1763,8 @@ mod tests {
         assert_eq!(paths[0].file_id, "id4");
     }
 
-    #[test]
-    fn remove_incoming_rejected_file() {
+    #[tokio::test]
+    async fn remove_incoming_rejected_file() {
         let logger = slog::Logger::root(slog::Discard, slog::o!());
         let storage = Storage::new(logger, ":memory:").unwrap();
 
@@ -1475,12 +1787,12 @@ mod tests {
             ]),
         };
 
-        storage.insert_transfer(&transfer).unwrap();
+        storage.insert_transfer(&transfer).await;
         storage
             .insert_incoming_path_reject_state(transfer_id, "id3", false)
-            .unwrap();
+            .await;
 
-        let transfers = storage.transfers_since(0).unwrap();
+        let transfers = storage.transfers_since(0).await;
         assert_eq!(transfers.len(), 1);
 
         let paths = match &transfers[0].transfer_type {
@@ -1491,14 +1803,14 @@ mod tests {
 
         assert!(storage
             .remove_transfer_file(transfer_id, "id3")
-            .unwrap()
+            .await
             .is_some());
         assert!(storage
             .remove_transfer_file(transfer_id, "id4")
-            .unwrap()
+            .await
             .is_none());
 
-        let transfers = storage.transfers_since(0).unwrap();
+        let transfers = storage.transfers_since(0).await;
         assert_eq!(transfers.len(), 1);
 
         let paths = match &transfers[0].transfer_type {

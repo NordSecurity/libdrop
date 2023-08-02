@@ -106,11 +106,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
         xfer: Arc<IncomingTransfer>,
     ) -> Option<Self::Loop> {
         let task = async {
-            let checksums = self
-                .state
-                .storage
-                .fetch_checksums(xfer.id())
-                .context("Failed to fetch fileche chsums from DB")?;
+            let checksums = self.state.storage.fetch_checksums(xfer.id()).await;
 
             let mut checksum_map = HashMap::new();
             let mut to_fetch = Vec::new();
@@ -272,14 +268,11 @@ impl HandlerLoop<'_> {
             let storage = self.state.storage.clone();
             let transfer_id = self.xfer.id();
             let file_id = report.file.clone();
-            let logger = self.logger.clone();
 
             tokio::spawn(async move {
-                if let Err(err) =
-                    storage.save_checksum(transfer_id, file_id.as_ref(), &report.checksum)
-                {
-                    error!(logger, "Failed to save checksum into DB: {err}");
-                }
+                storage
+                    .save_checksum(transfer_id, file_id.as_ref(), &report.checksum)
+                    .await;
             });
         // Requests made by the download task
         } else if let Some(job) = self.jobs.get_mut(&report.file) {
@@ -434,28 +427,22 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
     }
 
     async fn finalize_success(self) {
-        match self.state.storage.fetch_temp_locations(self.xfer.id()) {
-            Ok(files) => {
-                for file in files {
-                    let file_id = FileId::from(file.file_id);
+        let files = self
+            .state
+            .storage
+            .fetch_temp_locations(self.xfer.id())
+            .await;
+        for file in files {
+            let file_id = FileId::from(file.file_id);
 
-                    let loc = PathBuf::from(file.base_path)
-                        .join(temp_file_name(self.xfer.id(), &file_id));
-                    let loc = Hidden(loc);
+            let loc = PathBuf::from(file.base_path).join(temp_file_name(self.xfer.id(), &file_id));
+            let loc = Hidden(loc);
 
-                    debug!(self.logger, "Removing temporary file: {loc:?}");
-                    if let Err(err) = std::fs::remove_file(&*loc) {
-                        debug!(
-                            self.logger,
-                            "Failed to delete temporary file: {loc:?}, {err}"
-                        );
-                    }
-                }
-            }
-            Err(err) => {
-                warn!(
+            debug!(self.logger, "Removing temporary file: {loc:?}");
+            if let Err(err) = std::fs::remove_file(&*loc) {
+                debug!(
                     self.logger,
-                    "Failed to fetch temporary files locaitons from the DB: {err}"
+                    "Failed to delete temporary file: {loc:?}, {err}"
                 );
             }
         }
