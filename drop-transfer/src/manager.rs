@@ -960,9 +960,9 @@ pub(crate) async fn resume(
     logger: &Logger,
 ) {
     *state.transfer_manager.incoming.lock().await =
-        restore_incoming(&state.storage, &state.config, &logger).await;
+        restore_incoming(&state.storage, &state.config, logger).await;
     *state.transfer_manager.outgoing.lock().await =
-        restore_outgoing(&state, &stop, &alive_sender, &logger).await;
+        restore_outgoing(state, &stop, alive_sender, logger).await;
 }
 
 async fn restore_incoming(
