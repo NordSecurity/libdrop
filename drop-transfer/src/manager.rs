@@ -763,12 +763,18 @@ impl IncomingState {
         storage: &Storage,
         file_id: &FileId,
         parent_dir: &Path,
+        logger: &Logger,
     ) -> crate::Result<()> {
-        storage.start_incoming_file(
-            self.xfer.id(),
-            file_id.as_ref(),
-            &parent_dir.to_string_lossy(),
-        )?;
+        if storage
+            .start_incoming_file(
+                self.xfer.id(),
+                file_id.as_ref(),
+                &parent_dir.to_string_lossy(),
+            )?
+            .is_none()
+        {
+            warn!(logger, "Failed to store started file state into the DB");
+        }
 
         self.file_sync
             .get_mut(file_id)
