@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use drop_storage::{
-    error::Error,
     types::{Event, TransferFiles},
     Storage, TransferType,
 };
@@ -22,10 +21,10 @@ impl<'a> StorageDispatch<'a> {
         }
     }
 
-    pub async fn handle_event(&mut self, event: &crate::Event) -> Result<(), Error> {
+    pub async fn handle_event(&mut self, event: &crate::Event) {
         let event: Event = match event.into() {
             Some(event) => event,
-            None => return Ok(()),
+            None => return,
         };
 
         match event {
@@ -184,8 +183,6 @@ impl<'a> StorageDispatch<'a> {
                 }
             },
         }
-
-        Ok(())
     }
 
     fn get_file_progress(&mut self, transfer_id: Uuid, file_id: &String) -> i64 {
