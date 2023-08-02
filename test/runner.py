@@ -61,7 +61,6 @@ def run():
         ]
 
         for item in status_json:
-
             service: str = item["Service"]
 
             if service in scenario.runners() and (
