@@ -14,7 +14,7 @@ serde = { workspace = true }
 uuid = { workspace = true }
 chrono = { version = "0.4.26", default-features = false, features = ["std"] }
 url = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true }
 
 # Force bundled sqlite on linux, let moose choose on other platforms
 [target.'cfg(target_os = "linux")'.dependencies]

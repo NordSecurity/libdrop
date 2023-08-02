@@ -151,10 +151,7 @@ impl NordDropFFI {
             while let Some(e) = rx.recv().await {
                 debug!(event_logger, "emitting event: {:#?}", e);
 
-                if let Err(err) = dispatch.handle_event(&e).await {
-                    error!(event_logger, "Failed to handle database event: {err}");
-                }
-
+                dispatch.handle_event(&e).await;
                 // Android team reported problems with the event ordering.
                 // The events where dispatched in different order than where emitted.
                 // To fix that we need to process the events sequentially.
@@ -293,7 +290,7 @@ impl NordDropFFI {
                 .transfers_since(since_timestamp)
                 .await;
 
-            Ok::<Vec<drop_storage::types::Transfer>, ffi::types::norddrop_result>(transfers)
+            Ok::<Vec<_>, ffi::types::norddrop_result>(transfers)
         })?;
 
         let result =

@@ -63,7 +63,7 @@ impl Storage {
             "transfer_type" => transfer_type_int,
         );
 
-        let task = || async {
+        let task = async {
             let mut conn = self.conn.lock().await;
             let conn = conn.transaction()?;
 
@@ -106,7 +106,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to insert transfer"; "error" => %e);
         }
     }
@@ -117,7 +117,7 @@ impl Storage {
         remote: Option<sync::TransferState>,
         local: Option<sync::TransferState>,
     ) {
-        let task = || async {
+        let task = async {
             let mut conn = self.conn.lock().await;
             let conn = conn.transaction()?;
 
@@ -133,18 +133,18 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to update transfer sync states"; "error" => %e);
         }
     }
 
     pub async fn transfer_sync_state(&self, transfer_id: Uuid) -> Option<sync::Transfer> {
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             sync::transfer_state(&conn, transfer_id)
         };
 
-        match task().await {
+        match task.await {
             Ok(state) => state,
             Err(e) => {
                 error!(self.logger, "Failed to get transfer sync state"; "error" => %e);
@@ -154,12 +154,12 @@ impl Storage {
     }
 
     pub async fn transfer_sync_clear(&self, transfer_id: Uuid) -> Option<()> {
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             sync::transfer_clear(&conn, transfer_id)
         };
 
-        match task().await {
+        match task.await {
             Ok(state) => state,
             Err(e) => {
                 error!(self.logger, "Failed to clear transfer sync state"; "error" => %e);
@@ -173,12 +173,12 @@ impl Storage {
         transfer_id: Uuid,
         file_id: &str,
     ) -> Option<sync::File> {
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             sync::outgoing_file_state(&conn, transfer_id, file_id)
         };
 
-        match task().await {
+        match task.await {
             Ok(state) => state,
             Err(e) => {
                 error!(self.logger, "Failed to get outgoing file sync state"; "error" => %e);
@@ -194,7 +194,7 @@ impl Storage {
         remote: Option<sync::FileState>,
         local: Option<sync::FileState>,
     ) {
-        let task = || async {
+        let task = async {
             let mut conn = self.conn.lock().await;
             let conn = conn.transaction()?;
 
@@ -210,7 +210,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to update outgoing file sync states"; "error" => %e);
         }
     }
@@ -220,12 +220,12 @@ impl Storage {
         transfer_id: Uuid,
         file_id: &str,
     ) -> Option<sync::File> {
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             sync::incoming_file_state(&conn, transfer_id, file_id)
         };
 
-        match task().await {
+        match task.await {
             Ok(state) => state,
             Err(e) => {
                 error!(self.logger, "Failed to get incoming file sync state"; "error" => %e);
@@ -241,7 +241,7 @@ impl Storage {
         remote: Option<sync::FileState>,
         local: Option<sync::FileState>,
     ) {
-        let task = || async {
+        let task = async {
             let mut conn = self.conn.lock().await;
             let conn = conn.transaction()?;
 
@@ -257,18 +257,18 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to update incoming file sync states"; "error" => %e);
         }
     }
 
     pub async fn stop_incoming_file(&self, transfer_id: Uuid, file_id: &str) -> Option<()> {
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             sync::stop_incoming_file(&conn, transfer_id, file_id)
         };
 
-        match task().await {
+        match task.await {
             Ok(state) => state,
             Err(e) => {
                 error!(self.logger, "Failed to stop incoming file sync state"; "error" => %e);
@@ -283,12 +283,12 @@ impl Storage {
         file_id: &str,
         base_dir: &str,
     ) -> Option<()> {
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             sync::start_incoming_file(&conn, transfer_id, file_id, base_dir)
         };
 
-        match task().await {
+        match task.await {
             Ok(state) => state,
             Err(e) => {
                 error!(self.logger, "Failed to start incoming file sync state"; "error" => %e);
@@ -356,7 +356,7 @@ impl Storage {
             "file_id" => file_id,
         );
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "UPDATE incoming_paths SET checksum = ?3 WHERE transfer_id = ?1 AND path_hash = ?2",
@@ -366,7 +366,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to save checksum"; "error" => %e);
         }
     }
@@ -378,7 +378,7 @@ impl Storage {
             "Fetching checksums";
             "transfer_id" => &tid);
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             let out = conn
                 .prepare(
@@ -396,7 +396,7 @@ impl Storage {
             Ok::<Vec<_>, Error>(out)
         };
 
-        match task().await {
+        match task.await {
             Ok(out) => out,
             Err(e) => {
                 error!(self.logger, "Failed to fetch checksums"; "error" => %e);
@@ -413,7 +413,7 @@ impl Storage {
             "Inserting transfer active state";
             "transfer_id" => &tid);
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "INSERT INTO transfer_active_states (transfer_id) VALUES (?1)",
@@ -423,7 +423,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to insert transfer active state"; "error" => %e);
         }
     }
@@ -437,7 +437,7 @@ impl Storage {
             "transfer_id" => &tid,
             "error" => error);
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "INSERT INTO transfer_failed_states (transfer_id, status_code) VALUES (?1, ?2)",
@@ -447,7 +447,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to insert transfer failed state"; "error" => %e);
         }
     }
@@ -461,7 +461,7 @@ impl Storage {
             "transfer_id" => &tid,
             "by_peer" => by_peer);
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "INSERT INTO transfer_cancel_states (transfer_id, by_peer) VALUES (?1, ?2)",
@@ -471,7 +471,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to insert transfer cancel state"; "error" => %e);
         }
     }
@@ -485,7 +485,7 @@ impl Storage {
             "transfer_id" => &tid,
             "file_id" => file_id);
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "INSERT INTO outgoing_path_pending_states (path_id) VALUES ((SELECT id FROM \
@@ -496,7 +496,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to insert outgoing path pending state"; "error" => %e);
         }
     }
@@ -510,7 +510,7 @@ impl Storage {
             "transfer_id" => &tid,
             "file_id" => file_id);
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "INSERT INTO incoming_path_pending_states (path_id) VALUES ((SELECT id FROM \
@@ -521,7 +521,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to insert incoming path pending state"; "error" => %e);
         }
     }
@@ -535,7 +535,7 @@ impl Storage {
             "transfer_id" => &tid,
             "path_id" => path_id);
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "INSERT INTO outgoing_path_started_states (path_id, bytes_sent) VALUES ((SELECT \
@@ -546,7 +546,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to insert outgoing path started state"; "error" => %e);
         }
     }
@@ -566,7 +566,7 @@ impl Storage {
             "path_id" => path_id,
             "base_dir" => base_dir);
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "INSERT INTO incoming_path_started_states (path_id, base_dir, bytes_received) \
@@ -578,7 +578,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to insert incoming path started state"; "error" => %e);
         }
     }
@@ -600,7 +600,7 @@ impl Storage {
             "by_peer" => by_peer,
             "bytes_sent" => bytes_sent);
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "INSERT INTO outgoing_path_cancel_states (path_id, by_peer, bytes_sent) VALUES \
@@ -612,7 +612,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to insert outgoing path cancel state"; "error" => %e);
         }
     }
@@ -634,7 +634,7 @@ impl Storage {
             "by_peer" => by_peer,
             "bytes_received" => bytes_received);
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "INSERT INTO incoming_path_cancel_states (path_id, by_peer, bytes_received) \
@@ -646,7 +646,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to insert incoming path cancel state"; "error" => %e);
         }
     }
@@ -668,7 +668,7 @@ impl Storage {
             "error" => error,
             "bytes_received" => bytes_received);
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) \
@@ -680,7 +680,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to insert incoming path failed state"; "error" => %e);
         }
     }
@@ -701,7 +701,7 @@ impl Storage {
             "error" => error,
             "bytes_sent" => bytes_sent);
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent) \
@@ -713,7 +713,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to insert outgoing path failed state"; "error" => %e);
         }
     }
@@ -726,7 +726,7 @@ impl Storage {
             "transfer_id" => &tid,
             "path_id" => path_id);
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "INSERT INTO outgoing_path_completed_states (path_id) VALUES ((SELECT id FROM \
@@ -737,7 +737,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to insert outgoing path completed state"; "error" => %e);
         }
     }
@@ -756,7 +756,7 @@ impl Storage {
             "path_id" => path_id,
             "final_path" => final_path);
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "INSERT INTO incoming_path_completed_states (path_id, final_path) VALUES ((SELECT \
@@ -767,7 +767,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to insert incoming path completed state"; "error" => %e);
         }
     }
@@ -780,7 +780,7 @@ impl Storage {
     ) {
         let tid = transfer_id.to_string();
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "INSERT INTO outgoing_path_reject_states (path_id, by_peer) VALUES ((SELECT id \
@@ -791,7 +791,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to insert outgoing path reject state"; "error" => %e);
         }
     }
@@ -804,7 +804,7 @@ impl Storage {
     ) {
         let tid = transfer_id.to_string();
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "INSERT INTO incoming_path_reject_states (path_id, by_peer) VALUES ((SELECT id \
@@ -815,7 +815,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to insert incoming path reject state"; "error" => %e);
         }
     }
@@ -826,7 +826,7 @@ impl Storage {
             "Purging transfers until timestamp";
             "until_timestamp" => until_timestamp);
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 "DELETE FROM transfers WHERE created_at < datetime(?1, 'unixepoch')",
@@ -836,7 +836,7 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to purge transfers"; "error" => %e);
         }
     }
@@ -847,7 +847,7 @@ impl Storage {
             "Purging transfers";
             "transfer_ids" => format!("{:?}", transfer_ids));
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             for id in transfer_ids {
                 conn.execute("DELETE FROM transfers WHERE id = ?1", params![id])?;
@@ -856,18 +856,18 @@ impl Storage {
             Ok::<(), Error>(())
         };
 
-        if let Err(e) = task().await {
+        if let Err(e) = task.await {
             error!(self.logger, "Failed to purge transfers"; "error" => %e);
         }
     }
 
     pub async fn outgoing_files_to_reject(&self, transfer_id: Uuid) -> Vec<String> {
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             sync::outgoing_files_to_reject(&conn, transfer_id)
         };
 
-        match task().await {
+        match task.await {
             Ok(files) => files,
             Err(e) => {
                 error!(self.logger, "Failed to get outgoing files to reject"; "error" => %e);
@@ -877,7 +877,7 @@ impl Storage {
     }
 
     pub async fn outgoing_transfers_to_resume(&self) -> Vec<OutgoingTransferToRetry> {
-        let task = || async {
+        let task = async {
             let mut conn = self.conn.lock().await;
             let conn = conn.transaction()?;
 
@@ -926,7 +926,7 @@ impl Storage {
             Ok::<Vec<_>, Error>(out)
         };
 
-        match task().await {
+        match task.await {
             Ok(transfers) => transfers,
             Err(e) => {
                 error!(self.logger, "Failed to get outgoing transfers to resume"; "error" => %e);
@@ -936,7 +936,7 @@ impl Storage {
     }
 
     pub async fn incoming_transfers_to_resume(&self) -> Vec<IncomingTransferToRetry> {
-        let task = || async {
+        let task = async {
             let mut conn = self.conn.lock().await;
             let conn = conn.transaction()?;
 
@@ -974,7 +974,7 @@ impl Storage {
             Ok::<Vec<_>, Error>(out)
         };
 
-        match task().await {
+        match task.await {
             Ok(transfers) => transfers,
             Err(e) => {
                 error!(self.logger, "Failed to get incoming transfers to resume"; "error" => %e);
@@ -984,12 +984,12 @@ impl Storage {
     }
 
     pub async fn incoming_files_to_resume(&self, transfer_id: Uuid) -> Vec<sync::FileInFlight> {
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             sync::incoming_files_in_flight(&conn, transfer_id)
         };
 
-        match task().await {
+        match task.await {
             Ok(files) => files,
             Err(e) => {
                 error!(self.logger, "Failed to get incoming files to resume"; "error" => %e);
@@ -999,12 +999,12 @@ impl Storage {
     }
 
     pub async fn incoming_files_to_reject(&self, transfer_id: Uuid) -> Vec<String> {
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             sync::incoming_files_to_reject(&conn, transfer_id)
         };
 
-        match task().await {
+        match task.await {
             Ok(files) => files,
             Err(e) => {
                 error!(self.logger, "Failed to get incoming files to reject"; "error" => %e);
@@ -1014,7 +1014,7 @@ impl Storage {
     }
 
     pub async fn finished_incoming_files(&self, transfer_id: Uuid) -> Vec<FinishedIncomingFile> {
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
 
             let paths = conn
@@ -1037,7 +1037,7 @@ impl Storage {
             Ok::<Vec<_>, Error>(paths)
         };
 
-        match task().await {
+        match task.await {
             Ok(paths) => paths,
             Err(e) => {
                 error!(self.logger, "Failed to get finished incoming files"; "error" => %e);
@@ -1052,7 +1052,7 @@ impl Storage {
         "Fetching transfers since timestamp";
         "since_timestamp" => since_timestamp);
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
             let mut transfers = conn
                 .prepare(
@@ -1164,7 +1164,7 @@ impl Storage {
             Ok::<Vec<_>, Error>(transfers)
         };
 
-        match task().await {
+        match task.await {
             Ok(transfers) => transfers,
             Err(e) => {
                 error!(self.logger, "Failed to get transfers since timestamp"; "error" => %e);
@@ -1183,7 +1183,7 @@ impl Storage {
             "file_id" => file_id,
         );
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
 
             let mut count = 0;
@@ -1221,7 +1221,7 @@ impl Storage {
             }
         };
 
-        match task().await {
+        match task.await {
             Ok(res) => res,
             Err(e) => {
                 error!(self.logger, "Failed to remove transfer file"; "error" => %e);
@@ -1239,7 +1239,7 @@ impl Storage {
             "transfer_id" => &tid
         );
 
-        let task = || async {
+        let task = async {
             let conn = self.conn.lock().await;
 
             let out = conn
@@ -1262,7 +1262,7 @@ impl Storage {
             Ok::<Vec<_>, Error>(out)
         };
 
-        match task().await {
+        match task.await {
             Ok(res) => res,
             Err(e) => {
                 error!(self.logger, "Failed to fetch temporary file locations"; "error" => %e);
