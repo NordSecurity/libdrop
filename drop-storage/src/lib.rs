@@ -83,6 +83,8 @@ impl Storage {
                     for file in files {
                         Self::insert_incoming_path(&self.logger, &conn, transfer.id, file);
                     }
+
+                    Self::insert_incoming_path_pending_states(&self.logger, &conn, transfer.id);
                     true
                 }
                 TransferFiles::Outgoing(files) => {
@@ -95,6 +97,8 @@ impl Storage {
                     for file in files {
                         Self::insert_outgoing_path(&self.logger, &conn, transfer.id, file);
                     }
+
+                    Self::insert_outgoing_path_pending_states(&self.logger, &conn, transfer.id);
                     false
                 }
             };
@@ -476,59 +480,55 @@ impl Storage {
         }
     }
 
-    pub async fn insert_outgoing_path_pending_state(&self, transfer_id: Uuid, file_id: &str) {
+    pub fn insert_outgoing_path_pending_states(
+        logger: &slog::Logger,
+        conn: &Connection,
+        transfer_id: Uuid,
+    ) {
         let tid = transfer_id.to_string();
 
         trace!(
-            self.logger,
+            logger,
             "Inserting outgoing path pending state";
-            "transfer_id" => &tid,
-            "file_id" => file_id);
+            "transfer_id" => &tid);
 
-        let task = async {
-            let conn = self.conn.lock().await;
-            conn.execute(
-                r#"
+        let res = conn.execute(
+            r#"
                 INSERT INTO outgoing_path_pending_states (path_id)
                 SELECT id
-                FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                FROM outgoing_paths WHERE transfer_id = ?1
                 "#,
-                params![tid, file_id],
-            )?;
+            params![tid,],
+        );
 
-            Ok::<(), Error>(())
-        };
-
-        if let Err(e) = task.await {
-            error!(self.logger, "Failed to insert outgoing path pending state"; "error" => %e);
+        if let Err(e) = res {
+            error!(logger, "Failed to insert outgoing path pending state"; "error" => %e);
         }
     }
 
-    pub async fn insert_incoming_path_pending_state(&self, transfer_id: Uuid, file_id: &str) {
+    pub fn insert_incoming_path_pending_states(
+        logger: &slog::Logger,
+        conn: &Connection,
+        transfer_id: Uuid,
+    ) {
         let tid = transfer_id.to_string();
 
         trace!(
-            self.logger,
+            logger,
             "Inserting incoming path pending state";
-            "transfer_id" => &tid,
-            "file_id" => file_id);
+            "transfer_id" => &tid);
 
-        let task = async {
-            let conn = self.conn.lock().await;
-            conn.execute(
-                r#"
+        let res = conn.execute(
+            r#"
                 INSERT INTO incoming_path_pending_states (path_id)
                 SELECT id
-                FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                FROM incoming_paths WHERE transfer_id = ?1
                 "#,
-                params![tid, file_id],
-            )?;
+            params![tid,],
+        );
 
-            Ok::<(), Error>(())
-        };
-
-        if let Err(e) = task.await {
-            error!(self.logger, "Failed to insert incoming path pending state"; "error" => %e);
+        if let Err(e) = res {
+            error!(logger, "Failed to insert incoming path pending state"; "error" => %e);
         }
     }
 

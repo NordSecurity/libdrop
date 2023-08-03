@@ -172,9 +172,6 @@ pub struct TempFileLocation {
 
 #[derive(Debug)]
 pub enum Event {
-    Pending {
-        transfer_info: TransferInfo,
-    },
     FileUploadStarted {
         transfer_id: TransferId,
         file_id: FileId,
