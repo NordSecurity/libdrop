@@ -488,8 +488,11 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
-                "INSERT INTO outgoing_path_pending_states (path_id) VALUES ((SELECT id FROM \
-                 outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
+                r#"
+                INSERT INTO outgoing_path_pending_states (path_id)
+                SELECT id
+                FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
                 params![tid, file_id],
             )?;
 
@@ -513,8 +516,11 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
-                "INSERT INTO incoming_path_pending_states (path_id) VALUES ((SELECT id FROM \
-                 incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
+                r#"
+                INSERT INTO incoming_path_pending_states (path_id)
+                SELECT id
+                FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
                 params![tid, file_id],
             )?;
 
@@ -538,8 +544,11 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
-                "INSERT INTO outgoing_path_started_states (path_id, bytes_sent) VALUES ((SELECT \
-                 id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
+                r#"
+                INSERT INTO outgoing_path_started_states (path_id, bytes_sent)
+                SELECT id, ?3
+                FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
                 params![tid, path_id, 0],
             )?;
 
@@ -569,9 +578,11 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
-                "INSERT INTO incoming_path_started_states (path_id, base_dir, bytes_received) \
-                 VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = \
-                 ?2), ?3, ?4)",
+                r#"
+                INSERT INTO incoming_path_started_states (path_id, base_dir, bytes_received)
+                SELECT id, ?3, ?4
+                FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
                 params![tid, path_id, base_dir, 0],
             )?;
 
@@ -603,9 +614,11 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
-                "INSERT INTO outgoing_path_cancel_states (path_id, by_peer, bytes_sent) VALUES \
-                 ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3, \
-                 ?4)",
+                r#"
+                INSERT INTO outgoing_path_cancel_states (path_id, by_peer, bytes_sent)
+                SELECT id, ?3, ?4
+                FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
                 params![tid, path_id, by_peer, bytes_sent],
             )?;
 
@@ -637,9 +650,11 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
-                "INSERT INTO incoming_path_cancel_states (path_id, by_peer, bytes_received) \
-                 VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = \
-                 ?2), ?3, ?4)",
+                r#"
+                INSERT INTO incoming_path_cancel_states (path_id, by_peer, bytes_received)
+                SELECT id, ?3, ?4
+                FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
                 params![tid, path_id, by_peer, bytes_received],
             )?;
 
@@ -671,9 +686,11 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
-                "INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received) \
-                 VALUES ((SELECT id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = \
-                 ?2), ?3, ?4)",
+                r#"
+                INSERT INTO incoming_path_failed_states (path_id, status_code, bytes_received)
+                SELECT id, ?3, ?4
+                FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
                 params![tid, path_id, error, bytes_received],
             )?;
 
@@ -704,9 +721,11 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
-                "INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent) \
-                 VALUES ((SELECT id FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = \
-                 ?2), ?3, ?4)",
+                r#"
+                INSERT INTO outgoing_path_failed_states (path_id, status_code, bytes_sent)
+                SELECT id, ?3, ?4
+                FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
                 params![tid, path_id, error, bytes_sent],
             )?;
 
@@ -729,8 +748,11 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
-                "INSERT INTO outgoing_path_completed_states (path_id) VALUES ((SELECT id FROM \
-                 outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2))",
+                r#"
+                INSERT INTO outgoing_path_completed_states (path_id)
+                SELECT id
+                FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
                 params![tid, path_id],
             )?;
 
@@ -759,8 +781,11 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
-                "INSERT INTO incoming_path_completed_states (path_id, final_path) VALUES ((SELECT \
-                 id FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
+                r#"
+                INSERT INTO incoming_path_completed_states (path_id, final_path)
+                SELECT id, ?3
+                FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
                 params![tid, path_id, final_path],
             )?;
 
@@ -783,8 +808,11 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
-                "INSERT INTO outgoing_path_reject_states (path_id, by_peer) VALUES ((SELECT id \
-                 FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
+                r#"
+                INSERT INTO outgoing_path_reject_states (path_id, by_peer)
+                SELECT id, ?3
+                FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
                 params![tid, path_id, by_peer],
             )?;
 
@@ -807,8 +835,11 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
-                "INSERT INTO incoming_path_reject_states (path_id, by_peer) VALUES ((SELECT id \
-                 FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2), ?3)",
+                r#"
+                INSERT INTO incoming_path_reject_states (path_id, by_peer)
+                SELECT id, ?3
+                FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
                 params![tid, path_id, by_peer],
             )?;
 
