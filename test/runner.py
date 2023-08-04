@@ -8,7 +8,7 @@ import os
 import json
 
 STDERR_ERR_PATTERNS = [
-    "DB Error",
+    ["drop-storage", "ERROR"],
 ]
 
 
@@ -55,16 +55,20 @@ def run():
 
         failed = []
 
-        decoded_stderr = stderr.decode("unicode_escape")
-        stderr_captured_error = stderr_captured_error = [
-            pattern for pattern in STDERR_ERR_PATTERNS if pattern in decoded_stderr
-        ]
+        decoded_stderr: str = stderr.decode("unicode_escape")
+
+        stderr_captured_errored_lines = []
+        for line in decoded_stderr.splitlines():
+            for pattern in STDERR_ERR_PATTERNS:
+                if all(phrase in line for phrase in pattern):
+                    stderr_captured_errored_lines.append(line)
+                    break
 
         for item in status_json:
             service: str = item["Service"]
 
             if service in scenario.runners() and (
-                item["ExitCode"] != 0 or stderr_captured_error
+                item["ExitCode"] != 0 or len(stderr_captured_errored_lines) > 0
             ):
                 failed.append(service)
 
@@ -80,6 +84,11 @@ def run():
 
             print(f"---STDERR---")
             print(decoded_stderr)
+
+            if len(stderr_captured_errored_lines) > 0:
+                print(f"---SUSPICIOUS LINES---")
+                for line in stderr_captured_errored_lines:
+                    print(line)
 
             print(f"------------")
             print("", flush=True)

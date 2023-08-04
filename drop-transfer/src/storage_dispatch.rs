@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use drop_storage::{
-    types::{Event, TransferFiles},
-    Storage, TransferType,
-};
+use drop_storage::{types::Event, Storage, TransferType};
 use uuid::Uuid;
 
 use crate::transfer::Transfer;
@@ -28,23 +25,6 @@ impl<'a> StorageDispatch<'a> {
         };
 
         match event {
-            Event::Pending { transfer_info } => match &transfer_info.files {
-                TransferFiles::Incoming(files) => {
-                    for file in files {
-                        self.storage
-                            .insert_incoming_path_pending_state(transfer_info.id, &file.file_id)
-                            .await
-                    }
-                }
-                TransferFiles::Outgoing(files) => {
-                    for file in files {
-                        self.storage
-                            .insert_outgoing_path_pending_state(transfer_info.id, &file.file_id)
-                            .await
-                    }
-                }
-            },
-
             Event::FileUploadStarted {
                 transfer_id,
                 file_id,
@@ -195,12 +175,6 @@ impl<'a> StorageDispatch<'a> {
 impl From<&crate::Event> for Option<Event> {
     fn from(event: &crate::Event) -> Self {
         let ev = match event {
-            crate::Event::RequestReceived(transfer) => Event::Pending {
-                transfer_info: transfer.storage_info(),
-            },
-            crate::Event::RequestQueued(transfer) => Event::Pending {
-                transfer_info: transfer.storage_info(),
-            },
             crate::Event::FileDownloadStarted(transfer, file, base_dir) => {
                 Event::FileDownloadStarted {
                     transfer_id: transfer.id(),
@@ -295,6 +269,8 @@ impl From<&crate::Event> for Option<Event> {
                 file_id: file_id.to_string(),
                 by_peer: *by_peer,
             },
+            crate::Event::RequestReceived(_) => return None,
+            crate::Event::RequestQueued(_) => return None,
             crate::Event::FileUploadPaused { .. } => return None,
             crate::Event::FileDownloadPaused { .. } => return None,
         };
