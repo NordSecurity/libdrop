@@ -39,6 +39,7 @@ pub type WebSocket = WebSocketStream<TcpStream>;
 
 pub enum ClientReq {
     Reject { file: FileId },
+    Close,
 }
 
 struct RunContext<'a> {
@@ -308,14 +309,9 @@ impl RunContext<'_> {
 
                     // API request
                     req = api_req_rx.recv() => {
-                        if let Some(req) = req {
-                            on_req(&mut self.socket, &mut handler, req).await.context("Handler on API req")?;
-                        } else {
-                            debug!(self.logger, "Stopping client connection gracefuly");
-                            self.socket.close(None).await.context("Failed to close WS")?;
-                            handler.on_close(false).await;
+                        if on_req(&mut self.socket, &mut handler, req, self.logger).await?.is_break() {
                             break;
-                        };
+                        }
                     },
                     // Message received
                     recv = super::utils::recv(&mut self.socket, handler.recv_timeout(last_recv.elapsed())) => {
@@ -461,13 +457,21 @@ async fn acquire_throttle_permit<'a>(
 async fn on_req(
     socket: &mut WebSocket,
     handler: &mut impl HandlerLoop,
-    req: ClientReq,
-) -> anyhow::Result<()> {
-    match req {
+    req: Option<ClientReq>,
+    logger: &slog::Logger,
+) -> anyhow::Result<ControlFlow<()>> {
+    match req.context("API channel broken")? {
         ClientReq::Reject { file } => handler.issue_reject(socket, file).await?,
+        ClientReq::Close => {
+            debug!(logger, "Stopping client connection gracefuly");
+            socket.close(None).await.context("Failed to close WS")?;
+            handler.on_close(false).await;
+
+            return Ok(ControlFlow::Break(()));
+        }
     }
 
-    Ok(())
+    Ok(ControlFlow::Continue(()))
 }
 
 async fn on_recv(

@@ -8,7 +8,7 @@ use std::{
 use anyhow::Context;
 use drop_config::DropConfig;
 use drop_storage::{sync, Storage};
-use slog::{error, info, warn, Logger};
+use slog::{debug, error, info, warn, Logger};
 use tokio::sync::{
     mpsc::{self, UnboundedSender},
     Mutex,
@@ -124,7 +124,11 @@ impl TransferManager {
                 );
 
                 match state.xfer_sync.local {
-                    sync::TransferState::Canceled => drop(conn),
+                    sync::TransferState::Canceled => {
+                        debug!(self.logger, "Incoming transfer is locally cancelled");
+                        let _ = conn.send(ServerReq::Close);
+                        drop(conn)
+                    }
                     _ => {
                         state.reject_pending(&conn, &self.logger);
                         state.resume_pending(&conn, &self.logger);
@@ -212,6 +216,8 @@ impl TransferManager {
 
         match state.xfer_sync.local {
             sync::TransferState::Canceled => {
+                debug!(self.logger, "Outgoing transfer is locally cancelled");
+                let _ = conn.send(ClientReq::Close);
                 drop(conn);
             }
             _ => {
@@ -588,7 +594,11 @@ impl TransferManager {
             )
             .await;
         state.xfer_sync.local = sync::TransferState::Canceled;
-        let _ = state.conn.take();
+
+        if let Some(conn) = state.conn.take() {
+            let _ = conn.send(ServerReq::Close);
+        }
+
         for val in state.file_sync.values_mut() {
             val.in_flight.take();
         }
@@ -621,7 +631,10 @@ impl TransferManager {
             )
             .await;
         state.xfer_sync.local = sync::TransferState::Canceled;
-        let _ = state.conn.take();
+
+        if let Some(conn) = state.conn.take() {
+            let _ = conn.send(ClientReq::Close);
+        }
 
         let res = CloseResult {
             xfer: state.xfer.clone(),
@@ -974,7 +987,7 @@ async fn restore_incoming(
 
     let mut xfers = HashMap::new();
     for transfer in transfers {
-        let restore_transfer = || async {
+        let restore_transfer = async {
             let files = transfer
                 .files
                 .into_iter()
@@ -1034,6 +1047,14 @@ async fn restore_incoming(
                 events: HashMap::new(),
             };
 
+            debug!(
+                logger,
+                "Restoring transfer: {}, states: local {:?}, remote {:?}",
+                xstate.xfer.id(),
+                xstate.xfer_sync.local,
+                xstate.xfer_sync.remote
+            );
+
             let paths = storage.finished_incoming_files(xstate.xfer.id()).await;
             for path in paths {
                 let subpath = FileSubPath::from(path.subpath);
@@ -1045,7 +1066,7 @@ async fn restore_incoming(
             anyhow::Ok(xstate)
         };
 
-        match restore_transfer().await {
+        match restore_transfer.await {
             Ok(xstate) => {
                 xfers.insert(xstate.xfer.id(), xstate);
             }

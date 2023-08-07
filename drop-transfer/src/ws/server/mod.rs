@@ -55,6 +55,7 @@ pub enum ServerReq {
     Download { task: Box<FileXferTask> },
     Cancel { file: FileId },
     Reject { file: FileId },
+    Close,
 }
 
 pub struct FileXferTask {
@@ -370,12 +371,7 @@ async fn handle_client(
 
                 // API request
                 req = req_rx.recv() => {
-                    if let Some(req) = req {
-                        on_req(&mut socket, &mut handler, req).await?;
-                    } else {
-                        debug!(logger, "Stoppping server connection gracefuly");
-                        socket.send(Message::close()).await?;
-                        handler.on_close(false).await;
+                    if on_req(&mut socket, &mut handler, req, logger).await?.is_break() {
                         break;
                     }
                 },
@@ -730,15 +726,22 @@ async fn init_client_handler(
 async fn on_req(
     socket: &mut WebSocket,
     handler: &mut impl HandlerLoop,
-    req: ServerReq,
-) -> anyhow::Result<()> {
-    match req {
+    req: Option<ServerReq>,
+    logger: &Logger,
+) -> anyhow::Result<ControlFlow<()>> {
+    match req.context("API channel broken")? {
         ServerReq::Download { task } => handler.issue_download(socket, *task).await?,
         ServerReq::Cancel { file } => handler.issue_cancel(socket, file).await?,
         ServerReq::Reject { file } => handler.issue_reject(socket, file).await?,
+        ServerReq::Close => {
+            debug!(logger, "Stoppping server connection gracefuly");
+            socket.send(Message::close()).await?;
+            handler.on_close(false).await;
+            return Ok(ControlFlow::Break(()));
+        }
     }
 
-    Ok(())
+    Ok(ControlFlow::Continue(()))
 }
 
 async fn on_recv(
