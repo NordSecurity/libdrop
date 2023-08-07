@@ -270,6 +270,17 @@ class Sleep(Action):
         return f"Sleep({self._seconds})"
 
 
+class SleepMs(Action):
+    def __init__(self, ms: int):
+        self._ms: int = ms
+
+    async def run(self, drop: ffi.Drop):
+        await asyncio.sleep(float(self._ms) / float(1000))
+
+    def __str__(self):
+        return f"SleepMs({self._ms})"
+
+
 class Wait(Action):
     def __init__(self, event: Event):
         self._event: Event = event
@@ -341,6 +352,25 @@ class NoEvent(Action):
 
     def __str__(self):
         return f"NoEvent({self._duration})"
+
+
+class AssertNoEventOfType(Action):
+    def __init__(self, forbidden: typing.List[type], duration: int = 6):
+        self._duration = duration
+        self._forbidden = forbidden
+
+    async def run(self, drop: ffi.Drop):
+        evs = await drop._events.gather_all(self._duration)
+
+        for ev in evs:
+            for fev in self._forbidden:
+                if isinstance(ev, fev):
+                    raise Exception(
+                        f"Unexpected event: {str(ev)} received while asserting no such event will happen"
+                    )
+
+    def __str__(self):
+        return f"AssertNoEventOfType({self._duration}, {self._forbidden})"
 
 
 class ExpectCancel(Action):
