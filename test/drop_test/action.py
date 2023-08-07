@@ -340,7 +340,7 @@ class DrainEvents(Action):
 
 
 class NoEvent(Action):
-    def __init__(self, duration: int = 6):
+    def __init__(self, duration: int = 3):
         self._duration = duration
 
     async def run(self, drop: ffi.Drop):
