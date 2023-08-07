@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::Context;
+use drop_analytics::TransferDirection;
 use futures::SinkExt;
 use slog::{debug, error, warn};
 use tokio::{sync::mpsc::Sender, task::JoinHandle};
@@ -130,9 +131,9 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         if let Some(file) = self.xfer.files().get(&file_id) {
             self.state.moose.service_quality_transfer_file(
                 Err(drop_core::Status::FileRejected as i32),
-                drop_analytics::Phase::End,
                 self.xfer.id().to_string(),
                 0,
+                TransferDirection::Upload,
                 file.info(),
             );
 
@@ -162,9 +163,9 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
 
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
-                    drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
+                    TransferDirection::Upload,
                     file.info(),
                 );
 
@@ -321,9 +322,9 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
             .for_each(|file| {
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
-                    drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
+                    TransferDirection::Upload,
                     file.info(),
                 )
             });

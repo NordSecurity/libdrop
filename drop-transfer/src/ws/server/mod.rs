@@ -14,6 +14,7 @@ use std::{
 };
 
 use anyhow::Context;
+use drop_analytics::TransferDirection;
 use drop_auth::Nonce;
 use futures::{SinkExt, StreamExt};
 use handler::{Downloader, HandlerInit, HandlerLoop, Request};
@@ -625,9 +626,9 @@ impl FileXferTask {
 
                 state.moose.service_quality_transfer_file(
                     Ok(()),
-                    drop_analytics::Phase::Start,
                     self.xfer.id().to_string(),
                     0,
+                    TransferDirection::Download,
                     self.file.info(),
                 );
 
@@ -652,9 +653,9 @@ impl FileXferTask {
 
                 state.moose.service_quality_transfer_file(
                     result.to_status(),
-                    drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     transfer_time.elapsed().as_millis() as i32,
+                    TransferDirection::Download,
                     self.file.info(),
                 );
 

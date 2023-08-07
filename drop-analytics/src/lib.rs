@@ -19,11 +19,11 @@ const MOOSE_STATUS_SUCCESS: i32 = 0;
 const MOOSE_VALUE_NONE: i32 = -1;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum Phase {
-    #[serde(rename = "start")]
-    Start,
-    #[serde(rename = "end")]
-    End,
+pub enum TransferDirection {
+    #[serde(rename = "upload")]
+    Upload,
+    #[serde(rename = "download")]
+    Download,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -43,14 +43,19 @@ pub struct FileInfo {
 }
 
 pub trait Moose: Send + Sync {
-    fn service_quality_initialization_init(&self, res: Result<(), i32>, phase: Phase);
-    fn service_quality_transfer_batch(&self, phase: Phase, transfer_id: String, info: TransferInfo);
+    fn service_quality_initialization_init(&self, res: Result<(), i32>);
+    fn service_quality_transfer_batch(
+        &self,
+        transfer_id: String,
+        info: TransferInfo,
+        protocol_version: i32,
+    );
     fn service_quality_transfer_file(
         &self,
         res: Result<(), i32>,
-        phase: Phase,
         transfer_id: String,
         transfer_time: i32,
+        direction: TransferDirection,
         info: Option<FileInfo>,
     );
 

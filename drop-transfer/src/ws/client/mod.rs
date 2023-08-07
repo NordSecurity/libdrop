@@ -11,6 +11,7 @@ use std::{
 };
 
 use anyhow::Context;
+use drop_analytics::TransferDirection;
 use futures::{SinkExt, StreamExt};
 use hyper::{http::HeaderValue, StatusCode};
 use slog::{debug, error, info, warn, Logger};
@@ -68,6 +69,9 @@ pub(crate) async fn run(state: Arc<State>, xfer: crate::Transfer, logger: Logger
     };
 
     info!(logger, "Client connected, using version: {ver}");
+    state
+        .moose
+        .service_quality_transfer_batch(xfer.id().to_string(), xfer.info(), ver.into());
 
     let ctx = RunContext {
         logger: &logger,
@@ -361,9 +365,9 @@ async fn start_upload(
 
         state.moose.service_quality_transfer_file(
             Ok(()),
-            drop_analytics::Phase::Start,
             xfer.id().to_string(),
             0,
+            TransferDirection::Upload,
             xfile.info(),
         );
 
@@ -391,9 +395,9 @@ async fn start_upload(
 
         state.moose.service_quality_transfer_file(
             result.to_status(),
-            drop_analytics::Phase::End,
             xfer.id().to_string(),
             transfer_time.elapsed().as_millis() as i32,
+            TransferDirection::Upload,
             xfile.info(),
         );
 
