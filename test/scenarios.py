@@ -5480,7 +5480,6 @@ scenarios = [
                     # make sure we have received something, so that we have non-empty tmp file
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Stop(),
-                    action.WaitForAnotherPeer(),
                     # start the sender again
                     action.Start("172.20.0.5", dbpath="/tmp/db/29-1-ren.sqlite"),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
@@ -5606,7 +5605,6 @@ scenarios = [
                     # make sure we have received something, so that we have non-empty tmp file
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Stop(),
-                    action.WaitForAnotherPeer(),
                     # start the receiver again
                     action.Start("172.20.0.15", dbpath="/tmp/db/29-2-stimpy.sqlite"),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
