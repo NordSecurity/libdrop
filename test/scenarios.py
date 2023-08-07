@@ -6769,6 +6769,132 @@ scenarios = [
         },
     ),
     Scenario(
+        "scenario31-3",
+        "Remove file on sending side without rejecting it first. Expect error and file present in JSON output",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5", dbpath="/tmp/db/31-1-ren.sqlite"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Sleep(2),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.15",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "base_path": "/tmp",
+                                "bytes": 1048576,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                    action.ExpectError(
+                        action.RemoveTransferFile(0, FILES["testfile-small"].id),
+                        Error.BAD_FILE,
+                    ),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.15",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "base_path": "/tmp",
+                                "bytes": 1048576,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15", dbpath="/tmp/db/31-1-stimpy.sqlite"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Sleep(2),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.5",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "incoming",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "bytes": 1048576,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
         "scenario32",
         "Send the same file with two different transfer into the same directory. Expect no errors",
         {

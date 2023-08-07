@@ -14,6 +14,15 @@ from .config import RUNNERS
 DEBUG_PRINT_EVENT = True
 
 
+class DropException(Exception):
+    def __init__(self, msg, errno: None | int = None):
+        super().__init__(msg)
+        self._errno = errno
+
+    def error(self) -> int | None:
+        return self._errno
+
+
 class LibResult(IntEnum):
     # Operation was success
     NORDDROP_RES_OK = (0,)
@@ -348,7 +357,9 @@ class Drop:
         )
 
         if xfid is None:
-            raise Exception("norddrop_new_transfer has failed to return a transfer ID")
+            raise DropException(
+                "norddrop_new_transfer has failed to return a transfer ID"
+            )
 
         return xfid.decode("utf-8")
 
@@ -362,7 +373,7 @@ class Drop:
         )
 
         if xfid is None:
-            raise Exception(
+            raise DropException(
                 "norddrop_new_transfer_with_fd has failed to return a transfer ID"
             )
 
@@ -378,8 +389,8 @@ class Drop:
 
         if err != 0:
             err_type = LibResult(err).name
-            raise Exception(
-                f"norddrop_download has failed with code: {err}({err_type})"
+            raise DropException(
+                f"norddrop_download has failed with code: {err}({err_type})", err
             )
 
     def cancel_transfer_request(self, uuid: str):
@@ -389,8 +400,8 @@ class Drop:
 
         if err != 0:
             err_type = LibResult(err).name
-            raise Exception(
-                f"cancel_transfer_request has failed with code: {err}({err_type})"
+            raise DropException(
+                f"cancel_transfer_request has failed with code: {err}({err_type})", err
             )
 
     def cancel_transfer_file(self, uuid: str, fid: str):
@@ -402,7 +413,9 @@ class Drop:
 
         if err != 0:
             err_type = LibResult(err).name
-            raise Exception(f"cancel_file has failed with code: {err}({err_type})")
+            raise DropException(
+                f"cancel_file has failed with code: {err}({err_type})", err
+            )
 
     def reject_transfer_file(self, uuid: str, fid: str):
         err = self._lib.norddrop_reject_file(
@@ -413,7 +426,9 @@ class Drop:
 
         if err != 0:
             err_type = LibResult(err).name
-            raise Exception(f"cancel_file has failed with code: {err}({err_type})")
+            raise DropException(
+                f"cancel_file has failed with code: {err}({err_type})", err
+            )
 
     def get_transfers_since(self, since_timestamp: int) -> str:
         transfers = self._lib.norddrop_get_transfers_since(
@@ -422,7 +437,7 @@ class Drop:
         )
 
         if transfers is None:
-            raise Exception(f"get_transfers_since has failed)")
+            raise DropException(f"get_transfers_since has failed)")
 
         return transfers.decode("utf-8")
 
@@ -434,8 +449,8 @@ class Drop:
 
         if err != 0:
             err_type = LibResult(err).name
-            raise Exception(
-                f"purge_transfers_until has failed with code: {err}({err_type})"
+            raise DropException(
+                f"purge_transfers_until has failed with code: {err}({err_type})", err
             )
 
     def purge_transfers(self, xfids: typing.List[str]):
@@ -446,7 +461,9 @@ class Drop:
 
         if err != 0:
             err_type = LibResult(err).name
-            raise Exception(f"purge_transfers has failed with code: {err}({err_type})")
+            raise DropException(
+                f"purge_transfers has failed with code: {err}({err_type})", err
+            )
 
     def remove_transfer_file(self, uuid: str, fid: str):
         err = self._lib.norddrop_remove_transfer_file(
@@ -457,8 +474,8 @@ class Drop:
 
         if err != 0:
             err_type = LibResult(err).name
-            raise Exception(
-                f"remove_transfer_file has failed with code: {err}({err_type})"
+            raise DropException(
+                f"remove_transfer_file has failed with code: {err}({err_type})", err
             )
 
     def start(self, addr: str, dbpath: str, max_reqs_per_sec: int):
@@ -480,19 +497,23 @@ class Drop:
         )
         if err != 0:
             err_type = LibResult(err).name
-            raise Exception(f"norddrop_start has failed with code: {err}({err_type})")
+            raise DropException(
+                f"norddrop_start has failed with code: {err}({err_type})", err
+            )
 
     def stop(self):
         err = self._lib.norddrop_stop(self._instance)
         if err != 0:
             err_type = LibResult(err).name
-            raise Exception(f"norddrop_stop has failed with code: {err}({err_type})")
+            raise DropException(
+                f"norddrop_stop has failed with code: {err}({err_type})", err
+            )
 
     @property
     def version(self) -> str:
         version = self._lib.norddrop_version(self._instance)
         if not version:
-            return ""
+            raise DropException(f"norddrop_version has failed")
 
         return ctypes.string_at(version).decode("utf-8")
 
@@ -500,7 +521,9 @@ class Drop:
         err = self._lib.norddrop_destroy(self._instance)
         if err != 0:
             err_type = LibResult(err).name
-            raise Exception(f"norddrop_destory has failed with code: {err}({err_type})")
+            raise DropException(
+                f"norddrop_destory has failed with code: {err}({err_type})", err
+            )
 
 
 class IncomingRequestEntry:
