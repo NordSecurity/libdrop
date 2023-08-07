@@ -34,7 +34,7 @@ class LibResult(IntEnum):
     NORDDROP_RES_INVALID_STRING = (2,)
 
     # Bad JSON input
-    NORDDROP_RES_BAD_CONFIG = (3,)
+    NORDDROP_RES_BAD_INPUT = (3,)
 
 
 class LogLevel(IntEnum):
