@@ -77,7 +77,8 @@ async fn connect_to_peer(
     logger: &Logger,
 ) -> ControlFlow<()> {
     let (socket, ver) = match establish_ws_conn(state, xfer.peer(), logger).await {
-        Ok(res) => res,
+        Ok(Some(res)) => res,
+        Ok(None) => return ControlFlow::Continue(()),
         Err(err) => {
             error!(logger, "Could not connect to peer {}: {}", xfer.id(), err);
 
@@ -116,7 +117,7 @@ async fn establish_ws_conn(
     state: &State,
     ip: IpAddr,
     logger: &Logger,
-) -> crate::Result<(WebSocket, protocol::Version)> {
+) -> crate::Result<Option<(WebSocket, protocol::Version)>> {
     let mut socket = tcp_connect(state, ip, logger).await;
 
     let mut versions_to_try = [
@@ -147,12 +148,15 @@ async fn establish_ws_conn(
                     );
                 }
             }
-            Err(err) => return Err(err.into()),
+            Err(err) => {
+                info!(logger, "Error while making the HTTP request: {err:?}");
+                return Ok(None);
+            }
         }
     };
 
     let client = WebSocketStream::from_raw_socket(socket, Role::Client, None).await;
-    Ok((client, ver))
+    Ok(Some((client, ver)))
 }
 
 async fn make_request(
