@@ -11,9 +11,12 @@ class ActionList:
         self._actions = actions
 
     async def run(self, drop: ffi.Drop):
-        for act in self._actions:
-            logger.info(f"Running action: {act}")
-            await act.run(drop)
+        logger.info("Processing action list...")
+        for k, v in enumerate(self._actions):
+            logger.info(f"Running action {k+1}/{len(self._actions)}: {v}")
+            await v.run(drop)
+            logger.info(f"Action {k+1}/{len(self._actions)} completed: {v}")
+        logger.info("Done processing actions")
 
 
 class Scenario:
@@ -33,7 +36,7 @@ class Scenario:
         return self._id
 
     async def run(self, runner: str, drop: ffi.Drop):
-        logger.info(f'Scenario: "{self._desc}"')
+        logger.info(f'Scenario ({self.id()}): "{self._desc}"')
 
         try:
             await self._action_list[runner].run(drop)
