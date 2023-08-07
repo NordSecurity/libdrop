@@ -133,12 +133,10 @@ class NewTransfer(Action):
         self._paths: list[str] = paths
 
     async def run(self, drop: ffi.Drop):
-        UUIDS_LOCK.acquire()
+        with UUIDS_LOCK:
 
-        xfid = drop.new_transfer(self._peer, self._paths)
-        UUIDS.append(xfid)
-
-        UUIDS_LOCK.release()
+            xfid = drop.new_transfer(self._peer, self._paths)
+            UUIDS.append(xfid)
 
     def __str__(self):
         return f"NewTransfer({self._peer}, {self._paths})"
@@ -157,12 +155,10 @@ class NewTransferWithFD(Action):
             self._uri = f"content://new{path}"
 
     async def run(self, drop: ffi.Drop):
-        UUIDS_LOCK.acquire()
+        with UUIDS_LOCK:
 
-        xfid = drop.new_transfer_with_fd(self._peer, self._path, self._uri)
-        UUIDS.append(xfid)
-
-        UUIDS_LOCK.release()
+            xfid = drop.new_transfer_with_fd(self._peer, self._path, self._uri)
+            UUIDS.append(xfid)
 
     def __str__(self):
         return f"NewTransferWithFD({self._peer}, {self._uri})"
@@ -175,9 +171,8 @@ class Download(Action):
         self._dst = dst
 
     async def run(self, drop: ffi.Drop):
-        UUIDS_LOCK.acquire()
-        drop.download(UUIDS[self._uuid_slot], self._fid, self._dst)
-        UUIDS_LOCK.release()
+        with UUIDS_LOCK:
+            drop.download(UUIDS[self._uuid_slot], self._fid, self._dst)  # TODO
 
     def __str__(self):
         return f"DownloadFile({print_uuid(self._uuid_slot)}, {self._fid}, {self._dst})"
@@ -188,9 +183,8 @@ class CancelTransferRequest(Action):
         self._uuid_slot = uuid_slot
 
     async def run(self, drop: ffi.Drop):
-        UUIDS_LOCK.acquire()
-        drop.cancel_transfer_request(UUIDS[self._uuid_slot])
-        UUIDS_LOCK.release()
+        with UUIDS_LOCK:
+            drop.cancel_transfer_request(UUIDS[self._uuid_slot])
 
     def __str__(self):
         return f"CancelTransferRequest({print_uuid(self._uuid_slot)})"
@@ -202,9 +196,8 @@ class CancelTransferFile(Action):
         self._fid = fid
 
     async def run(self, drop: ffi.Drop):
-        UUIDS_LOCK.acquire()
-        drop.cancel_transfer_file(UUIDS[self._uuid_slot], self._fid)
-        UUIDS_LOCK.release()
+        with UUIDS_LOCK:
+            drop.cancel_transfer_file(UUIDS[self._uuid_slot], self._fid)
 
     def __str__(self):
         return f"CancelTransferFile({print_uuid(self._uuid_slot)}, {self._fid})"
@@ -216,9 +209,8 @@ class RejectTransferFile(Action):
         self._fid = fid
 
     async def run(self, drop: ffi.Drop):
-        UUIDS_LOCK.acquire()
-        drop.reject_transfer_file(UUIDS[self._uuid_slot], self._fid)
-        UUIDS_LOCK.release()
+        with UUIDS_LOCK:
+            drop.reject_transfer_file(UUIDS[self._uuid_slot], self._fid)
 
     def __str__(self):
         return f"RejectTransferFile({print_uuid(self._uuid_slot)}, {self._fid})"
@@ -362,21 +354,19 @@ class NoEvent(Action):
         return f"NoEvent({self._duration})"
 
 
+# TODO: why ExpectCancel took a list instead of specific slot value?
 class ExpectCancel(Action):
-    def __init__(self, uuid_slots: typing.List[int], by_peer: bool):
-        self._uuid_slots = uuid_slots
+    def __init__(self, uuid_slot: int, by_peer: bool):
+        self._uuid_slot = uuid_slot
         self._by_peer = by_peer
 
     async def run(self, drop: ffi.Drop):
-        events: typing.List[event.Event] = [
-            event.FinishTransferCanceled(slot, self._by_peer)
-            for slot in self._uuid_slots
-        ]
-        await drop._events.wait_racy(events, ignore_progress=False)
+        await drop._events.wait_for(
+            event.FinishTransferCanceled(self._uuid_slot, self._by_peer)
+        )
 
     def __str__(self):
-        uuids = [print_uuid(slot) for slot in self._uuid_slots]
-        return f"ExpectCancel({uuids})"
+        return f"ExpectCancel({self._uuid_slot})"
 
 
 # Shape egress traffic. Slowing down and adding latency helps introducing
@@ -564,9 +554,8 @@ class RemoveTransferFile(Action):
         self._fid = fid
 
     async def run(self, drop: ffi.Drop):
-        UUIDS_LOCK.acquire()
-        drop.remove_transfer_file(UUIDS[self._uuid_slot], self._fid)
-        UUIDS_LOCK.release()
+        with UUIDS_LOCK:
+            drop.remove_transfer_file(UUIDS[self._uuid_slot], self._fid)
 
     def __str__(self):
         return f"RemoveTransferFile({print_uuid(self._uuid_slot)}, {self._fid})"
