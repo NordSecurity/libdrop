@@ -90,6 +90,14 @@ class EventQueue:
 
         return None
 
+    async def gather_all(self, duration: int):
+        await asyncio.sleep(duration)
+
+        with self._lock:
+            evs = self._events
+            self._events = []
+            return evs
+
     async def wait_for(
         self, target_event: event.Event, ignore_progress: bool = True
     ) -> None:

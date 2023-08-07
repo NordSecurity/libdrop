@@ -6991,4 +6991,51 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario35",
+        "Try to connect to rapidly disconnecting peer",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.5"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.AssertNoEventOfType(
+                        [
+                            event.FinishFailedTransfer,
+                        ],
+                        duration=4,
+                    ),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Repeated(
+                        [
+                            action.Start(
+                                "172.20.0.15", dbpath="/tmp/db/35-stimpy.sqlite"
+                            ),
+                            action.SleepMs(30),
+                            action.Stop(),
+                        ],
+                        100,
+                    ),
+                ]
+            ),
+        },
+    ),
 ]
