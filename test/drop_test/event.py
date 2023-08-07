@@ -13,12 +13,9 @@ UUIDS_LOCK: Lock = Lock()
 def print_uuid(slot: int) -> str:
     uuid: str = "MISSING"
 
-    UUIDS_LOCK.acquire()
-
-    if slot < len(UUIDS):
-        uuid = UUIDS[slot]
-
-    UUIDS_LOCK.release()
+    with UUIDS_LOCK:
+        if slot < len(UUIDS):
+            uuid = UUIDS[slot]
 
     return f"{uuid} (slot: {slot})"
 
@@ -26,12 +23,9 @@ def print_uuid(slot: int) -> str:
 def get_uuid(slot: int) -> str:
     uuid: str = "MISSING"
 
-    UUIDS_LOCK.acquire()
-
-    if slot < len(UUIDS):
-        uuid = UUIDS[slot]
-
-    UUIDS_LOCK.release()
+    with UUIDS_LOCK:
+        if slot < len(UUIDS):
+            uuid = UUIDS[slot]
 
     return uuid
 
