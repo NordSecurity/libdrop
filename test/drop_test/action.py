@@ -69,6 +69,25 @@ class Action:
         raise NotImplementedError("run() on base Action class")
 
 
+class ExpectError(Action):
+    def __init__(self, action: Action, err: int):
+        self._action = action
+        self._err = err
+
+    async def run(self, drop: ffi.Drop):
+        try:
+            await self._action.run(drop)
+        except ffi.DropException as e:
+            if self._err != e.error():
+                raise Exception(
+                    f"Received DropException with error: {self._err}, expected {e.error()} instead"
+                )
+            else:
+                return
+
+        raise Exception(f"Action must have thrown DropException")
+
+
 class Parallel(Action):
     def __init__(self, actions: typing.List[Action]):
         self._actions = actions
