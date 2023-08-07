@@ -354,7 +354,7 @@ class NoEvent(Action):
         return f"NoEvent({self._duration})"
 
 
-# TODO: why ExpectCancel took a list instead of specific slot value?
+# TODO: this should be split to only wait for one event
 class ExpectCancel(Action):
     def __init__(self, uuid_slot: int, by_peer: bool):
         self._uuid_slot = uuid_slot
