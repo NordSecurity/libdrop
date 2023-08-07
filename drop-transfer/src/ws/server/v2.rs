@@ -9,6 +9,7 @@ use std::{
 };
 
 use anyhow::Context;
+use drop_analytics::TransferDirection;
 use drop_config::DropConfig;
 use futures::{SinkExt, StreamExt};
 use sha1::Digest;
@@ -218,9 +219,9 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         if let Some(file) = self.xfer.files().get(&file_id) {
             self.state.moose.service_quality_transfer_file(
                 Err(drop_core::Status::FileRejected as i32),
-                drop_analytics::Phase::End,
                 self.xfer.id().to_string(),
                 0,
+                TransferDirection::Download,
                 file.info(),
             );
 
@@ -276,9 +277,9 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
 
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
-                    drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
+                    TransferDirection::Download,
                     file.info(),
                 );
 
@@ -355,9 +356,9 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
             .for_each(|file| {
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
-                    drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
+                    TransferDirection::Download,
                     file.info(),
                 );
             });

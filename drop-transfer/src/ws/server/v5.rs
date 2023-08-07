@@ -11,6 +11,7 @@ use std::{
 
 use anyhow::Context;
 use async_cell::sync::AsyncCell;
+use drop_analytics::TransferDirection;
 use drop_config::DropConfig;
 use futures::{SinkExt, StreamExt};
 use slog::{debug, error, info, warn};
@@ -304,9 +305,9 @@ impl HandlerLoop<'_> {
 
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
-                    drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
+                    TransferDirection::Download,
                     file.info(),
                 );
 
@@ -371,9 +372,9 @@ impl HandlerLoop<'_> {
 
         self.state.moose.service_quality_transfer_file(
             Err(drop_core::Status::FileRejected as i32),
-            drop_analytics::Phase::End,
             self.xfer.id().to_string(),
             0,
+            TransferDirection::Download,
             file.info(),
         );
 
@@ -482,9 +483,9 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             .for_each(|file| {
                 self.state.moose.service_quality_transfer_file(
                     Err(u32::from(&crate::Error::Canceled) as i32),
-                    drop_analytics::Phase::End,
                     self.xfer.id().to_string(),
                     0,
+                    TransferDirection::Download,
                     file.info(),
                 );
             });

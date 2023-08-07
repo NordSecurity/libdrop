@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use drop_analytics::Moose;
+use drop_analytics::{Moose, TransferDirection};
 use drop_config::DropConfig;
 use drop_storage::Storage;
 use slog::{debug, error, warn, Logger};
@@ -51,9 +51,9 @@ macro_rules! moose_try_file {
             Err(e) => {
                 $moose.service_quality_transfer_file(
                     Err(u32::from(&e) as i32),
-                    drop_analytics::Phase::Start,
                     $xfer_id.to_string(),
                     0,
+                    TransferDirection::Download,
                     $file_info,
                 );
 
@@ -97,24 +97,14 @@ impl Service {
         };
 
         let res = task();
-        moose.service_quality_initialization_init(res.to_status(), drop_analytics::Phase::Start);
+        moose.service_quality_initialization_init(res.to_status());
 
         res
     }
 
     pub async fn stop(self) -> Result<(), Error> {
-        let task = async {
-            self.stop.cancel();
-            self.join_handle.await.map_err(|_| Error::ServiceStop)
-        };
-
-        let res = task.await;
-
-        self.state
-            .moose
-            .service_quality_initialization_init(res.to_status(), drop_analytics::Phase::End);
-
-        res
+        self.stop.cancel();
+        self.join_handle.await.map_err(|_| Error::ServiceStop)
     }
 
     pub fn purge_transfers(&self, transfer_ids: Vec<String>) -> Result<(), Error> {
@@ -169,12 +159,6 @@ impl Service {
     }
 
     pub async fn send_request(&mut self, xfer: crate::Transfer) {
-        self.state.moose.service_quality_transfer_batch(
-            drop_analytics::Phase::Start,
-            xfer.id().to_string(),
-            xfer.info(),
-        );
-
         if let Err(err) = self.state.storage.insert_transfer(&xfer.storage_info()) {
             error!(self.logger, "Failed to insert transfer into storage: {err}",);
         }
@@ -372,12 +356,16 @@ impl Service {
 
             xfer.files().values().for_each(|file| {
                 let status: u32 = From::from(&Error::Canceled);
+                let direction = match xfer.is_incoming() {
+                    true => TransferDirection::Download,
+                    false => TransferDirection::Upload,
+                };
 
                 self.state.moose.service_quality_transfer_file(
                     Err(status as _),
-                    drop_analytics::Phase::End,
                     xfer.id().to_string(),
                     0,
+                    direction,
                     file.info(),
                 )
             });

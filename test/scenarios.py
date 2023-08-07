@@ -85,14 +85,12 @@ scenarios = [
                         [
                             """{
                             "type": "init",
-                            "phase": "start",
                             "result": 0,
                             "app_version": "*",
                             "prod": false
                         }""",
                             """{
                             "type": "batch",
-                            "phase": "start",
                             "transfer_id": "*",
                             "info": {
                                 "mime_type_list": "unknown",
@@ -100,14 +98,15 @@ scenarios = [
                                 "file_size_list": "10240",
                                 "transfer_size_kb": 10240,
                                 "file_count": 1
-                            }
+                            },
+                            "protocol_version": 5
                         }""",
                             """{
                             "type": "file",
-                            "phase": "start",
                             "result": 0,
                             "transfer_id": "*",
                             "transfer_time": "*",
+                            "direction": "upload",
                             "info": {
                                 "mime_type": "unknown",
                                 "extension": "unknown",
@@ -116,22 +115,15 @@ scenarios = [
                         }""",
                             """{
                             "type": "file",
-                            "phase": "end",
                             "result": 0,
                             "transfer_id": "*",
                             "transfer_time": "*",
+                            "direction": "upload",
                             "info": {
                                 "mime_type": "unknown",
                                 "extension": "unknown",
                                 "size_kb": 10240
                             }
-                        }""",
-                            """{
-                            "type": "init",
-                            "phase": "end",
-                            "result": 0,
-                            "app_version": "*",
-                            "prod": false
                         }""",
                         ]
                     ),
@@ -217,14 +209,12 @@ scenarios = [
                         [
                             """{
                             "type": "init",
-                            "phase": "start",
                             "result": 0,
                             "app_version": "*",
                             "prod": false
                         }""",
                             """{
                             "type": "file",
-                            "phase": "start",
                             "result": 0,
                             "transfer_id": "*",
                             "transfer_time": "*",
@@ -236,10 +226,10 @@ scenarios = [
                         }""",
                             """{
                             "type": "file",
-                            "phase": "end",
                             "result": 0,
                             "transfer_id": "*",
                             "transfer_time": "*",
+                            "direction": "download",
                             "info": {
                                 "mime_type": "",
                                 "extension": "",
@@ -248,22 +238,15 @@ scenarios = [
                         }""",
                             """{
                             "type": "file",
-                            "phase": "end",
                             "result": 1,
                             "transfer_id": "*",
                             "transfer_time": "*",
+                            "direction": "download",
                             "info": {
                                 "mime_type": "",
                                 "extension": "",
                                 "size_kb": 0
                             }
-                        }""",
-                            """{
-                            "type": "init",
-                            "phase": "end",
-                            "result": 0,
-                            "app_version": "*",
-                            "prod": false
                         }""",
                         ]
                     ),
@@ -3321,14 +3304,12 @@ scenarios = [
                         [
                             """{
                             "type": "init",
-                            "phase": "start",
                             "result": 0,
                             "app_version": "*",
                             "prod": false
                         }""",
                             """{
                             "type": "batch",
-                            "phase": "start",
                             "transfer_id": "*",
                             "info": {
                                 "mime_type_list": "unknown",
@@ -3336,14 +3317,15 @@ scenarios = [
                                 "file_size_list": "10240",
                                 "transfer_size_kb": 10240,
                                 "file_count": 1
-                            }
+                            },
+                            "protocol_version": 5
                         }""",
                             """{
                             "type": "file",
-                            "phase": "start",
                             "result": 0,
                             "transfer_id": "*",
                             "transfer_time": "*",
+                            "direction": "upload",
                             "info": {
                                 "mime_type": "unknown",
                                 "extension": "unknown",
@@ -3352,22 +3334,15 @@ scenarios = [
                         }""",
                             """{
                             "type": "file",
-                            "phase": "end",
                             "result": 28,
                             "transfer_id": "*",
                             "transfer_time": "*",
+                            "direction": "upload",
                             "info": {
                                 "mime_type": "unknown",
                                 "extension": "unknown",
                                 "size_kb": 10240
                             }
-                        }""",
-                            """{
-                            "type": "init",
-                            "phase": "end",
-                            "result": 0,
-                            "app_version": "*",
-                            "prod": false
                         }""",
                         ]
                     ),
@@ -3448,17 +3423,16 @@ scenarios = [
                         [
                             """{
                             "type": "init",
-                            "phase": "start",
                             "result": 0,
                             "app_version": "*",
                             "prod": false
                         }""",
                             """{
                             "type": "file",
-                            "phase": "start",
                             "result": 0,
                             "transfer_id": "*",
                             "transfer_time": "*",
+                            "direction": "download",
                             "info": {
                                 "mime_type": "",
                                 "extension": "",
@@ -3467,22 +3441,15 @@ scenarios = [
                         }""",
                             """{
                             "type": "file",
-                            "phase": "end",
                             "result": 1,
                             "transfer_id": "*",
                             "transfer_time": "*",
+                            "direction": "download",
                             "info": {
                                 "mime_type": "",
                                 "extension": "",
                                 "size_kb": 0
                             }
-                        }""",
-                            """{
-                            "type": "init",
-                            "phase": "end",
-                            "result": 0,
-                            "app_version": "*",
-                            "prod": false
                         }""",
                         ]
                     ),

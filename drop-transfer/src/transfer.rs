@@ -87,15 +87,17 @@ impl Transfer {
         }
     }
 
-    pub fn storage_info(&self) -> StorageInfo {
+    pub fn is_incoming(&self) -> bool {
         // TODO(msz): this insane check wouldn't be needed if we had two different
         // `Transfer` types
-        let is_incoming = match self.files.values().next() {
+        match self.files.values().next() {
             Some(files) => matches!(files.kind, FileKind::FileToRecv { .. }),
             None => true, // TODO(msz): Arbitrarily chosen, there is no way to differentiate here
-        };
+        }
+    }
 
-        let files = if is_incoming {
+    pub fn storage_info(&self) -> StorageInfo {
+        let files = if self.is_incoming() {
             let files = self
                 .files
                 .values()
