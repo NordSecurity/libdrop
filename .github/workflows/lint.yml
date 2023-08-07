@@ -55,6 +55,8 @@ jobs:
           python-version: '3.11'
       - name: Install linters
         run: python3 -m pip install black mypy
+      - name: print black version
+        run: black --version
       - name: Run black
         run: black --check --diff test/
       - name: Run mypy
