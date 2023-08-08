@@ -124,7 +124,7 @@ impl HandlerLoop<'_> {
                 .await?;
 
             let xfile = &self.xfer.files()[&file_id];
-            let checksum = tokio::task::block_in_place(|| xfile.checksum(limit))?;
+            let checksum = xfile.checksum(limit).await?;
 
             anyhow::Ok(v4::ReportChsum {
                 file: file_id.clone(),
