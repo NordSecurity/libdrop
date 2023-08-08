@@ -618,3 +618,22 @@ class AssertMooseEvents(Action):
 
     def __str__(self):
         return f"AssertMooseEvents({','.join(self._expected_outputs)})"
+
+
+class EnsureTakesNoLonger(Action):
+    def __init__(self, action: Action, seconds: float):
+        self._action = action
+        self._secs = seconds
+
+    async def run(self, drop: ffi.Drop):
+        start = time.time()
+        await self._action.run(drop)
+        elapsed = time.time() - start
+
+        if elapsed > self._secs:
+            raise Exception(
+                f"Action took longer ({elapsed} s) than expected ({self._secs} s)"
+            )
+
+    def __str__(self):
+        return f"EnsureTakesNoLonger({self._action}, {self._secs})"
