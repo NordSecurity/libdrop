@@ -541,7 +541,7 @@ impl handler::Downloader for Downloader {
         );
 
         // Check if we can resume the temporary file
-        match tokio::task::block_in_place(|| super::TmpFileState::load(&tmp_location.0)) {
+        match super::TmpFileState::load(&tmp_location.0).await {
             Ok(super::TmpFileState { meta, csum }) => {
                 debug!(
                     self.logger,
@@ -642,11 +642,8 @@ impl handler::Downloader for Downloader {
     }
 
     async fn validate(&mut self, path: &Hidden<PathBuf>) -> crate::Result<()> {
-        let csum = tokio::task::block_in_place(|| {
-            let file = std::fs::File::open(&path.0)?;
-            let csum = file::checksum(&mut io::BufReader::new(file))?;
-            crate::Result::Ok(csum)
-        })?;
+        let file = std::fs::File::open(&path.0)?;
+        let csum = file::checksum(&mut io::BufReader::new(file)).await?;
 
         if self.full_csum.get().await != csum {
             return Err(crate::Error::ChecksumMismatch);

@@ -636,11 +636,11 @@ impl FileXferTask {
 
 impl TmpFileState {
     // Blocking operation
-    fn load(path: &Path) -> io::Result<Self> {
+    async fn load(path: &Path) -> io::Result<Self> {
         let file = fs::File::open(path)?;
 
         let meta = file.metadata()?;
-        let csum = file::checksum(&mut io::BufReader::new(file))?;
+        let csum = file::checksum(&mut io::BufReader::new(file)).await?;
         Ok(TmpFileState { meta, csum })
     }
 }
