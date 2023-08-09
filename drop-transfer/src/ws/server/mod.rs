@@ -77,13 +77,14 @@ struct StreamCtx<'a> {
     events: &'a FileEventTx<IncomingTransfer>,
 }
 
-pub(crate) fn start(
+pub(crate) fn spawn(
     addr: IpAddr,
-    stop: CancellationToken,
     state: Arc<State>,
     auth: Arc<auth::Context>,
     logger: Logger,
-) -> crate::Result<JoinHandle<()>> {
+    stop: CancellationToken,
+    alive: AliveGuard,
+) -> crate::Result<()> {
     let nonce_store = Arc::new(Mutex::new(HashMap::new()));
 
     #[derive(Debug)]
@@ -228,9 +229,8 @@ pub(crate) fn start(
     };
 
     let future = match warp::serve(service)
-        .try_bind_with_graceful_shutdown((addr, drop_config::PORT), async move {
-            stop.cancelled().await
-        }) {
+        .try_bind_with_graceful_shutdown((addr, drop_config::PORT), stop.cancelled_owned())
+    {
         Ok((socket, future)) => {
             debug!(logger, "WS server is bound to: {socket}");
             future
@@ -259,19 +259,20 @@ pub(crate) fn start(
         }
     };
 
-    let task = tokio::spawn(async move {
+    tokio::spawn(async move {
+        let _guard = alive;
         future.await;
         debug!(logger, "WS server stopped");
     });
 
-    Ok(task)
+    Ok(())
 }
 
 struct RunContext<'a> {
     logger: &'a slog::Logger,
     state: Arc<State>,
-    stop: &'a CancellationToken,
     socket: WebSocket,
+    stop: &'a CancellationToken,
 }
 
 impl RunContext<'_> {
@@ -314,11 +315,11 @@ impl RunContext<'_> {
         };
 
         let xfer = Arc::new(xfer);
+        let xfer_id = xfer.id();
 
         let job = async {
-            let xfer_id = xfer.id();
-
             handle_client(&self.state, self.logger, self.socket, handler, xfer).await;
+
             let _ = self
                 .state
                 .transfer_manager
@@ -330,10 +331,10 @@ impl RunContext<'_> {
             biased;
 
             _ = self.stop.cancelled() => {
-                info!(self.logger, "Aborting transfer download");
-            },
+                debug!(self.logger, "Server job stop: {xfer_id}");
+            }
             _ = job => (),
-        };
+        }
     }
 }
 
