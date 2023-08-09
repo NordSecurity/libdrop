@@ -1,6 +1,6 @@
 use std::{collections::HashMap, net::IpAddr};
 
-use drop_analytics::TransferInfo;
+use drop_analytics::{TransferDirection, TransferInfo};
 use drop_config::DropConfig;
 use drop_storage::TransferInfo as StorageInfo;
 use uuid::Uuid;
@@ -19,6 +19,8 @@ pub trait Transfer {
     fn id(&self) -> Uuid;
     fn peer(&self) -> IpAddr;
     fn files(&self) -> &HashMap<FileId, Self::File>;
+
+    fn direction() -> TransferDirection;
 
     fn contains(&self, file_id: &FileId) -> bool {
         self.files().contains_key(file_id)
@@ -106,6 +108,10 @@ impl<F: File> Transfer for TransferData<F> {
 
     fn files(&self) -> &HashMap<FileId, Self::File> {
         &self.files
+    }
+
+    fn direction() -> TransferDirection {
+        Self::File::direction()
     }
 }
 
