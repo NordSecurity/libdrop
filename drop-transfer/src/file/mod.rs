@@ -339,4 +339,36 @@ mod tests {
 
         assert_eq!(csum.as_slice(), EXPECTED);
     }
+
+    #[test]
+    fn checksum_yielding() {
+        use std::{
+            future::Future,
+            io,
+            pin::Pin,
+            task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
+        };
+
+        let buf = vec![0xffu8; 20 * 1024]; // 20kB of data
+
+        fn empty(_: *const ()) {}
+        fn make_raw(_: *const ()) -> RawWaker {
+            RawWaker::new(
+                std::ptr::null(),
+                &RawWakerVTable::new(make_raw, empty, empty, empty),
+            )
+        }
+        let waker = unsafe { Waker::from_raw(make_raw(std::ptr::null())) };
+        let mut cx = Context::from_waker(&waker);
+
+        let mut cursor = io::Cursor::new(&buf);
+        let mut future = super::checksum(&mut cursor);
+        let mut future = unsafe { Pin::new_unchecked(&mut future) };
+
+        // expect it to yield 3 times (one at the very end)
+        assert!(future.as_mut().poll(&mut cx).is_pending());
+        assert!(future.as_mut().poll(&mut cx).is_pending());
+        assert!(future.as_mut().poll(&mut cx).is_pending());
+        assert!(matches!(future.as_mut().poll(&mut cx), Poll::Ready(Ok(_))));
+    }
 }
