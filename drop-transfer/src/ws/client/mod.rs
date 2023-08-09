@@ -113,6 +113,10 @@ async fn connect_to_peer(
         }
     };
 
+    state
+        .moose
+        .service_quality_transfer_batch(xfer.id().to_string(), xfer.info(), ver.into());
+
     info!(logger, "Client connected, using version: {ver}");
 
     let ctx = RunContext {

@@ -3,7 +3,7 @@ use std::{fs::File, io::Write, path::Path};
 use serde::{Deserialize, Serialize};
 use slog::Logger;
 
-use crate::{FileInfo, Phase, TransferInfo, MOOSE_STATUS_SUCCESS, MOOSE_VALUE_NONE};
+use crate::{FileInfo, TransferDirection, TransferInfo, MOOSE_STATUS_SUCCESS, MOOSE_VALUE_NONE};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -20,7 +20,6 @@ enum MooseEventType {
 
 #[derive(Serialize, Deserialize)]
 struct InitEvent {
-    phase: Phase,
     result: i32,
     app_version: String,
     prod: bool,
@@ -28,17 +27,17 @@ struct InitEvent {
 
 #[derive(Serialize, Deserialize)]
 struct BatchEvent {
-    phase: Phase,
     transfer_id: String,
     info: TransferInfo,
+    protocol_version: i32,
 }
 
 #[derive(Serialize, Deserialize)]
 struct FileEvent {
-    phase: Phase,
     result: i32,
     transfer_id: String,
     transfer_time: i32,
+    direction: TransferDirection,
     info: FileInfo,
 }
 
@@ -86,14 +85,13 @@ impl FileImpl {
 }
 
 impl super::Moose for FileImpl {
-    fn service_quality_initialization_init(&self, res: Result<(), i32>, phase: crate::Phase) {
+    fn service_quality_initialization_init(&self, res: Result<(), i32>) {
         let result = match res {
             Ok(_) => MOOSE_STATUS_SUCCESS,
             Err(e) => e,
         };
 
         let event = self.write_event(MooseEventType::Init(InitEvent {
-            phase,
             result,
             app_version: self.app_version.clone(),
             prod: self.prod,
@@ -109,14 +107,14 @@ impl super::Moose for FileImpl {
     }
     fn service_quality_transfer_batch(
         &self,
-        phase: crate::Phase,
         transfer_id: String,
         info: TransferInfo,
+        protocol_version: i32,
     ) {
         let event = self.write_event(MooseEventType::Batch(BatchEvent {
-            phase,
             transfer_id,
             info,
+            protocol_version,
         }));
 
         if event.is_err() {
@@ -130,9 +128,9 @@ impl super::Moose for FileImpl {
     fn service_quality_transfer_file(
         &self,
         res: Result<(), i32>,
-        phase: crate::Phase,
         transfer_id: String,
         transfer_time: i32,
+        direction: TransferDirection,
         info: Option<FileInfo>,
     ) {
         let result = match res {
@@ -141,10 +139,10 @@ impl super::Moose for FileImpl {
         };
 
         let event = self.write_event(MooseEventType::File(FileEvent {
-            phase,
             result,
             transfer_id,
             transfer_time,
+            direction,
             info: info.unwrap_or_default(),
         }));
 

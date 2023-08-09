@@ -18,3 +18,14 @@ pub enum Version {
     #[strum(serialize = "v5")]
     V5,
 }
+
+impl From<Version> for i32 {
+    fn from(version: Version) -> Self {
+        match version {
+            Version::V1 => 1,
+            Version::V2 => 2,
+            Version::V4 => 4,
+            Version::V5 => 5,
+        }
+    }
+}

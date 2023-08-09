@@ -1,24 +1,24 @@
-use crate::{FileInfo, TransferInfo};
+use crate::{FileInfo, TransferDirection, TransferInfo};
 
 pub struct MockImpl;
 
 impl super::Moose for MockImpl {
-    fn service_quality_initialization_init(&self, _res: Result<(), i32>, _phase: crate::Phase) {}
+    fn service_quality_initialization_init(&self, _res: Result<(), i32>) {}
 
     fn service_quality_transfer_batch(
         &self,
-        _phase: crate::Phase,
         _transfer_id: String,
         _info: TransferInfo,
+        _protocol_version: i32,
     ) {
     }
 
     fn service_quality_transfer_file(
         &self,
         _res: Result<(), i32>,
-        _phase: crate::Phase,
         _transfer_id: String,
         _transfer_time: i32,
+        _direction: TransferDirection,
         _info: Option<FileInfo>,
     ) {
     }
