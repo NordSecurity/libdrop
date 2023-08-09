@@ -27,12 +27,13 @@ use tokio_tungstenite::{
     tungstenite::{self, client::IntoClientRequest, protocol::Role, Message},
     WebSocketStream,
 };
+use tokio_util::sync::CancellationToken;
 
 use self::handler::{HandlerInit, HandlerLoop, Uploader};
 use super::events::FileEventTx;
 use crate::{
-    auth, file::FileId, protocol, service::State, transfer::Transfer, ws::Pinger, Event,
-    OutgoingTransfer,
+    auth, file::FileId, protocol, service::State, tasks::AliveGuard, transfer::Transfer,
+    ws::Pinger, Event, OutgoingTransfer,
 };
 
 pub type WebSocket = WebSocketStream<TcpStream>;
@@ -49,14 +50,33 @@ struct RunContext<'a> {
     xfer: &'a Arc<OutgoingTransfer>,
 }
 
-pub(crate) async fn run(
+pub(crate) fn spawn(
     state: Arc<State>,
     xfer: Arc<OutgoingTransfer>,
-    _alive_guard: mpsc::Sender<()>,
     logger: Logger,
+    guard: AliveGuard,
+    stop: CancellationToken,
 ) {
+    let id = xfer.id();
+    let job = run(state, xfer, logger.clone(), guard.clone());
+
+    tokio::spawn(async move {
+        let _guard = guard;
+
+        tokio::select! {
+            biased;
+
+            _ = stop.cancelled() => {
+                debug!(logger, "Client job stop: {id}");
+            },
+            _ = job => (),
+        }
+    });
+}
+
+async fn run(state: Arc<State>, xfer: Arc<OutgoingTransfer>, logger: Logger, alive: AliveGuard) {
     loop {
-        let cf = connect_to_peer(&state, &xfer, &logger).await;
+        let cf = connect_to_peer(&state, &xfer, &logger, &alive).await;
         if cf.is_break() {
             if let Err(err) = state.transfer_manager.outgoing_remove(xfer.id()).await {
                 warn!(
@@ -75,6 +95,7 @@ async fn connect_to_peer(
     state: &Arc<State>,
     xfer: &Arc<OutgoingTransfer>,
     logger: &Logger,
+    alive: &AliveGuard,
 ) -> ControlFlow<()> {
     let (socket, ver) = match establish_ws_conn(state, xfer.peer(), logger).await {
         Ok(Some(res)) => res,
