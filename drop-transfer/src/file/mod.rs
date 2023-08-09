@@ -9,7 +9,7 @@ use std::{
 #[cfg(unix)]
 use std::{os::unix::prelude::*, sync::Arc};
 
-use drop_analytics::FileInfo;
+use drop_analytics::{FileInfo, TransferDirection};
 use drop_config::DropConfig;
 pub use id::{FileId, FileSubPath};
 use once_cell::sync::OnceCell;
@@ -30,6 +30,8 @@ pub trait File {
     fn subpath(&self) -> &FileSubPath;
     fn size(&self) -> u64;
     fn mime_type(&self) -> &str;
+
+    fn direction() -> TransferDirection;
 
     fn info(&self) -> FileInfo {
         FileInfo {
@@ -106,6 +108,10 @@ impl File for FileToSend {
             .map(|s| s.as_str())
             .unwrap_or(UNKNOWN_STR)
     }
+
+    fn direction() -> TransferDirection {
+        TransferDirection::Upload
+    }
 }
 
 impl File for FileToRecv {
@@ -123,6 +129,10 @@ impl File for FileToRecv {
 
     fn mime_type(&self) -> &str {
         UNKNOWN_STR
+    }
+
+    fn direction() -> TransferDirection {
+        TransferDirection::Download
     }
 }
 

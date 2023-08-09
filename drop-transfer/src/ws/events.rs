@@ -68,9 +68,9 @@ impl<T: Transfer> FileEventTx<T> {
 
         lock.moose.service_quality_transfer_file(
             Ok(()),
-            drop_analytics::Phase::Start,
             self.xfer.id().to_string(),
             0,
+            T::direction(),
             self.file_info(),
         );
 
@@ -91,9 +91,9 @@ impl<T: Transfer> FileEventTx<T> {
 
         lock.moose.service_quality_transfer_file(
             status,
-            drop_analytics::Phase::End,
             self.xfer.id().to_string(),
             elapsed.as_millis() as i32,
+            T::direction(),
             self.file_info(),
         );
 
@@ -111,9 +111,9 @@ impl<T: Transfer> FileEventTx<T> {
 
             lock.moose.service_quality_transfer_file(
                 Err(Status::Canceled as _),
-                drop_analytics::Phase::End,
                 self.xfer.id().to_string(),
                 started.elapsed().as_millis() as _,
+                T::direction(),
                 info,
             );
         }
@@ -127,9 +127,9 @@ impl<T: Transfer> FileEventTx<T> {
 
             lock.moose.service_quality_transfer_file(
                 Err(Status::FileRejected as _),
-                drop_analytics::Phase::End,
                 self.xfer.id().to_string(),
                 started.elapsed().as_millis() as _,
+                T::direction(),
                 info,
             );
         }
@@ -260,9 +260,9 @@ impl<T: Transfer> Drop for FileEventTx<T> {
 
             self.inner.get_mut().moose.service_quality_transfer_file(
                 Err(Status::Canceled as _),
-                drop_analytics::Phase::End,
                 self.xfer.id().to_string(),
                 started.elapsed().as_millis() as _,
+                T::direction(),
                 info,
             );
         }

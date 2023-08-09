@@ -8,13 +8,13 @@ use mooselibdropapp as moose;
 use serde_json::Value;
 use slog::{error, info, warn, Logger};
 
-use crate::{FileInfo, TransferInfo, MOOSE_STATUS_SUCCESS, MOOSE_VALUE_NONE};
+use crate::{FileInfo, TransferDirection, TransferInfo, MOOSE_STATUS_SUCCESS, MOOSE_VALUE_NONE};
 
 const DROP_MOOSE_APP_NAME: &str = "norddrop";
 
 /// Version of the tracker used, should be updated everytime the tracker library
 /// is updated
-const DROP_MOOSE_TRACKER_VERSION: &str = "0.4.0";
+const DROP_MOOSE_TRACKER_VERSION: &str = "0.5.1";
 
 pub struct MooseImpl {
     logger: slog::Logger,
@@ -22,11 +22,11 @@ pub struct MooseImpl {
 
 struct MooseInitCallback {
     logger: slog::Logger,
-    init_tx: SyncSender<Result<moose::ContextState, moose::MooseError>>,
+    init_tx: SyncSender<Result<moose::TrackerState, moose::MooseError>>,
 }
 
 impl moose::InitCallback for MooseInitCallback {
-    fn on_init(&self, result_code: &Result<moose::ContextState, moose::MooseError>) {
+    fn after_init(&self, result_code: &Result<moose::TrackerState, moose::MooseError>) {
         info!(self.logger, "[Moose] Init callback: {:?}", result_code);
         let _ = self.init_tx.send(*result_code);
     }
@@ -125,34 +125,28 @@ impl Drop for MooseImpl {
 }
 
 impl super::Moose for MooseImpl {
-    fn service_quality_initialization_init(&self, res: Result<(), i32>, phase: super::Phase) {
+    fn service_quality_initialization_init(&self, res: Result<(), i32>) {
         let errno = match res {
             Ok(()) => MOOSE_STATUS_SUCCESS,
             Err(err) => err,
         };
 
-        moose!(
-            self.logger,
-            send_serviceQuality_initialization_init,
-            errno,
-            phase.into()
-        );
+        moose!(self.logger, send_serviceQuality_initialization_init, errno);
     }
 
     fn service_quality_transfer_batch(
         &self,
-        phase: super::Phase,
         transfer_id: String,
         info: TransferInfo,
+        protocol_version: i32,
     ) {
         moose!(
             self.logger,
             send_serviceQuality_transfer_batch,
-            phase.into(),
-            mooselibdropapp::LibdropappEventTrigger::LibdropappEventTriggerNone,
             info.extension_list,
             info.mime_type_list,
             info.file_count,
+            protocol_version,
             info.file_size_list,
             transfer_id,
             info.transfer_size_kb
@@ -162,9 +156,9 @@ impl super::Moose for MooseImpl {
     fn service_quality_transfer_file(
         &self,
         res: Result<(), i32>,
-        phase: crate::Phase,
         transfer_id: String,
         transfer_time: i32,
+        direction: TransferDirection,
         info: Option<FileInfo>,
     ) {
         let errno = match res {
@@ -178,10 +172,9 @@ impl super::Moose for MooseImpl {
             self.logger,
             send_serviceQuality_transfer_file,
             errno,
-            phase.into(),
-            mooselibdropapp::LibdropappEventTrigger::LibdropappEventTriggerNone,
             info.extension,
             info.mime_type,
+            direction.into(),
             transfer_id,
             info.size_kb,
             transfer_time
@@ -220,11 +213,15 @@ impl super::Moose for MooseImpl {
     }
 }
 
-impl From<super::Phase> for mooselibdropapp::LibdropappEventPhase {
-    fn from(value: super::Phase) -> Self {
-        match value {
-            crate::Phase::Start => mooselibdropapp::LibdropappEventPhase::LibdropappEventPhaseStart,
-            crate::Phase::End => mooselibdropapp::LibdropappEventPhase::LibdropappEventPhaseEnd,
+impl From<TransferDirection> for moose::LibdropappTransferDirection {
+    fn from(direction: TransferDirection) -> Self {
+        match direction {
+            TransferDirection::Upload => {
+                moose::LibdropappTransferDirection::LibdropappTransferDirectionUpload
+            }
+            TransferDirection::Download => {
+                moose::LibdropappTransferDirection::LibdropappTransferDirectionDownload
+            }
         }
     }
 }
@@ -251,9 +248,9 @@ fn populate_context(logger: &Logger) {
     if let Ok(foreign_context) = moose::fetch_specific_context(foreign_tracker_name) {
         let context = parse_foreign_context(&foreign_context);
         set_context_fields!(
-            set_context_device_brand, context.brand;
             set_context_device_type, context.x_type;
             set_context_device_model, context.model;
+            set_context_device_brand, context.brand;
             set_context_device_fp, context.fp;
             set_context_device_resolution, context.resolution;
             set_context_device_os, context.os;

@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use drop_analytics::Moose;
+use drop_analytics::{Moose, TransferDirection};
 use drop_config::DropConfig;
 use drop_storage::Storage;
 use slog::{debug, Logger};
@@ -50,9 +50,9 @@ macro_rules! moose_try_file {
             Err(e) => {
                 $moose.service_quality_transfer_file(
                     Err(u32::from(&e) as i32),
-                    drop_analytics::Phase::Start,
                     $xfer_id.to_string(),
                     0,
+                    TransferDirection::Download,
                     $file_info,
                 );
 
@@ -116,17 +116,13 @@ impl Service {
         };
 
         let res = task.await;
-        moose.service_quality_initialization_init(res.to_status(), drop_analytics::Phase::Start);
+        moose.service_quality_initialization_init(res.to_status());
 
         res
     }
 
     pub async fn stop(self) {
         self.stop.cancel();
-
-        self.state
-            .moose
-            .service_quality_initialization_init(Ok(()), drop_analytics::Phase::End);
 
         self.waiter.wait_for_all().await;
     }
@@ -136,12 +132,6 @@ impl Service {
     }
 
     pub async fn send_request(&mut self, xfer: crate::OutgoingTransfer) {
-        self.state.moose.service_quality_transfer_batch(
-            drop_analytics::Phase::Start,
-            xfer.id().to_string(),
-            xfer.info(),
-        );
-
         let xfer = Arc::new(xfer);
         if let Err(err) = self
             .state
