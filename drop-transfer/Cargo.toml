@@ -46,6 +46,7 @@ warp = { version = "0.3.4", default-features = false, features = ["websocket"] }
 walkdir = "2.3.3"
 async_cell = "0.2.2"
 governor = { version = "0.5.1", default-features = false, features = ["dashmap", "std"] }
+once_cell = "1.18.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.9"
