@@ -21,7 +21,7 @@ use tokio::{
         mpsc::{self, UnboundedReceiver},
         Semaphore, SemaphorePermit, TryAcquireError,
     },
-    task::JoinHandle,
+    task::{AbortHandle, JoinSet},
 };
 use tokio_tungstenite::{
     tungstenite::{self, client::IntoClientRequest, protocol::Role, Message},
@@ -30,7 +30,7 @@ use tokio_tungstenite::{
 use tokio_util::sync::CancellationToken;
 
 use self::handler::{HandlerInit, HandlerLoop, Uploader};
-use super::events::FileEventTx;
+use super::OutgoingFileEventTx;
 use crate::{
     auth, file::FileId, protocol, service::State, tasks::AliveGuard, transfer::Transfer,
     ws::Pinger, Event, OutgoingTransfer,
@@ -124,10 +124,16 @@ async fn connect_to_peer(
 
     use protocol::Version;
     let control = match ver {
-        Version::V1 => ctx.run(v2::HandlerInit::<false>::new(state, logger)).await,
-        Version::V2 => ctx.run(v2::HandlerInit::<true>::new(state, logger)).await,
-        Version::V4 => ctx.run(v4::HandlerInit::new(state, logger)).await,
-        Version::V5 => ctx.run(v5::HandlerInit::new(state, logger)).await,
+        Version::V1 => {
+            ctx.run(v2::HandlerInit::<false>::new(state, logger, alive))
+                .await
+        }
+        Version::V2 => {
+            ctx.run(v2::HandlerInit::<true>::new(state, logger, alive))
+                .await
+        }
+        Version::V4 => ctx.run(v4::HandlerInit::new(state, logger, alive)).await,
+        Version::V5 => ctx.run(v5::HandlerInit::new(state, logger, alive)).await,
     };
 
     let _ = state.transfer_manager.outgoing_disconnect(xfer.id()).await;
@@ -326,6 +332,7 @@ impl RunContext<'_> {
         let mut ping = handler.pinger();
         let mut handler = handler.upgrade(upload_tx, self.xfer.clone());
         let mut last_recv = Instant::now();
+        let mut jobs = JoinSet::new();
 
         let task = async {
             loop {
@@ -343,7 +350,7 @@ impl RunContext<'_> {
                         let msg =  recv?.context("Failed to receive WS message")?;
                         last_recv = Instant::now();
 
-                        if on_recv(&mut self.socket, &mut handler, msg, self.logger).await.context("Handler on recv")?.is_break() {
+                        if on_recv(&mut self.socket, &mut handler, msg, self.logger, &mut jobs).await.context("Handler on recv")?.is_break() {
                             break;
                         }
                     },
@@ -363,7 +370,7 @@ impl RunContext<'_> {
 
         let result = task.await;
 
-        if let Err(err) = result {
+        let cf = if let Err(err) = result {
             info!(
                 self.logger,
                 "WS connection broke for {}: {err:?}",
@@ -385,7 +392,12 @@ impl RunContext<'_> {
             }
 
             ControlFlow::Break(())
-        }
+        };
+
+        drop(handler);
+        jobs.shutdown().await;
+
+        cf
     }
 
     async fn drain_socket(&mut self) -> crate::Result<()> {
@@ -395,62 +407,68 @@ impl RunContext<'_> {
 }
 
 async fn start_upload(
+    jobs: &mut JoinSet<()>,
     state: Arc<State>,
+    guard: AliveGuard,
     logger: slog::Logger,
-    events: Arc<FileEventTx<OutgoingTransfer>>,
     mut uploader: impl Uploader,
     xfer: Arc<OutgoingTransfer>,
     file_id: FileId,
-) -> anyhow::Result<JoinHandle<()>> {
-    let xfile = xfer
-        .files()
-        .get(&file_id)
-        .context("File not found")?
-        .clone();
+) -> anyhow::Result<(AbortHandle, Arc<OutgoingFileEventTx>)> {
+    let events = state
+        .transfer_manager
+        .outgoing_file_events(xfer.id(), &file_id)
+        .await?;
 
     events.start().await;
 
-    let upload_job = async move {
-        let send_file = async {
-            let _permit = acquire_throttle_permit(&logger, &state.throttle, &file_id)
-                .await
-                .ok_or(crate::Error::Canceled)?;
+    let upload_job = {
+        let events = events.clone();
+        async move {
+            let _guard = guard;
+            let xfile = &xfer.files()[&file_id];
 
-            let mut iofile = match xfile.open(uploader.offset()) {
-                Ok(f) => f,
-                Err(err) => {
-                    error!(
-                        logger,
-                        "Failed at service::download() while opening a file: {}", err
-                    );
-                    return Err(err);
+            let send_file = async {
+                let _permit = acquire_throttle_permit(&logger, &state.throttle, &file_id)
+                    .await
+                    .ok_or(crate::Error::Canceled)?;
+
+                let mut iofile = match xfile.open(uploader.offset()) {
+                    Ok(f) => f,
+                    Err(err) => {
+                        error!(
+                            logger,
+                            "Failed at service::download() while opening a file: {}", err
+                        );
+                        return Err(err);
+                    }
+                };
+
+                loop {
+                    match iofile.read_chunk()? {
+                        Some(chunk) => uploader.chunk(chunk).await?,
+                        None => return Ok(()),
+                    }
                 }
             };
 
-            loop {
-                match iofile.read_chunk()? {
-                    Some(chunk) => uploader.chunk(chunk).await?,
-                    None => return Ok(()),
+            match send_file.await {
+                Ok(()) => (),
+                Err(crate::Error::Canceled) => (),
+                Err(err) => {
+                    error!(
+                        logger,
+                        "Failed at service::download() while reading a file: {}", err
+                    );
+
+                    uploader.error(err.to_string()).await;
+                    events.failed(err).await;
                 }
-            }
-        };
-
-        match send_file.await {
-            Ok(()) => (),
-            Err(crate::Error::Canceled) => (),
-            Err(err) => {
-                error!(
-                    logger,
-                    "Failed at service::download() while reading a file: {}", err
-                );
-
-                uploader.error(err.to_string()).await;
-                events.failed(err).await;
-            }
-        };
+            };
+        }
     };
 
-    Ok(tokio::spawn(upload_job))
+    Ok((jobs.spawn(upload_job), events))
 }
 
 async fn acquire_throttle_permit<'a>(
@@ -504,11 +522,12 @@ async fn on_recv(
     handler: &mut impl HandlerLoop,
     msg: Message,
     logger: &slog::Logger,
+    jobs: &mut JoinSet<()>,
 ) -> anyhow::Result<ControlFlow<()>> {
     match msg {
         Message::Text(text) => {
             debug!(logger, "Received:\n\t{text}");
-            handler.on_text_msg(socket, text).await?;
+            handler.on_text_msg(socket, jobs, text).await?;
         }
         Message::Close(_) => {
             debug!(logger, "Got CLOSE frame");
