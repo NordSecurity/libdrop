@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use tokio::sync::mpsc::Sender;
+use tokio::{sync::mpsc::Sender, task::JoinSet};
 use tokio_tungstenite::tungstenite::Message;
 
 use super::WebSocket;
@@ -23,7 +23,12 @@ pub trait HandlerLoop {
     async fn issue_reject(&mut self, ws: &mut WebSocket, file_id: FileId) -> anyhow::Result<()>;
 
     async fn on_close(&mut self, by_peer: bool);
-    async fn on_text_msg(&mut self, ws: &mut WebSocket, text: String) -> anyhow::Result<()>;
+    async fn on_text_msg(
+        &mut self,
+        ws: &mut WebSocket,
+        jobs: &mut JoinSet<()>,
+        text: String,
+    ) -> anyhow::Result<()>;
     async fn on_stop(&mut self);
     async fn on_conn_break(&mut self);
 

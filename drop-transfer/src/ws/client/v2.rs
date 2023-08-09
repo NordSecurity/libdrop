@@ -7,7 +7,10 @@ use std::{
 use anyhow::Context;
 use futures::SinkExt;
 use slog::{debug, error, warn};
-use tokio::{sync::mpsc::Sender, task::JoinHandle};
+use tokio::{
+    sync::mpsc::Sender,
+    task::{AbortHandle, JoinSet},
+};
 use tokio_tungstenite::tungstenite::Message;
 
 use super::{handler, WebSocket};
@@ -15,6 +18,7 @@ use crate::{
     file::FileSubPath,
     protocol::v2,
     service::State,
+    tasks::AliveGuard,
     transfer::Transfer,
     ws::{self, events::FileEventTx},
     File, FileId, OutgoingTransfer,
@@ -23,6 +27,7 @@ use crate::{
 pub struct HandlerInit<'a, const PING: bool = true> {
     state: &'a Arc<State>,
     logger: &'a slog::Logger,
+    alive: &'a AliveGuard,
 }
 
 pub struct HandlerLoop<'a, const PING: bool> {
@@ -31,6 +36,7 @@ pub struct HandlerLoop<'a, const PING: bool> {
     upload_tx: Sender<Message>,
     tasks: HashMap<FileSubPath, FileTask>,
     xfer: Arc<OutgoingTransfer>,
+    alive: &'a AliveGuard,
 }
 
 struct Uploader {
@@ -39,13 +45,21 @@ struct Uploader {
 }
 
 struct FileTask {
-    job: JoinHandle<()>,
+    job: AbortHandle,
     events: Arc<FileEventTx<OutgoingTransfer>>,
 }
 
 impl<'a, const PING: bool> HandlerInit<'a, PING> {
-    pub(crate) fn new(state: &'a Arc<State>, logger: &'a slog::Logger) -> Self {
-        Self { state, logger }
+    pub(crate) fn new(
+        state: &'a Arc<State>,
+        logger: &'a slog::Logger,
+        alive: &'a AliveGuard,
+    ) -> Self {
+        Self {
+            state,
+            logger,
+            alive,
+        }
     }
 }
 
@@ -65,7 +79,11 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
     }
 
     fn upgrade(self, upload_tx: Sender<Message>, xfer: Arc<OutgoingTransfer>) -> Self::Loop {
-        let Self { state, logger } = self;
+        let Self {
+            state,
+            logger,
+            alive,
+        } = self;
 
         HandlerLoop {
             state,
@@ -73,6 +91,7 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
             upload_tx,
             xfer,
             tasks: HashMap::new(),
+            alive,
         }
     }
 
@@ -103,7 +122,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         }
     }
 
-    async fn on_download(&mut self, file_id: FileSubPath) {
+    async fn on_download(&mut self, jobs: &mut JoinSet<()>, file_id: FileSubPath) {
         let start = async {
             if let Some(file) = self.xfer.file_by_subpath(&file_id) {
                 self.state
@@ -118,6 +137,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
 
                     if task.job.is_finished() {
                         *task = FileTask::new(
+                            jobs,
                             self.state,
                             Uploader {
                                 sink: self.upload_tx.clone(),
@@ -126,6 +146,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                             self.xfer.clone(),
                             file_id,
                             self.logger,
+                            self.alive,
                         )
                         .await?;
                     } else {
@@ -134,6 +155,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                 }
                 Entry::Vacant(v) => {
                     let task = FileTask::new(
+                        jobs,
                         self.state,
                         Uploader {
                             sink: self.upload_tx.clone(),
@@ -142,6 +164,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                         self.xfer.clone(),
                         file_id,
                         self.logger,
+                        self.alive,
                     )
                     .await?;
 
@@ -230,7 +253,12 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         }
     }
 
-    async fn on_text_msg(&mut self, _: &mut WebSocket, text: String) -> anyhow::Result<()> {
+    async fn on_text_msg(
+        &mut self,
+        _: &mut WebSocket,
+        jobs: &mut JoinSet<()>,
+        text: String,
+    ) -> anyhow::Result<()> {
         let msg: v2::ServerMsg =
             serde_json::from_str(&text).context("Failed to deserialize server message")?;
 
@@ -244,7 +272,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
                 bytes_transfered: _,
             }) => self.on_done(file).await,
             v2::ServerMsg::Error(v2::Error { file, msg }) => self.on_error(file, msg).await,
-            v2::ServerMsg::Start(v2::Download { file }) => self.on_download(file).await,
+            v2::ServerMsg::Start(v2::Download { file }) => self.on_download(jobs, file).await,
             v2::ServerMsg::Cancel(v2::Download { file }) => self.on_cancel(file, true).await,
         }
 
@@ -254,12 +282,8 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     async fn on_stop(&mut self) {
         debug!(self.logger, "Waiting for background jobs to finish");
 
-        let tasks = self.tasks.drain().map(|(_, task)| {
-            task.job.abort();
-
-            async move {
-                task.events.cancel_silent().await;
-            }
+        let tasks = self.tasks.drain().map(|(_, task)| async move {
+            task.events.cancel_silent().await;
         });
 
         futures::future::join_all(tasks).await;
@@ -268,12 +292,8 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     async fn on_conn_break(&mut self) {
         debug!(self.logger, "Waiting for background jobs to pause");
 
-        let tasks = self.tasks.drain().map(|(_, task)| {
-            task.job.abort();
-
-            async move {
-                task.events.pause().await;
-            }
+        let tasks = self.tasks.drain().map(|(_, task)| async move {
+            task.events.pause().await;
         });
 
         futures::future::join_all(tasks).await;
@@ -296,7 +316,6 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 impl<const PING: bool> Drop for HandlerLoop<'_, PING> {
     fn drop(&mut self) {
         debug!(self.logger, "Stopping client handler");
-        self.tasks.values().for_each(|task| task.job.abort());
     }
 }
 
@@ -332,11 +351,13 @@ impl handler::Uploader for Uploader {
 
 impl FileTask {
     async fn new(
+        jobs: &mut JoinSet<()>,
         state: &Arc<State>,
         uploader: Uploader,
         xfer: Arc<OutgoingTransfer>,
         file: FileSubPath,
         logger: &slog::Logger,
+        gaurd: &AliveGuard,
     ) -> anyhow::Result<Self> {
         let file_id = xfer
             .file_by_subpath(&file)
@@ -344,15 +365,11 @@ impl FileTask {
             .id()
             .clone();
 
-        let events = state
-            .transfer_manager
-            .outgoing_file_events(xfer.id(), &file_id)
-            .await?;
-
-        let job = super::start_upload(
+        let (job, events) = super::start_upload(
+            jobs,
             state.clone(),
+            gaurd.clone(),
             logger.clone(),
-            events.clone(),
             uploader,
             xfer,
             file_id,
