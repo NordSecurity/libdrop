@@ -20,7 +20,21 @@ pub(super) fn open(source: &super::FileSource) -> crate::Result<Box<dyn Reader>>
     let reader: Box<dyn Reader> = match source {
         super::FileSource::Path(path) => Box::new(path::FileReader::new(path)?),
         #[cfg(unix)]
-        super::FileSource::Fd { fd, .. } => Box::new(unsafe { fd::FileReader::new(*fd) }),
+        super::FileSource::Fd {
+            fd,
+            resolver,
+            content_uri,
+        } => {
+            let fd = *fd.get_or_try_init(|| {
+                let callback = resolver.as_ref().ok_or_else(|| {
+                    crate::Error::BadTransferState("Missing FD resolver callback".into())
+                })?;
+                let fd = callback(content_uri.as_str()).ok_or(crate::Error::BadFile)?;
+                crate::Result::Ok(fd)
+            })?;
+
+            Box::new(unsafe { fd::FileReader::new(fd) })
+        }
     };
 
     Ok(reader)

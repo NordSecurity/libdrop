@@ -1,19 +1,18 @@
 mod id;
 mod reader;
 
-#[cfg(unix)]
-use std::os::unix::prelude::*;
 use std::{
-    fs::{
-        OpenOptions, {self},
-    },
+    fmt, fs,
     io::{self, Read, Write},
     path::{Path, PathBuf},
 };
+#[cfg(unix)]
+use std::{os::unix::prelude::*, sync::Arc};
 
 use drop_analytics::FileInfo;
 use drop_config::DropConfig;
 pub use id::{FileId, FileSubPath};
+use once_cell::sync::OnceCell;
 pub use reader::FileReader;
 use sha2::Digest;
 use walkdir::WalkDir;
@@ -45,9 +44,9 @@ pub trait File {
 pub struct FileToSend {
     file_id: FileId,
     subpath: FileSubPath,
-    meta: Hidden<fs::Metadata>,
+    size: u64,
     pub(crate) source: FileSource,
-    mime_type: Option<Hidden<String>>,
+    mime_type: OnceCell<Hidden<String>>,
 }
 
 #[derive(Clone, Debug)]
@@ -57,14 +56,31 @@ pub struct FileToRecv {
     size: u64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum FileSource {
     Path(Hidden<PathBuf>),
     #[cfg(unix)]
     Fd {
-        fd: RawFd,
+        fd: OnceCell<RawFd>,
+        resolver: Option<Arc<FdResolver>>,
         content_uri: url::Url,
     },
+}
+
+impl fmt::Debug for FileSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FileSource::Path(path) => f.debug_tuple("FileSource::Path").field(path).finish(),
+            #[cfg(unix)]
+            FileSource::Fd {
+                fd, content_uri, ..
+            } => f
+                .debug_struct("FileSource::Fd")
+                .field("uri", content_uri)
+                .field("fd", fd)
+                .finish_non_exhaustive(),
+        }
+    }
 }
 
 impl File for FileToSend {
@@ -77,13 +93,17 @@ impl File for FileToSend {
     }
 
     fn size(&self) -> u64 {
-        self.meta.len()
+        self.size
     }
 
     fn mime_type(&self) -> &str {
         self.mime_type
-            .as_ref()
-            .map(|x| x.as_str())
+            .get_or_try_init(|| {
+                let reader = reader::open(&self.source)?;
+                let mime = infer_mime(reader)?;
+                crate::Result::Ok(Hidden(mime))
+            })
+            .map(|s| s.as_str())
             .unwrap_or(UNKNOWN_STR)
     }
 }
@@ -126,42 +146,28 @@ impl FileToSend {
         let files = if meta.is_dir() {
             Self::walk(&path, config)?
         } else {
-            let file = Self::new(FileSubPath::from_file_name(&path)?, abspath, meta, file_id)?;
+            let file = Self::new(
+                FileSubPath::from_file_name(&path)?,
+                abspath,
+                meta.len(),
+                file_id,
+            );
             vec![file]
         };
 
         Ok(files)
     }
 
-    pub(crate) fn new(
-        subpath: FileSubPath,
-        abspath: PathBuf,
-        meta: fs::Metadata,
-        file_id: FileId,
-    ) -> Result<Self, Error> {
-        assert!(!meta.is_dir(), "Did not expect directory metadata");
+    pub(crate) fn new(subpath: FileSubPath, abspath: PathBuf, size: u64, file_id: FileId) -> Self {
         assert!(abspath.is_absolute(), "Expecting absolute path only");
 
-        let mut options = OpenOptions::new();
-        options.read(true);
-        #[cfg(unix)]
-        options.custom_flags(libc::O_NOFOLLOW);
-
-        // Check if we are allowed to read the file
-        let mut file = options.open(&abspath)?;
-        let mut buf = vec![0u8; HEADER_SIZE];
-        let header_len = file.read(&mut buf)?;
-        let mime_type = infer::get(&buf[0..header_len])
-            .map_or("unknown", |t| t.mime_type())
-            .to_string();
-
-        Ok(Self {
+        Self {
             file_id,
             subpath,
-            meta: Hidden(meta),
+            size,
             source: FileSource::Path(Hidden(abspath)),
-            mime_type: Some(Hidden(mime_type)),
-        })
+            mime_type: OnceCell::new(),
+        }
     }
 
     #[cfg(unix)]
@@ -178,16 +184,6 @@ impl FileToSend {
         hash.update(unique_id.to_ne_bytes());
         let file_id = FileId::from(hash);
 
-        Self::new_from_fd(subpath, content_uri, fd, file_id)
-    }
-
-    #[cfg(unix)]
-    pub fn new_from_fd(
-        subpath: FileSubPath,
-        content_uri: url::Url,
-        fd: RawFd,
-        file_id: FileId,
-    ) -> Result<Self, Error> {
         let f = unsafe { fs::File::from_raw_fd(fd) };
 
         let create_file = || {
@@ -197,18 +193,16 @@ impl FileToSend {
                 return Err(Error::DirectoryNotExpected);
             }
 
-            let mut buf = vec![0u8; HEADER_SIZE];
-            let header_len = f.read_at(&mut buf, 0)?;
-            let mime_type = infer::get(&buf[0..header_len])
-                .map_or("unknown", |t| t.mime_type())
-                .to_string();
-
             Ok(Self {
                 file_id,
                 subpath,
-                meta: Hidden(meta),
-                source: FileSource::Fd { fd, content_uri },
-                mime_type: Some(Hidden(mime_type)),
+                size: meta.len(),
+                source: FileSource::Fd {
+                    resolver: None,
+                    fd: OnceCell::with_value(fd),
+                    content_uri,
+                },
+                mime_type: OnceCell::new(),
             })
         };
         let result = create_file();
@@ -217,6 +211,27 @@ impl FileToSend {
         let _ = f.into_raw_fd();
 
         result
+    }
+
+    #[cfg(unix)]
+    pub fn new_from_content_uri(
+        resolver: Arc<FdResolver>,
+        subpath: FileSubPath,
+        content_uri: url::Url,
+        size: u64,
+        file_id: FileId,
+    ) -> Self {
+        Self {
+            file_id,
+            subpath,
+            size,
+            source: FileSource::Fd {
+                resolver: Some(resolver),
+                fd: OnceCell::new(),
+                content_uri,
+            },
+            mime_type: OnceCell::new(),
+        }
     }
 
     fn walk(path: &Path, config: &DropConfig) -> Result<Vec<Self>, Error> {
@@ -256,7 +271,7 @@ impl FileToSend {
             let abspath = crate::utils::make_path_absolute(&path)?;
             let file_id = file_id_from_path(&abspath)?;
 
-            let file = Self::new(subpath, abspath, meta, file_id)?;
+            let file = Self::new(subpath, abspath, meta.len(), file_id);
             files.push(file);
         }
 
@@ -267,8 +282,10 @@ impl FileToSend {
     // instance
     pub(crate) fn open(&self, offset: u64) -> crate::Result<FileReader> {
         let mut reader = reader::open(&self.source)?;
+        let meta = reader.meta()?;
+
         reader.seek(io::SeekFrom::Start(offset))?;
-        FileReader::new(reader, self.meta.0.clone())
+        FileReader::new(reader, meta)
     }
 
     /// Calculate sha2 of a file. This is a blocking operation
@@ -307,6 +324,16 @@ fn file_id_from_path(path: impl AsRef<Path>) -> crate::Result<FileId> {
     Ok(FileId::from(hash))
 }
 
+fn infer_mime(mut reader: impl io::Read) -> io::Result<String> {
+    let mut buf = vec![0u8; HEADER_SIZE];
+    let header_len = reader.read(&mut buf)?;
+    let mime_type = infer::get(&buf[0..header_len])
+        .map_or(UNKNOWN_STR, |t| t.mime_type())
+        .to_string();
+
+    Ok(mime_type)
+}
+
 #[cfg(test)]
 mod tests {
     const TEST: &[u8] = b"abc";
@@ -330,7 +357,7 @@ mod tests {
 
             let file =
                 &super::FileToSend::from_path(tmp.path(), &DropConfig::default()).unwrap()[0];
-            let size = file.meta.len();
+            let size = file.size;
 
             assert_eq!(size, TEST.len() as u64);
 

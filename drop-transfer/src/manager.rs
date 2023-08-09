@@ -1,13 +1,13 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
-    fs, io,
+    io,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
 use anyhow::Context;
 use drop_config::DropConfig;
-use drop_storage::{sync, Storage};
+use drop_storage::{sync, types::OutgoingFileToRetry, Storage};
 use slog::{debug, error, info, warn, Logger};
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
 use tokio_util::sync::CancellationToken;
@@ -1094,20 +1094,7 @@ async fn restore_outgoing(
             let files = transfer
                 .files
                 .into_iter()
-                .map(|dbfile| {
-                    let file_id: FileId = dbfile.file_id.into();
-                    let subpath: FileSubPath = dbfile.subpath.into();
-                    let uri = dbfile.uri;
-
-                    let file = match uri.scheme() {
-                        "file" => file_to_resume_from_path_uri(&uri, subpath, file_id)?,
-                        #[cfg(unix)]
-                        "content" => file_to_resume_from_content_uri(state, uri, subpath, file_id)?,
-                        unknown => anyhow::bail!("Unknon URI schema: {unknown}"),
-                    };
-
-                    anyhow::Ok(file)
-                })
+                .map(|dbfile| restore_outgoing_file(state, dbfile))
                 .collect::<Result<_, _>>()?;
 
             let xfer = OutgoingTransfer::new_with_uuid(
@@ -1180,41 +1167,35 @@ async fn restore_outgoing(
     xfers
 }
 
-fn file_to_resume_from_path_uri(
-    uri: &url::Url,
-    subpath: FileSubPath,
-    file_id: FileId,
-) -> anyhow::Result<FileToSend> {
-    let fullpath = uri
-        .to_file_path()
-        .ok()
-        .context("Failed to extract file path")?;
+#[allow(unused_variables)]
+fn restore_outgoing_file(state: &State, dbfile: OutgoingFileToRetry) -> anyhow::Result<FileToSend> {
+    let file_id: FileId = dbfile.file_id.into();
+    let subpath: FileSubPath = dbfile.subpath.into();
+    let uri = dbfile.uri;
+    let size = dbfile.size as u64;
 
-    let meta = fs::symlink_metadata(&fullpath)
-        .with_context(|| format!("Failed to load file: {}", file_id))?;
+    let file = match uri.scheme() {
+        "file" => {
+            let fullpath = uri
+                .to_file_path()
+                .ok()
+                .context("Failed to extract file path")?;
 
-    anyhow::ensure!(!meta.is_dir(), "Invalid file type");
+            FileToSend::new(subpath, fullpath, size, file_id)
+        }
+        #[cfg(unix)]
+        "content" => {
+            let callback = state
+                .fdresolv
+                .clone()
+                .context("Encountered content uri but FD resovler callback is missing")?;
 
-    FileToSend::new(subpath, fullpath, meta, file_id.clone())
-        .with_context(|| format!("Failed to restore file {file_id} from DB"))
-}
+            FileToSend::new_from_content_uri(callback, subpath, uri, size, file_id)
+        }
+        unknown => anyhow::bail!("Unknon URI schema: {unknown}"),
+    };
 
-#[cfg(unix)]
-fn file_to_resume_from_content_uri(
-    state: &State,
-    uri: url::Url,
-    subpath: FileSubPath,
-    file_id: FileId,
-) -> anyhow::Result<FileToSend> {
-    let callback = state
-        .fdresolv
-        .as_ref()
-        .context("Encountered content uri but FD resovler callback is missing")?;
-
-    let fd = callback(uri.as_str()).with_context(|| format!("Failed to fetch FD for: {uri}"))?;
-
-    FileToSend::new_from_fd(subpath, uri, fd, file_id.clone())
-        .with_context(|| format!("Failed to restore file {file_id} from DB"))
+    anyhow::Ok(file)
 }
 
 fn extract_directory_mapping(

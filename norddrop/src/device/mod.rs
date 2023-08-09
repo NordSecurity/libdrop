@@ -753,7 +753,7 @@ fn crate_fd_callback(
         drop(guard);
 
         if res < 0 {
-            debug!(logger, "FD callback failed for {uri:?}");
+            warn!(logger, "FD callback failed for {uri:?}");
             None
         } else {
             Some(res)

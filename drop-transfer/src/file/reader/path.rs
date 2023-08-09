@@ -1,4 +1,10 @@
-use std::{fs, io, path::Path};
+#[cfg(unix)]
+use std::os::unix::prelude::*;
+use std::{
+    fs::{self, OpenOptions},
+    io,
+    path::Path,
+};
 
 // Reads a file from the given path
 pub struct FileReader {
@@ -7,8 +13,14 @@ pub struct FileReader {
 }
 
 impl FileReader {
-    pub fn new(path: &Path) -> crate::Result<Self> {
-        let file = fs::File::open(path)?;
+    pub fn new(path: &Path) -> io::Result<Self> {
+        let mut options = OpenOptions::new();
+        options.read(true);
+        #[cfg(unix)]
+        options.custom_flags(libc::O_NOFOLLOW);
+
+        let file = options.open(path)?;
+
         Ok(Self { file, pos: 0 })
     }
 }
