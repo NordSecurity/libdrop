@@ -10,7 +10,7 @@ use futures::{SinkExt, StreamExt};
 use slog::{debug, error, info, warn};
 use tokio::{
     sync::mpsc::{self, Sender, UnboundedSender},
-    task::JoinHandle,
+    task::{AbortHandle, JoinSet},
 };
 use warp::ws::{Message, WebSocket};
 
@@ -19,6 +19,7 @@ use crate::{
     file,
     protocol::v4,
     service::State,
+    tasks::AliveGuard,
     transfer::{IncomingTransfer, Transfer},
     utils::Hidden,
     ws::events::FileEventTx,
@@ -29,11 +30,13 @@ pub struct HandlerInit<'a> {
     peer: IpAddr,
     state: Arc<State>,
     logger: &'a slog::Logger,
+    alive: &'a AliveGuard,
 }
 
 pub struct HandlerLoop<'a> {
     state: Arc<State>,
     logger: &'a slog::Logger,
+    alive: &'a AliveGuard,
     msg_tx: Sender<Message>,
     xfer: Arc<IncomingTransfer>,
     jobs: HashMap<FileId, FileTask>,
@@ -50,18 +53,24 @@ struct Downloader {
 }
 
 struct FileTask {
-    job: JoinHandle<()>,
+    job: AbortHandle,
     chunks_tx: UnboundedSender<Vec<u8>>,
     events: Arc<FileEventTx<IncomingTransfer>>,
     csum_tx: mpsc::Sender<v4::ReportChsum>,
 }
 
 impl<'a> HandlerInit<'a> {
-    pub(crate) fn new(peer: IpAddr, state: Arc<State>, logger: &'a slog::Logger) -> Self {
+    pub(crate) fn new(
+        peer: IpAddr,
+        state: Arc<State>,
+        logger: &'a slog::Logger,
+        alive: &'a AliveGuard,
+    ) -> Self {
         Self {
             peer,
             state,
             logger,
+            alive,
         }
     }
 }
@@ -102,6 +111,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
     async fn upgrade(
         mut self,
         ws: &mut WebSocket,
+        jobs: &mut JoinSet<()>,
         msg_tx: Sender<Message>,
         xfer: Arc<IncomingTransfer>,
     ) -> Option<Self::Loop> {
@@ -147,6 +157,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             peer: _,
             state,
             logger,
+            alive,
         } = self;
 
         // task responsible for requesting the checksum
@@ -154,8 +165,11 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             let msg_tx = msg_tx.clone();
             let logger = logger.clone();
             let xfer = xfer.clone();
+            let guard = alive.clone();
 
             async move {
+                let _guard = guard;
+
                 for xfile in to_fetch.into_iter().filter_map(|id| xfer.files().get(&id)) {
                     let msg = v4::ReqChsum {
                         file: xfile.id().clone(),
@@ -168,7 +182,8 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
                 }
             }
         };
-        tokio::spawn(req_file_checksums);
+
+        jobs.spawn(req_file_checksums);
 
         Some(HandlerLoop {
             state,
@@ -177,6 +192,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             jobs: HashMap::new(),
             logger,
             checksums,
+            alive,
         })
     }
 
@@ -291,6 +307,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
     async fn issue_download(
         &mut self,
         _: &mut WebSocket,
+        jobs: &mut JoinSet<()>,
         task: super::FileXferTask,
     ) -> anyhow::Result<()> {
         let is_running = self
@@ -308,17 +325,39 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             .context("Missing file checksum cell")?
             .clone();
 
+        let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
+        let (csum_tx, csum_rx) = mpsc::channel(4);
+
+        let downloader = Downloader {
+            file_id: task.file.id().clone(),
+            msg_tx: self.msg_tx.clone(),
+            logger: self.logger.clone(),
+            csum_rx,
+            full_csum: full_csum_cell,
+            offset: 0,
+        };
+
         let file_id = task.file.id().clone();
-        let state = FileTask::start(
-            self.msg_tx.clone(),
+        let (job, events) = super::start_download(
+            jobs,
+            self.alive.clone(),
             self.state.clone(),
             task,
-            full_csum_cell,
+            downloader,
+            chunks_rx,
             self.logger.clone(),
         )
         .await?;
 
-        self.jobs.insert(file_id, state);
+        self.jobs.insert(
+            file_id,
+            FileTask {
+                job,
+                chunks_tx,
+                events,
+                csum_tx,
+            },
+        );
 
         Ok(())
     }
@@ -415,12 +454,8 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
     async fn on_stop(&mut self) {
         debug!(self.logger, "Waiting for background jobs to finish");
 
-        let tasks = self.jobs.drain().map(|(_, task)| {
-            task.job.abort();
-
-            async move {
-                task.events.cancel_silent().await;
-            }
+        let tasks = self.jobs.drain().map(|(_, task)| async move {
+            task.events.cancel_silent().await;
         });
 
         futures::future::join_all(tasks).await;
@@ -451,12 +486,8 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
     async fn on_conn_break(&mut self) {
         debug!(self.logger, "Waiting for background jobs to pause");
 
-        let tasks = self.jobs.drain().map(|(_, task)| {
-            task.job.abort();
-
-            async move {
-                task.events.pause().await;
-            }
+        let tasks = self.jobs.drain().map(|(_, task)| async move {
+            task.events.pause().await;
         });
 
         futures::future::join_all(tasks).await;
@@ -475,7 +506,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 impl Drop for HandlerLoop<'_> {
     fn drop(&mut self) {
         debug!(self.logger, "Stopping server handler");
-        self.jobs.values().for_each(|task| task.job.abort());
     }
 }
 
@@ -515,7 +545,7 @@ impl handler::Downloader for Downloader {
         );
 
         // Check if we can resume the temporary file
-        match tokio::task::block_in_place(|| super::TmpFileState::load(&tmp_location.0)) {
+        match super::TmpFileState::load(&tmp_location.0).await {
             Ok(super::TmpFileState { meta, csum }) => {
                 debug!(
                     self.logger,
@@ -616,52 +646,14 @@ impl handler::Downloader for Downloader {
     }
 
     async fn validate(&mut self, path: &Hidden<PathBuf>) -> crate::Result<()> {
-        let csum = tokio::task::block_in_place(|| {
-            let file = std::fs::File::open(&path.0)?;
-            let csum = file::checksum(&mut io::BufReader::new(file))?;
-            crate::Result::Ok(csum)
-        })?;
+        let file = std::fs::File::open(&path.0)?;
+        let csum = file::checksum(&mut io::BufReader::new(file)).await?;
 
         if self.full_csum.get().await != csum {
             return Err(crate::Error::ChecksumMismatch);
         }
 
         Ok(())
-    }
-}
-
-impl FileTask {
-    async fn start(
-        msg_tx: Sender<Message>,
-        state: Arc<State>,
-        task: super::FileXferTask,
-        full_csum: Arc<AsyncCell<[u8; 32]>>,
-        logger: slog::Logger,
-    ) -> anyhow::Result<Self> {
-        let events = state
-            .transfer_manager
-            .incoming_file_events(task.xfer.id(), task.file.id())
-            .await?;
-
-        let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
-        let (csum_tx, csum_rx) = mpsc::channel(4);
-
-        let downloader = Downloader {
-            file_id: task.file.id().clone(),
-            msg_tx,
-            logger: logger.clone(),
-            csum_rx,
-            full_csum,
-            offset: 0,
-        };
-        let job = tokio::spawn(task.run(state, Arc::clone(&events), downloader, chunks_rx, logger));
-
-        Ok(Self {
-            job,
-            chunks_tx,
-            events,
-            csum_tx,
-        })
     }
 }
 

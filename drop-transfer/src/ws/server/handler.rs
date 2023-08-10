@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
-use tokio::sync::mpsc::Sender;
+use tokio::{sync::mpsc::Sender, task::JoinSet};
 use warp::ws::{Message, WebSocket};
 
 use crate::{transfer::IncomingTransfer, utils::Hidden, ws, FileId};
@@ -16,6 +16,7 @@ pub trait HandlerInit {
     async fn upgrade(
         self,
         ws: &mut WebSocket,
+        jobs: &mut JoinSet<()>,
         msg_tx: Sender<Message>,
         xfer: Arc<IncomingTransfer>,
     ) -> Option<Self::Loop>;
@@ -28,6 +29,7 @@ pub trait HandlerLoop {
     async fn issue_download(
         &mut self,
         ws: &mut WebSocket,
+        jobs: &mut JoinSet<()>,
         task: super::FileXferTask,
     ) -> anyhow::Result<()>;
     async fn issue_cancel(&mut self, ws: &mut WebSocket, file: FileId) -> anyhow::Result<()>;
