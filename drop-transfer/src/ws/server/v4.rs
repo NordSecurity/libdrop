@@ -268,7 +268,7 @@ impl HandlerLoop<'_> {
                     if let Err(err) = self
                         .state
                         .transfer_manager
-                        .incoming_finsh_download(self.xfer.id(), &file_id)
+                        .incoming_finish_download(self.xfer.id(), &file_id)
                         .await
                     {
                         warn!(self.logger, "Failed to store download finish: {err}");
