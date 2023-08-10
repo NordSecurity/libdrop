@@ -454,6 +454,20 @@ class ModifyFile(Action):
         return f"ModifyFile({self._file})"
 
 
+class DeleteFileFromFS(Action):
+    def __init__(self, file_glob: str):
+        self._file = file_glob
+
+    async def run(self, drop: ffi.Drop):
+        file_list = glob.glob(self._file)
+        file = file_list[0]
+
+        os.remove(file)
+
+    def __str__(self):
+        return f"DeleteFileFromFS({self._file})"
+
+
 class CompareTrees(Action):
     def __init__(self, out_dir: Path, tree: list[File]):
         self._out_dir = out_dir
