@@ -602,13 +602,7 @@ impl FileXferTask {
                 return;
             }
             Err(err) => {
-                events
-                    .emit_force(crate::Event::FileDownloadFailed(
-                        self.xfer.clone(),
-                        self.file.id().clone(),
-                        err,
-                    ))
-                    .await;
+                events.failed(err).await;
                 return;
             }
         };
@@ -618,8 +612,6 @@ impl FileXferTask {
                 offset,
                 tmp_location,
             } => {
-                events.start(self.base_dir.to_string_lossy()).await;
-
                 let result = self
                     .stream_file(
                         StreamCtx {
@@ -806,6 +798,8 @@ async fn start_download(
         .transfer_manager
         .incoming_file_events(job.xfer.id(), job.file.id())
         .await?;
+
+    events.start(job.base_dir.to_string_lossy()).await;
 
     let job = {
         let events = events.clone();
