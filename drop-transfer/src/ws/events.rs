@@ -80,17 +80,6 @@ impl<T: Transfer> FileEventTx<T> {
             .expect("Event channel shouldn't be closed");
     }
 
-    /// Emits the event even when the file upload is not started
-    pub async fn emit_force(&self, event: Event) {
-        self.inner
-            .read()
-            .await
-            .tx
-            .send(event)
-            .await
-            .expect("Event channel shouldn't be closed");
-    }
-
     async fn stop(&self, event: Event, status: Result<(), i32>) {
         let mut lock = self.inner.write().await;
 

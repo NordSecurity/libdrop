@@ -67,7 +67,7 @@ def cleanup_files(files: typing.Dict):
         ) as proc:
             proc.communicate()
             if proc.returncode != 0:
-                raise Exception("Couldn't create a testfile")
+                print(f"Couldn't remove a testfile {name}")
 
 
 async def main():

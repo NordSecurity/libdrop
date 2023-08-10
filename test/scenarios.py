@@ -6623,7 +6623,7 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario29-12",
+        "scenario29-11",
         "Send a transfer request, wait for it to arrive, stop the sender, reject on the receiver, start the sender, expect the transfer to not be resumed",
         {
             "ren": ActionList(
@@ -6679,7 +6679,7 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario29-11",
+        "scenario29-12",
         "Send a transfer request, wait for it to arrive, stop the sender, cancel on the receiver, start the sender, expect the transfer to not be resumed",
         {
             "ren": ActionList(
@@ -6723,6 +6723,84 @@ scenarios = [
                         )
                     ),
                     action.Sleep(1),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario29-13",
+        "Send a transfer request, start transfer and then stop the sender. Then remove transfered file and start the sender. Expect proper transfer restoration and file transfer failure",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-13-ren.sqlite"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Stop(),
+                    action.DeleteFileFromFS("/tmp/testfile-big"),
+                    # restart
+                    action.Start("172.20.0.5", dbpath="/tmp/db/29-13-ren.sqlite"),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15", dbpath="/tmp/db/29-11-stimpy.sqlite"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0, FILES["testfile-big"].id, "/tmp/received/29-13/"
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0, FILES["testfile-big"].id, Error.BAD_TRANSFER_STATE
+                        )
+                    ),
+                    # Try to download it again
+                    action.Download(
+                        0, FILES["testfile-big"].id, "/tmp/received/29-13/"
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0, FILES["testfile-big"].id, Error.BAD_TRANSFER_STATE
+                        )
+                    ),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),

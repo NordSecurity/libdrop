@@ -297,7 +297,23 @@ impl HandlerLoop<'_> {
             }) = self.jobs.remove(&file_id)
             {
                 if !task.is_finished() {
+                    debug!(
+                        self.logger,
+                        "Aborting download job: {}:{file_id}",
+                        self.xfer.id()
+                    );
+
                     task.abort();
+
+                    if let Err(err) = self
+                        .state
+                        .transfer_manager
+                        .incoming_finish_download(self.xfer.id(), &file_id)
+                        .await
+                    {
+                        warn!(self.logger, "Failed to store download finish: {err}");
+                    }
+
                     events
                         .failed(crate::Error::BadTransferState(format!(
                             "Sender reported an error: {msg}"

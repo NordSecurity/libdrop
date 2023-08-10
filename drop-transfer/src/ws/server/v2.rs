@@ -189,7 +189,28 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
             }) = self.jobs.remove(&file)
             {
                 if !task.is_finished() {
+                    let file_id = self
+                        .xfer
+                        .file_by_subpath(&file)
+                        .expect("File should be there since we have a task registered")
+                        .id();
+
+                    debug!(
+                        self.logger,
+                        "Aborting download job: {}:{file_id}",
+                        self.xfer.id()
+                    );
+
                     task.abort();
+
+                    if let Err(err) = self
+                        .state
+                        .transfer_manager
+                        .incoming_finish_download(self.xfer.id(), file_id)
+                        .await
+                    {
+                        warn!(self.logger, "Failed to store download finish: {err}");
+                    }
 
                     events
                         .failed(crate::Error::BadTransferState(format!(
