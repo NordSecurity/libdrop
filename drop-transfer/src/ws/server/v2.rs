@@ -192,7 +192,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                     let file_id = self
                         .xfer
                         .file_by_subpath(&file)
-                        .expect("File should be there sice we have a task registered")
+                        .expect("File should be there since we have a task registered")
                         .id();
 
                     debug!(
@@ -206,7 +206,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                     if let Err(err) = self
                         .state
                         .transfer_manager
-                        .incoming_finsh_download(self.xfer.id(), file_id)
+                        .incoming_finish_download(self.xfer.id(), file_id)
                         .await
                     {
                         warn!(self.logger, "Failed to store download finish: {err}");

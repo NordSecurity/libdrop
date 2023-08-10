@@ -628,7 +628,7 @@ impl FileXferTask {
 
                 if let Err(err) = state
                     .transfer_manager
-                    .incoming_finsh_download(self.xfer.id(), self.file.id())
+                    .incoming_finish_download(self.xfer.id(), self.file.id())
                     .await
                 {
                     warn!(logger, "Failed to store download finish: {err}");

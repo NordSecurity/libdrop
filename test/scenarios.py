@@ -6758,7 +6758,7 @@ scenarios = [
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Stop(),
                     action.DeleteFileFromFS("/tmp/testfile-big"),
-                    # restrat
+                    # restart
                     action.Start("172.20.0.5", dbpath="/tmp/db/29-13-ren.sqlite"),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),

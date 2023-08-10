@@ -540,7 +540,7 @@ impl TransferManager {
         Ok(())
     }
 
-    pub async fn incoming_finsh_download(
+    pub async fn incoming_finish_download(
         &self,
         transfer_id: Uuid,
         file_id: &FileId,
