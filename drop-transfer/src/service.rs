@@ -8,11 +8,8 @@ use std::{
 use drop_analytics::Moose;
 use drop_config::DropConfig;
 use drop_storage::Storage;
-use slog::{debug, warn, Logger};
-use tokio::{
-    sync::{mpsc, Semaphore},
-    task::JoinHandle,
-};
+use slog::{debug, Logger};
+use tokio::sync::{mpsc, Semaphore};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -21,6 +18,7 @@ use crate::{
     error::ResultExt,
     file::File,
     manager,
+    tasks::AliveWaiter,
     transfer::Transfer,
     ws::{self, FileEventTxFactory},
     Error, Event, FileId, TransferManager,
@@ -40,9 +38,8 @@ pub(super) struct State {
 
 pub struct Service {
     pub(super) state: Arc<State>,
-    pub(crate) stop: CancellationToken,
-    pub(crate) client_stopped: (mpsc::Sender<()>, mpsc::Receiver<()>),
-    server_task: JoinHandle<()>,
+    stop: CancellationToken,
+    waiter: AliveWaiter,
     pub(super) logger: Logger,
 }
 
@@ -95,18 +92,25 @@ impl Service {
                 fdresolv,
             });
 
+            let waiter = AliveWaiter::new();
             let stop = CancellationToken::new();
-            let client_stopped = mpsc::channel(1);
 
-            manager::resume(&state, stop.clone(), &client_stopped.0, &logger).await;
-            let server_task =
-                ws::server::start(addr, stop.clone(), state.clone(), auth, logger.clone())?;
+            let guard = waiter.guard();
+
+            manager::resume(&state, &logger, &guard, &stop).await;
+            ws::server::spawn(
+                addr,
+                state.clone(),
+                auth,
+                logger.clone(),
+                stop.clone(),
+                guard,
+            )?;
 
             Ok(Self {
                 state,
-                server_task,
-                client_stopped,
                 stop,
+                waiter,
                 logger,
             })
         };
@@ -120,22 +124,11 @@ impl Service {
     pub async fn stop(self) {
         self.stop.cancel();
 
-        if let Err(err) = self.server_task.await {
-            warn!(
-                self.logger,
-                "Failed to wait for server task to finish: {err}"
-            );
-        }
-
-        // Drop the sender and wait for the receiver to get the notification about last
-        // sender being dropped. Based on <https://tokio.rs/tokio/topics/shutdown>
-        let (send, mut recv) = self.client_stopped;
-        drop(send);
-        let _ = recv.recv().await;
-
         self.state
             .moose
             .service_quality_initialization_init(Ok(()), drop_analytics::Phase::End);
+
+        self.waiter.wait_for_all().await;
     }
 
     pub fn storage(&self) -> &Storage {
@@ -171,22 +164,13 @@ impl Service {
             .await
             .expect("Could not send a RequestQueued event, channel closed");
 
-        let client_job = ws::client::run(
+        ws::client::spawn(
             self.state.clone(),
             xfer,
-            self.client_stopped.0.clone(),
             self.logger.clone(),
+            self.waiter.guard(),
+            self.stop.clone(),
         );
-        let stop = self.stop.clone();
-
-        tokio::spawn(async move {
-            tokio::select! {
-                biased;
-
-                _ = stop.cancelled() => (),
-                _ = client_job => (),
-            }
-        });
     }
 
     pub async fn download(

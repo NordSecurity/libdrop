@@ -9,16 +9,14 @@ use anyhow::Context;
 use drop_config::DropConfig;
 use drop_storage::{sync, Storage};
 use slog::{debug, error, info, warn, Logger};
-use tokio::sync::{
-    mpsc::{self, UnboundedSender},
-    Mutex,
-};
+use tokio::sync::{mpsc::UnboundedSender, Mutex};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
     file::FileSubPath,
     service::State,
+    tasks::AliveGuard,
     transfer::{IncomingTransfer, OutgoingTransfer},
     ws::{
         self,
@@ -968,14 +966,14 @@ impl DirMapping {
 
 pub(crate) async fn resume(
     state: &Arc<State>,
-    stop: CancellationToken,
-    alive_sender: &mpsc::Sender<()>,
     logger: &Logger,
+    guard: &AliveGuard,
+    stop: &CancellationToken,
 ) {
     *state.transfer_manager.incoming.lock().await =
         restore_incoming(&state.storage, &state.config, logger).await;
     *state.transfer_manager.outgoing.lock().await =
-        restore_outgoing(state, &stop, alive_sender, logger).await;
+        restore_outgoing(state, logger, guard, stop).await;
 }
 
 async fn restore_incoming(
@@ -1084,9 +1082,9 @@ async fn restore_incoming(
 
 async fn restore_outgoing(
     state: &Arc<State>,
-    stop: &CancellationToken,
-    alive_sender: &mpsc::Sender<()>,
     logger: &Logger,
+    guard: &AliveGuard,
+    stop: &CancellationToken,
 ) -> HashMap<Uuid, OutgoingState> {
     let transfers = state.storage.outgoing_transfers_to_resume().await;
 
@@ -1170,27 +1168,13 @@ async fn restore_outgoing(
     }
 
     for xstate in xfers.values() {
-        let logger = logger.clone();
-        let stop = stop.clone();
-
-        let task = {
-            let logger = logger.clone();
-            let state = state.clone();
-            let xfer = xstate.xfer.clone();
-
-            ws::client::run(state, xfer, alive_sender.clone(), logger)
-        };
-
-        tokio::spawn(async move {
-            tokio::select! {
-                biased;
-
-                _ = stop.cancelled() => {
-                    warn!(logger, "Aborting transfer resume");
-                },
-                _ = task => (),
-            }
-        });
+        ws::client::spawn(
+            state.clone(),
+            xstate.xfer.clone(),
+            logger.clone(),
+            guard.clone(),
+            stop.clone(),
+        );
     }
 
     xfers

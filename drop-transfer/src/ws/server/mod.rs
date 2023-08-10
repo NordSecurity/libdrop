@@ -17,7 +17,7 @@ use std::{
 use anyhow::Context;
 use drop_auth::Nonce;
 use futures::{SinkExt, StreamExt};
-use handler::{Downloader, HandlerInit, HandlerLoop, Request};
+use handler::{Downloader, HandlerInit, HandlerLoop};
 use hyper::StatusCode;
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
@@ -25,7 +25,7 @@ use tokio::{
         mpsc::{self, UnboundedReceiver},
         Mutex,
     },
-    task::JoinHandle,
+    task::{AbortHandle, JoinSet},
 };
 use tokio_util::sync::CancellationToken;
 use warp::{
@@ -33,16 +33,17 @@ use warp::{
     Filter,
 };
 
-use super::events::FileEventTx;
+use super::{events::FileEventTx, IncomingFileEventTx};
 use crate::{
     auth,
     file::{self, FileToRecv},
     protocol,
     quarantine::PathExt,
     service::State,
+    tasks::AliveGuard,
     transfer::{IncomingTransfer, Transfer},
     utils::Hidden,
-    ws::Pinger,
+    ws::{server::handler::Request, Pinger},
     Error, Event, File, FileId,
 };
 
@@ -77,13 +78,14 @@ struct StreamCtx<'a> {
     events: &'a FileEventTx<IncomingTransfer>,
 }
 
-pub(crate) fn start(
+pub(crate) fn spawn(
     addr: IpAddr,
-    stop: CancellationToken,
     state: Arc<State>,
     auth: Arc<auth::Context>,
     logger: Logger,
-) -> crate::Result<JoinHandle<()>> {
+    stop: CancellationToken,
+    alive: AliveGuard,
+) -> crate::Result<()> {
     let nonce_store = Arc::new(Mutex::new(HashMap::new()));
 
     #[derive(Debug)]
@@ -123,9 +125,11 @@ pub(crate) fn start(
     }
 
     let service = {
-        let stop = stop.clone();
         let logger = logger.clone();
         let nonces = nonce_store.clone();
+        let alive = alive.clone();
+        let stop = stop.clone();
+
         let rate_limiter = Arc::new(governor::RateLimiter::dashmap(governor::Quota::per_second(
             state
                 .config
@@ -187,6 +191,7 @@ pub(crate) fn start(
             .map(
                 move |version: protocol::Version, peer: SocketAddr, ws: warp::ws::Ws| {
                     let state = Arc::clone(&state);
+                    let alive = alive.clone();
                     let stop = stop.clone();
                     let logger = logger.clone();
 
@@ -202,19 +207,29 @@ pub(crate) fn start(
 
                         match version {
                             protocol::Version::V1 => {
-                                ctx.run(v2::HandlerInit::<false>::new(peer.ip(), &state, &logger))
-                                    .await
+                                ctx.run(v2::HandlerInit::<false>::new(
+                                    peer.ip(),
+                                    &state,
+                                    &logger,
+                                    &alive,
+                                ))
+                                .await
                             }
                             protocol::Version::V2 => {
-                                ctx.run(v2::HandlerInit::<true>::new(peer.ip(), &state, &logger))
-                                    .await
+                                ctx.run(v2::HandlerInit::<true>::new(
+                                    peer.ip(),
+                                    &state,
+                                    &logger,
+                                    &alive,
+                                ))
+                                .await
                             }
                             protocol::Version::V4 => {
-                                ctx.run(v4::HandlerInit::new(peer.ip(), state, &logger))
+                                ctx.run(v4::HandlerInit::new(peer.ip(), state, &logger, &alive))
                                     .await
                             }
                             protocol::Version::V5 => {
-                                ctx.run(v5::HandlerInit::new(peer.ip(), state, &logger))
+                                ctx.run(v5::HandlerInit::new(peer.ip(), state, &logger, &alive))
                                     .await
                             }
                         }
@@ -228,9 +243,8 @@ pub(crate) fn start(
     };
 
     let future = match warp::serve(service)
-        .try_bind_with_graceful_shutdown((addr, drop_config::PORT), async move {
-            stop.cancelled().await
-        }) {
+        .try_bind_with_graceful_shutdown((addr, drop_config::PORT), stop.cancelled_owned())
+    {
         Ok((socket, future)) => {
             debug!(logger, "WS server is bound to: {socket}");
             future
@@ -259,19 +273,20 @@ pub(crate) fn start(
         }
     };
 
-    let task = tokio::spawn(async move {
+    tokio::spawn(async move {
+        let _guard = alive;
         future.await;
         debug!(logger, "WS server stopped");
     });
 
-    Ok(task)
+    Ok(())
 }
 
 struct RunContext<'a> {
     logger: &'a slog::Logger,
     state: Arc<State>,
-    stop: &'a CancellationToken,
     socket: WebSocket,
+    stop: &'a CancellationToken,
 }
 
 impl RunContext<'_> {
@@ -314,11 +329,11 @@ impl RunContext<'_> {
         };
 
         let xfer = Arc::new(xfer);
+        let xfer_id = xfer.id();
 
         let job = async {
-            let xfer_id = xfer.id();
-
             handle_client(&self.state, self.logger, self.socket, handler, xfer).await;
+
             let _ = self
                 .state
                 .transfer_manager
@@ -330,10 +345,10 @@ impl RunContext<'_> {
             biased;
 
             _ = self.stop.cancelled() => {
-                info!(self.logger, "Aborting transfer download");
-            },
+                debug!(self.logger, "Server job stop: {xfer_id}");
+            }
             _ = job => (),
-        };
+        }
     }
 }
 
@@ -355,12 +370,16 @@ async fn handle_client(
     let mut ping = handler.pinger();
 
     let (send_tx, mut send_rx) = mpsc::channel(2);
-    let mut handler =
-        if let Some(handler) = handler.upgrade(&mut socket, send_tx, xfer.clone()).await {
-            handler
-        } else {
-            return;
-        };
+    let mut jobs = JoinSet::new();
+
+    let mut handler = if let Some(handler) = handler
+        .upgrade(&mut socket, &mut jobs, send_tx, xfer.clone())
+        .await
+    {
+        handler
+    } else {
+        return;
+    };
 
     let mut last_recv = Instant::now();
 
@@ -371,7 +390,7 @@ async fn handle_client(
 
                 // API request
                 req = req_rx.recv() => {
-                    if on_req(&mut socket, &mut handler, req, logger).await?.is_break() {
+                    if on_req(&mut socket, &mut jobs, &mut handler, req, logger).await?.is_break() {
                         break;
                     }
                 },
@@ -430,6 +449,8 @@ async fn handle_client(
 
         handler.finalize_success().await;
     }
+
+    jobs.shutdown().await;
 }
 
 impl FileXferTask {
@@ -636,11 +657,11 @@ impl FileXferTask {
 
 impl TmpFileState {
     // Blocking operation
-    fn load(path: &Path) -> io::Result<Self> {
+    async fn load(path: &Path) -> io::Result<Self> {
         let file = fs::File::open(path)?;
 
         let meta = file.metadata()?;
-        let csum = file::checksum(&mut io::BufReader::new(file))?;
+        let csum = file::checksum(&mut io::BufReader::new(file)).await?;
         Ok(TmpFileState { meta, csum })
     }
 }
@@ -725,12 +746,13 @@ async fn init_client_handler(
 
 async fn on_req(
     socket: &mut WebSocket,
+    jobs: &mut JoinSet<()>,
     handler: &mut impl HandlerLoop,
     req: Option<ServerReq>,
     logger: &Logger,
 ) -> anyhow::Result<ControlFlow<()>> {
     match req.context("API channel broken")? {
-        ServerReq::Download { task } => handler.issue_download(socket, *task).await?,
+        ServerReq::Download { task } => handler.issue_download(socket, jobs, *task).await?,
         ServerReq::Cancel { file } => handler.issue_cancel(socket, file).await?,
         ServerReq::Reject { file } => handler.issue_reject(socket, file).await?,
         ServerReq::Close => {
@@ -769,4 +791,30 @@ async fn on_recv(
     }
 
     anyhow::Ok(ControlFlow::Continue(()))
+}
+
+async fn start_download(
+    jobs: &mut JoinSet<()>,
+    guard: AliveGuard,
+    state: Arc<State>,
+    job: FileXferTask,
+    downloader: impl Downloader + Send + 'static,
+    stream: UnboundedReceiver<Vec<u8>>,
+    logger: Logger,
+) -> anyhow::Result<(AbortHandle, Arc<IncomingFileEventTx>)> {
+    let events = state
+        .transfer_manager
+        .incoming_file_events(job.xfer.id(), job.file.id())
+        .await?;
+
+    let job = {
+        let events = events.clone();
+
+        jobs.spawn(async move {
+            let _guard = guard;
+            job.run(state, events, downloader, stream, logger).await;
+        })
+    };
+
+    Ok((job, events))
 }

@@ -14,7 +14,7 @@ use sha1::Digest;
 use slog::{debug, error, warn};
 use tokio::{
     sync::mpsc::{self, Sender, UnboundedSender},
-    task::JoinHandle,
+    task::{AbortHandle, JoinSet},
 };
 use warp::ws::{Message, WebSocket};
 
@@ -23,6 +23,7 @@ use crate::{
     file::FileSubPath,
     protocol::v2,
     service::State,
+    tasks::AliveGuard,
     transfer::{IncomingTransfer, Transfer},
     utils::Hidden,
     ws::{self, events::FileEventTx},
@@ -33,11 +34,13 @@ pub struct HandlerInit<'a, const PING: bool = true> {
     peer: IpAddr,
     state: &'a Arc<State>,
     logger: &'a slog::Logger,
+    alive: &'a AliveGuard,
 }
 
 pub struct HandlerLoop<'a, const PING: bool> {
     state: &'a Arc<State>,
     logger: &'a slog::Logger,
+    alive: &'a AliveGuard,
     msg_tx: Sender<Message>,
     xfer: Arc<IncomingTransfer>,
     jobs: HashMap<FileSubPath, FileTask>,
@@ -51,17 +54,23 @@ struct Downloader {
 }
 
 struct FileTask {
-    job: JoinHandle<()>,
+    job: AbortHandle,
     chunks_tx: UnboundedSender<Vec<u8>>,
     events: Arc<FileEventTx<IncomingTransfer>>,
 }
 
 impl<'a, const PING: bool> HandlerInit<'a, PING> {
-    pub(crate) fn new(peer: IpAddr, state: &'a Arc<State>, logger: &'a slog::Logger) -> Self {
+    pub(crate) fn new(
+        peer: IpAddr,
+        state: &'a Arc<State>,
+        logger: &'a slog::Logger,
+        alive: &'a AliveGuard,
+    ) -> Self {
         Self {
             peer,
             state,
             logger,
+            alive,
         }
     }
 }
@@ -101,6 +110,7 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
     async fn upgrade(
         self,
         _: &mut WebSocket,
+        _: &mut JoinSet<()>,
         msg_tx: Sender<Message>,
         xfer: Arc<IncomingTransfer>,
     ) -> Option<Self::Loop> {
@@ -108,6 +118,7 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
             peer: _,
             state,
             logger,
+            alive,
         } = self;
 
         Some(HandlerLoop {
@@ -116,6 +127,7 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
             xfer,
             jobs: HashMap::new(),
             logger,
+            alive,
         })
     }
 
@@ -195,6 +207,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     async fn issue_download(
         &mut self,
         _: &mut WebSocket,
+        jobs: &mut JoinSet<()>,
         task: super::FileXferTask,
     ) -> anyhow::Result<()> {
         let is_running = self
@@ -207,15 +220,33 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         }
 
         let subpath = task.file.subpath().clone();
-        let state = FileTask::start(
-            self.msg_tx.clone(),
+        let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
+
+        let downloader = Downloader {
+            state: self.state.clone(),
+            file_id: task.file.subpath().clone(),
+            msg_tx: self.msg_tx.clone(),
+            tmp_loc: None,
+        };
+        let (job, events) = super::start_download(
+            jobs,
+            self.alive.clone(),
             self.state.clone(),
             task,
+            downloader,
+            chunks_rx,
             self.logger.clone(),
         )
         .await?;
 
-        self.jobs.insert(subpath, state);
+        self.jobs.insert(
+            subpath,
+            FileTask {
+                job,
+                chunks_tx,
+                events,
+            },
+        );
 
         Ok(())
     }
@@ -324,12 +355,8 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     async fn on_stop(&mut self) {
         debug!(self.logger, "Waiting for background jobs to finish");
 
-        let tasks = self.jobs.drain().map(|(_, task)| {
-            task.job.abort();
-
-            async move {
-                task.events.cancel_silent().await;
-            }
+        let tasks = self.jobs.drain().map(|(_, task)| async move {
+            task.events.cancel_silent().await;
         });
 
         futures::future::join_all(tasks).await;
@@ -340,12 +367,8 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     async fn on_conn_break(&mut self) {
         debug!(self.logger, "Waiting for background jobs to pause");
 
-        let tasks = self.jobs.drain().map(|(_, task)| {
-            task.job.abort();
-
-            async move {
-                task.events.pause().await;
-            }
+        let tasks = self.jobs.drain().map(|(_, task)| async move {
+            task.events.pause().await;
         });
 
         futures::future::join_all(tasks).await;
@@ -368,7 +391,6 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 impl<const PING: bool> Drop for HandlerLoop<'_, PING> {
     fn drop(&mut self) {
         debug!(self.logger, "Stopping server handler");
-        self.jobs.values().for_each(|task| task.job.abort());
     }
 }
 
@@ -464,36 +486,6 @@ impl handler::Downloader for Downloader {
 
     async fn validate(&mut self, _: &Hidden<PathBuf>) -> crate::Result<()> {
         Ok(())
-    }
-}
-
-impl FileTask {
-    async fn start(
-        msg_tx: Sender<Message>,
-        state: Arc<State>,
-        task: super::FileXferTask,
-        logger: slog::Logger,
-    ) -> anyhow::Result<Self> {
-        let events = state
-            .transfer_manager
-            .incoming_file_events(task.xfer.id(), task.file.id())
-            .await?;
-
-        let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
-
-        let downloader = Downloader {
-            state: state.clone(),
-            file_id: task.file.subpath().clone(),
-            msg_tx,
-            tmp_loc: None,
-        };
-        let job = tokio::spawn(task.run(state, Arc::clone(&events), downloader, chunks_rx, logger));
-
-        Ok(Self {
-            job,
-            chunks_tx,
-            events,
-        })
     }
 }
 

@@ -7,7 +7,7 @@ use std::{
     fs::{
         OpenOptions, {self},
     },
-    io::{self, Read},
+    io::{self, Read, Write},
     path::{Path, PathBuf},
 };
 
@@ -272,17 +272,32 @@ impl FileToSend {
     }
 
     /// Calculate sha2 of a file. This is a blocking operation
-    pub(crate) fn checksum(&self, limit: u64) -> crate::Result<[u8; 32]> {
+    pub(crate) async fn checksum(&self, limit: u64) -> crate::Result<[u8; 32]> {
         let reader = reader::open(&self.source)?;
         let mut reader = io::BufReader::new(reader).take(limit);
-        let csum = checksum(&mut reader)?;
+        let csum = checksum(&mut reader).await?;
         Ok(csum)
     }
 }
 
-pub fn checksum(reader: &mut impl io::Read) -> io::Result<[u8; 32]> {
+pub async fn checksum(reader: &mut impl io::Read) -> io::Result<[u8; 32]> {
     let mut csum = sha2::Sha256::new();
-    io::copy(reader, &mut csum)?;
+
+    let mut buf = vec![0u8; 8 * 1024]; // 8kB buffer
+
+    loop {
+        let n = reader.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+
+        csum.write_all(&buf[..n])?;
+
+        // Since these are all blocking operation we need to give tokio runtime a
+        // timeslice
+        tokio::task::yield_now().await;
+    }
+
     Ok(csum.finalize().into())
 }
 
@@ -297,14 +312,14 @@ mod tests {
     const TEST: &[u8] = b"abc";
     const EXPECTED: &[u8] = b"\xba\x78\x16\xbf\x8f\x01\xcf\xea\x41\x41\x40\xde\x5d\xae\x22\x23\xb0\x03\x61\xa3\x96\x17\x7a\x9c\xb4\x10\xff\x61\xf2\x00\x15\xad";
 
-    #[test]
-    fn checksum() {
-        let csum = super::checksum(&mut &TEST[..]).unwrap();
+    #[tokio::test]
+    async fn checksum() {
+        let csum = super::checksum(&mut &TEST[..]).await.unwrap();
         assert_eq!(csum.as_slice(), EXPECTED);
     }
 
-    #[test]
-    fn file_checksum() {
+    #[tokio::test]
+    async fn file_checksum() {
         use std::io::Write;
 
         use drop_config::DropConfig;
@@ -319,9 +334,41 @@ mod tests {
 
             assert_eq!(size, TEST.len() as u64);
 
-            file.checksum(size).unwrap()
+            file.checksum(size).await.unwrap()
         };
 
         assert_eq!(csum.as_slice(), EXPECTED);
+    }
+
+    #[test]
+    fn checksum_yielding() {
+        use std::{
+            future::Future,
+            io,
+            pin::Pin,
+            task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
+        };
+
+        let buf = vec![0xffu8; 20 * 1024]; // 20kB of data
+
+        fn empty(_: *const ()) {}
+        fn make_raw(_: *const ()) -> RawWaker {
+            RawWaker::new(
+                std::ptr::null(),
+                &RawWakerVTable::new(make_raw, empty, empty, empty),
+            )
+        }
+        let waker = unsafe { Waker::from_raw(make_raw(std::ptr::null())) };
+        let mut cx = Context::from_waker(&waker);
+
+        let mut cursor = io::Cursor::new(&buf);
+        let mut future = super::checksum(&mut cursor);
+        let mut future = unsafe { Pin::new_unchecked(&mut future) };
+
+        // expect it to yield 3 times (one at the very end)
+        assert!(future.as_mut().poll(&mut cx).is_pending());
+        assert!(future.as_mut().poll(&mut cx).is_pending());
+        assert!(future.as_mut().poll(&mut cx).is_pending());
+        assert!(matches!(future.as_mut().poll(&mut cx), Poll::Ready(Ok(_))));
     }
 }

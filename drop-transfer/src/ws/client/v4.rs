@@ -7,23 +7,28 @@ use std::{
 use anyhow::Context;
 use futures::SinkExt;
 use slog::{debug, error};
-use tokio::{sync::mpsc::Sender, task::JoinHandle};
+use tokio::{
+    sync::mpsc::Sender,
+    task::{AbortHandle, JoinSet},
+};
 use tokio_tungstenite::tungstenite::Message;
 
 use super::{handler, WebSocket};
 use crate::{
-    protocol::v4, service::State, transfer::Transfer, ws::events::FileEventTx, FileId,
-    OutgoingTransfer,
+    protocol::v4, service::State, tasks::AliveGuard, transfer::Transfer, ws::events::FileEventTx,
+    FileId, OutgoingTransfer,
 };
 
 pub struct HandlerInit<'a> {
     state: &'a Arc<State>,
     logger: &'a slog::Logger,
+    alive: &'a AliveGuard,
 }
 
 pub struct HandlerLoop<'a> {
     state: &'a Arc<State>,
     logger: &'a slog::Logger,
+    alive: &'a AliveGuard,
     upload_tx: Sender<Message>,
     tasks: HashMap<FileId, FileTask>,
     done: HashSet<FileId>,
@@ -31,7 +36,7 @@ pub struct HandlerLoop<'a> {
 }
 
 struct FileTask {
-    job: JoinHandle<()>,
+    job: AbortHandle,
     events: Arc<FileEventTx<OutgoingTransfer>>,
 }
 
@@ -42,8 +47,16 @@ struct Uploader {
 }
 
 impl<'a> HandlerInit<'a> {
-    pub(crate) fn new(state: &'a Arc<State>, logger: &'a slog::Logger) -> Self {
-        Self { state, logger }
+    pub(crate) fn new(
+        state: &'a Arc<State>,
+        logger: &'a slog::Logger,
+        alive: &'a AliveGuard,
+    ) -> Self {
+        Self {
+            state,
+            logger,
+            alive,
+        }
     }
 }
 
@@ -63,10 +76,15 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
     }
 
     fn upgrade(self, upload_tx: Sender<Message>, xfer: Arc<OutgoingTransfer>) -> Self::Loop {
-        let Self { state, logger } = self;
+        let Self {
+            state,
+            logger,
+            alive,
+        } = self;
 
         HandlerLoop {
             state,
+            alive,
             logger,
             upload_tx,
             xfer,
@@ -111,55 +129,56 @@ impl HandlerLoop<'_> {
         self.done.insert(file_id);
     }
 
-    async fn on_checksum(
-        &mut self,
-        socket: &mut WebSocket,
-        file_id: FileId,
-        limit: u64,
-    ) -> anyhow::Result<()> {
-        let f = async {
-            self.state
-                .transfer_manager
-                .outgoing_ensure_file_not_rejected(self.xfer.id(), &file_id)
-                .await?;
+    async fn on_checksum(&mut self, jobs: &mut JoinSet<()>, file_id: FileId, limit: u64) {
+        let state = self.state.clone();
+        let msg_tx = self.upload_tx.clone();
+        let xfer = self.xfer.clone();
+        let logger = self.logger.clone();
+        let alive = self.alive.clone();
 
-            let xfile = &self.xfer.files()[&file_id];
-            let checksum = tokio::task::block_in_place(|| xfile.checksum(limit))?;
+        let task = async move {
+            let _guard = alive;
 
-            anyhow::Ok(v4::ReportChsum {
-                file: file_id.clone(),
-                limit,
-                checksum,
-            })
+            let make_report = async {
+                state
+                    .transfer_manager
+                    .outgoing_ensure_file_not_rejected(xfer.id(), &file_id)
+                    .await?;
+
+                let checksum = xfer.files()[&file_id].checksum(limit).await?;
+
+                anyhow::Ok(v4::ReportChsum {
+                    file: file_id.clone(),
+                    limit,
+                    checksum,
+                })
+            };
+
+            match make_report.await {
+                Ok(report) => {
+                    let _ = msg_tx
+                        .send(Message::from(&v4::ClientMsg::ReportChsum(report)))
+                        .await;
+                }
+                Err(err) => {
+                    error!(logger, "Failed to report checksum: {:?}", err);
+
+                    let msg = v4::Error {
+                        file: Some(file_id),
+                        msg: err.to_string(),
+                    };
+                    let _ = msg_tx.send(Message::from(&v4::ClientMsg::Error(msg))).await;
+                }
+            }
         };
 
-        match f.await {
-            Ok(report) => {
-                socket
-                    .send(Message::from(&v4::ClientMsg::ReportChsum(report)))
-                    .await
-                    .context("Failed to send checksum report")?;
-            }
-            Err(err) => {
-                error!(self.logger, "Failed to report checksum: {:?}", err);
-
-                let msg = v4::Error {
-                    file: Some(file_id),
-                    msg: err.to_string(),
-                };
-                socket
-                    .send(Message::from(&v4::ClientMsg::Error(msg)))
-                    .await
-                    .context("Failed to report error")?;
-            }
-        }
-
-        Ok(())
+        jobs.spawn(task);
     }
 
     async fn on_start(
         &mut self,
         socket: &mut WebSocket,
+        jobs: &mut JoinSet<()>,
         file_id: FileId,
         offset: u64,
     ) -> anyhow::Result<()> {
@@ -169,36 +188,39 @@ impl HandlerLoop<'_> {
                 .outgoing_ensure_file_not_rejected(self.xfer.id(), &file_id)
                 .await?;
 
+            let start = || {
+                let uploader = Uploader {
+                    sink: self.upload_tx.clone(),
+                    file_id: file_id.clone(),
+                    offset,
+                };
+                let state = self.state.clone();
+                let alive = self.alive.clone();
+                let logger = self.logger.clone();
+                let xfer = self.xfer.clone();
+                let file_id = file_id.clone();
+
+                async move {
+                    let (job, events) =
+                        super::start_upload(jobs, state, alive, logger, uploader, xfer, file_id)
+                            .await?;
+
+                    anyhow::Ok(FileTask { job, events })
+                }
+            };
+
             match self.tasks.entry(file_id.clone()) {
                 Entry::Occupied(o) => {
                     let task = o.into_mut();
 
                     if task.job.is_finished() {
-                        *task = FileTask::start(
-                            self.state.clone(),
-                            self.logger,
-                            self.upload_tx.clone(),
-                            self.xfer.clone(),
-                            file_id.clone(),
-                            offset,
-                        )
-                        .await?;
+                        *task = start().await?;
                     } else {
                         anyhow::bail!("Transfer already in progress");
                     }
                 }
                 Entry::Vacant(v) => {
-                    let task = FileTask::start(
-                        self.state.clone(),
-                        self.logger,
-                        self.upload_tx.clone(),
-                        self.xfer.clone(),
-                        file_id.clone(),
-                        offset,
-                    )
-                    .await?;
-
-                    v.insert(task);
+                    v.insert(start().await?);
                 }
             };
 
@@ -289,7 +311,12 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         }
     }
 
-    async fn on_text_msg(&mut self, socket: &mut WebSocket, text: String) -> anyhow::Result<()> {
+    async fn on_text_msg(
+        &mut self,
+        socket: &mut WebSocket,
+        jobs: &mut JoinSet<()>,
+        text: String,
+    ) -> anyhow::Result<()> {
         let msg: v4::ServerMsg =
             serde_json::from_str(&text).context("Failed to deserialize server message")?;
 
@@ -304,10 +331,10 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             }) => self.on_done(file).await,
             v4::ServerMsg::Error(v4::Error { file, msg }) => self.on_error(file, msg).await,
             v4::ServerMsg::ReqChsum(v4::ReqChsum { file, limit }) => {
-                self.on_checksum(socket, file, limit).await?
+                self.on_checksum(jobs, file, limit).await
             }
             v4::ServerMsg::Start(v4::Start { file, offset }) => {
-                self.on_start(socket, file, offset).await?
+                self.on_start(socket, jobs, file, offset).await?
             }
             v4::ServerMsg::Cancel(v4::Cancel { file }) => self.on_cancel(file, true).await,
         }
@@ -318,12 +345,8 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
     async fn on_stop(&mut self) {
         debug!(self.logger, "Waiting for background jobs to finish");
 
-        let tasks = self.tasks.drain().map(|(_, task)| {
-            task.job.abort();
-
-            async move {
-                task.events.cancel_silent().await;
-            }
+        let tasks = self.tasks.drain().map(|(_, task)| async move {
+            task.events.cancel_silent().await;
         });
 
         futures::future::join_all(tasks).await;
@@ -332,12 +355,8 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
     async fn on_conn_break(&mut self) {
         debug!(self.logger, "Waiting for background jobs to pause");
 
-        let tasks = self.tasks.drain().map(|(_, task)| {
-            task.job.abort();
-
-            async move {
-                task.events.pause().await;
-            }
+        let tasks = self.tasks.drain().map(|(_, task)| async move {
+            task.events.pause().await;
         });
 
         futures::future::join_all(tasks).await;
@@ -356,7 +375,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 impl Drop for HandlerLoop<'_> {
     fn drop(&mut self) {
         debug!(self.logger, "Stopping client handler");
-        self.tasks.values().for_each(|task| task.job.abort());
     }
 }
 
@@ -387,39 +405,5 @@ impl handler::Uploader for Uploader {
 
     fn offset(&self) -> u64 {
         self.offset
-    }
-}
-
-impl FileTask {
-    async fn start(
-        state: Arc<State>,
-        logger: &slog::Logger,
-        sink: Sender<Message>,
-        xfer: Arc<OutgoingTransfer>,
-        file_id: FileId,
-        offset: u64,
-    ) -> anyhow::Result<Self> {
-        let events = state
-            .transfer_manager
-            .outgoing_file_events(xfer.id(), &file_id)
-            .await?;
-
-        let uploader = Uploader {
-            sink,
-            file_id: file_id.clone(),
-            offset,
-        };
-
-        let job = super::start_upload(
-            state,
-            logger.clone(),
-            Arc::clone(&events),
-            uploader,
-            xfer,
-            file_id,
-        )
-        .await?;
-
-        Ok(Self { job, events })
     }
 }

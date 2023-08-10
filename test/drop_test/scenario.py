@@ -1,4 +1,4 @@
-import typing, os
+import typing, os, time
 
 from . import action, ffi
 from .logger import logger
@@ -14,8 +14,15 @@ class ActionList:
         logger.info("Processing action list...")
         for k, v in enumerate(self._actions):
             logger.info(f"Running action {k+1}/{len(self._actions)}: {v}")
+            start = time.time()
+
             await v.run(drop)
-            logger.info(f"Action {k+1}/{len(self._actions)} completed: {v}")
+
+            elapsed = (time.time() - start) * 1000.0
+            logger.info(
+                f"Action {k+1}/{len(self._actions)} completed in {elapsed} ms: {v}"
+            )
+
         logger.info("Done processing actions")
 
 
