@@ -246,22 +246,41 @@ fn populate_context(logger: &Logger) {
     let foreign_tracker_name = "nordvpnapp";
 
     if let Ok(foreign_context) = moose::fetch_specific_context(foreign_tracker_name) {
-        let context = parse_foreign_context(&foreign_context);
+        let (device, user) = parse_foreign_context(&foreign_context);
+
         set_context_fields!(
-            set_context_device_type, context.x_type;
-            set_context_device_model, context.model;
-            set_context_device_brand, context.brand;
-            set_context_device_fp, context.fp;
-            set_context_device_resolution, context.resolution;
-            set_context_device_os, context.os;
-            set_context_device_location_city, context.location.city;
-            set_context_device_location_country, context.location.country;
-            set_context_device_location_region, context.location.region;
-            set_context_device_timeZone, context.time_zone;
-            set_context_device_ram_module, context.ram.module;
-            set_context_device_ram_totalMemory, context.ram.total_memory;
-            set_context_device_ram_availableMemory, context.ram.total_memory;
-            set_context_device_storage_mediaType, context.storage.media_type
+            set_context_device_type, device.x_type;
+            set_context_device_model, device.model;
+            set_context_device_brand, device.brand;
+            set_context_device_fp, device.fp;
+            set_context_device_resolution, device.resolution;
+            set_context_device_os, device.os;
+            set_context_device_location_city, device.location.city;
+            set_context_device_location_country, device.location.country;
+            set_context_device_location_region, device.location.region;
+            set_context_device_timeZone, device.time_zone;
+            set_context_device_ram_module, device.ram.module;
+            set_context_device_ram_totalMemory, device.ram.total_memory;
+            set_context_device_ram_availableMemory, device.ram.total_memory;
+            set_context_device_storage_mediaType, device.storage.media_type
+        );
+
+        set_context_fields!(
+            set_context_user_fp, user.fp;
+            set_context_user_subscription_currentState_activationDate, user.subscription.current_state.activation_date;
+            set_context_user_subscription_currentState_frequencyInterval, user.subscription.current_state.frequency_interval;
+            set_context_user_subscription_currentState_frequencyUnit, user.subscription.current_state.frequency_unit;
+            set_context_user_subscription_currentState_isActive, user.subscription.current_state.is_active;
+            set_context_user_subscription_currentState_isNewCustomer, user.subscription.current_state.is_new_customer;
+            set_context_user_subscription_currentState_merchantId, user.subscription.current_state.merchant_id;
+            set_context_user_subscription_currentState_paymentAmount, user.subscription.current_state.payment_amount;
+            set_context_user_subscription_currentState_paymentCurrency, user.subscription.current_state.payment_currency;
+            set_context_user_subscription_currentState_paymentProvider, user.subscription.current_state.payment_provider;
+            set_context_user_subscription_currentState_paymentStatus, user.subscription.current_state.payment_status;
+            set_context_user_subscription_currentState_planId, user.subscription.current_state.plan_id;
+            set_context_user_subscription_currentState_planType, user.subscription.current_state.plan_type;
+            set_context_user_subscription_currentState_subscriptionStatus, user.subscription.current_state.subscription_status;
+            set_context_user_subscription_history, user.subscription.history
         );
     } else {
         warn!(
@@ -271,8 +290,10 @@ fn populate_context(logger: &Logger) {
     }
 }
 
-fn parse_foreign_context(foreign_context: &str) -> moose::LibdropappContextDevice {
-    let mut context = moose::LibdropappContextDevice {
+fn parse_foreign_context(
+    foreign_context: &str,
+) -> (moose::LibdropappContextDevice, moose::LibdropappContextUser) {
+    let mut device = moose::LibdropappContextDevice {
         brand: None,
         x_type: None,
         model: None,
@@ -293,6 +314,28 @@ fn parse_foreign_context(foreign_context: &str) -> moose::LibdropappContextDevic
         storage: moose::LibdropappContextDeviceStorage { media_type: None },
     };
 
+    let mut user = moose::LibdropappContextUser {
+        fp: None,
+        subscription: moose::LibdropappContextUserSubscription {
+            current_state: moose::LibdropappContextUserSubscriptionCurrentState {
+                activation_date: None,
+                frequency_interval: None,
+                frequency_unit: None,
+                is_active: None,
+                is_new_customer: None,
+                merchant_id: None,
+                payment_amount: None,
+                payment_currency: None,
+                payment_provider: None,
+                payment_status: None,
+                plan_id: None,
+                plan_type: None,
+                subscription_status: None,
+            },
+            history: None,
+        },
+    };
+
     let get_json_string = |json_value: &Value, field_name: &str| {
         if let Some(Value::String(val)) = json_value.get(field_name) {
             Some(val.clone())
@@ -309,42 +352,94 @@ fn parse_foreign_context(foreign_context: &str) -> moose::LibdropappContextDevic
         }
     };
 
-    if let Ok(value) = serde_json::from_str::<Value>(foreign_context) {
-        if let Some(device) = value.get("device") {
-            context.brand = get_json_string(device, "brand");
-            context.model = get_json_string(device, "model");
-            context.fp = get_json_string(device, "fp");
-            context.resolution = get_json_string(device, "resolution");
-            context.os = get_json_string(device, "os");
-            context.time_zone = get_json_string(device, "time_zone");
+    let get_json_f32 = |json_value: &Value, field_name: &str| {
+        if let Some(Value::Number(val)) = json_value.get(field_name) {
+            val.as_f64().map(|num| num as f32)
+        } else {
+            None
+        }
+    };
 
-            if let Some(x_type) = device.get("type") {
+    let get_json_bool = |json_value: &Value, field_name: &str| {
+        if let Some(Value::Bool(val)) = json_value.get(field_name) {
+            Some(val.clone())
+        } else {
+            None
+        }
+    };
+
+    if let Ok(value) = serde_json::from_str::<Value>(foreign_context) {
+        if let Some(foreign_device) = value.get("device") {
+            device.brand = get_json_string(foreign_device, "brand");
+            device.model = get_json_string(foreign_device, "model");
+            device.fp = get_json_string(foreign_device, "fp");
+            device.resolution = get_json_string(foreign_device, "resolution");
+            device.os = get_json_string(foreign_device, "os");
+            device.time_zone = get_json_string(foreign_device, "time_zone");
+
+            if let Some(x_type) = foreign_device.get("type") {
                 if let Ok(x_type) =
                     serde_json::from_value::<moose::LibdropappDeviceType>(x_type.clone())
                 {
-                    context.x_type = Some(x_type);
+                    device.x_type = Some(x_type);
                 }
             }
 
-            if let Some(location) = device.get("location") {
-                context.location.city = get_json_string(location, "city");
-                context.location.country = get_json_string(location, "country");
-                context.location.region = get_json_string(location, "region");
+            if let Some(location) = foreign_device.get("location") {
+                device.location.city = get_json_string(location, "city");
+                device.location.country = get_json_string(location, "country");
+                device.location.region = get_json_string(location, "region");
             }
 
-            if let Some(ram) = device.get("ram") {
-                context.ram.module = get_json_string(ram, "module");
-                context.ram.total_memory = get_json_i32(ram, "total_memory");
-                context.ram.available_memory = get_json_i32(ram, "available_memory");
+            if let Some(ram) = foreign_device.get("ram") {
+                device.ram.module = get_json_string(ram, "module");
+                device.ram.total_memory = get_json_i32(ram, "total_memory");
+                device.ram.available_memory = get_json_i32(ram, "available_memory");
             }
 
-            if let Some(storage) = device.get("storage") {
-                context.storage.media_type = get_json_string(storage, "media_type");
+            if let Some(storage) = foreign_device.get("storage") {
+                device.storage.media_type = get_json_string(storage, "media_type");
+            }
+        }
+
+        if let Some(foreign_user) = value.get("user") {
+            user.fp = get_json_string(foreign_user, "fp");
+
+            if let Some(subscription) = foreign_user.get("subscription") {
+                if let Some(current_state) = subscription.get("current_state") {
+                    user.subscription.current_state.activation_date =
+                        get_json_string(current_state, "activation_date");
+                    user.subscription.current_state.frequency_interval =
+                        get_json_i32(current_state, "frequency_interval");
+                    user.subscription.current_state.frequency_unit =
+                        get_json_string(current_state, "frequency_unit");
+                    user.subscription.current_state.is_active =
+                        get_json_bool(current_state, "is_active");
+                    user.subscription.current_state.is_new_customer =
+                        get_json_bool(current_state, "is_new_customer");
+                    user.subscription.current_state.merchant_id =
+                        get_json_i32(current_state, "merchant_id");
+                    user.subscription.current_state.payment_amount =
+                        get_json_f32(current_state, "payment_amount");
+                    user.subscription.current_state.payment_currency =
+                        get_json_string(current_state, "payment_currency");
+                    user.subscription.current_state.payment_provider =
+                        get_json_string(current_state, "payment_provider");
+                    user.subscription.current_state.payment_status =
+                        get_json_string(current_state, "payment_status");
+                    user.subscription.current_state.plan_id =
+                        get_json_i32(current_state, "plan_id");
+                    user.subscription.current_state.plan_type =
+                        get_json_string(current_state, "plan_type");
+                    user.subscription.current_state.subscription_status =
+                        get_json_string(current_state, "subscription_status");
+                }
+                user.subscription.history = get_json_string(subscription, "history");
             }
         }
     }
 
-    context
+    (device, user)
 }
 
 #[cfg(test)]
@@ -375,28 +470,86 @@ mod tests {
                 "storage": {
                     "media_type": "vidyja"
                 }
+            },
+            "user": {
+                "fp": "finger",
+                "subscription": {
+                    "current_state": {
+                        "activation_date": "now",
+                        "frequency_interval": 1,
+                        "frequency_unit": "seconds",
+                        "is_active": false,
+                        "is_new_customer": true,
+                        "merchant_id": 4,
+                        "payment_amount": 32.34,
+                        "payment_currency": "gold",
+                        "payment_provider": "someone",
+                        "payment_status": "rejected",
+                        "plan_id": 0,
+                        "plan_type": "good",
+                        "subscription_status": "is good"
+                    },
+                    "history": "gone"
+                }
             }
         }"#;
 
-        let parsed = parse_foreign_context(json);
+        let (device, user) = parse_foreign_context(json);
 
-        assert_eq!(parsed.brand, Some(String::from("brend")));
-        assert_eq!(parsed.model, Some(String::from("best")));
-        assert_eq!(parsed.fp, Some(String::from("pingerfrint")));
-        assert_eq!(parsed.resolution, Some(String::from("256x144@2hz")));
-        assert_eq!(parsed.os, Some(String::from("TempleOS")));
-        assert_eq!(parsed.location.city, Some(String::from("nordo")));
-        assert_eq!(parsed.location.country, Some(String::from("troba")));
-        assert_eq!(parsed.location.region, Some(String::from("redacted")));
-        assert_eq!(parsed.time_zone, Some(String::from("current")));
-        assert_eq!(parsed.ram.module, Some(String::from("downloaded")));
-        assert_eq!(parsed.ram.total_memory, Some(6i32));
-        assert_eq!(parsed.ram.available_memory, Some(9i32));
-        assert_eq!(parsed.storage.media_type, Some(String::from("vidyja")));
-        assert!(parsed
+        assert_eq!(device.brand, Some(String::from("brend")));
+        assert_eq!(device.model, Some(String::from("best")));
+        assert_eq!(device.fp, Some(String::from("pingerfrint")));
+        assert_eq!(device.resolution, Some(String::from("256x144@2hz")));
+        assert_eq!(device.os, Some(String::from("TempleOS")));
+        assert_eq!(device.location.city, Some(String::from("nordo")));
+        assert_eq!(device.location.country, Some(String::from("troba")));
+        assert_eq!(device.location.region, Some(String::from("redacted")));
+        assert_eq!(device.time_zone, Some(String::from("current")));
+        assert_eq!(device.ram.module, Some(String::from("downloaded")));
+        assert_eq!(device.ram.total_memory, Some(6i32));
+        assert_eq!(device.ram.available_memory, Some(9i32));
+        assert_eq!(device.storage.media_type, Some(String::from("vidyja")));
+        assert!(device
             .x_type
             .map(|t| t == moose::LibdropappDeviceType::LibdropappDeviceTypeMobile)
             .unwrap_or(false));
+
+        assert_eq!(user.fp, Some(String::from("finger")));
+        assert_eq!(
+            user.subscription.current_state.activation_date,
+            Some(String::from("now"))
+        );
+        assert_eq!(user.subscription.current_state.frequency_interval, Some(1));
+        assert_eq!(
+            user.subscription.current_state.frequency_unit,
+            Some(String::from("seconds"))
+        );
+        assert_eq!(user.subscription.current_state.is_active, Some(false));
+        assert_eq!(user.subscription.current_state.is_new_customer, Some(true));
+        assert_eq!(user.subscription.current_state.merchant_id, Some(4));
+        assert_eq!(user.subscription.current_state.payment_amount, Some(32.34));
+        assert_eq!(
+            user.subscription.current_state.payment_currency,
+            Some(String::from("gold"))
+        );
+        assert_eq!(
+            user.subscription.current_state.payment_provider,
+            Some(String::from("someone"))
+        );
+        assert_eq!(
+            user.subscription.current_state.payment_status,
+            Some(String::from("rejected"))
+        );
+        assert_eq!(user.subscription.current_state.plan_id, Some(0));
+        assert_eq!(
+            user.subscription.current_state.plan_type,
+            Some(String::from("good"))
+        );
+        assert_eq!(
+            user.subscription.current_state.subscription_status,
+            Some(String::from("is good"))
+        );
+        assert_eq!(user.subscription.history, Some(String::from("gone")));
     }
 
     #[test]
@@ -416,25 +569,49 @@ mod tests {
                 "storage": {
                     "media_type": "vidyja"
                 }
+            },
+            "user": {
+                "fp": "finger",
+                "subscription": {
+                    "current_state": {
+                        "is_active": false
+                    }
+                }
             }
         }"#;
 
-        let parsed = parse_foreign_context(json);
+        let (device, user) = parse_foreign_context(json);
 
-        assert_eq!(parsed.brand, Some(String::from("brend")));
-        assert_eq!(parsed.model, Some(String::from("best")));
-        assert_eq!(parsed.fp, Some(String::from("pingerfrint")));
-        assert_eq!(parsed.resolution, None);
-        assert_eq!(parsed.os, Some(String::from("TempleOS")));
-        assert_eq!(parsed.location.city, None);
-        assert_eq!(parsed.location.country, None);
-        assert_eq!(parsed.location.region, None);
-        assert_eq!(parsed.time_zone, Some(String::from("current")));
-        assert_eq!(parsed.ram.module, Some(String::from("downloaded")));
-        assert_eq!(parsed.ram.total_memory, Some(6i32));
-        assert_eq!(parsed.ram.available_memory, Some(9i32));
-        assert_eq!(parsed.storage.media_type, Some(String::from("vidyja")));
-        assert!(parsed.x_type.is_none());
+        assert_eq!(device.brand, Some(String::from("brend")));
+        assert_eq!(device.model, Some(String::from("best")));
+        assert_eq!(device.fp, Some(String::from("pingerfrint")));
+        assert_eq!(device.resolution, None);
+        assert_eq!(device.os, Some(String::from("TempleOS")));
+        assert_eq!(device.location.city, None);
+        assert_eq!(device.location.country, None);
+        assert_eq!(device.location.region, None);
+        assert_eq!(device.time_zone, Some(String::from("current")));
+        assert_eq!(device.ram.module, Some(String::from("downloaded")));
+        assert_eq!(device.ram.total_memory, Some(6i32));
+        assert_eq!(device.ram.available_memory, Some(9i32));
+        assert_eq!(device.storage.media_type, Some(String::from("vidyja")));
+        assert!(device.x_type.is_none());
+
+        assert_eq!(user.fp, Some(String::from("finger")));
+        assert_eq!(user.subscription.current_state.activation_date, None);
+        assert_eq!(user.subscription.current_state.frequency_interval, None);
+        assert_eq!(user.subscription.current_state.frequency_unit, None);
+        assert_eq!(user.subscription.current_state.is_active, Some(false));
+        assert_eq!(user.subscription.current_state.is_new_customer, None);
+        assert_eq!(user.subscription.current_state.merchant_id, None);
+        assert_eq!(user.subscription.current_state.payment_amount, None);
+        assert_eq!(user.subscription.current_state.payment_currency, None);
+        assert_eq!(user.subscription.current_state.payment_provider, None);
+        assert_eq!(user.subscription.current_state.payment_status, None);
+        assert_eq!(user.subscription.current_state.plan_id, None);
+        assert_eq!(user.subscription.current_state.plan_type, None);
+        assert_eq!(user.subscription.current_state.subscription_status, None);
+        assert_eq!(user.subscription.history, None);
     }
 
     #[test]
@@ -442,21 +619,37 @@ mod tests {
         let json = "i'll have two number 9s, a number 9 large, a number 6 with extra dip, a \
                     number 7, two number 45s, one with cheese, and a large soda";
 
-        let parsed = parse_foreign_context(json);
+        let (device, user) = parse_foreign_context(json);
 
-        assert_eq!(parsed.brand, None);
-        assert_eq!(parsed.model, None);
-        assert_eq!(parsed.fp, None);
-        assert_eq!(parsed.resolution, None);
-        assert_eq!(parsed.os, None);
-        assert_eq!(parsed.location.city, None);
-        assert_eq!(parsed.location.country, None);
-        assert_eq!(parsed.location.region, None);
-        assert_eq!(parsed.time_zone, None);
-        assert_eq!(parsed.ram.module, None);
-        assert_eq!(parsed.ram.total_memory, None);
-        assert_eq!(parsed.ram.available_memory, None);
-        assert_eq!(parsed.storage.media_type, None);
-        assert!(parsed.x_type.is_none());
+        assert_eq!(device.brand, None);
+        assert_eq!(device.model, None);
+        assert_eq!(device.fp, None);
+        assert_eq!(device.resolution, None);
+        assert_eq!(device.os, None);
+        assert_eq!(device.location.city, None);
+        assert_eq!(device.location.country, None);
+        assert_eq!(device.location.region, None);
+        assert_eq!(device.time_zone, None);
+        assert_eq!(device.ram.module, None);
+        assert_eq!(device.ram.total_memory, None);
+        assert_eq!(device.ram.available_memory, None);
+        assert_eq!(device.storage.media_type, None);
+        assert!(device.x_type.is_none());
+
+        assert_eq!(user.fp, None);
+        assert_eq!(user.subscription.current_state.activation_date, None);
+        assert_eq!(user.subscription.current_state.frequency_interval, None);
+        assert_eq!(user.subscription.current_state.frequency_unit, None);
+        assert_eq!(user.subscription.current_state.is_active, None);
+        assert_eq!(user.subscription.current_state.is_new_customer, None);
+        assert_eq!(user.subscription.current_state.merchant_id, None);
+        assert_eq!(user.subscription.current_state.payment_amount, None);
+        assert_eq!(user.subscription.current_state.payment_currency, None);
+        assert_eq!(user.subscription.current_state.payment_provider, None);
+        assert_eq!(user.subscription.current_state.payment_status, None);
+        assert_eq!(user.subscription.current_state.plan_id, None);
+        assert_eq!(user.subscription.current_state.plan_type, None);
+        assert_eq!(user.subscription.current_state.subscription_status, None);
+        assert_eq!(user.subscription.history, None);
     }
 }
