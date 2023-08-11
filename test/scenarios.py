@@ -5071,8 +5071,8 @@ scenarios = [
                             "arbitrary_value": -1,
                             "code": 11,
                             "note": "Initial DB open failed, recreating",
-                            "message": "Failed to open database",
-                            "name": "Database Error"
+                            "message": "Failed to open DB file",
+                            "name": "DB Error"
                         }""",
                             """{
                             "type": "init",
@@ -5174,16 +5174,16 @@ scenarios = [
                             "arbitrary_value": -1,
                             "code": 11,
                             "note": "Initial DB open failed, recreating",
-                            "message": "Failed to open database",
-                            "name": "Database Error"
+                            "message": "Failed to open DB file",
+                            "name": "DB Error"
                         }""",
                             """{
                             "type": "exception",
                             "arbitrary_value": -1,
                             "code": 11,
-                            "note": "",
-                            "message": "Failed to open DB and failed to remove it's file: Permission denied (os error 13)",
-                            "name": "Database Error"
+                            "note": "Permission denied (os error 13)",
+                            "message": "Failed to remove old DB file",
+                            "name": "DB Error"
                         }""",
                             """{
                             "type": "init",
