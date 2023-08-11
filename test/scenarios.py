@@ -7451,7 +7451,7 @@ scenarios = [
                 [
                     action.Start("172.20.0.5"),
                     action.NewTransfer(
-                        "172.20.0.15", ["../tmp/testfile-small"]
+                        "172.20.0.15", ["../../tmp/testfile-small"]
                     ),  # CWD is /src
                     action.Wait(
                         event.Queued(

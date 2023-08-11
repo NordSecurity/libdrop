@@ -12,19 +12,13 @@ version. The format is `v{semver}`. An API call to `norddrop_version()` should b
 # Tests
 ## Whole testsuite
 ```
-cd test
-LIB_PATH=PATH_TO_LIB_BINARY make run
+make -C test
 ```
 
 ## Individual tests
-Testsuite takes a long time to complete so running specific tests might be preferential and much faster while developing. To run a specific testsuite you must have a library already built from the previous step.
+Testsuite takes a long time to complete so running specific tests might be preferential and much faster while developing. To run a specific testsuite:
 ```
-cd test
-docker compose down && SCENARIO="SCENARIO_NAME" LIB_PATH=PATH_TO_LIB_BINARY docker compose up ren stimpy george
-```
-Note: When building libdrop for tests, use the `moose_file` flag, otherwise tests related to checking events will fail.
-```
-cargo build --features moose_file
+$SCENARIO=scenario_name make -C test
 ```
 
 ## udrop
