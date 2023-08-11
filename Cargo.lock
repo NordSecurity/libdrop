@@ -393,6 +393,7 @@ dependencies = [
  "rusqlite_migration",
  "serde",
  "slog",
+ "strum",
  "thiserror",
  "tokio",
  "url",

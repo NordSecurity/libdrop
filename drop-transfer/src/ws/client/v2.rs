@@ -127,7 +127,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
             if let Some(file) = self.xfer.file_by_subpath(&file_id) {
                 self.state
                     .transfer_manager
-                    .outgoing_ensure_file_not_rejected(self.xfer.id(), file.id())
+                    .outgoing_ensure_file_not_terminated(self.xfer.id(), file.id())
                     .await?;
             }
 

@@ -206,7 +206,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                     if let Err(err) = self
                         .state
                         .transfer_manager
-                        .incoming_finish_download(self.xfer.id(), file_id)
+                        .incoming_download_cancel(self.xfer.id(), file_id)
                         .await
                     {
                         warn!(self.logger, "Failed to store download finish: {err}");

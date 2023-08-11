@@ -25,6 +25,8 @@ pub enum Status {
     FileChecksumMismatch = 33,
     FileRejected = 34,
     FilePaused = 35,
+    FileFailed = 36,
+    FileFinished = 37,
 }
 
 impl serde::Serialize for Status {

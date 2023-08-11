@@ -142,7 +142,7 @@ impl HandlerLoop<'_> {
             let make_report = async {
                 state
                     .transfer_manager
-                    .outgoing_ensure_file_not_rejected(xfer.id(), &file_id)
+                    .outgoing_ensure_file_not_terminated(xfer.id(), &file_id)
                     .await?;
 
                 let checksum = xfer.files()[&file_id].checksum(limit).await?;
@@ -185,7 +185,7 @@ impl HandlerLoop<'_> {
         let start = async {
             self.state
                 .transfer_manager
-                .outgoing_ensure_file_not_rejected(self.xfer.id(), &file_id)
+                .outgoing_ensure_file_not_terminated(self.xfer.id(), &file_id)
                 .await?;
 
             let start = || {

@@ -42,19 +42,36 @@ pub struct RejectionResult<T: Transfer> {
     pub events: Arc<FileEventTx<T>>,
 }
 
+#[derive(Debug, Clone, Copy, strum::FromRepr, PartialEq, Eq)]
+pub enum FileTerminalState {
+    Rejected,
+    Completed,
+    Failed,
+}
+
+enum IncomingLocalFlieState {
+    Idle,
+    InFlight { path: PathBuf },
+    Terminal(FileTerminalState),
+}
+
+enum OutgoingLocalFlieState {
+    Alive,
+    Terminal(FileTerminalState),
+}
+
 struct TransferSync {
     local: sync::TransferState,
     remote: sync::TransferState,
 }
 
 struct IncomingFileSync {
-    local: sync::FileState,
+    local: IncomingLocalFlieState,
     remote: sync::FileState,
-    in_flight: Option<PathBuf>,
 }
 
 struct OutgoingFileSync {
-    local: sync::FileState,
+    local: OutgoingLocalFlieState,
     remote: sync::FileState,
 }
 
@@ -160,9 +177,8 @@ impl TransferManager {
                             (
                                 file_id.clone(),
                                 IncomingFileSync {
-                                    local: sync::FileState::Alive,
+                                    local: IncomingLocalFlieState::Idle,
                                     remote: sync::FileState::Alive,
-                                    in_flight: None,
                                 },
                             )
                         })
@@ -258,7 +274,7 @@ impl TransferManager {
                             (
                                 file_id.clone(),
                                 OutgoingFileSync {
-                                    local: sync::FileState::Alive,
+                                    local: OutgoingLocalFlieState::Alive,
                                     remote: sync::FileState::Alive,
                                 },
                             )
@@ -316,37 +332,25 @@ impl TransferManager {
             .get_mut(&transfer_id)
             .ok_or(crate::Error::BadTransfer)?;
 
-        if matches!(
-            state.xfer_sync.local,
-            drop_storage::sync::TransferState::Canceled
-        ) {
-            return Err(crate::Error::BadTransfer);
-        }
+        state.ensure_not_cancelled()?;
 
-        let sync = state
-            .file_sync
-            .get_mut(file_id)
-            .ok_or(crate::Error::BadFileId)?;
+        state
+            .file_sync_mut(file_id)?
+            .try_terminate_local(FileTerminalState::Rejected)?;
 
-        match sync.local {
-            sync::FileState::Rejected => return Err(crate::Error::Rejected),
-            sync::FileState::Alive => {
-                self.storage
-                    .update_outgoing_file_sync_states(
-                        state.xfer.id(),
-                        file_id.as_ref(),
-                        None,
-                        Some(sync::FileState::Rejected),
-                    )
-                    .await;
-                sync.local = sync::FileState::Rejected;
+        self.storage
+            .update_outgoing_file_sync_states(
+                state.xfer.id(),
+                file_id.as_ref(),
+                None,
+                Some(sync::FileState::Terminal),
+            )
+            .await;
 
-                if let Some(conn) = &state.conn {
-                    let _ = conn.send(ClientReq::Reject {
-                        file: file_id.clone(),
-                    });
-                }
-            }
+        if let Some(conn) = &state.conn {
+            let _ = conn.send(ClientReq::Reject {
+                file: file_id.clone(),
+            });
         }
 
         Ok(RejectionResult {
@@ -366,20 +370,18 @@ impl TransferManager {
             .get_mut(&transfer_id)
             .ok_or(crate::Error::BadTransfer)?;
 
-        let sync = state
-            .file_sync
-            .get_mut(file_id)
-            .ok_or(crate::Error::BadFileId)?;
+        let sync = state.file_sync_mut(file_id)?;
+
+        sync.termiante_remote();
 
         self.storage
             .update_outgoing_file_sync_states(
                 transfer_id,
                 file_id.as_ref(),
-                Some(sync::FileState::Rejected),
-                None,
+                Some(sync::FileState::Terminal),
+                Some(sync::FileState::Terminal),
             )
             .await;
-        sync.remote = sync::FileState::Rejected;
 
         Ok(())
     }
@@ -395,21 +397,20 @@ impl TransferManager {
             .get_mut(&transfer_id)
             .ok_or(crate::Error::BadTransfer)?;
 
-        let sync = state
-            .file_sync
-            .get_mut(file_id)
-            .ok_or(crate::Error::BadFileId)?;
+        let sync = state.file_sync_mut(file_id)?;
+
+        sync.termiante_remote();
 
         self.storage
             .update_outgoing_file_sync_states(
                 transfer_id,
                 file_id.as_ref(),
-                Some(sync::FileState::Rejected),
-                Some(sync::FileState::Rejected),
+                Some(sync::FileState::Terminal),
+                Some(sync::FileState::Terminal),
             )
             .await;
-        sync.remote = sync::FileState::Rejected;
-        sync.local = sync::FileState::Rejected;
+
+        sync.try_terminate_local(FileTerminalState::Rejected)?;
 
         Ok(())
     }
@@ -425,42 +426,28 @@ impl TransferManager {
             .get_mut(&transfer_id)
             .ok_or(crate::Error::BadTransfer)?;
 
-        if matches!(
-            state.xfer_sync.local,
-            drop_storage::sync::TransferState::Canceled
-        ) {
-            return Err(crate::Error::BadTransfer);
-        }
+        state.ensure_not_cancelled()?;
 
-        let sync = state
-            .file_sync
-            .get_mut(file_id)
-            .ok_or(crate::Error::BadFileId)?;
+        let sync = state.file_sync_mut(file_id)?;
+        sync.try_terminate_local(FileTerminalState::Rejected)?;
 
-        match sync.local {
-            sync::FileState::Rejected => return Err(crate::Error::Rejected),
-            sync::FileState::Alive => {
-                self.storage
-                    .update_incoming_file_sync_states(
-                        state.xfer.id(),
-                        file_id.as_ref(),
-                        None,
-                        Some(sync::FileState::Rejected),
-                    )
-                    .await;
-                self.storage
-                    .stop_incoming_file(state.xfer.id(), file_id.as_ref())
-                    .await;
+        self.storage
+            .update_incoming_file_sync_states(
+                state.xfer.id(),
+                file_id.as_ref(),
+                None,
+                Some(sync::FileState::Terminal),
+            )
+            .await;
 
-                sync.local = sync::FileState::Rejected;
-                let _ = sync.in_flight.take();
+        self.storage
+            .stop_incoming_file(state.xfer.id(), file_id.as_ref())
+            .await;
 
-                if let Some(conn) = &state.conn {
-                    let _ = conn.send(ServerReq::Reject {
-                        file: file_id.clone(),
-                    });
-                }
-            }
+        if let Some(conn) = &state.conn {
+            let _ = conn.send(ServerReq::Reject {
+                file: file_id.clone(),
+            });
         }
 
         Ok(RejectionResult {
@@ -480,20 +467,18 @@ impl TransferManager {
             .get_mut(&transfer_id)
             .ok_or(crate::Error::BadTransfer)?;
 
-        let sync = state
-            .file_sync
-            .get_mut(file_id)
-            .ok_or(crate::Error::BadFileId)?;
+        let sync = state.file_sync_mut(file_id)?;
+
+        sync.termiante_remote();
 
         self.storage
             .update_incoming_file_sync_states(
                 transfer_id,
                 file_id.as_ref(),
-                Some(sync::FileState::Rejected),
-                None,
+                Some(sync::FileState::Terminal),
+                Some(sync::FileState::Terminal),
             )
             .await;
-        sync.remote = sync::FileState::Rejected;
 
         Ok(())
     }
@@ -509,22 +494,20 @@ impl TransferManager {
             .get_mut(&transfer_id)
             .ok_or(crate::Error::BadTransfer)?;
 
-        let sync = state
-            .file_sync
-            .get_mut(file_id)
-            .ok_or(crate::Error::BadFileId)?;
+        let sync = state.file_sync_mut(file_id)?;
+
+        sync.termiante_remote();
 
         self.storage
             .update_incoming_file_sync_states(
                 transfer_id,
                 file_id.as_ref(),
-                Some(sync::FileState::Rejected),
-                Some(sync::FileState::Rejected),
+                Some(sync::FileState::Terminal),
+                Some(sync::FileState::Terminal),
             )
             .await;
-        sync.remote = sync::FileState::Rejected;
-        sync.local = sync::FileState::Rejected;
-        sync.in_flight.take();
+
+        sync.try_terminate_local(FileTerminalState::Rejected)?;
 
         Ok(())
     }
@@ -540,7 +523,7 @@ impl TransferManager {
         Ok(())
     }
 
-    pub async fn incoming_finish_download(
+    pub async fn incoming_download_cancel(
         &self,
         transfer_id: Uuid,
         file_id: &FileId,
@@ -551,23 +534,52 @@ impl TransferManager {
             .get_mut(&transfer_id)
             .ok_or(crate::Error::BadTransfer)?;
 
-        if matches!(state.xfer_sync.local, sync::TransferState::Canceled) {
-            return Err(crate::Error::BadTransfer);
-        }
+        state.ensure_not_cancelled()?;
 
-        let state = state
-            .file_sync
-            .get_mut(file_id)
-            .ok_or(crate::Error::BadFileId)?;
+        let state = state.file_sync_mut(file_id)?;
 
-        if matches!(state.local, sync::FileState::Rejected) {
-            return Err(crate::Error::Rejected);
-        }
+        state.ensure_not_terminated()?;
+        state.local = IncomingLocalFlieState::Idle;
 
         self.storage
             .stop_incoming_file(transfer_id, file_id.as_ref())
             .await;
-        let _ = state.in_flight.take();
+
+        Ok(())
+    }
+
+    pub async fn incoming_finish_post(
+        &self,
+        transfer_id: Uuid,
+        file_id: &FileId,
+        success: bool,
+    ) -> crate::Result<()> {
+        let mut lock = self.incoming.lock().await;
+
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        state.ensure_not_cancelled()?;
+
+        let state = state.file_sync_mut(file_id)?;
+        state.try_terminate_local(if success {
+            FileTerminalState::Completed
+        } else {
+            FileTerminalState::Failed
+        })?;
+
+        self.storage
+            .update_incoming_file_sync_states(
+                transfer_id,
+                file_id.as_ref(),
+                None,
+                Some(sync::FileState::Terminal),
+            )
+            .await;
+        self.storage
+            .stop_incoming_file(transfer_id, file_id.as_ref())
+            .await;
 
         Ok(())
     }
@@ -598,7 +610,9 @@ impl TransferManager {
         }
 
         for val in state.file_sync.values_mut() {
-            val.in_flight.take();
+            if let IncomingLocalFlieState::InFlight { .. } = &val.local {
+                val.local = IncomingLocalFlieState::Idle;
+            }
         }
 
         let res = CloseResult {
@@ -642,7 +656,7 @@ impl TransferManager {
         Ok(res)
     }
 
-    pub async fn outgoing_ensure_file_not_rejected(
+    pub async fn outgoing_ensure_file_not_terminated(
         &self,
         transfer_id: Uuid,
         file_id: &FileId,
@@ -654,10 +668,7 @@ impl TransferManager {
             .get(file_id)
             .ok_or(crate::Error::BadFileId)?;
 
-        if matches!(state.local, drop_storage::sync::FileState::Rejected) {
-            return Err(crate::Error::Rejected);
-        }
-        Ok(())
+        state.ensure_not_terminated()
     }
 
     pub async fn outgoing_remove(&self, transfer_id: Uuid) -> crate::Result<()> {
@@ -693,30 +704,28 @@ impl TransferManager {
             .ok_or(crate::Error::BadTransfer)?;
         state.ensure_not_cancelled()?;
 
-        let sync = state
-            .file_sync
-            .get_mut(file_id)
-            .ok_or(crate::Error::BadFileId)?;
+        let sync = state.file_sync_mut(file_id)?;
 
-        if matches!(sync.local, sync::FileState::Rejected) {
-            return Err(crate::Error::Rejected);
-        }
+        let cancelled = match sync.local {
+            IncomingLocalFlieState::Idle => false,
+            IncomingLocalFlieState::InFlight { .. } => {
+                sync.local = IncomingLocalFlieState::Idle;
 
-        let cancelled = if sync.in_flight.is_some() {
-            self.storage
-                .stop_incoming_file(state.xfer.id(), file_id.as_ref())
-                .await;
-            let _ = sync.in_flight.take();
+                self.storage
+                    .stop_incoming_file(state.xfer.id(), file_id.as_ref())
+                    .await;
 
-            if let Some(conn) = &state.conn {
-                let _ = conn.send(ServerReq::Cancel {
-                    file: file_id.clone(),
-                });
+                if let Some(conn) = &state.conn {
+                    let _ = conn.send(ServerReq::Cancel {
+                        file: file_id.clone(),
+                    });
+                }
+
+                true
             }
-
-            true
-        } else {
-            false
+            IncomingLocalFlieState::Terminal(term) => {
+                return Err(crate::Error::FileStateMismatch(term));
+            }
         };
 
         Ok(cancelled.then(|| FileCancelResult {
@@ -741,8 +750,11 @@ impl OutgoingState {
         for file_id in self
             .file_sync
             .iter()
-            .filter_map(|(k, v)| match (v.local, v.remote) {
-                (sync::FileState::Rejected, sync::FileState::Alive) => Some(k),
+            .filter_map(|(k, v)| match (&v.local, v.remote) {
+                (
+                    OutgoingLocalFlieState::Terminal(FileTerminalState::Rejected),
+                    sync::FileState::Alive,
+                ) => Some(k),
                 _ => None,
             })
         {
@@ -775,23 +787,30 @@ impl OutgoingState {
             })
             .clone()
     }
+
+    fn file_sync_mut(&mut self, file_id: &FileId) -> crate::Result<&mut OutgoingFileSync> {
+        self.file_sync
+            .get_mut(file_id)
+            .ok_or(crate::Error::BadFileId)
+    }
 }
 
 impl IncomingState {
     /// Returs `true` when the new download can be started and `false` in case
     /// the downaload is already happening
     pub fn validate_for_download(&self, file_id: &FileId) -> crate::Result<bool> {
-        if matches!(self.xfer_sync.local, sync::TransferState::Canceled) {
-            return Err(crate::Error::BadTransfer);
-        }
+        self.ensure_not_cancelled()?;
 
         let state = self.file_sync.get(file_id).ok_or(crate::Error::BadFileId)?;
+        let start = match state.local {
+            IncomingLocalFlieState::Idle => true,
+            IncomingLocalFlieState::InFlight { .. } => false,
+            IncomingLocalFlieState::Terminal(term) => {
+                return Err(crate::Error::FileStateMismatch(term));
+            }
+        };
 
-        if matches!(state.local, sync::FileState::Rejected) {
-            return Err(crate::Error::Rejected);
-        }
-
-        Ok(state.in_flight.is_none())
+        Ok(start)
     }
 
     pub async fn start_download(
@@ -799,24 +818,21 @@ impl IncomingState {
         storage: &Storage,
         file_id: &FileId,
         parent_dir: &Path,
-        logger: &Logger,
     ) -> crate::Result<()> {
-        if storage
+        let state = self.file_sync_mut(file_id)?;
+
+        state.ensure_not_terminated()?;
+        state.local = IncomingLocalFlieState::InFlight {
+            path: parent_dir.to_path_buf(),
+        };
+
+        storage
             .start_incoming_file(
                 self.xfer.id(),
                 file_id.as_ref(),
                 &parent_dir.to_string_lossy(),
             )
-            .await
-            .is_none()
-        {
-            warn!(logger, "Failed to store started file state into the DB");
-        }
-
-        self.file_sync
-            .get_mut(file_id)
-            .expect("Missing file sync state")
-            .in_flight = Some(parent_dir.to_path_buf());
+            .await;
 
         let file = &self.xfer.files()[file_id];
 
@@ -858,8 +874,11 @@ impl IncomingState {
         for file_id in self
             .file_sync
             .iter()
-            .filter_map(|(k, v)| match (v.local, v.remote) {
-                (sync::FileState::Rejected, sync::FileState::Alive) => Some(k),
+            .filter_map(|(k, v)| match (&v.local, v.remote) {
+                (
+                    IncomingLocalFlieState::Terminal(FileTerminalState::Rejected),
+                    sync::FileState::Alive,
+                ) => Some(k),
                 _ => None,
             })
         {
@@ -871,9 +890,9 @@ impl IncomingState {
     }
 
     fn resume_pending(&self, conn: &UnboundedSender<ServerReq>, logger: &Logger) {
-        let iter = self.file_sync.iter().filter_map(|(k, v)| match v.local {
-            sync::FileState::Rejected => None,
-            _ => v.in_flight.as_deref().map(|p| (k, p)),
+        let iter = self.file_sync.iter().filter_map(|(k, v)| match &v.local {
+            IncomingLocalFlieState::InFlight { path } => Some((k, path)),
+            _ => None,
         });
 
         for (file_id, base_dir) in iter {
@@ -885,6 +904,12 @@ impl IncomingState {
                 task: Box::new(task),
             });
         }
+    }
+
+    fn file_sync_mut(&mut self, file_id: &FileId) -> crate::Result<&mut IncomingFileSync> {
+        self.file_sync
+            .get_mut(file_id)
+            .ok_or(crate::Error::BadFileId)
     }
 }
 
@@ -964,6 +989,62 @@ impl DirMapping {
     }
 }
 
+impl OutgoingFileSync {
+    fn try_terminate_local(&mut self, to_set: FileTerminalState) -> crate::Result<()> {
+        match self.local {
+            OutgoingLocalFlieState::Alive => {
+                self.local = OutgoingLocalFlieState::Terminal(to_set);
+                Ok(())
+            }
+            OutgoingLocalFlieState::Terminal(state) => Err(crate::Error::FileStateMismatch(state)),
+        }
+    }
+
+    fn termiante_remote(&mut self) {
+        match self.remote {
+            sync::FileState::Alive => {
+                self.remote = sync::FileState::Terminal;
+            }
+            sync::FileState::Terminal => (),
+        }
+    }
+
+    fn ensure_not_terminated(&self) -> crate::Result<()> {
+        match self.local {
+            OutgoingLocalFlieState::Terminal(term) => Err(crate::Error::FileStateMismatch(term)),
+            _ => Ok(()),
+        }
+    }
+}
+
+impl IncomingFileSync {
+    fn try_terminate_local(&mut self, to_set: FileTerminalState) -> crate::Result<()> {
+        match self.local {
+            IncomingLocalFlieState::Idle | IncomingLocalFlieState::InFlight { .. } => {
+                self.local = IncomingLocalFlieState::Terminal(to_set);
+                Ok(())
+            }
+            IncomingLocalFlieState::Terminal(state) => Err(crate::Error::FileStateMismatch(state)),
+        }
+    }
+
+    fn termiante_remote(&mut self) {
+        match self.remote {
+            sync::FileState::Alive => {
+                self.remote = sync::FileState::Terminal;
+            }
+            sync::FileState::Terminal => (),
+        }
+    }
+
+    fn ensure_not_terminated(&self) -> crate::Result<()> {
+        match self.local {
+            IncomingLocalFlieState::Terminal(term) => Err(crate::Error::FileStateMismatch(term)),
+            _ => Ok(()),
+        }
+    }
+}
+
 pub(crate) async fn resume(
     state: &Arc<State>,
     logger: &Logger,
@@ -1015,12 +1096,12 @@ async fn restore_incoming(
                     .await
                     .context("Missing sync state for file")?;
 
+                // TODO(msz): make use of local terminal states
                 file_sync.insert(
                     file_id.clone(),
                     IncomingFileSync {
-                        local: sync.local_state,
+                        local: IncomingLocalFlieState::Idle,
                         remote: sync.remote_state,
-                        in_flight: None,
                     },
                 );
             }
@@ -1029,7 +1110,11 @@ async fn restore_incoming(
 
             for file in in_flights {
                 if let Some(state) = file_sync.get_mut(&file.file_id) {
-                    state.in_flight = Some(file.base_dir.into());
+                    if state.ensure_not_terminated().is_ok() {
+                        state.local = IncomingLocalFlieState::InFlight {
+                            path: file.base_dir.into(),
+                        };
+                    }
                 }
             }
 
@@ -1119,10 +1204,11 @@ async fn restore_outgoing(
                     .await
                     .context("Missing sync state for file")?;
 
+                // TODO(msz): make use of local terminal states
                 file_sync.insert(
                     file_id.clone(),
                     OutgoingFileSync {
-                        local: sync.local_state,
+                        local: OutgoingLocalFlieState::Alive,
                         remote: sync.remote_state,
                     },
                 );

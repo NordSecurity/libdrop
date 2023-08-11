@@ -28,11 +28,11 @@ impl FromSql for TransferState {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, strum::FromRepr, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum FileState {
     Alive = 0,
-    Rejected = 1,
+    Terminal = 1,
 }
 
 impl ToSql for FileState {
@@ -43,11 +43,12 @@ impl ToSql for FileState {
 
 impl FromSql for FileState {
     fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
-        match value.as_i64()? {
-            0 => Ok(Self::Alive),
-            1 => Ok(Self::Rejected),
-            x => Err(rusqlite::types::FromSqlError::OutOfRange(x)),
-        }
+        let x = value.as_i64()?;
+
+        x.try_into()
+            .ok()
+            .and_then(Self::from_repr)
+            .ok_or(rusqlite::types::FromSqlError::OutOfRange(x))
     }
 }
 
@@ -271,16 +272,17 @@ pub(super) fn outgoing_files_to_reject(
     let res = conn
         .prepare(
             r#"
-        SELECT op.path_hash
+        SELECT DISTINCT op.path_hash
         FROM sync_outgoing_files sof
         INNER JOIN sync_transfer st USING(sync_id)
         INNER JOIN outgoing_paths op ON op.id = sof.path_id 
+        INNER JOIN outgoing_path_reject_states oprs ON op.ip = oprs.path_id 
         WHERE st.transfer_id = ?1
             AND sof.local_state = ?2
             AND NOT sof.remote_state = sof.local_state
         "#,
         )?
-        .query_map(params![tid, FileState::Rejected], |r| r.get(0))?
+        .query_map(params![tid, FileState::Terminal], |r| r.get(0))?
         .collect::<QueryResult<_>>()?;
 
     Ok(res)
@@ -324,16 +326,17 @@ pub(super) fn incoming_files_to_reject(
     let res = conn
         .prepare(
             r#"
-        SELECT ip.path_hash
+        SELECT DISTINCT ip.path_hash
         FROM sync_incoming_files sif
         INNER JOIN sync_transfer st USING(sync_id)
         INNER JOIN incoming_paths ip ON ip.id = sif.path_id 
+        INNER JOIN incoming_path_reject_states iprs ON ip.ip = iprs.path_id 
         WHERE st.transfer_id = ?1
             AND sif.local_state = ?2
             AND NOT sif.remote_state = sif.local_state
         "#,
         )?
-        .query_map(params![tid, FileState::Rejected], |r| r.get(0))?
+        .query_map(params![tid, FileState::Terminal], |r| r.get(0))?
         .collect::<QueryResult<_>>()?;
 
     Ok(res)
