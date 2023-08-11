@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use drop_analytics::{Moose, TransferDirection};
+use drop_analytics::Moose;
 use drop_config::DropConfig;
 use drop_storage::Storage;
 use slog::{debug, Logger};
@@ -16,10 +16,8 @@ use uuid::Uuid;
 use crate::{
     auth,
     error::ResultExt,
-    file::File,
     manager,
     tasks::AliveWaiter,
-    transfer::Transfer,
     ws::{self, FileEventTxFactory},
     Error, Event, FileId, TransferManager,
 };
@@ -41,25 +39,6 @@ pub struct Service {
     stop: CancellationToken,
     waiter: AliveWaiter,
     pub(super) logger: Logger,
-}
-
-macro_rules! moose_try_file {
-    ($moose:expr, $func:expr, $xfer_id:expr, $file_info:expr) => {
-        match $func {
-            Ok(r) => r,
-            Err(e) => {
-                $moose.service_quality_transfer_file(
-                    Err(u32::from(&e) as i32),
-                    $xfer_id.to_string(),
-                    0,
-                    TransferDirection::Download,
-                    $file_info,
-                );
-
-                return Err(e);
-            }
-        }
-    };
 }
 
 // todo: better name to reduce confusion
@@ -179,27 +158,16 @@ impl Service {
 
         let mut lock = self.state.transfer_manager.incoming.lock().await;
 
-        let task = async {
-            let state = lock.get_mut(&uuid).ok_or(crate::Error::BadTransfer)?;
-            let started = state.validate_for_download(file_id)?;
-            Ok((state, started))
-        };
-
-        let (state, started) = moose_try_file!(self.state.moose, task.await, uuid, None);
+        let state = lock.get_mut(&uuid).ok_or(crate::Error::BadTransfer)?;
+        let started = state.validate_for_download(file_id)?;
 
         if started {
-            let file_info = state.xfer.files()[file_id].info();
-
-            let task = async {
-                validate_dest_path(parent_dir)?;
-                state
-                    .start_download(&self.state.storage, file_id, parent_dir, &self.logger)
-                    .await?;
-                Ok(())
-            };
-
-            moose_try_file!(self.state.moose, task.await, uuid, Some(file_info));
+            validate_dest_path(parent_dir)?;
+            state
+                .start_download(&self.state.storage, file_id, parent_dir, &self.logger)
+                .await?;
         }
+
         Ok(())
     }
 

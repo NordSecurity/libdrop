@@ -66,14 +66,6 @@ impl<T: Transfer> FileEventTx<T> {
         let mut lock = self.inner.write().await;
         lock.started = Some(Instant::now());
 
-        lock.moose.service_quality_transfer_file(
-            Ok(()),
-            self.xfer.id().to_string(),
-            0,
-            T::direction(),
-            self.file_info(),
-        );
-
         lock.tx
             .send(event)
             .await
