@@ -627,18 +627,36 @@ impl FileXferTask {
                     )
                     .await;
 
-                if let Err(err) = state
-                    .transfer_manager
-                    .incoming_finish_download(self.xfer.id(), self.file.id())
-                    .await
-                {
-                    warn!(logger, "Failed to store download finish: {err}");
-                }
-
                 match result {
-                    Ok(dst_location) => events.success(dst_location).await,
-                    Err(crate::Error::Canceled) => (),
+                    Err(crate::Error::Canceled) => {
+                        if let Err(err) = state
+                            .transfer_manager
+                            .incoming_download_cancel(self.xfer.id(), self.file.id())
+                            .await
+                        {
+                            warn!(logger, "Failed to store download finish: {err}");
+                        }
+                    }
+                    Ok(dst_location) => {
+                        if let Err(err) = state
+                            .transfer_manager
+                            .incoming_finish_post(self.xfer.id(), self.file.id(), true)
+                            .await
+                        {
+                            warn!(logger, "Failed to post finish: {err}");
+                        }
+
+                        events.success(dst_location).await;
+                    }
                     Err(err) => {
+                        if let Err(err) = state
+                            .transfer_manager
+                            .incoming_finish_post(self.xfer.id(), self.file.id(), false)
+                            .await
+                        {
+                            warn!(logger, "Failed to post finish: {err}");
+                        }
+
                         let _ = downloader.error(err.to_string()).await;
                         events.failed(err).await;
                     }
