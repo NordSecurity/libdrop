@@ -1,6 +1,5 @@
 #!/usr/bin/python3
-
-from scenarios import scenarios
+from scenarios import scenarios as all_scenarios
 
 import subprocess
 import sys
@@ -16,10 +15,30 @@ def run():
     print("*** Test suite launched", flush=True)
     print("This will run test suite")
 
+    scenarios = []
+    if "SCENARIO" in os.environ:
+        name = os.environ["SCENARIO"]
+
+        found = False
+        for s in all_scenarios:
+            if s.id() == name:
+                found = True
+                scenarios = [s]
+                break
+
+        if not found:
+            print(f"Unrecognized scenario: {name}")
+            exit(1)
+    else:
+        scenarios = all_scenarios
+
     failed_scenarios = []
 
-    for scenario in scenarios:
-        print(f"Executing scenario '{scenario.id()}'", flush=True)
+    print(f"Will execute {len(scenarios)} scenario(s): {[s.id() for s in scenarios]}")
+    for i, scenario in enumerate(scenarios):
+        print(
+            f"Executing scenario {i+1}/{len(scenarios)}: '{scenario.id()}'", flush=True
+        )
         my_env = os.environ.copy()
         my_env["SCENARIO"] = scenario.id()
 
