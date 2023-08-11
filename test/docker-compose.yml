@@ -4,12 +4,12 @@ x-peer: &peer-common
   build:
     context: .
     dockerfile: Dockerfile
-  command: sh -c "test/run.py --runner=$$HOSTNAME --scenario=\"${SCENARIO}\" --lib=/src/${LIB_PATH}"
+  command: sh -c "./run.py --runner=$$HOSTNAME --scenario=\"${SCENARIO}\" --lib=${LIB_PATH}"
   volumes:
     - type: bind
       source: ..
-      target: /src
-  working_dir: /src
+      target: /libdrop
+  working_dir: /libdrop/test
   cap_add:
       - NET_ADMIN
   environment:

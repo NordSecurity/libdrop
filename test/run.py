@@ -82,6 +82,8 @@ async def main():
     scenario = args.scenario
     lib = args.lib
 
+    os.environ["LLVM_PROFILE_FILE"] = f"./coverage/{scenario}-{runner}.profraw"
+
     script = None
     for scn in scenarios:
         if scn._id == scenario:

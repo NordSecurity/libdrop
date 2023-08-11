@@ -45,3 +45,4 @@ target/
 *.sqlite-shm
 *.sqlite-wal
 /drop-storage/.env
+default*.profraw

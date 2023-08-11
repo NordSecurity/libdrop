@@ -13,10 +13,6 @@ jobs:
         with:
           toolchain: 1.64.0
           default: true
-      - name: Build linux binary for testing
-        run: |
-          cargo build --features moose_file
       - name: run tests
         run: |
-          cd test
-          LIB_PATH="target/debug/libnorddrop.so" ./runner.py
+          make -C test
