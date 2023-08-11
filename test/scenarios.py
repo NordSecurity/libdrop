@@ -114,18 +114,6 @@ scenarios = [
                                 "size_kb": 10240
                             }
                         }""",
-                            """{
-                            "type": "file",
-                            "result": 0,
-                            "transfer_id": "*",
-                            "transfer_time": "*",
-                            "direction": "upload",
-                            "info": {
-                                "mime_type": "unknown",
-                                "extension": "none",
-                                "size_kb": 10240
-                            }
-                        }""",
                         ]
                     ),
                 ]
@@ -214,18 +202,6 @@ scenarios = [
                             "result": 0,
                             "app_version": "*",
                             "prod": false
-                        }""",
-                            """{
-                            "type": "file",
-                            "result": 0,
-                            "transfer_id": "*",
-                            "transfer_time": "*",
-                            "direction": "download",
-                            "info": {
-                                "mime_type": "unknown",
-                                "extension": "none",
-                                "size_kb": 10240
-                            }
                         }""",
                             """{
                             "type": "file",
@@ -3519,18 +3495,6 @@ scenarios = [
                         }""",
                             """{
                             "type": "file",
-                            "result": 0,
-                            "transfer_id": "*",
-                            "transfer_time": "*",
-                            "direction": "upload",
-                            "info": {
-                                "mime_type": "unknown",
-                                "extension": "none",
-                                "size_kb": 10240
-                            }
-                        }""",
-                            """{
-                            "type": "file",
                             "result": 28,
                             "transfer_id": "*",
                             "transfer_time": "*",
@@ -3624,18 +3588,6 @@ scenarios = [
                             "result": 0,
                             "app_version": "*",
                             "prod": false
-                        }""",
-                            """{
-                            "type": "file",
-                            "result": 0,
-                            "transfer_id": "*",
-                            "transfer_time": "*",
-                            "direction": "download",
-                            "info": {
-                                "mime_type": "unknown",
-                                "extension": "none",
-                                "size_kb": 10240
-                            }
                         }""",
                             """{
                             "type": "file",
@@ -5162,18 +5114,6 @@ scenarios = [
                                 "file_count": 1
                             },
                             "protocol_version": 5
-                        }""",
-                            """{
-                            "type": "file",
-                            "result": 0,
-                            "transfer_id": "*",
-                            "transfer_time": "*",
-                            "direction": "upload",
-                            "info": {
-                                "mime_type": "unknown",
-                                "extension": "none",
-                                "size_kb": 1024
-                            }
                         }""",
                             """{
                             "type": "file",
