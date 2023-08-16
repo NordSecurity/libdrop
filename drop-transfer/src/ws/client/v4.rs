@@ -6,16 +6,23 @@ use std::{
 
 use anyhow::Context;
 use futures::SinkExt;
-use slog::{debug, error};
+use slog::{debug, error, warn};
 use tokio::{
     sync::mpsc::Sender,
     task::{AbortHandle, JoinSet},
 };
 use tokio_tungstenite::tungstenite::Message;
 
-use super::{handler, WebSocket};
+use super::{
+    handler::{self, MsgToSend},
+    WebSocket,
+};
 use crate::{
-    protocol::v4, service::State, tasks::AliveGuard, transfer::Transfer, ws::events::FileEventTx,
+    protocol::v4,
+    service::State,
+    tasks::AliveGuard,
+    transfer::Transfer,
+    ws::{client::handler::Ack, events::FileEventTx},
     FileId, OutgoingTransfer,
 };
 
@@ -29,7 +36,7 @@ pub struct HandlerLoop<'a> {
     state: &'a Arc<State>,
     logger: &'a slog::Logger,
     alive: &'a AliveGuard,
-    upload_tx: Sender<Message>,
+    upload_tx: Sender<MsgToSend>,
     tasks: HashMap<FileId, FileTask>,
     done: HashSet<FileId>,
     xfer: Arc<OutgoingTransfer>,
@@ -41,7 +48,7 @@ struct FileTask {
 }
 
 struct Uploader {
-    sink: Sender<Message>,
+    sink: Sender<MsgToSend>,
     file_id: FileId,
     offset: u64,
 }
@@ -75,7 +82,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
         Ok(())
     }
 
-    fn upgrade(self, upload_tx: Sender<Message>, xfer: Arc<OutgoingTransfer>) -> Self::Loop {
+    fn upgrade(self, upload_tx: Sender<MsgToSend>, xfer: Arc<OutgoingTransfer>) -> Self::Loop {
         let Self {
             state,
             logger,
@@ -115,6 +122,15 @@ impl HandlerLoop<'_> {
     }
 
     async fn on_done(&mut self, file_id: FileId) {
+        if let Err(err) = self
+            .state
+            .transfer_manager
+            .outgoing_finish_recv(self.xfer.id(), &file_id, true)
+            .await
+        {
+            warn!(self.logger, "Failed to accept file as done: {err}");
+        }
+
         if let Some(task) = self.tasks.remove(&file_id) {
             task.events.success().await;
         } else if !self.done.contains(&file_id) {
@@ -157,17 +173,33 @@ impl HandlerLoop<'_> {
             match make_report.await {
                 Ok(report) => {
                     let _ = msg_tx
-                        .send(Message::from(&v4::ClientMsg::ReportChsum(report)))
+                        .send(MsgToSend {
+                            msg: Message::from(&v4::ClientMsg::ReportChsum(report)),
+                            ack: None,
+                        })
                         .await;
                 }
                 Err(err) => {
                     error!(logger, "Failed to report checksum: {:?}", err);
 
+                    if let Err(err) = state
+                        .transfer_manager
+                        .outgoing_failure_post(xfer.id(), &file_id)
+                        .await
+                    {
+                        warn!(logger, "Failed to post failure {err:?}");
+                    }
+
                     let msg = v4::Error {
-                        file: Some(file_id),
+                        file: Some(file_id.clone()),
                         msg: err.to_string(),
                     };
-                    let _ = msg_tx.send(Message::from(&v4::ClientMsg::Error(msg))).await;
+                    let _ = msg_tx
+                        .send(MsgToSend {
+                            msg: Message::from(&v4::ClientMsg::Error(msg)),
+                            ack: Some(Ack::Finished(file_id)),
+                        })
+                        .await;
                 }
             }
         };
@@ -251,6 +283,15 @@ impl HandlerLoop<'_> {
         );
 
         if let Some(file_id) = file_id {
+            if let Err(err) = self
+                .state
+                .transfer_manager
+                .outgoing_finish_recv(self.xfer.id(), &file_id, false)
+                .await
+            {
+                warn!(self.logger, "Failed to accept failure: {err}");
+            }
+
             if let Some(task) = self.tasks.remove(&file_id) {
                 if !task.job.is_finished() {
                     task.job.abort();
@@ -386,7 +427,10 @@ impl handler::Uploader for Uploader {
         };
 
         self.sink
-            .send(Message::from(msg))
+            .send(MsgToSend {
+                msg: Message::from(msg),
+                ack: None,
+            })
             .await
             .map_err(|_| crate::Error::Canceled)?;
 
@@ -399,7 +443,13 @@ impl handler::Uploader for Uploader {
             msg,
         });
 
-        let _ = self.sink.send(Message::from(&msg)).await;
+        let _ = self
+            .sink
+            .send(MsgToSend {
+                msg: Message::from(&msg),
+                ack: Some(Ack::Finished(self.file_id.clone())),
+            })
+            .await;
     }
 
     fn offset(&self) -> u64 {

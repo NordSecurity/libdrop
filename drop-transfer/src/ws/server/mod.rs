@@ -33,6 +33,7 @@ use warp::{
     Filter,
 };
 
+use self::handler::Ack;
 use super::{events::FileEventTx, IncomingFileEventTx};
 use crate::{
     auth,
@@ -43,7 +44,10 @@ use crate::{
     tasks::AliveGuard,
     transfer::{IncomingTransfer, Transfer},
     utils::Hidden,
-    ws::{server::handler::Request, Pinger},
+    ws::{
+        server::handler::{MsgToSend, Request},
+        Pinger,
+    },
     Error, Event, File, FileId,
 };
 
@@ -405,8 +409,12 @@ async fn handle_client(
                 },
                 // Message to send down the wire
                 msg = send_rx.recv() => {
-                    let msg = msg.expect("Handler channel should always be open");
+                    let MsgToSend { msg, ack } = msg.expect("Handler channel should always be open");
+
                     socket.send(msg).await?;
+                    if let Some(ack) = ack {
+                        on_msg_ack(state, &xfer, ack).await?;
+                    }
                 },
                 _ = ping.tick() => {
                     socket.send(Message::ping(Vec::new())).await.context("Failed to send PING message")?;
@@ -830,4 +838,17 @@ async fn start_download(
     };
 
     Ok((job, events))
+}
+
+async fn on_msg_ack(state: &State, xfer: &IncomingTransfer, ack: Ack) -> anyhow::Result<()> {
+    match ack {
+        Ack::Finished(file_id) => {
+            state
+                .transfer_manager
+                .incoming_finish_ack(xfer.id(), &file_id)
+                .await?
+        }
+    }
+
+    Ok(())
 }

@@ -29,11 +29,17 @@ use tokio_tungstenite::{
 };
 use tokio_util::sync::CancellationToken;
 
-use self::handler::{HandlerInit, HandlerLoop, Uploader};
+use self::handler::{Ack, HandlerInit, HandlerLoop, Uploader};
 use super::OutgoingFileEventTx;
 use crate::{
-    auth, file::FileId, protocol, service::State, tasks::AliveGuard, transfer::Transfer,
-    ws::Pinger, Event, OutgoingTransfer,
+    auth,
+    file::FileId,
+    protocol,
+    service::State,
+    tasks::AliveGuard,
+    transfer::Transfer,
+    ws::{client::handler::MsgToSend, Pinger},
+    Event, OutgoingTransfer,
 };
 
 pub type WebSocket = WebSocketStream<TcpStream>;
@@ -360,8 +366,12 @@ impl RunContext<'_> {
                     },
                     // Message to send down the wire
                     msg = upload_rx.recv() => {
-                        let msg = msg.expect("Handler channel should always be open");
+                        let MsgToSend { msg, ack } = msg.expect("Handler channel should always be open");
+
                         self.socket.send(msg).await.context("Socket sending upload msg")?;
+                        if let Some(ack) = ack {
+                            on_msg_ack(self.state, self.xfer, ack).await?;
+                        }
                     },
                     _ = ping.tick() => {
                         self.socket.send(Message::Ping(Vec::new())).await.context("Failed to send PING")?;
@@ -465,6 +475,14 @@ async fn start_upload(
                         "Failed at service::download() while reading a file: {}", err
                     );
 
+                    if let Err(err) = state
+                        .transfer_manager
+                        .outgoing_failure_post(xfer.id(), &file_id)
+                        .await
+                    {
+                        warn!(logger, "Failed to post failure: {err}");
+                    }
+
                     uploader.error(err.to_string()).await;
                     events.failed(err).await;
                 }
@@ -548,4 +566,17 @@ async fn on_recv(
     }
 
     Ok(ControlFlow::Continue(()))
+}
+
+async fn on_msg_ack(state: &State, xfer: &OutgoingTransfer, ack: Ack) -> anyhow::Result<()> {
+    match ack {
+        Ack::Finished(file_id) => {
+            state
+                .transfer_manager
+                .outgoing_failure_ack(xfer.id(), &file_id)
+                .await?
+        }
+    }
+
+    Ok(())
 }

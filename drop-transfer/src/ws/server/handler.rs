@@ -5,6 +5,16 @@ use warp::ws::{Message, WebSocket};
 
 use crate::{transfer::IncomingTransfer, utils::Hidden, ws, FileId};
 
+#[derive(Debug)]
+pub enum Ack {
+    Finished(FileId),
+}
+
+pub struct MsgToSend {
+    pub msg: Message,
+    pub ack: Option<Ack>,
+}
+
 #[async_trait::async_trait]
 pub trait HandlerInit {
     type Request: Request;
@@ -17,7 +27,7 @@ pub trait HandlerInit {
         self,
         ws: &mut WebSocket,
         jobs: &mut JoinSet<()>,
-        msg_tx: Sender<Message>,
+        msg_tx: Sender<MsgToSend>,
         xfer: Arc<IncomingTransfer>,
     ) -> Option<Self::Loop>;
 
@@ -64,4 +74,16 @@ pub trait Downloader {
     async fn done(&mut self, bytes: u64) -> crate::Result<()>;
     async fn error(&mut self, msg: String) -> crate::Result<()>;
     async fn validate(&mut self, location: &Hidden<PathBuf>) -> crate::Result<()>;
+}
+
+impl<T> From<T> for MsgToSend
+where
+    T: Into<Message>,
+{
+    fn from(value: T) -> Self {
+        Self {
+            msg: value.into(),
+            ack: None,
+        }
+    }
 }
