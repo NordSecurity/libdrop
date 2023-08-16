@@ -112,7 +112,7 @@ def run():
             print(f"------------")
             print("", flush=True)
 
-            failed_scenarios.append(f"{scenario.id()} for {failed}")
+            failed_scenarios.append(f"{scenario.id()} for {failed}: {scenario.desc()}")
         else:
             print(f"Scenario '{scenario.id()}' ran successfuly", flush=True)
 

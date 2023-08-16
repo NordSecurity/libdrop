@@ -39,6 +39,9 @@ class Scenario:
         self._action_list = action_list
         self._dbpath = dbpath
 
+    def desc(self):
+        return self._desc
+
     def id(self):
         return self._id
 
