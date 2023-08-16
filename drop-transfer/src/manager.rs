@@ -584,6 +584,150 @@ impl TransferManager {
         Ok(())
     }
 
+    pub async fn incoming_finish_ack(
+        &self,
+        transfer_id: Uuid,
+        file_id: &FileId,
+    ) -> crate::Result<()> {
+        let mut lock = self.incoming.lock().await;
+
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        let sync = state.file_sync_mut(file_id)?;
+        sync.termiante_remote();
+
+        self.storage
+            .update_incoming_file_sync_states(
+                transfer_id,
+                file_id.as_ref(),
+                Some(sync::FileState::Terminal),
+                Some(sync::FileState::Terminal),
+            )
+            .await;
+
+        Ok(())
+    }
+
+    pub async fn incoming_failure_recv(
+        &self,
+        transfer_id: Uuid,
+        file_id: &FileId,
+    ) -> crate::Result<()> {
+        let mut lock = self.incoming.lock().await;
+
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        let sync = state.file_sync_mut(file_id)?;
+        sync.termiante_remote();
+
+        self.storage
+            .update_incoming_file_sync_states(
+                transfer_id,
+                file_id.as_ref(),
+                Some(sync::FileState::Terminal),
+                Some(sync::FileState::Terminal),
+            )
+            .await;
+        self.storage
+            .stop_incoming_file(transfer_id, file_id.as_ref())
+            .await;
+
+        sync.try_terminate_local(FileTerminalState::Failed)?;
+
+        Ok(())
+    }
+
+    pub async fn outgoing_failure_post(
+        &self,
+        transfer_id: Uuid,
+        file_id: &FileId,
+    ) -> crate::Result<()> {
+        let mut lock = self.outgoing.lock().await;
+
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        state.ensure_not_cancelled()?;
+
+        let state = state.file_sync_mut(file_id)?;
+        state.try_terminate_local(FileTerminalState::Failed)?;
+
+        self.storage
+            .update_outgoing_file_sync_states(
+                transfer_id,
+                file_id.as_ref(),
+                None,
+                Some(sync::FileState::Terminal),
+            )
+            .await;
+
+        Ok(())
+    }
+
+    pub async fn outgoing_failure_ack(
+        &self,
+        transfer_id: Uuid,
+        file_id: &FileId,
+    ) -> crate::Result<()> {
+        let mut lock = self.outgoing.lock().await;
+
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        let sync = state.file_sync_mut(file_id)?;
+        sync.termiante_remote();
+
+        self.storage
+            .update_outgoing_file_sync_states(
+                transfer_id,
+                file_id.as_ref(),
+                Some(sync::FileState::Terminal),
+                Some(sync::FileState::Terminal),
+            )
+            .await;
+
+        Ok(())
+    }
+
+    pub async fn outgoing_finish_recv(
+        &self,
+        transfer_id: Uuid,
+        file_id: &FileId,
+        success: bool,
+    ) -> crate::Result<()> {
+        let mut lock = self.outgoing.lock().await;
+
+        let state = lock
+            .get_mut(&transfer_id)
+            .ok_or(crate::Error::BadTransfer)?;
+
+        let sync = state.file_sync_mut(file_id)?;
+        sync.termiante_remote();
+
+        self.storage
+            .update_outgoing_file_sync_states(
+                transfer_id,
+                file_id.as_ref(),
+                Some(sync::FileState::Terminal),
+                Some(sync::FileState::Terminal),
+            )
+            .await;
+
+        sync.try_terminate_local(if success {
+            FileTerminalState::Completed
+        } else {
+            FileTerminalState::Failed
+        })?;
+
+        Ok(())
+    }
+
     pub async fn incoming_issue_close(
         &self,
         transfer_id: Uuid,

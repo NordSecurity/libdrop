@@ -18,7 +18,7 @@ use tokio::{
 };
 use warp::ws::{Message, WebSocket};
 
-use super::handler;
+use super::handler::{self, Ack, MsgToSend};
 use crate::{
     file::FileSubPath,
     protocol::v2,
@@ -41,15 +41,16 @@ pub struct HandlerLoop<'a, const PING: bool> {
     state: &'a Arc<State>,
     logger: &'a slog::Logger,
     alive: &'a AliveGuard,
-    msg_tx: Sender<Message>,
+    msg_tx: Sender<MsgToSend>,
     xfer: Arc<IncomingTransfer>,
     jobs: HashMap<FileSubPath, FileTask>,
 }
 
 struct Downloader {
     state: Arc<State>,
-    file_id: FileSubPath,
-    msg_tx: Sender<Message>,
+    file_id: FileId,
+    file_subpath: FileSubPath,
+    msg_tx: Sender<MsgToSend>,
     tmp_loc: Option<Hidden<PathBuf>>,
 }
 
@@ -111,7 +112,7 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
         self,
         _: &mut WebSocket,
         _: &mut JoinSet<()>,
-        msg_tx: Sender<Message>,
+        msg_tx: Sender<MsgToSend>,
         xfer: Arc<IncomingTransfer>,
     ) -> Option<Self::Loop> {
         let Self {
@@ -182,6 +183,17 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         );
 
         if let Some(file) = file {
+            if let Some(file) = self.xfer.file_by_subpath(&file) {
+                if let Err(err) = self
+                    .state
+                    .transfer_manager
+                    .incoming_failure_recv(self.xfer.id(), file.id())
+                    .await
+                {
+                    warn!(self.logger, "Failed to accept failure: {err}");
+                }
+            }
+
             if let Some(FileTask {
                 job: task,
                 events,
@@ -255,7 +267,8 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 
         let downloader = Downloader {
             state: self.state.clone(),
-            file_id: task.file.subpath().clone(),
+            file_subpath: task.file.subpath().clone(),
+            file_id: task.file.id().clone(),
             msg_tx: self.msg_tx.clone(),
             tmp_loc: None,
         };
@@ -420,7 +433,17 @@ impl<const PING: bool> Drop for HandlerLoop<'_, PING> {
 impl Downloader {
     async fn send(&mut self, msg: impl Into<Message>) -> crate::Result<()> {
         self.msg_tx
-            .send(msg.into())
+            .send(msg.into().into())
+            .await
+            .map_err(|_| crate::Error::Canceled)
+    }
+
+    async fn send_with_ack(&mut self, msg: impl Into<Message>, ack: Ack) -> crate::Result<()> {
+        self.msg_tx
+            .send(MsgToSend {
+                msg: msg.into(),
+                ack: Some(ack),
+            })
             .await
             .map_err(|_| crate::Error::Canceled)
     }
@@ -463,7 +486,7 @@ impl handler::Downloader for Downloader {
         super::validate_tmp_location_path(&tmp_location)?;
 
         let msg = v2::ServerMsg::Start(v2::Download {
-            file: self.file_id.clone(),
+            file: self.file_subpath.clone(),
         });
         self.send(Message::from(&msg)).await?;
 
@@ -485,25 +508,31 @@ impl handler::Downloader for Downloader {
 
     async fn progress(&mut self, bytes: u64) -> crate::Result<()> {
         self.send(&v2::ServerMsg::Progress(v2::Progress {
-            file: self.file_id.clone(),
+            file: self.file_subpath.clone(),
             bytes_transfered: bytes,
         }))
         .await
     }
 
     async fn done(&mut self, bytes: u64) -> crate::Result<()> {
-        self.send(&v2::ServerMsg::Done(v2::Progress {
-            file: self.file_id.clone(),
-            bytes_transfered: bytes,
-        }))
+        self.send_with_ack(
+            &v2::ServerMsg::Done(v2::Progress {
+                file: self.file_subpath.clone(),
+                bytes_transfered: bytes,
+            }),
+            Ack::Finished(self.file_id.clone()),
+        )
         .await
     }
 
     async fn error(&mut self, msg: String) -> crate::Result<()> {
-        self.send(&v2::ServerMsg::Error(v2::Error {
-            file: Some(self.file_id.clone()),
-            msg,
-        }))
+        self.send_with_ack(
+            &v2::ServerMsg::Error(v2::Error {
+                file: Some(self.file_subpath.clone()),
+                msg,
+            }),
+            Ack::Finished(self.file_id.clone()),
+        )
         .await
     }
 

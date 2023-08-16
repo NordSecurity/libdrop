@@ -14,7 +14,7 @@ use tokio::{
 };
 use warp::ws::{Message, WebSocket};
 
-use super::handler;
+use super::handler::{self, Ack, MsgToSend};
 use crate::{
     file,
     protocol::v4,
@@ -37,7 +37,7 @@ pub struct HandlerLoop<'a> {
     state: Arc<State>,
     logger: &'a slog::Logger,
     alive: &'a AliveGuard,
-    msg_tx: Sender<Message>,
+    msg_tx: Sender<MsgToSend>,
     xfer: Arc<IncomingTransfer>,
     jobs: HashMap<FileId, FileTask>,
     checksums: HashMap<FileId, Arc<AsyncCell<[u8; 32]>>>,
@@ -46,7 +46,7 @@ pub struct HandlerLoop<'a> {
 struct Downloader {
     logger: slog::Logger,
     file_id: FileId,
-    msg_tx: Sender<Message>,
+    msg_tx: Sender<MsgToSend>,
     csum_rx: mpsc::Receiver<v4::ReportChsum>,
     full_csum: Arc<AsyncCell<[u8; 32]>>,
     offset: u64,
@@ -112,7 +112,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
         mut self,
         ws: &mut WebSocket,
         jobs: &mut JoinSet<()>,
-        msg_tx: Sender<Message>,
+        msg_tx: Sender<MsgToSend>,
         xfer: Arc<IncomingTransfer>,
     ) -> Option<Self::Loop> {
         let task = async {
@@ -249,6 +249,15 @@ impl HandlerLoop<'_> {
         );
 
         if let Some(file_id) = file_id {
+            if let Err(err) = self
+                .state
+                .transfer_manager
+                .incoming_failure_recv(self.xfer.id(), &file_id)
+                .await
+            {
+                warn!(self.logger, "Failed to accept failure: {err}");
+            }
+
             if let Some(FileTask {
                 job: task,
                 events,
@@ -530,7 +539,17 @@ impl Drop for HandlerLoop<'_> {
 impl Downloader {
     async fn send(&mut self, msg: impl Into<Message>) -> crate::Result<()> {
         self.msg_tx
-            .send(msg.into())
+            .send(msg.into().into())
+            .await
+            .map_err(|_| crate::Error::Canceled)
+    }
+
+    async fn send_with_ack(&mut self, msg: impl Into<Message>, ack: Ack) -> crate::Result<()> {
+        self.msg_tx
+            .send(MsgToSend {
+                msg: msg.into(),
+                ack: Some(ack),
+            })
             .await
             .map_err(|_| crate::Error::Canceled)
     }
@@ -648,18 +667,24 @@ impl handler::Downloader for Downloader {
     }
 
     async fn done(&mut self, bytes: u64) -> crate::Result<()> {
-        self.send(&v4::ServerMsg::Done(v4::Done {
-            file: self.file_id.clone(),
-            bytes_transfered: bytes,
-        }))
+        self.send_with_ack(
+            &v4::ServerMsg::Done(v4::Done {
+                file: self.file_id.clone(),
+                bytes_transfered: bytes,
+            }),
+            Ack::Finished(self.file_id.clone()),
+        )
         .await
     }
 
     async fn error(&mut self, msg: String) -> crate::Result<()> {
-        self.send(&v4::ServerMsg::Error(v4::Error {
-            file: Some(self.file_id.clone()),
-            msg,
-        }))
+        self.send_with_ack(
+            &v4::ServerMsg::Error(v4::Error {
+                file: Some(self.file_id.clone()),
+                msg,
+            }),
+            Ack::Finished(self.file_id.clone()),
+        )
         .await
     }
 

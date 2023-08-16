@@ -6,6 +6,16 @@ use tokio_tungstenite::tungstenite::Message;
 use super::WebSocket;
 use crate::{ws, FileId, OutgoingTransfer};
 
+#[derive(Debug)]
+pub enum Ack {
+    Finished(FileId),
+}
+
+pub struct MsgToSend {
+    pub msg: Message,
+    pub ack: Option<Ack>,
+}
+
 #[async_trait::async_trait]
 pub trait HandlerInit {
     type Pinger: ws::Pinger;
@@ -14,7 +24,7 @@ pub trait HandlerInit {
     async fn start(&mut self, socket: &mut WebSocket, xfer: &OutgoingTransfer)
         -> crate::Result<()>;
 
-    fn upgrade(self, msg_tx: Sender<Message>, xfer: Arc<OutgoingTransfer>) -> Self::Loop;
+    fn upgrade(self, msg_tx: Sender<MsgToSend>, xfer: Arc<OutgoingTransfer>) -> Self::Loop;
     fn pinger(&mut self) -> Self::Pinger;
 }
 
@@ -41,4 +51,16 @@ pub trait Uploader: Send + 'static {
 
     // File stream offset
     fn offset(&self) -> u64;
+}
+
+impl<T> From<T> for MsgToSend
+where
+    T: Into<Message>,
+{
+    fn from(value: T) -> Self {
+        Self {
+            msg: value.into(),
+            ack: None,
+        }
+    }
 }

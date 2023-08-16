@@ -13,7 +13,10 @@ use tokio::{
 };
 use tokio_tungstenite::tungstenite::Message;
 
-use super::{handler, WebSocket};
+use super::{
+    handler::{self, Ack, MsgToSend},
+    WebSocket,
+};
 use crate::{
     file::FileSubPath,
     protocol::v2,
@@ -33,15 +36,16 @@ pub struct HandlerInit<'a, const PING: bool = true> {
 pub struct HandlerLoop<'a, const PING: bool> {
     state: &'a Arc<State>,
     logger: &'a slog::Logger,
-    upload_tx: Sender<Message>,
+    upload_tx: Sender<MsgToSend>,
     tasks: HashMap<FileSubPath, FileTask>,
     xfer: Arc<OutgoingTransfer>,
     alive: &'a AliveGuard,
 }
 
 struct Uploader {
-    sink: Sender<Message>,
-    file_id: FileSubPath,
+    sink: Sender<MsgToSend>,
+    file_id: FileId,
+    file_subpath: FileSubPath,
 }
 
 struct FileTask {
@@ -78,7 +82,7 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
         Ok(())
     }
 
-    fn upgrade(self, upload_tx: Sender<Message>, xfer: Arc<OutgoingTransfer>) -> Self::Loop {
+    fn upgrade(self, upload_tx: Sender<MsgToSend>, xfer: Arc<OutgoingTransfer>) -> Self::Loop {
         let Self {
             state,
             logger,
@@ -117,6 +121,17 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
     }
 
     async fn on_done(&mut self, file: FileSubPath) {
+        if let Some(file) = self.xfer.file_by_subpath(&file) {
+            if let Err(err) = self
+                .state
+                .transfer_manager
+                .outgoing_finish_recv(self.xfer.id(), file.id(), true)
+                .await
+            {
+                warn!(self.logger, "Failed to accept file as done: {err}");
+            }
+        }
+
         if let Some(task) = self.tasks.remove(&file) {
             task.events.success().await;
         }
@@ -124,12 +139,15 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
 
     async fn on_download(&mut self, jobs: &mut JoinSet<()>, file_id: FileSubPath) {
         let start = async {
-            if let Some(file) = self.xfer.file_by_subpath(&file_id) {
-                self.state
-                    .transfer_manager
-                    .outgoing_ensure_file_not_terminated(self.xfer.id(), file.id())
-                    .await?;
-            }
+            let file = self
+                .xfer
+                .file_by_subpath(&file_id)
+                .context("Invalid file")?;
+
+            self.state
+                .transfer_manager
+                .outgoing_ensure_file_not_terminated(self.xfer.id(), file.id())
+                .await?;
 
             match self.tasks.entry(file_id.clone()) {
                 Entry::Occupied(o) => {
@@ -141,7 +159,8 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                             self.state,
                             Uploader {
                                 sink: self.upload_tx.clone(),
-                                file_id: file_id.clone(),
+                                file_subpath: file_id.clone(),
+                                file_id: file.id().clone(),
                             },
                             self.xfer.clone(),
                             file_id,
@@ -159,7 +178,8 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                         self.state,
                         Uploader {
                             sink: self.upload_tx.clone(),
-                            file_id: file_id.clone(),
+                            file_subpath: file_id.clone(),
+                            file_id: file.id().clone(),
                         },
                         self.xfer.clone(),
                         file_id,
@@ -187,6 +207,17 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         );
 
         if let Some(file) = file {
+            if let Some(file) = self.xfer.file_by_subpath(&file) {
+                if let Err(err) = self
+                    .state
+                    .transfer_manager
+                    .outgoing_finish_recv(self.xfer.id(), file.id(), false)
+                    .await
+                {
+                    warn!(self.logger, "Failed to accept failure: {err}");
+                }
+            }
+
             if let Some(task) = self.tasks.remove(&file) {
                 if !task.job.is_finished() {
                     task.job.abort();
@@ -322,12 +353,15 @@ impl<const PING: bool> Drop for HandlerLoop<'_, PING> {
 impl handler::Uploader for Uploader {
     async fn chunk(&mut self, chunk: &[u8]) -> Result<(), crate::Error> {
         let msg = v2::Chunk {
-            file: self.file_id.clone(),
+            file: self.file_subpath.clone(),
             data: chunk.to_vec(),
         };
 
         self.sink
-            .send(Message::from(msg))
+            .send(MsgToSend {
+                msg: Message::from(msg),
+                ack: None,
+            })
             .await
             .map_err(|_| crate::Error::Canceled)?;
 
@@ -336,11 +370,17 @@ impl handler::Uploader for Uploader {
 
     async fn error(&mut self, msg: String) {
         let msg = v2::ClientMsg::Error(v2::Error {
-            file: Some(self.file_id.clone()),
+            file: Some(self.file_subpath.clone()),
             msg,
         });
 
-        let _ = self.sink.send(Message::from(&msg)).await;
+        let _ = self
+            .sink
+            .send(MsgToSend {
+                msg: Message::from(&msg),
+                ack: Some(Ack::Finished(self.file_id.clone())),
+            })
+            .await;
     }
 
     fn offset(&self) -> u64 {
