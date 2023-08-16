@@ -5,6 +5,8 @@ import subprocess
 import sys
 import os
 import json
+import time
+import math
 
 STDERR_ERR_PATTERNS = [
     ["drop-storage", "ERROR"],
@@ -36,19 +38,22 @@ def run():
 
     print(f"Will execute {len(scenarios)} scenario(s): {[s.id() for s in scenarios]}")
     for i, scenario in enumerate(scenarios):
+        time_start = time.time()
+
         print(
-            f"Executing scenario {i+1}/{len(scenarios)}: '{scenario.id()}'", flush=True
+            f"Executing scenario {i+1}/{len(scenarios)}({scenario.id()}): {scenario.desc()}",
+            flush=True,
         )
         my_env = os.environ.copy()
         my_env["SCENARIO"] = scenario.id()
 
-        res = subprocess.run(
-            ["docker", "compose", "down", "--remove-orphans", "--timeout", "4"],
-            env=my_env,
-        )
-        if res.returncode != 0:
-            print("`docker compose down` was not successful")
-            exit(1)
+        # res = subprocess.run(
+        #     ["docker", "compose", "down", "--remove-orphans", "--timeout", "4"],
+        #     env=my_env,
+        # )
+        # if res.returncode != 0:
+        #     print("`docker compose down` was not successful")
+        #     exit(1)
 
         args = [
             "docker",
@@ -114,7 +119,11 @@ def run():
 
             failed_scenarios.append(f"{scenario.id()} for {failed}: {scenario.desc()}")
         else:
-            print(f"Scenario '{scenario.id()}' ran successfuly", flush=True)
+            time_taken = math.trunc(time.time() - time_start)
+            print(
+                f"Scenario '{scenario.id()}' ran successfuly in {time_taken}s",
+                flush=True,
+            )
 
     if len(failed_scenarios) > 0:
         print(f"Failed scenarios:")
