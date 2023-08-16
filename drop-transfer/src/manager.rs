@@ -1091,17 +1091,26 @@ async fn restore_incoming(
             let mut file_sync = HashMap::new();
 
             for file_id in xfer.files().keys() {
-                let sync = storage
+                let state = storage
                     .incoming_file_sync_state(xfer.id(), file_id.as_ref())
                     .await
                     .context("Missing sync state for file")?;
 
-                // TODO(msz): make use of local terminal states
+                let local = if state.is_rejected {
+                    IncomingLocalFlieState::Terminal(FileTerminalState::Rejected)
+                } else if state.is_success {
+                    IncomingLocalFlieState::Terminal(FileTerminalState::Completed)
+                } else if state.is_failed {
+                    IncomingLocalFlieState::Terminal(FileTerminalState::Failed)
+                } else {
+                    IncomingLocalFlieState::Idle
+                };
+
                 file_sync.insert(
                     file_id.clone(),
                     IncomingFileSync {
-                        local: IncomingLocalFlieState::Idle,
-                        remote: sync.remote_state,
+                        local,
+                        remote: state.sync.remote_state,
                     },
                 );
             }
@@ -1198,18 +1207,27 @@ async fn restore_outgoing(
 
             let mut file_sync = HashMap::new();
             for file_id in xfer.files().keys() {
-                let sync = state
+                let state = state
                     .storage
                     .outgoing_file_sync_state(xfer.id(), file_id.as_ref())
                     .await
                     .context("Missing sync state for file")?;
 
-                // TODO(msz): make use of local terminal states
+                let local = if state.is_rejected {
+                    OutgoingLocalFlieState::Terminal(FileTerminalState::Rejected)
+                } else if state.is_success {
+                    OutgoingLocalFlieState::Terminal(FileTerminalState::Completed)
+                } else if state.is_failed {
+                    OutgoingLocalFlieState::Terminal(FileTerminalState::Failed)
+                } else {
+                    OutgoingLocalFlieState::Alive
+                };
+
                 file_sync.insert(
                     file_id.clone(),
                     OutgoingFileSync {
-                        local: OutgoingLocalFlieState::Alive,
-                        remote: sync.remote_state,
+                        local,
+                        remote: state.sync.remote_state,
                     },
                 );
             }

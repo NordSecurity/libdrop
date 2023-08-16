@@ -10,7 +10,7 @@ use rusqlite_migration::Migrations;
 use slog::{error, trace, warn, Logger};
 use tokio::sync::Mutex;
 use types::{
-    DbTransferType, IncomingFileToRetry, IncomingPath, IncomingPathStateEvent,
+    DbTransferType, FileSyncState, IncomingFileToRetry, IncomingPath, IncomingPathStateEvent,
     IncomingPathStateEventData, IncomingTransferToRetry, OutgoingFileToRetry, OutgoingPath,
     OutgoingPathStateEvent, OutgoingPathStateEventData, TempFileLocation, Transfer, TransferFiles,
     TransferIncomingPath, TransferOutgoingPath, TransferStateEvent,
@@ -176,10 +176,65 @@ impl Storage {
         &self,
         transfer_id: Uuid,
         file_id: &str,
-    ) -> Option<sync::File> {
+    ) -> Option<FileSyncState> {
+        let tid = transfer_id.to_string();
+
         let task = async {
-            let conn = self.conn.lock().await;
-            sync::outgoing_file_state(&conn, transfer_id, file_id)
+            let mut conn = self.conn.lock().await;
+
+            let conn = conn.transaction()?;
+
+            let sync = sync::outgoing_file_state(&conn, transfer_id, file_id)?;
+
+            let sync = if let Some(sync) = sync {
+                sync
+            } else {
+                return Ok::<_, Error>(None);
+            };
+
+            let res = conn.query_row(
+                r#"
+                SELECT
+                    EXISTS (
+                        SELECT 1
+                        FROM outgoing_path_failed_states opfs
+                        INNER JOIN outgoing_paths op ON op.id = opfs.path_id
+                        WHERE op.transfer_id = ?1 AND op.path_hash = ?2
+                        LIMIT 1
+                    ) as is_failed,
+                    EXISTS (
+                        SELECT 1
+                        FROM outgoing_path_completed_states opcs
+                        INNER JOIN outgoing_paths op ON op.id = opcs.path_id
+                        WHERE op.transfer_id = ?1 AND op.path_hash = ?2
+                        LIMIT 1
+                    ) as is_completed,
+                    EXISTS (
+                        SELECT 1
+                        FROM outgoing_path_reject_states oprs
+                        INNER JOIN outgoing_paths op ON op.id = oprs.path_id
+                        WHERE op.transfer_id = ?1 AND op.path_hash = ?2
+                        LIMIT 1
+                    ) as is_rejected
+                "#,
+                params![tid, file_id],
+                |r| {
+                    let is_failed = r.get("is_failed")?;
+                    let is_success = r.get("is_completed")?;
+                    let is_rejected = r.get("is_rejected")?;
+
+                    Ok(FileSyncState {
+                        sync,
+                        is_rejected,
+                        is_success,
+                        is_failed,
+                    })
+                },
+            )?;
+
+            conn.commit()?;
+
+            Ok::<_, Error>(Some(res))
         };
 
         match task.await {
@@ -223,10 +278,64 @@ impl Storage {
         &self,
         transfer_id: Uuid,
         file_id: &str,
-    ) -> Option<sync::File> {
+    ) -> Option<FileSyncState> {
+        let tid = transfer_id.to_string();
+
         let task = async {
-            let conn = self.conn.lock().await;
-            sync::incoming_file_state(&conn, transfer_id, file_id)
+            let mut conn = self.conn.lock().await;
+
+            let conn = conn.transaction()?;
+
+            let sync = sync::incoming_file_state(&conn, transfer_id, file_id)?;
+            let sync = if let Some(sync) = sync {
+                sync
+            } else {
+                return Ok::<_, Error>(None);
+            };
+
+            let res = conn.query_row(
+                r#"
+                SELECT
+                    EXISTS (
+                        SELECT 1
+                        FROM incoming_path_failed_states ipfs
+                        INNER JOIN incoming_paths ip ON ip.id = ipfs.path_id
+                        WHERE ip.transfer_id = ?1 AND ip.path_hash = ?2
+                        LIMIT 1
+                    ) as is_failed,
+                    EXISTS (
+                        SELECT 1
+                        FROM incoming_path_completed_states ipcs
+                        INNER JOIN incoming_paths ip ON ip.id = ipcs.path_id
+                        WHERE ip.transfer_id = ?1 AND ip.path_hash = ?2
+                        LIMIT 1
+                    ) as is_completed,
+                    EXISTS (
+                        SELECT 1
+                        FROM incoming_path_reject_states iprs
+                        INNER JOIN incoming_paths ip ON ip.id = iprs.path_id
+                        WHERE ip.transfer_id = ?1 AND ip.path_hash = ?2
+                        LIMIT 1
+                    ) as is_rejected
+                "#,
+                params![tid, file_id],
+                |r| {
+                    let is_failed = r.get("is_failed")?;
+                    let is_success = r.get("is_completed")?;
+                    let is_rejected = r.get("is_rejected")?;
+
+                    Ok(FileSyncState {
+                        sync,
+                        is_rejected,
+                        is_success,
+                        is_failed,
+                    })
+                },
+            )?;
+
+            conn.commit()?;
+
+            Ok::<_, Error>(Some(res))
         };
 
         match task.await {
