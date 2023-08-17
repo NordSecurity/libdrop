@@ -21,6 +21,15 @@ Testsuite takes a long time to complete so running specific tests might be prefe
 $SCENARIO=scenario_name make -C test
 ```
 
+## Code coverage single test
+```
+$SCENARIO=scenario_name make -C test coverage
+```
+
+## Code coverage all testcases
+```
+make -C test coverage
+```
 ## udrop
 
 udrop is an example client-server to test basic functionality of the library.
