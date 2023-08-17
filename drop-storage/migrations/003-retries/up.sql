@@ -43,3 +43,7 @@ CREATE TABLE IF NOT EXISTS sync_incoming_files_inflight (
   FOREIGN KEY(sync_id, path_id) REFERENCES sync_incoming_files(sync_id, path_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+
+ -- paths soft deletion
+ALTER TABLE incoming_paths ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT FALSE CHECK (is_deleted IN (FALSE, TRUE));
+ALTER TABLE outgoing_paths ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT FALSE CHECK (is_deleted IN (FALSE, TRUE));

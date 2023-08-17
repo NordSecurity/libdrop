@@ -1221,20 +1221,30 @@ impl Storage {
             count += conn
                 .prepare(
                     r#"
-                DELETE FROM outgoing_paths
+                UPDATE outgoing_paths
+                SET is_deleted = TRUE
                 WHERE transfer_id = ?1
                     AND path_hash = ?2
-                    AND id IN(SELECT path_id FROM outgoing_path_reject_states)
+                    AND (
+                        id IN(SELECT path_id FROM outgoing_path_reject_states) OR
+                        id IN(SELECT path_id FROM outgoing_path_failed_states) OR
+                        id IN(SELECT path_id FROM outgoing_path_completed_states)
+                    )
             "#,
                 )?
                 .execute(params![tid, file_id])?;
             count += conn
                 .prepare(
                     r#"
-                DELETE FROM incoming_paths
+                UPDATE incoming_paths
+                SET is_deleted = TRUE
                 WHERE transfer_id = ?1
                     AND path_hash = ?2
-                    AND id IN(SELECT path_id FROM incoming_path_reject_states)
+                    AND (
+                        id IN(SELECT path_id FROM incoming_path_reject_states) OR
+                        id IN(SELECT path_id FROM incoming_path_failed_states) OR
+                        id IN(SELECT path_id FROM incoming_path_completed_states)
+                    )
             "#,
                 )?
                 .execute(params![tid, file_id])?;
@@ -1319,7 +1329,7 @@ impl Storage {
             let mut paths: Vec<_> = conn
                 .prepare(
                     r#"
-                SELECT * FROM outgoing_paths WHERE transfer_id = ?1
+                SELECT * FROM outgoing_paths WHERE transfer_id = ?1 AND NOT is_deleted
                 "#,
                 )?
                 .query_map(params![tid], |row| {
@@ -1513,7 +1523,7 @@ impl Storage {
             let mut paths = conn
                 .prepare(
                     r#"
-                SELECT * FROM incoming_paths WHERE transfer_id = ?1
+                SELECT * FROM incoming_paths WHERE transfer_id = ?1 AND NOT is_deleted
                 "#,
                 )?
                 .query_map(params![tid], |row| {
