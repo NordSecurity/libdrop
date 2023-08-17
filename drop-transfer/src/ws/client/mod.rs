@@ -46,6 +46,7 @@ pub type WebSocket = WebSocketStream<TcpStream>;
 
 pub enum ClientReq {
     Reject { file: FileId },
+    Fail { file: FileId },
     Close,
 }
 
@@ -351,7 +352,7 @@ impl RunContext<'_> {
 
                     // API request
                     req = api_req_rx.recv() => {
-                        if on_req(&mut self.socket, &mut handler, req, self.logger).await?.is_break() {
+                        if on_req(&mut self.socket, &mut handler, self.state, self.logger, req, self.xfer).await?.is_break() {
                             break;
                         }
                     },
@@ -437,7 +438,6 @@ async fn start_upload(
     events.start().await;
 
     let upload_job = {
-        let events = events.clone();
         async move {
             let _guard = guard;
             let xfile = &xfer.files()[&file_id];
@@ -475,16 +475,19 @@ async fn start_upload(
                         "Failed at service::download() while reading a file: {}", err
                     );
 
-                    if let Err(err) = state
+                    let msg = err.to_string();
+
+                    match state
                         .transfer_manager
                         .outgoing_failure_post(xfer.id(), &file_id)
                         .await
                     {
-                        warn!(logger, "Failed to post failure: {err}");
+                        Err(err) => {
+                            warn!(logger, "Failed to post failure {err:?}");
+                        }
+                        Ok(res) => res.events.failed(err).await,
                     }
-
-                    uploader.error(err.to_string()).await;
-                    events.failed(err).await;
+                    uploader.error(msg).await;
                 }
             };
         }
@@ -522,11 +525,26 @@ async fn acquire_throttle_permit<'a>(
 async fn on_req(
     socket: &mut WebSocket,
     handler: &mut impl HandlerLoop,
+    state: &State,
+    logger: &Logger,
     req: Option<ClientReq>,
-    logger: &slog::Logger,
+    xfer: &OutgoingTransfer,
 ) -> anyhow::Result<ControlFlow<()>> {
     match req.context("API channel broken")? {
-        ClientReq::Reject { file } => handler.issue_reject(socket, file).await?,
+        ClientReq::Reject { file } => {
+            handler.issue_reject(socket, file.clone()).await?;
+            state
+                .transfer_manager
+                .outgoing_finish_ack(xfer.id(), &file)
+                .await?;
+        }
+        ClientReq::Fail { file } => {
+            handler.issue_faliure(socket, file.clone()).await?;
+            state
+                .transfer_manager
+                .outgoing_finish_ack(xfer.id(), &file)
+                .await?;
+        }
         ClientReq::Close => {
             debug!(logger, "Stopping client connection gracefuly");
             socket.close(None).await.context("Failed to close WS")?;
@@ -573,7 +591,7 @@ async fn on_msg_ack(state: &State, xfer: &OutgoingTransfer, ack: Ack) -> anyhow:
         Ack::Finished(file_id) => {
             state
                 .transfer_manager
-                .outgoing_failure_ack(xfer.id(), &file_id)
+                .outgoing_finish_ack(xfer.id(), &file_id)
                 .await?
         }
     }

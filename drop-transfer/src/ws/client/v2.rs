@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::Context;
+use drop_core::Status;
 use futures::SinkExt;
 use slog::{debug, error, warn};
 use tokio::{
@@ -208,26 +209,40 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
 
         if let Some(file) = file {
             if let Some(file) = self.xfer.file_by_subpath(&file) {
-                if let Err(err) = self
+                match self
                     .state
                     .transfer_manager
                     .outgoing_finish_recv(self.xfer.id(), file.id(), false)
                     .await
                 {
-                    warn!(self.logger, "Failed to accept failure: {err}");
+                    Err(err) => {
+                        warn!(self.logger, "Failed to accept failure: {err}");
+                    }
+                    Ok(res) => {
+                        res.events
+                            .failed(crate::Error::BadTransferState(format!(
+                                "Sender reported an error: {msg}"
+                            )))
+                            .await;
+                    }
                 }
             }
 
-            if let Some(task) = self.tasks.remove(&file) {
-                if !task.job.is_finished() {
-                    task.job.abort();
-                }
+            self.stop_task(&file, Status::BadTransferState).await;
+        }
+    }
 
-                task.events
-                    .failed(crate::Error::BadTransferState(format!(
-                        "Receiver reported an error: {msg}"
-                    )))
-                    .await;
+    async fn stop_task(&mut self, file: &FileSubPath, status: Status) {
+        if let Some(FileTask { job: task, events }) = self.tasks.remove(file) {
+            if !task.is_finished() {
+                debug!(
+                    self.logger,
+                    "Aborting download job: {}:{file:?}",
+                    self.xfer.id()
+                );
+
+                task.abort();
+                events.stop_silent(status).await;
             }
         }
     }
@@ -252,17 +267,28 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         });
         socket.send(Message::from(&msg)).await?;
 
-        self.state
-            .transfer_manager
-            .outgoing_rejection_ack(self.xfer.id(), &file_id)
-            .await?;
+        self.stop_task(&file_subpath, Status::FileRejected).await;
 
-        if let Some(task) = self.tasks.remove(&file_subpath) {
-            if !task.job.is_finished() {
-                task.job.abort();
-                task.events.cancelled_on_rejection().await;
-            }
-        }
+        Ok(())
+    }
+
+    async fn issue_faliure(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+    ) -> anyhow::Result<()> {
+        let file_subpath = if let Some(file) = self.xfer.files().get(&file_id) {
+            file.subpath().clone()
+        } else {
+            warn!(self.logger, "Missing file with ID: {file_id:?}");
+            return Ok(());
+        };
+
+        let msg = v2::ClientMsg::Error(v2::Error {
+            file: Some(file_subpath),
+            msg: String::from("File failed elsewhere"),
+        });
+        socket.send(Message::from(&msg)).await?;
 
         Ok(())
     }
@@ -314,7 +340,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         debug!(self.logger, "Waiting for background jobs to finish");
 
         let tasks = self.tasks.drain().map(|(_, task)| async move {
-            task.events.cancel_silent().await;
+            task.events.stop_silent(Status::Canceled).await;
         });
 
         futures::future::join_all(tasks).await;
