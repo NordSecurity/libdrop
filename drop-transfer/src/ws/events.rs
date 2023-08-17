@@ -1,4 +1,8 @@
-use std::{path::PathBuf, sync::Arc, time::Instant};
+use std::{
+    path::PathBuf,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use drop_analytics::{FileInfo, Moose};
 use drop_core::Status;
@@ -95,30 +99,37 @@ impl<T: Transfer> FileEventTx<T> {
             .expect("Event channel shouldn't be closed");
     }
 
-    pub async fn cancel_silent(&self) {
+    async fn force_stop(&self, event: Event, status: Result<(), i32>) {
         let mut lock = self.inner.write().await;
 
-        if let Some(started) = lock.started.take() {
-            let info = self.file_info();
+        let elapsed = if let Some(started) = lock.started.take() {
+            started.elapsed()
+        } else {
+            Duration::default()
+        };
 
-            lock.moose.service_quality_transfer_file(
-                Err(Status::Canceled as _),
-                self.xfer.id().to_string(),
-                started.elapsed().as_millis() as _,
-                T::direction(),
-                info,
-            );
-        }
+        lock.moose.service_quality_transfer_file(
+            status,
+            self.xfer.id().to_string(),
+            elapsed.as_millis() as i32,
+            T::direction(),
+            self.file_info(),
+        );
+
+        lock.tx
+            .send(event)
+            .await
+            .expect("Event channel shouldn't be closed");
     }
 
-    pub async fn cancelled_on_rejection(&self) {
+    pub async fn stop_silent(&self, status: Status) {
         let mut lock = self.inner.write().await;
 
         if let Some(started) = lock.started.take() {
             let info = self.file_info();
 
             lock.moose.service_quality_transfer_file(
-                Err(Status::FileRejected as _),
+                Err(status as _),
                 self.xfer.id().to_string(),
                 started.elapsed().as_millis() as _,
                 T::direction(),
@@ -149,9 +160,21 @@ impl FileEventTx<IncomingTransfer> {
 
     pub async fn failed(&self, err: crate::Error) {
         let status = i32::from(&err);
-        self.stop(
+        self.force_stop(
             crate::Event::FileDownloadFailed(self.xfer.clone(), self.file_id.clone(), err),
             Err(status),
+        )
+        .await
+    }
+
+    pub async fn rejected(&self, by_peer: bool) {
+        self.force_stop(
+            crate::Event::FileDownloadRejected {
+                transfer_id: self.xfer.id(),
+                file_id: self.file_id.clone(),
+                by_peer,
+            },
+            Err(Status::FileRejected as _),
         )
         .await
     }
@@ -210,7 +233,7 @@ impl FileEventTx<OutgoingTransfer> {
 
     pub async fn failed(&self, err: crate::Error) {
         let status = i32::from(&err);
-        self.stop(
+        self.force_stop(
             crate::Event::FileUploadFailed(self.xfer.clone(), self.file_id.clone(), err),
             Err(status),
         )
@@ -240,6 +263,18 @@ impl FileEventTx<OutgoingTransfer> {
                 file_id: self.file_id.clone(),
             },
             Err(Status::FilePaused as _),
+        )
+        .await
+    }
+
+    pub async fn rejected(&self, by_peer: bool) {
+        self.force_stop(
+            crate::Event::FileUploadRejected {
+                transfer_id: self.xfer.id(),
+                file_id: self.file_id.clone(),
+                by_peer,
+            },
+            Err(Status::FileRejected as _),
         )
         .await
     }

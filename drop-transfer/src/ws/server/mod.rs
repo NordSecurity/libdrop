@@ -60,6 +60,8 @@ pub enum ServerReq {
     Download { task: Box<FileXferTask> },
     Cancel { file: FileId },
     Reject { file: FileId },
+    Done { file: FileId },
+    Fail { file: FileId },
     Close,
 }
 
@@ -394,7 +396,7 @@ async fn handle_client(
 
                 // API request
                 req = req_rx.recv() => {
-                    if on_req(&mut socket, &mut jobs, &mut handler, req, logger).await?.is_break() {
+                    if on_req(&mut socket, &mut jobs, &mut handler, state, logger, req, &xfer).await?.is_break() {
                         break;
                     }
                 },
@@ -767,13 +769,35 @@ async fn on_req(
     socket: &mut WebSocket,
     jobs: &mut JoinSet<()>,
     handler: &mut impl HandlerLoop,
-    req: Option<ServerReq>,
+    state: &State,
     logger: &Logger,
+    req: Option<ServerReq>,
+    xfer: &IncomingTransfer,
 ) -> anyhow::Result<ControlFlow<()>> {
     match req.context("API channel broken")? {
         ServerReq::Download { task } => handler.issue_download(socket, jobs, *task).await?,
         ServerReq::Cancel { file } => handler.issue_cancel(socket, file).await?,
-        ServerReq::Reject { file } => handler.issue_reject(socket, file).await?,
+        ServerReq::Reject { file } => {
+            handler.issue_reject(socket, file.clone()).await?;
+            state
+                .transfer_manager
+                .incoming_finish_ack(xfer.id(), &file)
+                .await?;
+        }
+        ServerReq::Done { file } => {
+            handler.issue_done(socket, file.clone()).await?;
+            state
+                .transfer_manager
+                .incoming_finish_ack(xfer.id(), &file)
+                .await?;
+        }
+        ServerReq::Fail { file } => {
+            handler.issue_failure(socket, file.clone()).await?;
+            state
+                .transfer_manager
+                .incoming_finish_ack(xfer.id(), &file)
+                .await?;
+        }
         ServerReq::Close => {
             debug!(logger, "Stoppping server connection gracefuly");
             socket.send(Message::close()).await?;

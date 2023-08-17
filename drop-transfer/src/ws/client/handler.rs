@@ -31,6 +31,7 @@ pub trait HandlerInit {
 #[async_trait::async_trait]
 pub trait HandlerLoop {
     async fn issue_reject(&mut self, ws: &mut WebSocket, file_id: FileId) -> anyhow::Result<()>;
+    async fn issue_faliure(&mut self, ws: &mut WebSocket, file_id: FileId) -> anyhow::Result<()>;
 
     async fn on_close(&mut self, by_peer: bool);
     async fn on_text_msg(

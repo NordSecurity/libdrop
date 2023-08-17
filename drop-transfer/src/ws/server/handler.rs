@@ -44,6 +44,8 @@ pub trait HandlerLoop {
     ) -> anyhow::Result<()>;
     async fn issue_cancel(&mut self, ws: &mut WebSocket, file: FileId) -> anyhow::Result<()>;
     async fn issue_reject(&mut self, ws: &mut WebSocket, file: FileId) -> anyhow::Result<()>;
+    async fn issue_failure(&mut self, ws: &mut WebSocket, file: FileId) -> anyhow::Result<()>;
+    async fn issue_done(&mut self, ws: &mut WebSocket, file: FileId) -> anyhow::Result<()>;
 
     async fn on_close(&mut self, by_peer: bool);
     async fn on_text_msg(&mut self, ws: &mut WebSocket, text: &str) -> anyhow::Result<()>;

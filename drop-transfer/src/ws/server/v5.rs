@@ -6,6 +6,7 @@ use std::{
 use anyhow::Context;
 use async_cell::sync::AsyncCell;
 use drop_config::DropConfig;
+use drop_core::Status;
 use futures::{SinkExt, StreamExt};
 use slog::{debug, error, info, warn};
 use tokio::{
@@ -242,43 +243,42 @@ impl HandlerLoop<'_> {
         }
     }
 
-    async fn on_reject(&mut self, file_id: FileId, by_peer: bool) {
-        info!(self.logger, "Rejecting file {file_id}, by_peer?: {by_peer}");
+    async fn on_reject(&mut self, file_id: FileId) {
+        info!(self.logger, "On reject file {file_id}");
 
-        if by_peer {
-            if let Err(err) = self
-                .state
-                .transfer_manager
-                .incoming_rejection_recv(self.xfer.id(), &file_id)
-                .await
-            {
+        match self
+            .state
+            .transfer_manager
+            .incoming_rejection_recv(self.xfer.id(), &file_id)
+            .await
+        {
+            Err(err) => {
                 error!(self.logger, "Failed to handler file rejection: {err}");
             }
+            Ok(res) => res.events.rejected(true).await,
         }
 
+        self.stop_task(&file_id, Status::FileRejected).await;
+    }
+
+    async fn stop_task(&mut self, file_id: &FileId, status: Status) {
         if let Some(FileTask {
             job: task,
             events,
             chunks_tx: _,
             csum_tx: _,
-        }) = self.jobs.remove(&file_id)
+        }) = self.jobs.remove(file_id)
         {
             if !task.is_finished() {
-                task.abort();
-                events.cancelled_on_rejection().await;
-            }
-        }
+                debug!(
+                    self.logger,
+                    "Aborting download job: {}:{file_id}",
+                    self.xfer.id()
+                );
 
-        if by_peer {
-            self.state
-                .event_tx
-                .send(crate::Event::FileDownloadRejected {
-                    transfer_id: self.xfer.id(),
-                    file_id,
-                    by_peer,
-                })
-                .await
-                .expect("Event channel should be open");
+                task.abort();
+                events.stop_silent(status).await;
+            }
         }
     }
 
@@ -289,47 +289,25 @@ impl HandlerLoop<'_> {
         );
 
         if let Some(file_id) = file_id {
-            if let Err(err) = self
+            match self
                 .state
                 .transfer_manager
                 .incoming_failure_recv(self.xfer.id(), &file_id)
                 .await
             {
-                warn!(self.logger, "Failed to accept failure: {err}");
-            }
-
-            if let Some(FileTask {
-                job: task,
-                events,
-                chunks_tx: _,
-                csum_tx: _,
-            }) = self.jobs.remove(&file_id)
-            {
-                if !task.is_finished() {
-                    debug!(
-                        self.logger,
-                        "Aborting download job: {}:{file_id}",
-                        self.xfer.id()
-                    );
-
-                    task.abort();
-
-                    if let Err(err) = self
-                        .state
-                        .transfer_manager
-                        .incoming_download_cancel(self.xfer.id(), &file_id)
-                        .await
-                    {
-                        warn!(self.logger, "Failed to store download finish: {err}");
-                    }
-
-                    events
+                Err(err) => {
+                    warn!(self.logger, "Failed to accept failure: {err}");
+                }
+                Ok(res) => {
+                    res.events
                         .failed(crate::Error::BadTransferState(format!(
                             "Sender reported an error: {msg}"
                         )))
                         .await;
                 }
             }
+
+            self.stop_task(&file_id, Status::BadTransferState).await;
         }
     }
 
@@ -370,7 +348,7 @@ impl HandlerLoop<'_> {
         debug!(self.logger, "Stopping silently");
 
         let tasks = self.jobs.drain().map(|(_, task)| async move {
-            task.events.cancel_silent().await;
+            task.events.stop_silent(Status::Canceled).await;
         });
 
         futures::future::join_all(tasks).await;
@@ -464,12 +442,32 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         });
         socket.send(Message::from(&msg)).await?;
 
-        self.state
-            .transfer_manager
-            .incoming_rejection_ack(self.xfer.id(), &file_id)
-            .await?;
-        self.on_reject(file_id, false).await;
+        self.stop_task(&file_id, Status::FileRejected).await;
+        Ok(())
+    }
 
+    async fn issue_failure(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+    ) -> anyhow::Result<()> {
+        let msg = prot::ServerMsg::Error(prot::Error {
+            file: Some(file_id),
+            msg: String::from("File failed elsewhere"),
+        });
+        socket.send(Message::from(&msg)).await?;
+
+        Ok(())
+    }
+
+    async fn issue_done(&mut self, socket: &mut WebSocket, file_id: FileId) -> anyhow::Result<()> {
+        let file = self.xfer.files().get(&file_id).context("Invalid file")?;
+
+        let msg = prot::ServerMsg::Done(prot::Done {
+            file: file_id,
+            bytes_transfered: file.size(),
+        });
+        socket.send(Message::from(&msg)).await?;
         Ok(())
     }
 
@@ -498,7 +496,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             prot::ClientMsg::Error(prot::Error { file, msg }) => self.on_error(file, msg).await,
             prot::ClientMsg::Cancel(prot::Cancel { file }) => self.on_cancel(file, true).await,
             prot::ClientMsg::ReportChsum(report) => self.on_checksum(report).await,
-            prot::ClientMsg::Reject(prot::Reject { file }) => self.on_reject(file, true).await,
+            prot::ClientMsg::Reject(prot::Reject { file }) => self.on_reject(file).await,
         }
         Ok(())
     }
