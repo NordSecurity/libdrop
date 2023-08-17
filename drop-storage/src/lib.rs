@@ -1745,7 +1745,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn remove_outgoing_rejected_file() {
+    async fn remove_outgoing_file() {
         let logger = slog::Logger::root(slog::Discard, slog::o!());
         let storage = Storage::new(logger, ":memory:").unwrap();
 
@@ -1755,6 +1755,18 @@ mod tests {
             id: transfer_id,
             peer: "5.6.7.8".to_string(),
             files: TransferFiles::Outgoing(vec![
+                TransferOutgoingPath {
+                    file_id: "id1".to_string(),
+                    size: 1024,
+                    uri: "file:///dir".parse().unwrap(),
+                    relative_path: "1".to_string(),
+                },
+                TransferOutgoingPath {
+                    file_id: "id2".to_string(),
+                    size: 1024,
+                    uri: "file:///dir".parse().unwrap(),
+                    relative_path: "2".to_string(),
+                },
                 TransferOutgoingPath {
                     file_id: "id3".to_string(),
                     size: 1024,
@@ -1772,6 +1784,12 @@ mod tests {
 
         storage.insert_transfer(&transfer).await;
         storage
+            .insert_outgoing_path_failed_state(transfer_id, "id1", 1, 123)
+            .await;
+        storage
+            .insert_outgoing_path_completed_state(transfer_id, "id2")
+            .await;
+        storage
             .insert_outgoing_path_reject_state(transfer_id, "id3", false)
             .await;
 
@@ -1782,8 +1800,16 @@ mod tests {
             DbTransferType::Outgoing(out) => out,
             _ => panic!("Unexpected transfer type"),
         };
-        assert_eq!(paths.len(), 2);
+        assert_eq!(paths.len(), 4);
 
+        assert!(storage
+            .remove_transfer_file(transfer_id, "id1")
+            .await
+            .is_some());
+        assert!(storage
+            .remove_transfer_file(transfer_id, "id2")
+            .await
+            .is_some());
         assert!(storage
             .remove_transfer_file(transfer_id, "id3")
             .await
@@ -1805,7 +1831,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn remove_incoming_rejected_file() {
+    async fn remove_incoming_file() {
         let logger = slog::Logger::root(slog::Discard, slog::o!());
         let storage = Storage::new(logger, ":memory:").unwrap();
 
@@ -1815,6 +1841,16 @@ mod tests {
             id: transfer_id,
             peer: "5.6.7.8".to_string(),
             files: TransferFiles::Incoming(vec![
+                TransferIncomingPath {
+                    file_id: "id1".to_string(),
+                    size: 1024,
+                    relative_path: "1".to_string(),
+                },
+                TransferIncomingPath {
+                    file_id: "id2".to_string(),
+                    size: 1024,
+                    relative_path: "2".to_string(),
+                },
                 TransferIncomingPath {
                     file_id: "id3".to_string(),
                     size: 1024,
@@ -1830,6 +1866,12 @@ mod tests {
 
         storage.insert_transfer(&transfer).await;
         storage
+            .insert_incoming_path_failed_state(transfer_id, "id1", 1, 123)
+            .await;
+        storage
+            .insert_incoming_path_completed_state(transfer_id, "id2", "/recv/id2")
+            .await;
+        storage
             .insert_incoming_path_reject_state(transfer_id, "id3", false)
             .await;
 
@@ -1840,8 +1882,16 @@ mod tests {
             DbTransferType::Incoming(inc) => inc,
             _ => panic!("Unexpected transfer type"),
         };
-        assert_eq!(paths.len(), 2);
+        assert_eq!(paths.len(), 4);
 
+        assert!(storage
+            .remove_transfer_file(transfer_id, "id1")
+            .await
+            .is_some());
+        assert!(storage
+            .remove_transfer_file(transfer_id, "id2")
+            .await
+            .is_some());
         assert!(storage
             .remove_transfer_file(transfer_id, "id3")
             .await
