@@ -221,6 +221,16 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
             }
         }
     }
+
+    async fn on_stop(&mut self) {
+        debug!(self.logger, "Stopping silently");
+
+        let tasks = self.jobs.drain().map(|(_, task)| async move {
+            task.events.cancel_silent().await;
+        });
+
+        futures::future::join_all(tasks).await;
+    }
 }
 
 #[async_trait::async_trait]
@@ -373,26 +383,9 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         Ok(())
     }
 
-    async fn on_stop(&mut self) {
-        debug!(self.logger, "Waiting for background jobs to finish");
-
-        let tasks = self.jobs.drain().map(|(_, task)| async move {
-            task.events.cancel_silent().await;
-        });
-
-        futures::future::join_all(tasks).await;
-    }
-
-    async fn finalize_success(self) {}
-
-    async fn on_conn_break(&mut self) {
-        debug!(self.logger, "Waiting for background jobs to pause");
-
-        let tasks = self.jobs.drain().map(|(_, task)| async move {
-            task.events.pause().await;
-        });
-
-        futures::future::join_all(tasks).await;
+    async fn finalize_success(mut self) {
+        debug!(self.logger, "Finalizing");
+        self.on_stop().await;
     }
 
     fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration> {
@@ -412,6 +405,15 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 impl<const PING: bool> Drop for HandlerLoop<'_, PING> {
     fn drop(&mut self) {
         debug!(self.logger, "Stopping server handler");
+
+        let jobs = std::mem::take(&mut self.jobs);
+        tokio::spawn(async move {
+            let tasks = jobs.into_values().map(|task| async move {
+                task.events.pause().await;
+            });
+
+            futures::future::join_all(tasks).await;
+        });
     }
 }
 

@@ -316,6 +316,16 @@ impl HandlerLoop<'_> {
             }
         }
     }
+
+    async fn on_stop(&mut self) {
+        debug!(self.logger, "Stopping silently");
+
+        let tasks = self.jobs.drain().map(|(_, task)| async move {
+            task.events.cancel_silent().await;
+        });
+
+        futures::future::join_all(tasks).await;
+    }
 }
 
 #[async_trait::async_trait]
@@ -467,17 +477,10 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         Ok(())
     }
 
-    async fn on_stop(&mut self) {
-        debug!(self.logger, "Waiting for background jobs to finish");
+    async fn finalize_success(mut self) {
+        debug!(self.logger, "Finalizing");
+        self.on_stop().await;
 
-        let tasks = self.jobs.drain().map(|(_, task)| async move {
-            task.events.cancel_silent().await;
-        });
-
-        futures::future::join_all(tasks).await;
-    }
-
-    async fn finalize_success(self) {
         let files = self
             .state
             .storage
@@ -499,16 +502,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         }
     }
 
-    async fn on_conn_break(&mut self) {
-        debug!(self.logger, "Waiting for background jobs to pause");
-
-        let tasks = self.jobs.drain().map(|(_, task)| async move {
-            task.events.pause().await;
-        });
-
-        futures::future::join_all(tasks).await;
-    }
-
     fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration> {
         Some(
             self.state
@@ -522,6 +515,15 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 impl Drop for HandlerLoop<'_> {
     fn drop(&mut self) {
         debug!(self.logger, "Stopping server handler");
+
+        let jobs = std::mem::take(&mut self.jobs);
+        tokio::spawn(async move {
+            let tasks = jobs.into_values().map(|task| async move {
+                task.events.pause().await;
+            });
+
+            futures::future::join_all(tasks).await;
+        });
     }
 }
 
