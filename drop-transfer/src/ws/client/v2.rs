@@ -289,16 +289,6 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         futures::future::join_all(tasks).await;
     }
 
-    async fn on_conn_break(&mut self) {
-        debug!(self.logger, "Waiting for background jobs to pause");
-
-        let tasks = self.tasks.drain().map(|(_, task)| async move {
-            task.events.pause().await;
-        });
-
-        futures::future::join_all(tasks).await;
-    }
-
     fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration> {
         if PING {
             Some(
@@ -316,6 +306,15 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 impl<const PING: bool> Drop for HandlerLoop<'_, PING> {
     fn drop(&mut self) {
         debug!(self.logger, "Stopping client handler");
+
+        let jobs = std::mem::take(&mut self.tasks);
+        tokio::spawn(async move {
+            let tasks = jobs.into_values().map(|task| async move {
+                task.events.pause().await;
+            });
+
+            futures::future::join_all(tasks).await;
+        });
     }
 }
 
