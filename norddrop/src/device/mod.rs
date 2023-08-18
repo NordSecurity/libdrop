@@ -666,7 +666,7 @@ fn open_database(
     moose: &Arc<dyn drop_analytics::Moose>,
 ) -> Result<drop_storage::Storage> {
     match drop_storage::Storage::new(logger.clone(), dbpath) {
-        Ok(storage) => return Ok(storage),
+        Ok(storage) => Ok(storage),
         Err(err) => {
             error!(logger, "Failed to open DB at \"{dbpath}\": {err}",);
 
