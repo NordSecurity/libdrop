@@ -27,24 +27,160 @@ const PUB_KEY: [u8; PUBLIC_KEY_LENGTH] = [
     0x5a, 0x1b, 0x4c, 0xb1, 0x87, 0x4e, 0xff, 0x46, 0x5e, 0x56, 0x31, 0xb2, 0x33, 0x6b, 0xca, 0x6d,
 ];
 
+fn print_event(ev: &Event) {
+    match ev {
+        Event::RequestReceived(xfer) => {
+            let xfid = xfer.id();
+            let files = xfer.files();
+
+            info!("[EVENT] RequestReceived {}: {:?}", xfid, files);
+        }
+        Event::FileDownloadStarted(xfer, file, base_dir) => {
+            info!(
+                "[EVENT] [{}] FileDownloadStarted {:?} transfer started, to {:?}",
+                xfer.id(),
+                file,
+                base_dir
+            );
+        }
+
+        Event::FileUploadProgress(xfer, file, byte_count) => {
+            info!(
+                "[EVENT] [{}] FileUploadProgress {:?} progress: {}",
+                xfer.id(),
+                file,
+                byte_count,
+            );
+        }
+        Event::FileDownloadSuccess(xfer, info) => {
+            let xfid = xfer.id();
+
+            info!(
+                "[EVENT] [{}] FileDownloadSuccess {:?} [Final name: {:?}]",
+                xfid, info.id, info.final_path,
+            );
+        }
+        Event::FileUploadSuccess(xfer, path) => {
+            info!("[EVENT] FileUploadSuccess {}: {:?}", xfer.id(), path,);
+        }
+        Event::RequestQueued(xfer) => {
+            info!("[EVENT] RequestQueued {}: {:?}", xfer.id(), xfer.files(),);
+        }
+        Event::FileUploadStarted(xfer, file) => {
+            info!("[EVENT] FileUploadStarted {}: {:?}", xfer.id(), file,);
+        }
+        Event::FileDownloadProgress(xfer, file, progress) => {
+            info!(
+                "[EVENT] FileDownloadProgress {}: {:?}, progress: {}",
+                xfer.id(),
+                file,
+                progress
+            );
+        }
+        Event::FileUploadCancelled(xfer, file, by_peer) => {
+            info!(
+                "[EVENT] FileUploadCancelled {}: {:?}, by_peer: {by_peer}",
+                xfer.id(),
+                file,
+            );
+        }
+        Event::FileDownloadCancelled(xfer, file, by_peer) => {
+            let xfid = xfer.id();
+
+            info!(
+                "[EVENT] FileDownloadCancelled {}: {:?}, by_peer: {by_peer}",
+                xfid, file
+            );
+        }
+        Event::FileUploadFailed(xfer, file, status) => {
+            info!(
+                "[EVENT] FileUploadFailed {}: {:?}, status: {:?}",
+                xfer.id(),
+                file,
+                status
+            );
+        }
+        Event::FileDownloadFailed(xfer, file, status) => {
+            let xfid = xfer.id();
+
+            info!(
+                "[EVENT] FileDownloadFailed {}: {:?}, {:?}",
+                xfid, file, status
+            );
+        }
+        Event::IncomingTransferCanceled(xfer, by_peer) => {
+            info!(
+                "[EVENT] IncomingTransferCanceled {}, by peer? {}",
+                xfer.id(),
+                by_peer
+            );
+        }
+        Event::OutgoingTransferCanceled(xfer, by_peer) => {
+            info!(
+                "[EVENT] OutgoingTransferCanceled {}, by peer? {}",
+                xfer.id(),
+                by_peer
+            );
+        }
+        Event::IncomingTransferFailed(xfer, err, by_peer) => {
+            info!(
+                "[EVENT] IncomingTransferFailed {}, status: {}, by peer? {}",
+                xfer.id(),
+                err,
+                by_peer
+            );
+        }
+        Event::OutgoingTransferFailed(xfer, err, by_peer) => {
+            info!(
+                "[EVENT] OutgoingTransferFailed {}, status: {}, by peer? {}",
+                xfer.id(),
+                err,
+                by_peer
+            );
+        }
+        Event::FileDownloadRejected {
+            transfer_id,
+            file_id,
+            by_peer,
+        } => {
+            info!("[EVENT] FileDownloadRejected {transfer_id}: {file_id}, by_peer?: {by_peer}")
+        }
+
+        Event::FileUploadRejected {
+            transfer_id,
+            file_id,
+            by_peer,
+        } => {
+            info!("[EVENT] FileUploadRejected {transfer_id}: {file_id}, by_peer?: {by_peer}")
+        }
+        Event::FileUploadPaused {
+            transfer_id,
+            file_id,
+        } => info!("[EVENT] FileUploadPaused {transfer_id}: {file_id}"),
+        Event::FileDownloadPaused {
+            transfer_id,
+            file_id,
+        } => info!("[EVENT] FileDownloadPaused {transfer_id}: {file_id}"),
+    }
+}
+
 async fn listen(
     service: &mut Service,
-    storage: Arc<Storage>,
+    storage: &Storage,
     rx: &mut mpsc::Receiver<Event>,
     out_dir: &Path,
 ) -> anyhow::Result<()> {
     info!("Awaiting events…");
 
     let mut active_file_downloads = BTreeMap::new();
-    let mut storage = drop_transfer::StorageDispatch::new(&storage);
+    let mut storage = drop_transfer::StorageDispatch::new(storage);
     while let Some(ev) = rx.recv().await {
         storage.handle_event(&ev).await;
+        print_event(&ev);
         match ev {
             Event::RequestReceived(xfer) => {
                 let xfid = xfer.id();
                 let files = xfer.files();
-
-                info!("[EVENT] RequestReceived {}: {:?}", xfid, files);
 
                 if files.is_empty() {
                     service
@@ -60,36 +196,15 @@ async fn listen(
                         .context("Cannot issue download call")?;
                 }
             }
-            Event::FileDownloadStarted(xfer, file, base_dir) => {
-                info!(
-                    "[EVENT] [{}] FileDownloadStarted {:?} transfer started, to {:?}",
-                    xfer.id(),
-                    file,
-                    base_dir
-                );
-
+            Event::FileDownloadStarted(xfer, file, _) => {
                 active_file_downloads
                     .entry(xfer.id())
                     .or_insert_with(HashSet::new)
                     .insert(file);
             }
 
-            Event::FileUploadProgress(xfer, file, byte_count) => {
-                info!(
-                    "[EVENT] [{}] FileUploadProgress {:?} progress: {}",
-                    xfer.id(),
-                    file,
-                    byte_count,
-                );
-            }
             Event::FileDownloadSuccess(xfer, info) => {
                 let xfid = xfer.id();
-
-                info!(
-                    "[EVENT] [{}] FileDownloadSuccess {:?} [Final name: {:?}]",
-                    xfid, info.id, info.final_path,
-                );
-
                 if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
                     occ.get_mut().remove(&info.id);
                     if occ.get().is_empty() {
@@ -101,42 +216,14 @@ async fn listen(
                     }
                 }
             }
-            Event::FileUploadSuccess(xfer, path) => {
-                info!("[EVENT] FileUploadSuccess {}: {:?}", xfer.id(), path,);
-            }
-            Event::RequestQueued(xfer) => {
-                info!("[EVENT] RequestQueued {}: {:?}", xfer.id(), xfer.files(),);
-            }
-            Event::FileUploadStarted(xfer, file) => {
-                info!("[EVENT] FileUploadStarted {}: {:?}", xfer.id(), file,);
-            }
-            Event::FileDownloadProgress(xfer, file, progress) => {
-                info!(
-                    "[EVENT] FileDownloadProgress {}: {:?}, progress: {}",
-                    xfer.id(),
-                    file,
-                    progress
-                );
-
+            Event::FileDownloadProgress(xfer, file, _) => {
                 active_file_downloads
                     .entry(xfer.id())
                     .or_insert_with(HashSet::new)
                     .insert(file);
             }
-            Event::FileUploadCancelled(xfer, file, by_peer) => {
-                info!(
-                    "[EVENT] FileUploadCancelled {}: {:?}, by_peer: {by_peer}",
-                    xfer.id(),
-                    file,
-                );
-            }
-            Event::FileDownloadCancelled(xfer, file, by_peer) => {
+            Event::FileDownloadCancelled(xfer, file, _) => {
                 let xfid = xfer.id();
-
-                info!(
-                    "[EVENT] FileDownloadCancelled {}: {:?}, by_peer: {by_peer}",
-                    xfid, file
-                );
 
                 if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
                     occ.get_mut().remove(&file);
@@ -149,79 +236,13 @@ async fn listen(
                     }
                 }
             }
-            Event::FileUploadFailed(xfer, file, status) => {
-                info!(
-                    "[EVENT] FileUploadFailed {}: {:?}, status: {:?}",
-                    xfer.id(),
-                    file,
-                    status
-                );
-            }
-            Event::FileDownloadFailed(xfer, file, status) => {
-                let xfid = xfer.id();
-
-                info!(
-                    "[EVENT] FileDownloadFailed {}: {:?}, {:?}",
-                    xfid, file, status
-                );
-            }
-            Event::IncomingTransferCanceled(xfer, by_peer) => {
-                info!(
-                    "[EVENT] IncomingTransferCanceled {}, by peer? {}",
-                    xfer.id(),
-                    by_peer
-                );
-
+            Event::IncomingTransferCanceled(xfer, _) => {
                 active_file_downloads.remove(&xfer.id());
             }
-            Event::OutgoingTransferCanceled(xfer, by_peer) => {
-                info!(
-                    "[EVENT] OutgoingTransferCanceled {}, by peer? {}",
-                    xfer.id(),
-                    by_peer
-                );
-
+            Event::OutgoingTransferCanceled(xfer, _) => {
                 active_file_downloads.remove(&xfer.id());
             }
-            Event::IncomingTransferFailed(xfer, err, by_peer) => {
-                info!(
-                    "[EVENT] IncomingTransferFailed {}, status: {}, by peer? {}",
-                    xfer.id(),
-                    err,
-                    by_peer
-                );
-            }
-            Event::OutgoingTransferFailed(xfer, err, by_peer) => {
-                info!(
-                    "[EVENT] OutgoingTransferFailed {}, status: {}, by peer? {}",
-                    xfer.id(),
-                    err,
-                    by_peer
-                );
-            }
-            Event::FileDownloadRejected {
-                transfer_id,
-                file_id,
-                by_peer,
-            } => {
-                info!("[EVENT] FileDownloadRejected {transfer_id}: {file_id}, by_peer?: {by_peer}")
-            }
-
-            Event::FileUploadRejected {
-                transfer_id,
-                file_id,
-                by_peer,
-            } => {
-                info!("[EVENT] FileUploadRejected {transfer_id}: {file_id}, by_peer?: {by_peer}")
-            }
-            Event::FileUploadPaused {
-                transfer_id,
-                file_id,
-            } => info!("[EVENT] FileUploadPaused {transfer_id}: {file_id}"),
-            Event::FileDownloadPaused {
-                transfer_id,
-                file_id,
-            } => info!("[EVENT] FileDownloadPaused {transfer_id}: {file_id}"),
+            _ => (),
         }
     }
 
@@ -351,15 +372,28 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Listening...");
 
-    let task_result = listen(&mut service, storage, &mut rx, out_dir).await;
+    tokio::select! {
+        task_result = listen(&mut service, &storage, &mut rx, out_dir) => {
+            on_stop(service, &mut rx, &storage).await;
+            task_result?;
+        },
+        _ = tokio::signal::ctrl_c() => {
+            on_stop(service, &mut rx, &storage).await;
+        }
+    }
+
+    Ok(())
+}
+
+async fn on_stop(service: Service, rx: &mut mpsc::Receiver<Event>, storage: &Storage) {
     info!("Stopping the service");
 
     service.stop().await;
+    let mut storage = drop_transfer::StorageDispatch::new(storage);
 
     // Drain events
-    while rx.recv().await.is_some() {}
-
-    task_result?;
-
-    Ok(())
+    while let Some(ev) = rx.recv().await {
+        storage.handle_event(&ev).await;
+        print_event(&ev);
+    }
 }
