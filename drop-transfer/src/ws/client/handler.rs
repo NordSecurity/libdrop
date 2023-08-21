@@ -30,7 +30,6 @@ pub trait HandlerLoop {
         text: String,
     ) -> anyhow::Result<()>;
     async fn on_stop(&mut self);
-    async fn on_conn_break(&mut self);
 
     fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration>;
 }

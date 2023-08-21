@@ -420,34 +420,35 @@ async fn handle_client(
 
     if let Err(err) = result {
         info!(logger, "WS connection broke for {}: {err:?}", xfer.id());
-        handler.on_conn_break().await;
     } else {
-        handler.on_stop().await;
+        let drain_sock = async {
+            let task = async {
+                // Drain messages
+                while socket.next().await.is_some() {}
+                socket.close().await
+            };
 
-        let task = async {
-            // Drain messages
-            while socket.next().await.transpose()?.is_some() {}
-            socket.close().await
+            if let Err(err) = task.await {
+                warn!(
+                    logger,
+                    "Failed to gracefully close the client connection: {}", err
+                );
+            } else {
+                debug!(logger, "WS client disconnected");
+            }
         };
 
-        if let Err(err) = task.await {
-            warn!(
-                logger,
-                "Failed to gracefully close the client connection: {}", err
-            );
-        } else {
-            debug!(logger, "WS client disconnected");
-        }
+        let remove_xfer = async {
+            if let Err(err) = state.transfer_manager.incoming_remove(xfer.id()).await {
+                warn!(
+                    logger,
+                    "Failed to clear sync state for {}: {err}",
+                    xfer.id()
+                );
+            }
+        };
 
-        if let Err(err) = state.transfer_manager.incoming_remove(xfer.id()).await {
-            warn!(
-                logger,
-                "Failed to clear sync state for {}: {err}",
-                xfer.id()
-            );
-        }
-
-        handler.finalize_success().await;
+        tokio::join!(handler.finalize_success(), drain_sock, remove_xfer);
     }
 
     jobs.shutdown().await;

@@ -380,25 +380,25 @@ impl RunContext<'_> {
                 "WS connection broke for {}: {err:?}",
                 self.xfer.id()
             );
-            handler.on_conn_break().await;
 
             ControlFlow::Continue(())
         } else {
-            handler.on_stop().await;
+            let drain_sock = async {
+                if let Err(err) = self.drain_socket().await {
+                    warn!(
+                        self.logger,
+                        "Failed to gracefully close the client connection: {err}"
+                    );
+                } else {
+                    debug!(self.logger, "WS client disconnected");
+                }
+            };
 
-            if let Err(err) = self.drain_socket().await {
-                warn!(
-                    self.logger,
-                    "Failed to gracefully close the client connection: {err}"
-                );
-            } else {
-                debug!(self.logger, "WS client disconnected");
-            }
+            tokio::join!(handler.on_stop(), drain_sock);
 
             ControlFlow::Break(())
         };
 
-        drop(handler);
         jobs.shutdown().await;
 
         cf
