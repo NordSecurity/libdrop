@@ -385,10 +385,11 @@ impl TransferManager {
         Ok(())
     }
 
-    pub async fn outgoing_rejection_recv(
+    pub async fn outgoing_terminal_recv(
         &self,
         transfer_id: Uuid,
         file_id: &FileId,
+        file_state: FileTerminalState,
     ) -> crate::Result<FinishResult<OutgoingTransfer>> {
         let mut lock = self.outgoing.lock().await;
 
@@ -397,7 +398,6 @@ impl TransferManager {
             .ok_or(crate::Error::BadTransfer)?;
 
         let sync = state.file_sync_mut(file_id)?;
-
         sync.termiante_remote();
 
         self.storage
@@ -409,7 +409,7 @@ impl TransferManager {
             )
             .await;
 
-        sync.try_terminate_local(FileTerminalState::Rejected)?;
+        sync.try_terminate_local(file_state)?;
 
         Ok(FinishResult {
             xfer: state.xfer.clone(),
@@ -451,38 +451,6 @@ impl TransferManager {
                 file: file_id.clone(),
             });
         }
-
-        Ok(FinishResult {
-            xfer: state.xfer.clone(),
-            events: state.file_events(&self.event_factory, file_id),
-        })
-    }
-
-    pub async fn incoming_rejection_recv(
-        &self,
-        transfer_id: Uuid,
-        file_id: &FileId,
-    ) -> crate::Result<FinishResult<IncomingTransfer>> {
-        let mut lock = self.incoming.lock().await;
-
-        let state = lock
-            .get_mut(&transfer_id)
-            .ok_or(crate::Error::BadTransfer)?;
-
-        let sync = state.file_sync_mut(file_id)?;
-
-        sync.termiante_remote();
-
-        self.storage
-            .update_incoming_file_sync_states(
-                transfer_id,
-                file_id.as_ref(),
-                Some(sync::FileState::Terminal),
-                Some(sync::FileState::Terminal),
-            )
-            .await;
-
-        sync.try_terminate_local(FileTerminalState::Rejected)?;
 
         Ok(FinishResult {
             xfer: state.xfer.clone(),
@@ -588,10 +556,11 @@ impl TransferManager {
         Ok(())
     }
 
-    pub async fn incoming_failure_recv(
+    pub async fn incoming_terminal_recv(
         &self,
         transfer_id: Uuid,
         file_id: &FileId,
+        file_state: FileTerminalState,
     ) -> crate::Result<FinishResult<IncomingTransfer>> {
         let mut lock = self.incoming.lock().await;
 
@@ -614,7 +583,7 @@ impl TransferManager {
             .stop_incoming_file(transfer_id, file_id.as_ref())
             .await;
 
-        sync.try_terminate_local(FileTerminalState::Failed)?;
+        sync.try_terminate_local(file_state)?;
 
         Ok(FinishResult {
             xfer: state.xfer.clone(),
@@ -646,42 +615,6 @@ impl TransferManager {
                 Some(sync::FileState::Terminal),
             )
             .await;
-
-        Ok(FinishResult {
-            xfer: state.xfer.clone(),
-            events: state.file_events(&self.event_factory, file_id),
-        })
-    }
-
-    pub async fn outgoing_finish_recv(
-        &self,
-        transfer_id: Uuid,
-        file_id: &FileId,
-        success: bool,
-    ) -> crate::Result<FinishResult<OutgoingTransfer>> {
-        let mut lock = self.outgoing.lock().await;
-
-        let state = lock
-            .get_mut(&transfer_id)
-            .ok_or(crate::Error::BadTransfer)?;
-
-        let sync = state.file_sync_mut(file_id)?;
-        sync.termiante_remote();
-
-        self.storage
-            .update_outgoing_file_sync_states(
-                transfer_id,
-                file_id.as_ref(),
-                Some(sync::FileState::Terminal),
-                Some(sync::FileState::Terminal),
-            )
-            .await;
-
-        sync.try_terminate_local(if success {
-            FileTerminalState::Completed
-        } else {
-            FileTerminalState::Failed
-        })?;
 
         Ok(FinishResult {
             xfer: state.xfer.clone(),

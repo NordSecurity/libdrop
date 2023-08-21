@@ -22,6 +22,7 @@ use warp::ws::{Message, WebSocket};
 use super::handler::{self, Ack, MsgToSend};
 use crate::{
     file::FileSubPath,
+    manager::FileTerminalState,
     protocol::v2,
     service::State,
     tasks::AliveGuard,
@@ -208,7 +209,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                 match self
                     .state
                     .transfer_manager
-                    .incoming_failure_recv(self.xfer.id(), file.id())
+                    .incoming_terminal_recv(self.xfer.id(), file.id(), FileTerminalState::Failed)
                     .await
                 {
                     Err(err) => {
