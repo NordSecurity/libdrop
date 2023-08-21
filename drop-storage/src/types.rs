@@ -27,7 +27,9 @@ pub enum OutgoingPathStateEventData {
     #[serde(rename = "completed")]
     Completed,
     #[serde(rename = "rejected")]
-    Rejected { by_peer: bool },
+    Rejected { by_peer: bool, bytes_sent: i64 },
+    #[serde(rename = "paused")]
+    Paused { bytes_sent: i64 },
 }
 
 #[derive(Debug, Serialize)]
@@ -50,7 +52,9 @@ pub enum IncomingPathStateEventData {
     #[serde(rename = "completed")]
     Completed { final_path: String },
     #[serde(rename = "rejected")]
-    Rejected { by_peer: bool },
+    Rejected { by_peer: bool, bytes_received: i64 },
+    #[serde(rename = "paused")]
+    Paused { bytes_received: i64 },
 }
 
 #[derive(Debug, Serialize)]
@@ -222,6 +226,11 @@ pub enum Event {
         transfer_id: TransferId,
         file_id: FileId,
         by_peer: bool,
+    },
+    FilePaused {
+        transfer_type: TransferType,
+        transfer_id: TransferId,
+        file_id: FileId,
     },
 }
 

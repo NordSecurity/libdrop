@@ -47,3 +47,24 @@ CREATE TABLE IF NOT EXISTS sync_incoming_files_inflight (
  -- paths soft deletion
 ALTER TABLE incoming_paths ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT FALSE CHECK (is_deleted IN (FALSE, TRUE));
 ALTER TABLE outgoing_paths ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT FALSE CHECK (is_deleted IN (FALSE, TRUE));
+
+
+ -- storing progress
+ALTER TABLE incoming_path_reject_states ADD COLUMN bytes_received INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE outgoing_path_reject_states ADD COLUMN bytes_sent     INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS incoming_path_paused_states (
+  path_id INTEGER NOT NULL,
+  bytes_received INTEGER NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
+  FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS outgoing_path_paused_states (
+  path_id INTEGER NOT NULL,
+  bytes_sent INTEGER NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
+  FOREIGN KEY(path_id) REFERENCES outgoing_paths(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+

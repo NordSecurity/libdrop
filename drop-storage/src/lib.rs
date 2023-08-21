@@ -802,6 +802,7 @@ impl Storage {
         transfer_id: Uuid,
         path_id: &str,
         by_peer: bool,
+        bytes_sent: i64,
     ) {
         let tid = transfer_id.to_string();
 
@@ -809,11 +810,11 @@ impl Storage {
             let conn = self.conn.lock().await;
             conn.execute(
                 r#"
-                INSERT INTO outgoing_path_reject_states (path_id, by_peer)
-                SELECT id, ?3
+                INSERT INTO outgoing_path_reject_states (path_id, by_peer, bytes_sent)
+                SELECT id, ?3, ?4
                 FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2
                 "#,
-                params![tid, path_id, by_peer],
+                params![tid, path_id, by_peer, bytes_sent],
             )?;
 
             Ok::<(), Error>(())
@@ -829,6 +830,7 @@ impl Storage {
         transfer_id: Uuid,
         path_id: &str,
         by_peer: bool,
+        bytes_received: i64,
     ) {
         let tid = transfer_id.to_string();
 
@@ -836,11 +838,11 @@ impl Storage {
             let conn = self.conn.lock().await;
             conn.execute(
                 r#"
-                INSERT INTO incoming_path_reject_states (path_id, by_peer)
-                SELECT id, ?3
+                INSERT INTO incoming_path_reject_states (path_id, by_peer, bytes_received)
+                SELECT id, ?3, ?4
                 FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
                 "#,
-                params![tid, path_id, by_peer],
+                params![tid, path_id, by_peer, bytes_received],
             )?;
 
             Ok::<(), Error>(())
@@ -848,6 +850,60 @@ impl Storage {
 
         if let Err(e) = task.await {
             error!(self.logger, "Failed to insert incoming path reject state"; "error" => %e);
+        }
+    }
+
+    pub async fn insert_outgoing_path_paused_state(
+        &self,
+        transfer_id: Uuid,
+        path_id: &str,
+        bytes_sent: i64,
+    ) {
+        let tid = transfer_id.to_string();
+
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                r#"
+                INSERT INTO outgoing_path_paused_states (path_id, bytes_sent)
+                SELECT id, ?3
+                FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
+                params![tid, path_id, bytes_sent],
+            )?;
+
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert outgoing path paused state"; "error" => %e);
+        }
+    }
+
+    pub async fn insert_incoming_path_paused_state(
+        &self,
+        transfer_id: Uuid,
+        path_id: &str,
+        bytes_received: i64,
+    ) {
+        let tid = transfer_id.to_string();
+
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                r#"
+                INSERT INTO incoming_path_paused_states (path_id, bytes_received)
+                SELECT id, ?3
+                FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
+                params![tid, path_id, bytes_received],
+            )?;
+
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert incoming path paused state"; "error" => %e);
         }
     }
 
@@ -1485,6 +1541,25 @@ impl Storage {
                             created_at: row.get("created_at")?,
                             data: OutgoingPathStateEventData::Rejected {
                                 by_peer: row.get("by_peer")?,
+                                bytes_sent: row.get("bytes_sent")?,
+                            },
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
+                );
+
+                path.states.extend(
+                    conn.prepare(
+                        r#"
+                    SELECT * FROM outgoing_path_paused_states WHERE path_id = ?1
+                    "#,
+                    )?
+                    .query_map(params![path.id], |row| {
+                        Ok(OutgoingPathStateEvent {
+                            path_id: row.get("path_id")?,
+                            created_at: row.get("created_at")?,
+                            data: OutgoingPathStateEventData::Paused {
+                                bytes_sent: row.get("bytes_sent")?,
                             },
                         })
                     })?
@@ -1643,6 +1718,25 @@ impl Storage {
                             created_at: row.get("created_at")?,
                             data: IncomingPathStateEventData::Rejected {
                                 by_peer: row.get("by_peer")?,
+                                bytes_received: row.get("bytes_received")?,
+                            },
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
+                );
+
+                path.states.extend(
+                    conn.prepare(
+                        r#"
+                    SELECT * FROM incoming_path_paused_states WHERE path_id = ?1
+                    "#,
+                    )?
+                    .query_map(params![path.id], |row| {
+                        Ok(IncomingPathStateEvent {
+                            path_id: row.get("path_id")?,
+                            created_at: row.get("created_at")?,
+                            data: IncomingPathStateEventData::Paused {
+                                bytes_received: row.get("bytes_received")?,
                             },
                         })
                     })?
@@ -1790,7 +1884,7 @@ mod tests {
             .insert_outgoing_path_completed_state(transfer_id, "id2")
             .await;
         storage
-            .insert_outgoing_path_reject_state(transfer_id, "id3", false)
+            .insert_outgoing_path_reject_state(transfer_id, "id3", false, 246)
             .await;
 
         let transfers = storage.transfers_since(0).await;
@@ -1872,7 +1966,7 @@ mod tests {
             .insert_incoming_path_completed_state(transfer_id, "id2", "/recv/id2")
             .await;
         storage
-            .insert_incoming_path_reject_state(transfer_id, "id3", false)
+            .insert_incoming_path_reject_state(transfer_id, "id3", false, 246)
             .await;
 
         let transfers = storage.transfers_since(0).await;
