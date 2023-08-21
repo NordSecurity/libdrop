@@ -5,14 +5,8 @@ use warp::ws::{Message, WebSocket};
 
 use crate::{transfer::IncomingTransfer, utils::Hidden, ws, FileId};
 
-#[derive(Debug)]
-pub enum Ack {
-    Finished(FileId),
-}
-
 pub struct MsgToSend {
     pub msg: Message,
-    pub ack: Option<Ack>,
 }
 
 #[async_trait::async_trait]
@@ -83,9 +77,6 @@ where
     T: Into<Message>,
 {
     fn from(value: T) -> Self {
-        Self {
-            msg: value.into(),
-            ack: None,
-        }
+        Self { msg: value.into() }
     }
 }

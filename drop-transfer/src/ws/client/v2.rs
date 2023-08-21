@@ -15,7 +15,7 @@ use tokio::{
 use tokio_tungstenite::tungstenite::Message;
 
 use super::{
-    handler::{self, Ack, MsgToSend},
+    handler::{self, MsgToSend},
     WebSocket,
 };
 use crate::{
@@ -46,7 +46,6 @@ pub struct HandlerLoop<'a, const PING: bool> {
 
 struct Uploader {
     sink: Sender<MsgToSend>,
-    file_id: FileId,
     file_subpath: FileSubPath,
 }
 
@@ -162,7 +161,6 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                             Uploader {
                                 sink: self.upload_tx.clone(),
                                 file_subpath: file_id.clone(),
-                                file_id: file.id().clone(),
                             },
                             self.xfer.clone(),
                             file_id,
@@ -181,7 +179,6 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                         Uploader {
                             sink: self.upload_tx.clone(),
                             file_subpath: file_id.clone(),
-                            file_id: file.id().clone(),
                         },
                         self.xfer.clone(),
                         file_id,
@@ -219,13 +216,14 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                     Err(err) => {
                         warn!(self.logger, "Failed to accept failure: {err}");
                     }
-                    Ok(res) => {
+                    Ok(Some(res)) => {
                         res.events
                             .failed(crate::Error::BadTransferState(format!(
                                 "Sender reported an error: {msg}"
                             )))
                             .await;
                     }
+                    Ok(None) => (),
                 }
             }
 
@@ -387,7 +385,6 @@ impl handler::Uploader for Uploader {
         self.sink
             .send(MsgToSend {
                 msg: Message::from(msg),
-                ack: None,
             })
             .await
             .map_err(|_| crate::Error::Canceled)?;
@@ -405,7 +402,6 @@ impl handler::Uploader for Uploader {
             .sink
             .send(MsgToSend {
                 msg: Message::from(&msg),
-                ack: Some(Ack::Finished(self.file_id.clone())),
             })
             .await;
     }

@@ -15,7 +15,7 @@ use tokio::{
 };
 use warp::ws::{Message, WebSocket};
 
-use super::handler::{self, Ack, MsgToSend};
+use super::handler::{self, MsgToSend};
 use crate::{
     file::{self, FileToRecv},
     manager::FileTerminalState,
@@ -256,7 +256,8 @@ impl HandlerLoop<'_> {
             Err(err) => {
                 error!(self.logger, "Failed to handler file rejection: {err}");
             }
-            Ok(res) => res.events.rejected(true).await,
+            Ok(Some(res)) => res.events.rejected(true).await,
+            Ok(None) => (),
         }
 
         self.stop_task(&file_id, Status::FileRejected).await;
@@ -299,13 +300,14 @@ impl HandlerLoop<'_> {
                 Err(err) => {
                     warn!(self.logger, "Failed to accept failure: {err}");
                 }
-                Ok(res) => {
+                Ok(Some(res)) => {
                     res.events
                         .failed(crate::Error::BadTransferState(format!(
                             "Sender reported an error: {msg}"
                         )))
                         .await;
                 }
+                Ok(None) => (),
             }
 
             self.stop_task(&file_id, Status::BadTransferState).await;
@@ -569,16 +571,6 @@ impl Downloader {
             .map_err(|_| crate::Error::Canceled)
     }
 
-    async fn send_with_ack(&mut self, msg: impl Into<Message>, ack: Ack) -> crate::Result<()> {
-        self.msg_tx
-            .send(MsgToSend {
-                msg: msg.into(),
-                ack: Some(ack),
-            })
-            .await
-            .map_err(|_| crate::Error::Canceled)
-    }
-
     async fn request_csum(&mut self, limit: u64) -> crate::Result<prot::ReportChsum> {
         let msg = prot::ServerMsg::ReqChsum(prot::ReqChsum {
             file: self.file_id.clone(),
@@ -692,24 +684,18 @@ impl handler::Downloader for Downloader {
     }
 
     async fn done(&mut self, bytes: u64) -> crate::Result<()> {
-        self.send_with_ack(
-            &prot::ServerMsg::Done(prot::Done {
-                file: self.file_id.clone(),
-                bytes_transfered: bytes,
-            }),
-            Ack::Finished(self.file_id.clone()),
-        )
+        self.send(&prot::ServerMsg::Done(prot::Done {
+            file: self.file_id.clone(),
+            bytes_transfered: bytes,
+        }))
         .await
     }
 
     async fn error(&mut self, msg: String) -> crate::Result<()> {
-        self.send_with_ack(
-            &prot::ServerMsg::Error(prot::Error {
-                file: Some(self.file_id.clone()),
-                msg,
-            }),
-            Ack::Finished(self.file_id.clone()),
-        )
+        self.send(&prot::ServerMsg::Error(prot::Error {
+            file: Some(self.file_id.clone()),
+            msg,
+        }))
         .await
     }
 

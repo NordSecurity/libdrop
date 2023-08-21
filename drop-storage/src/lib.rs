@@ -184,7 +184,7 @@ impl Storage {
 
             let conn = conn.transaction()?;
 
-            let sync = sync::outgoing_file_state(&conn, transfer_id, file_id)?;
+            let sync = sync::outgoing_file_local_state(&conn, transfer_id, file_id)?;
 
             let sync = if let Some(sync) = sync {
                 sync
@@ -250,22 +250,11 @@ impl Storage {
         &self,
         transfer_id: Uuid,
         file_id: &str,
-        remote: Option<sync::FileState>,
-        local: Option<sync::FileState>,
+        local: sync::FileState,
     ) {
         let task = async {
-            let mut conn = self.conn.lock().await;
-            let conn = conn.transaction()?;
-
-            if let Some(remote) = remote {
-                sync::outgoing_file_set_remote_state(&conn, transfer_id, file_id, remote)?;
-            }
-            if let Some(local) = local {
-                sync::outgoing_file_set_local_state(&conn, transfer_id, file_id, local)?;
-            }
-
-            conn.commit()?;
-
+            let conn = self.conn.lock().await;
+            sync::outgoing_file_set_local_state(&conn, transfer_id, file_id, local)?;
             Ok::<(), Error>(())
         };
 
@@ -286,7 +275,7 @@ impl Storage {
 
             let conn = conn.transaction()?;
 
-            let sync = sync::incoming_file_state(&conn, transfer_id, file_id)?;
+            let sync = sync::incoming_file_local_state(&conn, transfer_id, file_id)?;
             let sync = if let Some(sync) = sync {
                 sync
             } else {
@@ -351,22 +340,11 @@ impl Storage {
         &self,
         transfer_id: Uuid,
         file_id: &str,
-        remote: Option<sync::FileState>,
-        local: Option<sync::FileState>,
+        local: sync::FileState,
     ) {
         let task = async {
-            let mut conn = self.conn.lock().await;
-            let conn = conn.transaction()?;
-
-            if let Some(remote) = remote {
-                sync::incoming_file_set_remote_state(&conn, transfer_id, file_id, remote)?;
-            }
-            if let Some(local) = local {
-                sync::incoming_file_set_local_state(&conn, transfer_id, file_id, local)?;
-            }
-
-            conn.commit()?;
-
+            let conn = self.conn.lock().await;
+            sync::incoming_file_set_local_state(&conn, transfer_id, file_id, local)?;
             Ok::<(), Error>(())
         };
 
@@ -1001,21 +979,6 @@ impl Storage {
         }
     }
 
-    pub async fn outgoing_files_to_reject(&self, transfer_id: Uuid) -> Vec<String> {
-        let task = async {
-            let conn = self.conn.lock().await;
-            sync::outgoing_files_to_reject(&conn, transfer_id)
-        };
-
-        match task.await {
-            Ok(files) => files,
-            Err(e) => {
-                error!(self.logger, "Failed to get outgoing files to reject"; "error" => %e);
-                vec![]
-            }
-        }
-    }
-
     pub async fn outgoing_transfers_to_resume(&self) -> Vec<OutgoingTransferToRetry> {
         let task = async {
             let mut conn = self.conn.lock().await;
@@ -1133,21 +1096,6 @@ impl Storage {
             Ok(files) => files,
             Err(e) => {
                 error!(self.logger, "Failed to get incoming files to resume"; "error" => %e);
-                vec![]
-            }
-        }
-    }
-
-    pub async fn incoming_files_to_reject(&self, transfer_id: Uuid) -> Vec<String> {
-        let task = async {
-            let conn = self.conn.lock().await;
-            sync::incoming_files_to_reject(&conn, transfer_id)
-        };
-
-        match task.await {
-            Ok(files) => files,
-            Err(e) => {
-                error!(self.logger, "Failed to get incoming files to reject"; "error" => %e);
                 vec![]
             }
         }
