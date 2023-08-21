@@ -20,6 +20,7 @@ use super::{
 };
 use crate::{
     file::FileSubPath,
+    manager::FileTerminalState,
     protocol::v2,
     service::State,
     tasks::AliveGuard,
@@ -126,7 +127,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
             if let Err(err) = self
                 .state
                 .transfer_manager
-                .outgoing_finish_recv(self.xfer.id(), file.id(), true)
+                .outgoing_terminal_recv(self.xfer.id(), file.id(), FileTerminalState::Completed)
                 .await
             {
                 warn!(self.logger, "Failed to accept file as done: {err}");
@@ -212,7 +213,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                 match self
                     .state
                     .transfer_manager
-                    .outgoing_finish_recv(self.xfer.id(), file.id(), false)
+                    .outgoing_terminal_recv(self.xfer.id(), file.id(), FileTerminalState::Failed)
                     .await
                 {
                     Err(err) => {

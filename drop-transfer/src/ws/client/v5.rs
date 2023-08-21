@@ -19,6 +19,7 @@ use super::{
     WebSocket,
 };
 use crate::{
+    manager::FileTerminalState,
     protocol::v5 as prot,
     service::State,
     tasks::AliveGuard,
@@ -122,7 +123,7 @@ impl HandlerLoop<'_> {
         match self
             .state
             .transfer_manager
-            .outgoing_rejection_recv(self.xfer.id(), &file_id)
+            .outgoing_terminal_recv(self.xfer.id(), &file_id, FileTerminalState::Rejected)
             .await
         {
             Err(err) => {
@@ -159,7 +160,7 @@ impl HandlerLoop<'_> {
         if let Err(err) = self
             .state
             .transfer_manager
-            .outgoing_finish_recv(self.xfer.id(), &file_id, true)
+            .outgoing_terminal_recv(self.xfer.id(), &file_id, FileTerminalState::Completed)
             .await
         {
             warn!(self.logger, "Failed to accept file as done: {err}");
@@ -324,7 +325,7 @@ impl HandlerLoop<'_> {
             match self
                 .state
                 .transfer_manager
-                .outgoing_finish_recv(self.xfer.id(), &file_id, false)
+                .outgoing_terminal_recv(self.xfer.id(), &file_id, FileTerminalState::Failed)
                 .await
             {
                 Err(err) => {

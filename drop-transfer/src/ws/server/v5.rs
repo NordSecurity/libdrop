@@ -18,6 +18,7 @@ use warp::ws::{Message, WebSocket};
 use super::handler::{self, Ack, MsgToSend};
 use crate::{
     file::{self, FileToRecv},
+    manager::FileTerminalState,
     protocol::v5 as prot,
     service::State,
     tasks::AliveGuard,
@@ -249,7 +250,7 @@ impl HandlerLoop<'_> {
         match self
             .state
             .transfer_manager
-            .incoming_rejection_recv(self.xfer.id(), &file_id)
+            .incoming_terminal_recv(self.xfer.id(), &file_id, FileTerminalState::Rejected)
             .await
         {
             Err(err) => {
@@ -292,7 +293,7 @@ impl HandlerLoop<'_> {
             match self
                 .state
                 .transfer_manager
-                .incoming_failure_recv(self.xfer.id(), &file_id)
+                .incoming_terminal_recv(self.xfer.id(), &file_id, FileTerminalState::Failed)
                 .await
             {
                 Err(err) => {
