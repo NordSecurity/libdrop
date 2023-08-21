@@ -3821,6 +3821,18 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
+                            event.Start(
+                                0,
+                                FILES[
+                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                ].id,
+                            ),
+                            event.Start(
+                                1,
+                                FILES[
+                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                ].id,
+                            ),
                             event.FinishFileFailed(
                                 0,
                                 FILES[
@@ -3893,6 +3905,18 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
+                            event.Start(
+                                0,
+                                FILES[
+                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                ].id,
+                            ),
+                            event.Start(
+                                1,
+                                FILES[
+                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                ].id,
+                            ),
                             event.FinishFileFailed(
                                 0,
                                 FILES[
@@ -5718,6 +5742,7 @@ scenarios = [
                     # make sure we have received something, so that we have non-empty tmp file
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Stop(),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     # start the sender again
                     action.Start("172.20.0.5", dbpath="/tmp/db/29-1-ren.sqlite"),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
@@ -5730,6 +5755,55 @@ scenarios = [
                     ),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.15",
+                        "created_at": "*",
+                        "states": [
+                            {
+                                "created_at": "*",
+                                "state": "cancel",
+                                "by_peer": true
+                            }
+                        ],
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-big",
+                                "base_path": "/tmp",
+                                "bytes": 10485760,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "started",
+                                        "bytes_sent": 0
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "paused",
+                                        "bytes_sent": "*"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "started",
+                                        "bytes_sent": "*"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "completed"
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
                     action.Stop(),
                 ]
             ),
@@ -5773,6 +5847,56 @@ scenarios = [
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.5",
+                        "created_at": "*",
+                        "states": [
+                            {
+                                "created_at": "*",
+                                "state": "cancel",
+                                "by_peer": false
+                            }
+                        ],
+                        "type": "incoming",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-big",
+                                "bytes": 10485760,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "started",
+                                        "bytes_received": 0,
+                                        "base_dir": "/tmp/received/29-1"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "paused",
+                                        "bytes_received": "*"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "started",
+                                        "bytes_received": "*",
+                                        "base_dir": "/tmp/received/29-1"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "completed"
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
                     action.Stop(),
                 ]
             ),
@@ -5843,6 +5967,7 @@ scenarios = [
                     # make sure we have received something, so that we have non-empty tmp file
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Stop(),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     # start the receiver again
                     action.Start("172.20.0.15", dbpath="/tmp/db/29-2-stimpy.sqlite"),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
@@ -5915,6 +6040,7 @@ scenarios = [
                     # make sure we have received something, so that we have non-empty tmp file
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Stop(),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     action.WaitForAnotherPeer(),
                     # start the sender again
                     action.Start("172.20.0.5", dbpath="/tmp/db/29-3-ren.sqlite"),
@@ -6089,6 +6215,7 @@ scenarios = [
                     # make sure we have received something, so that we have non-empty tmp file
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Stop(),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     action.WaitForAnotherPeer(),
                     # start the receiver again
                     action.Start("172.20.0.15", dbpath="/tmp/db/29-4-stimpy.sqlite"),
@@ -6150,6 +6277,9 @@ scenarios = [
                         event.Progress(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
                     ),
                     action.Stop(),
+                    action.Wait(
+                        event.Paused(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
+                    ),
                     action.WaitForAnotherPeer(),
                     # start the sender again
                     action.Start("172.20.0.5", dbpath="/tmp/db/29-5-ren.sqlite"),
@@ -6649,6 +6779,7 @@ scenarios = [
                     # make sure we have received something, so that we have non-empty tmp file
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Stop(),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     action.DeleteFileFromFS("/tmp/testfile-big"),
                     # restart
                     action.Start("172.20.0.5", dbpath="/tmp/db/29-13-ren.sqlite"),
