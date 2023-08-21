@@ -7,6 +7,7 @@ import os
 import json
 import time
 import math
+import re
 
 STDERR_ERR_PATTERNS = [
     ["drop-storage", "ERROR"],
@@ -20,15 +21,13 @@ def run():
     scenarios = []
     if "SCENARIO" in os.environ:
         name = os.environ["SCENARIO"]
+        pattern = re.compile(name)
 
-        found = False
         for s in all_scenarios:
-            if s.id() == name:
-                found = True
-                scenarios = [s]
-                break
+            if pattern.fullmatch(s.id()):
+                scenarios.append(s)
 
-        if not found:
+        if len(scenarios) == 0:
             print(f"Unrecognized scenario: {name}")
             exit(1)
     else:
