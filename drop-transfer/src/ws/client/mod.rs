@@ -29,7 +29,7 @@ use tokio_tungstenite::{
 };
 use tokio_util::sync::CancellationToken;
 
-use self::handler::{Ack, HandlerInit, HandlerLoop, Uploader};
+use self::handler::{HandlerInit, HandlerLoop, Uploader};
 use super::OutgoingFileEventTx;
 use crate::{
     auth,
@@ -352,7 +352,7 @@ impl RunContext<'_> {
 
                     // API request
                     req = api_req_rx.recv() => {
-                        if on_req(&mut self.socket, &mut handler, self.state, self.logger, req, self.xfer).await?.is_break() {
+                        if on_req(&mut self.socket, &mut handler, self.logger, req).await?.is_break() {
                             break;
                         }
                     },
@@ -367,12 +367,8 @@ impl RunContext<'_> {
                     },
                     // Message to send down the wire
                     msg = upload_rx.recv() => {
-                        let MsgToSend { msg, ack } = msg.expect("Handler channel should always be open");
-
+                        let MsgToSend { msg } = msg.expect("Handler channel should always be open");
                         self.socket.send(msg).await.context("Socket sending upload msg")?;
-                        if let Some(ack) = ack {
-                            on_msg_ack(self.state, self.xfer, ack).await?;
-                        }
                     },
                     _ = ping.tick() => {
                         self.socket.send(Message::Ping(Vec::new())).await.context("Failed to send PING")?;
@@ -525,25 +521,15 @@ async fn acquire_throttle_permit<'a>(
 async fn on_req(
     socket: &mut WebSocket,
     handler: &mut impl HandlerLoop,
-    state: &State,
     logger: &Logger,
     req: Option<ClientReq>,
-    xfer: &OutgoingTransfer,
 ) -> anyhow::Result<ControlFlow<()>> {
     match req.context("API channel broken")? {
         ClientReq::Reject { file } => {
             handler.issue_reject(socket, file.clone()).await?;
-            state
-                .transfer_manager
-                .outgoing_finish_ack(xfer.id(), &file)
-                .await?;
         }
         ClientReq::Fail { file } => {
             handler.issue_faliure(socket, file.clone()).await?;
-            state
-                .transfer_manager
-                .outgoing_finish_ack(xfer.id(), &file)
-                .await?;
         }
         ClientReq::Close => {
             debug!(logger, "Stopping client connection gracefuly");
@@ -584,17 +570,4 @@ async fn on_recv(
     }
 
     Ok(ControlFlow::Continue(()))
-}
-
-async fn on_msg_ack(state: &State, xfer: &OutgoingTransfer, ack: Ack) -> anyhow::Result<()> {
-    match ack {
-        Ack::Finished(file_id) => {
-            state
-                .transfer_manager
-                .outgoing_finish_ack(xfer.id(), &file_id)
-                .await?
-        }
-    }
-
-    Ok(())
 }

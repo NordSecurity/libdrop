@@ -173,7 +173,7 @@ pub struct TempFileLocation {
 }
 
 pub struct FileSyncState {
-    pub sync: sync::File,
+    pub sync: sync::FileState,
     pub is_rejected: bool,
     pub is_success: bool,
     pub is_failed: bool,

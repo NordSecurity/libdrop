@@ -33,7 +33,6 @@ use warp::{
     Filter,
 };
 
-use self::handler::Ack;
 use super::{events::FileEventTx, IncomingFileEventTx};
 use crate::{
     auth,
@@ -396,7 +395,7 @@ async fn handle_client(
 
                 // API request
                 req = req_rx.recv() => {
-                    if on_req(&mut socket, &mut jobs, &mut handler, state, logger, req, &xfer).await?.is_break() {
+                    if on_req(&mut socket, &mut jobs, &mut handler, logger, req).await?.is_break() {
                         break;
                     }
                 },
@@ -411,12 +410,8 @@ async fn handle_client(
                 },
                 // Message to send down the wire
                 msg = send_rx.recv() => {
-                    let MsgToSend { msg, ack } = msg.expect("Handler channel should always be open");
-
+                    let MsgToSend { msg } = msg.expect("Handler channel should always be open");
                     socket.send(msg).await?;
-                    if let Some(ack) = ack {
-                        on_msg_ack(state, &xfer, ack).await?;
-                    }
                 },
                 _ = ping.tick() => {
                     socket.send(Message::ping(Vec::new())).await.context("Failed to send PING message")?;
@@ -769,35 +764,16 @@ async fn on_req(
     socket: &mut WebSocket,
     jobs: &mut JoinSet<()>,
     handler: &mut impl HandlerLoop,
-    state: &State,
     logger: &Logger,
     req: Option<ServerReq>,
-    xfer: &IncomingTransfer,
 ) -> anyhow::Result<ControlFlow<()>> {
     match req.context("API channel broken")? {
         ServerReq::Download { task } => handler.issue_download(socket, jobs, *task).await?,
         ServerReq::Cancel { file } => handler.issue_cancel(socket, file).await?,
-        ServerReq::Reject { file } => {
-            handler.issue_reject(socket, file.clone()).await?;
-            state
-                .transfer_manager
-                .incoming_finish_ack(xfer.id(), &file)
-                .await?;
-        }
-        ServerReq::Done { file } => {
-            handler.issue_done(socket, file.clone()).await?;
-            state
-                .transfer_manager
-                .incoming_finish_ack(xfer.id(), &file)
-                .await?;
-        }
-        ServerReq::Fail { file } => {
-            handler.issue_failure(socket, file.clone()).await?;
-            state
-                .transfer_manager
-                .incoming_finish_ack(xfer.id(), &file)
-                .await?;
-        }
+        ServerReq::Reject { file } => handler.issue_reject(socket, file.clone()).await?,
+        ServerReq::Done { file } => handler.issue_done(socket, file.clone()).await?,
+        ServerReq::Fail { file } => handler.issue_failure(socket, file.clone()).await?,
+
         ServerReq::Close => {
             debug!(logger, "Stoppping server connection gracefuly");
             socket.send(Message::close()).await?;
@@ -862,17 +838,4 @@ async fn start_download(
     };
 
     Ok((job, events))
-}
-
-async fn on_msg_ack(state: &State, xfer: &IncomingTransfer, ack: Ack) -> anyhow::Result<()> {
-    match ack {
-        Ack::Finished(file_id) => {
-            state
-                .transfer_manager
-                .incoming_finish_ack(xfer.id(), &file_id)
-                .await?
-        }
-    }
-
-    Ok(())
 }

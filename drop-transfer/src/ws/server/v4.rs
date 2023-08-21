@@ -15,7 +15,7 @@ use tokio::{
 };
 use warp::ws::{Message, WebSocket};
 
-use super::handler::{self, Ack, MsgToSend};
+use super::handler::{self, MsgToSend};
 use crate::{
     file,
     manager::FileTerminalState,
@@ -281,13 +281,14 @@ impl HandlerLoop<'_> {
                 Err(err) => {
                     warn!(self.logger, "Failed to accept failure: {err}");
                 }
-                Ok(res) => {
+                Ok(Some(res)) => {
                     res.events
                         .failed(crate::Error::BadTransferState(format!(
                             "Sender reported an error: {msg}"
                         )))
                         .await;
                 }
+                Ok(None) => (),
             }
 
             self.stop_task(&file_id, Status::BadTransferState).await;
@@ -551,16 +552,6 @@ impl Downloader {
             .map_err(|_| crate::Error::Canceled)
     }
 
-    async fn send_with_ack(&mut self, msg: impl Into<Message>, ack: Ack) -> crate::Result<()> {
-        self.msg_tx
-            .send(MsgToSend {
-                msg: msg.into(),
-                ack: Some(ack),
-            })
-            .await
-            .map_err(|_| crate::Error::Canceled)
-    }
-
     async fn request_csum(&mut self, limit: u64) -> crate::Result<v4::ReportChsum> {
         let msg = v4::ServerMsg::ReqChsum(v4::ReqChsum {
             file: self.file_id.clone(),
@@ -674,24 +665,18 @@ impl handler::Downloader for Downloader {
     }
 
     async fn done(&mut self, bytes: u64) -> crate::Result<()> {
-        self.send_with_ack(
-            &v4::ServerMsg::Done(v4::Done {
-                file: self.file_id.clone(),
-                bytes_transfered: bytes,
-            }),
-            Ack::Finished(self.file_id.clone()),
-        )
+        self.send(&v4::ServerMsg::Done(v4::Done {
+            file: self.file_id.clone(),
+            bytes_transfered: bytes,
+        }))
         .await
     }
 
     async fn error(&mut self, msg: String) -> crate::Result<()> {
-        self.send_with_ack(
-            &v4::ServerMsg::Error(v4::Error {
-                file: Some(self.file_id.clone()),
-                msg,
-            }),
-            Ack::Finished(self.file_id.clone()),
-        )
+        self.send(&v4::ServerMsg::Error(v4::Error {
+            file: Some(self.file_id.clone()),
+            msg,
+        }))
         .await
     }
 

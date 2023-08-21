@@ -19,13 +19,8 @@ use super::{
     WebSocket,
 };
 use crate::{
-    manager::FileTerminalState,
-    protocol::v5 as prot,
-    service::State,
-    tasks::AliveGuard,
-    transfer::Transfer,
-    ws::{client::handler::Ack, events::FileEventTx},
-    FileId, OutgoingTransfer,
+    manager::FileTerminalState, protocol::v5 as prot, service::State, tasks::AliveGuard,
+    transfer::Transfer, ws::events::FileEventTx, FileId, OutgoingTransfer,
 };
 
 pub struct HandlerInit<'a> {
@@ -129,7 +124,8 @@ impl HandlerLoop<'_> {
             Err(err) => {
                 error!(self.logger, "Failed to handler file rejection: {err}");
             }
-            Ok(res) => res.events.rejected(true).await,
+            Ok(Some(res)) => res.events.rejected(true).await,
+            Ok(None) => (),
         }
 
         self.stop_task(&file_id, Status::FileRejected).await;
@@ -235,7 +231,6 @@ impl HandlerLoop<'_> {
                     let _ = msg_tx
                         .send(MsgToSend {
                             msg: Message::from(&prot::ClientMsg::Error(msg)),
-                            ack: Some(Ack::Finished(file_id)),
                         })
                         .await;
                 }
@@ -331,13 +326,14 @@ impl HandlerLoop<'_> {
                 Err(err) => {
                     warn!(self.logger, "Failed to accept failure: {err}");
                 }
-                Ok(res) => {
+                Ok(Some(res)) => {
                     res.events
                         .failed(crate::Error::BadTransferState(format!(
                             "Receiver reported an error: {msg}"
                         )))
                         .await;
                 }
+                Ok(None) => (),
             }
 
             self.stop_task(&file_id, Status::BadTransferState).await;
@@ -469,7 +465,6 @@ impl handler::Uploader for Uploader {
         self.sink
             .send(MsgToSend {
                 msg: Message::from(msg),
-                ack: None,
             })
             .await
             .map_err(|_| crate::Error::Canceled)?;
@@ -487,7 +482,6 @@ impl handler::Uploader for Uploader {
             .sink
             .send(MsgToSend {
                 msg: Message::from(&msg),
-                ack: Some(Ack::Finished(self.file_id.clone())),
             })
             .await;
     }
