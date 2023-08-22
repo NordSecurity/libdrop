@@ -889,6 +889,7 @@ impl Storage {
         transfer_id: Uuid,
         path_id: &str,
         by_peer: bool,
+        bytes_sent: i64,
     ) {
         let tid = transfer_id.to_string();
 
@@ -896,11 +897,11 @@ impl Storage {
             let conn = self.conn.lock().await;
             conn.execute(
                 r#"
-                INSERT INTO outgoing_path_reject_states (path_id, by_peer)
-                SELECT id, ?3
+                INSERT INTO outgoing_path_reject_states (path_id, by_peer, bytes_sent)
+                SELECT id, ?3, ?4
                 FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2
                 "#,
-                params![tid, path_id, by_peer],
+                params![tid, path_id, by_peer, bytes_sent],
             )?;
 
             Ok::<(), Error>(())
@@ -916,6 +917,7 @@ impl Storage {
         transfer_id: Uuid,
         path_id: &str,
         by_peer: bool,
+        bytes_received: i64,
     ) {
         let tid = transfer_id.to_string();
 
@@ -923,11 +925,11 @@ impl Storage {
             let conn = self.conn.lock().await;
             conn.execute(
                 r#"
-                INSERT INTO incoming_path_reject_states (path_id, by_peer)
-                SELECT id, ?3
+                INSERT INTO incoming_path_reject_states (path_id, by_peer, bytes_received)
+                SELECT id, ?3, ?4
                 FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
                 "#,
-                params![tid, path_id, by_peer],
+                params![tid, path_id, by_peer, bytes_received],
             )?;
 
             Ok::<(), Error>(())
@@ -935,6 +937,60 @@ impl Storage {
 
         if let Err(e) = task.await {
             error!(self.logger, "Failed to insert incoming path reject state"; "error" => %e);
+        }
+    }
+
+    pub async fn insert_outgoing_path_paused_state(
+        &self,
+        transfer_id: Uuid,
+        path_id: &str,
+        bytes_sent: i64,
+    ) {
+        let tid = transfer_id.to_string();
+
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                r#"
+                INSERT INTO outgoing_path_paused_states (path_id, bytes_sent)
+                SELECT id, ?3
+                FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
+                params![tid, path_id, bytes_sent],
+            )?;
+
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert outgoing path paused state"; "error" => %e);
+        }
+    }
+
+    pub async fn insert_incoming_path_paused_state(
+        &self,
+        transfer_id: Uuid,
+        path_id: &str,
+        bytes_received: i64,
+    ) {
+        let tid = transfer_id.to_string();
+
+        let task = async {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                r#"
+                INSERT INTO incoming_path_paused_states (path_id, bytes_received)
+                SELECT id, ?3
+                FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
+                params![tid, path_id, bytes_received],
+            )?;
+
+            Ok::<(), Error>(())
+        };
+
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to insert incoming path paused state"; "error" => %e);
         }
     }
 
@@ -1410,6 +1466,7 @@ impl Storage {
                         relative_path,
                         file_id,
                         bytes,
+                        bytes_sent: 0,
                         created_at,
                         states: vec![],
                     };
@@ -1542,6 +1599,25 @@ impl Storage {
                             created_at: row.get("created_at")?,
                             data: OutgoingPathStateEventData::Rejected {
                                 by_peer: row.get("by_peer")?,
+                                bytes_sent: row.get("bytes_sent")?,
+                            },
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
+                );
+
+                path.states.extend(
+                    conn.prepare(
+                        r#"
+                    SELECT * FROM outgoing_path_paused_states WHERE path_id = ?1
+                    "#,
+                    )?
+                    .query_map(params![path.id], |row| {
+                        Ok(OutgoingPathStateEvent {
+                            path_id: row.get("path_id")?,
+                            created_at: row.get("created_at")?,
+                            data: OutgoingPathStateEventData::Paused {
+                                bytes_sent: row.get("bytes_sent")?,
                             },
                         })
                     })?
@@ -1549,6 +1625,21 @@ impl Storage {
                 );
 
                 path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+
+                path.bytes_sent = path
+                    .states
+                    .iter()
+                    .rev()
+                    .find_map(|state| match state.data {
+                        OutgoingPathStateEventData::Pending => None,
+                        OutgoingPathStateEventData::Started { bytes_sent } => Some(bytes_sent),
+                        OutgoingPathStateEventData::Cancel { bytes_sent, .. } => Some(bytes_sent),
+                        OutgoingPathStateEventData::Failed { bytes_sent, .. } => Some(bytes_sent),
+                        OutgoingPathStateEventData::Completed => Some(path.bytes),
+                        OutgoingPathStateEventData::Rejected { bytes_sent, .. } => Some(bytes_sent),
+                        OutgoingPathStateEventData::Paused { bytes_sent } => Some(bytes_sent),
+                    })
+                    .unwrap_or(0);
             }
 
             Ok::<Vec<_>, Error>(paths)
@@ -1590,6 +1681,7 @@ impl Storage {
                         relative_path: row.get("relative_path")?,
                         file_id: row.get("path_hash")?,
                         bytes: row.get("bytes")?,
+                        bytes_received: 0,
                         created_at: row.get("created_at")?,
                         states: vec![],
                     })
@@ -1700,6 +1792,25 @@ impl Storage {
                             created_at: row.get("created_at")?,
                             data: IncomingPathStateEventData::Rejected {
                                 by_peer: row.get("by_peer")?,
+                                bytes_received: row.get("bytes_received")?,
+                            },
+                        })
+                    })?
+                    .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
+                );
+
+                path.states.extend(
+                    conn.prepare(
+                        r#"
+                    SELECT * FROM incoming_path_paused_states WHERE path_id = ?1
+                    "#,
+                    )?
+                    .query_map(params![path.id], |row| {
+                        Ok(IncomingPathStateEvent {
+                            path_id: row.get("path_id")?,
+                            created_at: row.get("created_at")?,
+                            data: IncomingPathStateEventData::Paused {
+                                bytes_received: row.get("bytes_received")?,
                             },
                         })
                     })?
@@ -1707,6 +1818,31 @@ impl Storage {
                 );
 
                 path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+
+                path.bytes_received = path
+                    .states
+                    .iter()
+                    .rev()
+                    .find_map(|state| match state.data {
+                        IncomingPathStateEventData::Pending => None,
+                        IncomingPathStateEventData::Started { bytes_received, .. } => {
+                            Some(bytes_received)
+                        }
+                        IncomingPathStateEventData::Cancel { bytes_received, .. } => {
+                            Some(bytes_received)
+                        }
+                        IncomingPathStateEventData::Failed { bytes_received, .. } => {
+                            Some(bytes_received)
+                        }
+                        IncomingPathStateEventData::Completed { .. } => Some(path.bytes),
+                        IncomingPathStateEventData::Rejected { bytes_received, .. } => {
+                            Some(bytes_received)
+                        }
+                        IncomingPathStateEventData::Paused { bytes_received } => {
+                            Some(bytes_received)
+                        }
+                    })
+                    .unwrap_or(0);
             }
 
             Ok::<Vec<_>, Error>(paths)
@@ -1847,7 +1983,7 @@ mod tests {
             .insert_outgoing_path_completed_state(transfer_id, "id2")
             .await;
         storage
-            .insert_outgoing_path_reject_state(transfer_id, "id3", false)
+            .insert_outgoing_path_reject_state(transfer_id, "id3", false, 246)
             .await;
 
         let transfers = storage.transfers_since(0).await;
@@ -1929,7 +2065,7 @@ mod tests {
             .insert_incoming_path_completed_state(transfer_id, "id2", "/recv/id2")
             .await;
         storage
-            .insert_incoming_path_reject_state(transfer_id, "id3", false)
+            .insert_incoming_path_reject_state(transfer_id, "id3", false, 246)
             .await;
 
         let transfers = storage.transfers_since(0).await;

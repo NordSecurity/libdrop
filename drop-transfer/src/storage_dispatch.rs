@@ -150,18 +150,53 @@ impl<'a> StorageDispatch<'a> {
                 transfer_id,
                 file_id,
                 by_peer,
-            } => match transfer_type {
-                TransferType::Incoming => {
-                    self.storage
-                        .insert_incoming_path_reject_state(transfer_id, &file_id, by_peer)
-                        .await
+            } => {
+                let progress = self.get_file_progress(transfer_id, &file_id);
+
+                match transfer_type {
+                    TransferType::Incoming => {
+                        self.storage
+                            .insert_incoming_path_reject_state(
+                                transfer_id,
+                                &file_id,
+                                by_peer,
+                                progress,
+                            )
+                            .await
+                    }
+                    TransferType::Outgoing => {
+                        self.storage
+                            .insert_outgoing_path_reject_state(
+                                transfer_id,
+                                &file_id,
+                                by_peer,
+                                progress,
+                            )
+                            .await
+                    }
                 }
-                TransferType::Outgoing => {
-                    self.storage
-                        .insert_outgoing_path_reject_state(transfer_id, &file_id, by_peer)
-                        .await
+            }
+
+            Event::FilePaused {
+                transfer_type,
+                transfer_id,
+                file_id,
+            } => {
+                let progress = self.get_file_progress(transfer_id, &file_id);
+
+                match transfer_type {
+                    TransferType::Incoming => {
+                        self.storage
+                            .insert_incoming_path_paused_state(transfer_id, &file_id, progress)
+                            .await
+                    }
+                    TransferType::Outgoing => {
+                        self.storage
+                            .insert_outgoing_path_paused_state(transfer_id, &file_id, progress)
+                            .await
+                    }
                 }
-            },
+            }
         }
     }
 
@@ -269,10 +304,24 @@ impl From<&crate::Event> for Option<Event> {
                 file_id: file_id.to_string(),
                 by_peer: *by_peer,
             },
+            crate::Event::FileUploadPaused {
+                transfer_id,
+                file_id,
+            } => Event::FilePaused {
+                transfer_type: TransferType::Outgoing,
+                transfer_id: *transfer_id,
+                file_id: file_id.to_string(),
+            },
+            crate::Event::FileDownloadPaused {
+                transfer_id,
+                file_id,
+            } => Event::FilePaused {
+                transfer_type: TransferType::Incoming,
+                transfer_id: *transfer_id,
+                file_id: file_id.to_string(),
+            },
             crate::Event::RequestReceived(_) => return None,
             crate::Event::RequestQueued(_) => return None,
-            crate::Event::FileUploadPaused { .. } => return None,
-            crate::Event::FileDownloadPaused { .. } => return None,
         };
 
         Some(ev)
