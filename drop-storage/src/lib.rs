@@ -1409,6 +1409,7 @@ impl Storage {
                         relative_path,
                         file_id,
                         bytes,
+                        bytes_sent: 0,
                         created_at,
                         states: vec![],
                     };
@@ -1567,6 +1568,21 @@ impl Storage {
                 );
 
                 path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+
+                path.bytes_sent = path
+                    .states
+                    .iter()
+                    .rev()
+                    .find_map(|state| match state.data {
+                        OutgoingPathStateEventData::Pending => None,
+                        OutgoingPathStateEventData::Started { bytes_sent } => Some(bytes_sent),
+                        OutgoingPathStateEventData::Cancel { bytes_sent, .. } => Some(bytes_sent),
+                        OutgoingPathStateEventData::Failed { bytes_sent, .. } => Some(bytes_sent),
+                        OutgoingPathStateEventData::Completed => Some(path.bytes),
+                        OutgoingPathStateEventData::Rejected { bytes_sent, .. } => Some(bytes_sent),
+                        OutgoingPathStateEventData::Paused { bytes_sent } => Some(bytes_sent),
+                    })
+                    .unwrap_or(0);
             }
 
             Ok::<Vec<_>, Error>(paths)
@@ -1608,6 +1624,7 @@ impl Storage {
                         relative_path: row.get("relative_path")?,
                         file_id: row.get("path_hash")?,
                         bytes: row.get("bytes")?,
+                        bytes_received: 0,
                         created_at: row.get("created_at")?,
                         states: vec![],
                     })
@@ -1744,6 +1761,31 @@ impl Storage {
                 );
 
                 path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+
+                path.bytes_received = path
+                    .states
+                    .iter()
+                    .rev()
+                    .find_map(|state| match state.data {
+                        IncomingPathStateEventData::Pending => None,
+                        IncomingPathStateEventData::Started { bytes_received, .. } => {
+                            Some(bytes_received)
+                        }
+                        IncomingPathStateEventData::Cancel { bytes_received, .. } => {
+                            Some(bytes_received)
+                        }
+                        IncomingPathStateEventData::Failed { bytes_received, .. } => {
+                            Some(bytes_received)
+                        }
+                        IncomingPathStateEventData::Completed { .. } => Some(path.bytes),
+                        IncomingPathStateEventData::Rejected { bytes_received, .. } => {
+                            Some(bytes_received)
+                        }
+                        IncomingPathStateEventData::Paused { bytes_received } => {
+                            Some(bytes_received)
+                        }
+                    })
+                    .unwrap_or(0);
             }
 
             Ok::<Vec<_>, Error>(paths)
