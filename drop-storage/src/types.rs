@@ -253,13 +253,6 @@ pub enum DbTransferType {
 }
 
 #[derive(Debug, Serialize)]
-pub struct Peer {
-    pub id: Option<String>,
-    #[serde(serialize_with = "serialize_datetime")]
-    pub created_at: NaiveDateTime,
-}
-
-#[derive(Debug, Serialize)]
 pub struct Transfer {
     pub id: TransferId,
     #[serde(serialize_with = "serialize_datetime")]

@@ -496,29 +496,6 @@ impl Storage {
         }
     }
 
-    pub async fn insert_transfer_active_state(&self, transfer_id: Uuid) {
-        let tid = transfer_id.to_string();
-
-        trace!(
-            self.logger,
-            "Inserting transfer active state";
-            "transfer_id" => &tid);
-
-        let task = async {
-            let conn = self.conn.lock().await;
-            conn.execute(
-                "INSERT INTO transfer_active_states (transfer_id) VALUES (?1)",
-                params![tid],
-            )?;
-
-            Ok::<(), Error>(())
-        };
-
-        if let Err(e) = task.await {
-            error!(self.logger, "Failed to insert transfer active state"; "error" => %e);
-        }
-    }
-
     pub async fn insert_transfer_failed_state(&self, transfer_id: Uuid, error: u32) {
         let tid = transfer_id.to_string();
 
@@ -567,7 +544,7 @@ impl Storage {
         }
     }
 
-    pub fn insert_outgoing_path_pending_states(
+    fn insert_outgoing_path_pending_states(
         logger: &slog::Logger,
         conn: &Connection,
         transfer_id: Uuid,
@@ -593,7 +570,7 @@ impl Storage {
         }
     }
 
-    pub fn insert_incoming_path_pending_states(
+    fn insert_incoming_path_pending_states(
         logger: &slog::Logger,
         conn: &Connection,
         transfer_id: Uuid,
@@ -1015,7 +992,7 @@ impl Storage {
         }
     }
 
-    pub async fn purge_transfers(&self, transfer_ids: Vec<String>) {
+    pub async fn purge_transfers(&self, transfer_ids: &[String]) {
         trace!(
             self.logger,
             "Purging transfers";
@@ -1929,7 +1906,7 @@ mod tests {
         }
 
         storage
-            .purge_transfers(vec![transfer_id_1.to_string(), transfer_id_2.to_string()])
+            .purge_transfers(&[transfer_id_1.to_string(), transfer_id_2.to_string()])
             .await;
 
         let transfers = storage.transfers_since(0).await;
