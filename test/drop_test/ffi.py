@@ -10,6 +10,7 @@ from . import event
 from .logger import logger
 from .config import RUNNERS
 
+from .dns_resolver import dns_resolver
 
 DEBUG_PRINT_EVENT = True
 
@@ -135,7 +136,7 @@ class EventQueue:
         self, target_event: event.Event, ignore_progress: bool = True
     ) -> None:
         # TODO: a better solution would be to have infinite loop with a timeout check for all wait commands
-        for _ in range(100):
+        for _ in range(10):
             with self._lock:
                 while len(self._events) > 0:
                     e = self._events[0]
@@ -148,7 +149,7 @@ class EventQueue:
                         return
 
                     raise Exception(
-                        f"Unexpected event:\n{str(e)}\nwhile looking for:\n{str(target_event)}\n"
+                        f"TODO1 Unexpected event:\n{str(e)}\nwhile looking for:\n{str(target_event)}\n"
                     )
 
             await asyncio.sleep(1)
@@ -185,7 +186,7 @@ class EventQueue:
 
                     if not found:
                         raise Exception(
-                            f"Unexpected event1:\n{str(e)}\nwhile looking for(racy):\n{', '.join(str(e) for e in target_events if e not in success)}\n"
+                            f"Unexpected event:\n{str(e)}\nwhile looking for(racy):\n{', '.join(str(e) for e in target_events if e not in success)}\n"
                         )
 
                     i -= 1
@@ -201,21 +202,21 @@ class EventQueue:
 
 class KeysCtx:
     def __init__(self, runner: str):
-        self.this = RUNNERS[runner]
+        self.this = RUNNERS[runner.split("-")[0]] # TODO
 
     def callback(self, ctx, ip, pubkey):
         ip = ip.decode("utf-8")
 
         peer = None
-        for pr in RUNNERS.values():
-            if pr.ip == ip:
+        for pr in RUNNERS.keys():
+            if dns_resolver.resolve(pr) == ip:
                 peer = pr
                 break
 
         if peer is None:
             return 1
 
-        found = peer.pubkey
+        found = RUNNERS[peer].pubkey
 
         ctypes.memmove(pubkey, found, len(found))
         return 0
@@ -592,7 +593,7 @@ def new_event(event_str: str) -> event.Event:
 
         return event.Receive(
             transfer_slot,
-            event_data["peer"],
+            dns_resolver.reverse_lookup(event_data["peer"]),
             {event.File(f["id"], f["path"], f["size"]) for f in event_data["files"]},
         )
 

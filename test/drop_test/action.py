@@ -16,6 +16,7 @@ import requests
 from . import event, ffi
 from .logger import logger
 from .event import Event, print_uuid, get_uuid, UUIDS, UUIDS_LOCK
+from .dns_resolver import dns_resolver
 
 import sys
 
@@ -147,14 +148,14 @@ class NewTransferFails(Action):
 
     async def run(self, drop: ffi.Drop):
         try:
-            xfid = drop.new_transfer(self._peer, [self._path])
+            xfid = drop.new_transfer(dns_resolver.resolve(self._peer), [self._path])
         except:
             return
 
         raise Exception("NewTransferFails did not fail")
 
     def __str__(self):
-        return f"NewTransferFails({self._peer}, {self._path})"
+        return f"NewTransferFails({dns_resolver.resolve(self._peer)}, {self._path})"
 
 
 class NewTransfer(Action):
@@ -164,11 +165,11 @@ class NewTransfer(Action):
 
     async def run(self, drop: ffi.Drop):
         with UUIDS_LOCK:
-            xfid = drop.new_transfer(self._peer, self._paths)
+            xfid = drop.new_transfer(dns_resolver.resolve(self._peer), self._paths)
             UUIDS.append(xfid)
 
     def __str__(self):
-        return f"NewTransfer({self._peer}, {self._paths})"
+        return f"NewTransfer({dns_resolver.resolve(self._peer)}, {self._paths})"
 
 
 # New transfer just with files preopened. Used to test Android. Android can't share directories
@@ -185,11 +186,13 @@ class NewTransferWithFD(Action):
 
     async def run(self, drop: ffi.Drop):
         with UUIDS_LOCK:
-            xfid = drop.new_transfer_with_fd(self._peer, self._path, self._uri)
+            xfid = drop.new_transfer_with_fd(
+                dns_resolver.resolve(self._peer), self._path, self._uri
+            )
             UUIDS.append(xfid)
 
     def __str__(self):
-        return f"NewTransferWithFD({self._peer}, {self._uri})"
+        return f"NewTransferWithFD({dns_resolver.resolve(self._peer)}, {self._uri})"
 
 
 class Download(Action):
@@ -200,7 +203,7 @@ class Download(Action):
 
     async def run(self, drop: ffi.Drop):
         with UUIDS_LOCK:
-            drop.download(UUIDS[self._uuid_slot], self._fid, self._dst)  # TODO
+            drop.download(UUIDS[self._uuid_slot], self._fid, self._dst)
 
     def __str__(self):
         return f"DownloadFile({print_uuid(self._uuid_slot)}, {self._fid}, {self._dst})"
@@ -621,7 +624,7 @@ class Start(Action):
         drop.start(self._addr, self._dbpath)
 
     def __str__(self):
-        return f"Start(addr={self._addr}, dbpath={self._dbpath})"
+        return f"Start(addr={dns_resolver.resolve(self._addr)}, dbpath={self._dbpath})"
 
 
 class RemoveTransferFile(Action):
