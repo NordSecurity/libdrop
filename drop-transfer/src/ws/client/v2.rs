@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::Context;
+use drop_core::Status;
 use futures::SinkExt;
 use slog::{debug, error, warn};
 use tokio::{
@@ -13,9 +14,13 @@ use tokio::{
 };
 use tokio_tungstenite::tungstenite::Message;
 
-use super::{handler, WebSocket};
+use super::{
+    handler::{self, MsgToSend},
+    WebSocket,
+};
 use crate::{
     file::FileSubPath,
+    manager::FileTerminalState,
     protocol::v2,
     service::State,
     tasks::AliveGuard,
@@ -33,15 +38,15 @@ pub struct HandlerInit<'a, const PING: bool = true> {
 pub struct HandlerLoop<'a, const PING: bool> {
     state: &'a Arc<State>,
     logger: &'a slog::Logger,
-    upload_tx: Sender<Message>,
+    upload_tx: Sender<MsgToSend>,
     tasks: HashMap<FileSubPath, FileTask>,
     xfer: Arc<OutgoingTransfer>,
     alive: &'a AliveGuard,
 }
 
 struct Uploader {
-    sink: Sender<Message>,
-    file_id: FileSubPath,
+    sink: Sender<MsgToSend>,
+    file_subpath: FileSubPath,
 }
 
 struct FileTask {
@@ -78,7 +83,7 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
         Ok(())
     }
 
-    fn upgrade(self, upload_tx: Sender<Message>, xfer: Arc<OutgoingTransfer>) -> Self::Loop {
+    fn upgrade(self, upload_tx: Sender<MsgToSend>, xfer: Arc<OutgoingTransfer>) -> Self::Loop {
         let Self {
             state,
             logger,
@@ -117,6 +122,17 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
     }
 
     async fn on_done(&mut self, file: FileSubPath) {
+        if let Some(file) = self.xfer.file_by_subpath(&file) {
+            if let Err(err) = self
+                .state
+                .transfer_manager
+                .outgoing_terminal_recv(self.xfer.id(), file.id(), FileTerminalState::Completed)
+                .await
+            {
+                warn!(self.logger, "Failed to accept file as done: {err}");
+            }
+        }
+
         if let Some(task) = self.tasks.remove(&file) {
             task.events.success().await;
         }
@@ -124,12 +140,15 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
 
     async fn on_download(&mut self, jobs: &mut JoinSet<()>, file_id: FileSubPath) {
         let start = async {
-            if let Some(file) = self.xfer.file_by_subpath(&file_id) {
-                self.state
-                    .transfer_manager
-                    .outgoing_ensure_file_not_rejected(self.xfer.id(), file.id())
-                    .await?;
-            }
+            let file = self
+                .xfer
+                .file_by_subpath(&file_id)
+                .context("Invalid file")?;
+
+            self.state
+                .transfer_manager
+                .outgoing_ensure_file_not_terminated(self.xfer.id(), file.id())
+                .await?;
 
             match self.tasks.entry(file_id.clone()) {
                 Entry::Occupied(o) => {
@@ -141,7 +160,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                             self.state,
                             Uploader {
                                 sink: self.upload_tx.clone(),
-                                file_id: file_id.clone(),
+                                file_subpath: file_id.clone(),
                             },
                             self.xfer.clone(),
                             file_id,
@@ -159,7 +178,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                         self.state,
                         Uploader {
                             sink: self.upload_tx.clone(),
-                            file_id: file_id.clone(),
+                            file_subpath: file_id.clone(),
                         },
                         self.xfer.clone(),
                         file_id,
@@ -187,16 +206,42 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         );
 
         if let Some(file) = file {
-            if let Some(task) = self.tasks.remove(&file) {
-                if !task.job.is_finished() {
-                    task.job.abort();
+            if let Some(file) = self.xfer.file_by_subpath(&file) {
+                match self
+                    .state
+                    .transfer_manager
+                    .outgoing_terminal_recv(self.xfer.id(), file.id(), FileTerminalState::Failed)
+                    .await
+                {
+                    Err(err) => {
+                        warn!(self.logger, "Failed to accept failure: {err}");
+                    }
+                    Ok(Some(res)) => {
+                        res.events
+                            .failed(crate::Error::BadTransferState(format!(
+                                "Sender reported an error: {msg}"
+                            )))
+                            .await;
+                    }
+                    Ok(None) => (),
                 }
+            }
 
-                task.events
-                    .failed(crate::Error::BadTransferState(format!(
-                        "Receiver reported an error: {msg}"
-                    )))
-                    .await;
+            self.stop_task(&file, Status::BadTransferState).await;
+        }
+    }
+
+    async fn stop_task(&mut self, file: &FileSubPath, status: Status) {
+        if let Some(FileTask { job: task, events }) = self.tasks.remove(file) {
+            if !task.is_finished() {
+                debug!(
+                    self.logger,
+                    "Aborting download job: {}:{file:?}",
+                    self.xfer.id()
+                );
+
+                task.abort();
+                events.stop_silent(status).await;
             }
         }
     }
@@ -221,17 +266,28 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         });
         socket.send(Message::from(&msg)).await?;
 
-        self.state
-            .transfer_manager
-            .outgoing_rejection_ack(self.xfer.id(), &file_id)
-            .await?;
+        self.stop_task(&file_subpath, Status::FileRejected).await;
 
-        if let Some(task) = self.tasks.remove(&file_subpath) {
-            if !task.job.is_finished() {
-                task.job.abort();
-                task.events.cancelled_on_rejection().await;
-            }
-        }
+        Ok(())
+    }
+
+    async fn issue_failure(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+    ) -> anyhow::Result<()> {
+        let file_subpath = if let Some(file) = self.xfer.files().get(&file_id) {
+            file.subpath().clone()
+        } else {
+            warn!(self.logger, "Missing file with ID: {file_id:?}");
+            return Ok(());
+        };
+
+        let msg = v2::ClientMsg::Error(v2::Error {
+            file: Some(file_subpath),
+            msg: String::from("File failed elsewhere"),
+        });
+        socket.send(Message::from(&msg)).await?;
 
         Ok(())
     }
@@ -283,7 +339,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         debug!(self.logger, "Waiting for background jobs to finish");
 
         let tasks = self.tasks.drain().map(|(_, task)| async move {
-            task.events.cancel_silent().await;
+            task.events.stop_silent(Status::Canceled).await;
         });
 
         futures::future::join_all(tasks).await;
@@ -322,12 +378,14 @@ impl<const PING: bool> Drop for HandlerLoop<'_, PING> {
 impl handler::Uploader for Uploader {
     async fn chunk(&mut self, chunk: &[u8]) -> Result<(), crate::Error> {
         let msg = v2::Chunk {
-            file: self.file_id.clone(),
+            file: self.file_subpath.clone(),
             data: chunk.to_vec(),
         };
 
         self.sink
-            .send(Message::from(msg))
+            .send(MsgToSend {
+                msg: Message::from(msg),
+            })
             .await
             .map_err(|_| crate::Error::Canceled)?;
 
@@ -336,11 +394,16 @@ impl handler::Uploader for Uploader {
 
     async fn error(&mut self, msg: String) {
         let msg = v2::ClientMsg::Error(v2::Error {
-            file: Some(self.file_id.clone()),
+            file: Some(self.file_subpath.clone()),
             msg,
         });
 
-        let _ = self.sink.send(Message::from(&msg)).await;
+        let _ = self
+            .sink
+            .send(MsgToSend {
+                msg: Message::from(&msg),
+            })
+            .await;
     }
 
     fn offset(&self) -> u64 {

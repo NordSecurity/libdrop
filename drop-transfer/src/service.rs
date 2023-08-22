@@ -7,6 +7,7 @@ use std::{
 
 use drop_analytics::Moose;
 use drop_config::DropConfig;
+use drop_core::Status;
 use drop_storage::Storage;
 use slog::{debug, Logger};
 use tokio::sync::{mpsc, Semaphore};
@@ -163,8 +164,9 @@ impl Service {
 
         if started {
             validate_dest_path(parent_dir)?;
+
             state
-                .start_download(&self.state.storage, file_id, parent_dir, &self.logger)
+                .start_download(&self.state.storage, file_id, parent_dir)
                 .await?;
         }
 
@@ -180,7 +182,7 @@ impl Service {
             .await?;
 
         if let Some(res) = res {
-            res.events.cancel_silent().await;
+            res.events.stop_silent(Status::Canceled).await;
 
             self.state
                 .event_tx
@@ -203,18 +205,7 @@ impl Service {
                 .await
             {
                 Ok(res) => {
-                    res.events.cancelled_on_rejection().await;
-
-                    self.state
-                        .event_tx
-                        .send(crate::Event::FileUploadRejected {
-                            transfer_id,
-                            file_id: file,
-                            by_peer: false,
-                        })
-                        .await
-                        .expect("Event channel should be open");
-
+                    res.events.rejected(false).await;
                     return Ok(());
                 }
                 Err(crate::Error::BadTransfer) => (),
@@ -229,18 +220,7 @@ impl Service {
                 .await
             {
                 Ok(res) => {
-                    res.events.cancelled_on_rejection().await;
-
-                    self.state
-                        .event_tx
-                        .send(crate::Event::FileDownloadRejected {
-                            transfer_id,
-                            file_id: file,
-                            by_peer: false,
-                        })
-                        .await
-                        .expect("Event channel should be open");
-
+                    res.events.rejected(false).await;
                     return Ok(());
                 }
                 Err(crate::Error::BadTransfer) => (),
@@ -261,7 +241,10 @@ impl Service {
                 .await
             {
                 Ok(res) => {
-                    futures::future::join_all(res.events.iter().map(|ev| ev.cancel_silent())).await;
+                    futures::future::join_all(
+                        res.events.iter().map(|ev| ev.stop_silent(Status::Canceled)),
+                    )
+                    .await;
 
                     self.state
                         .event_tx
@@ -283,7 +266,10 @@ impl Service {
                 .await
             {
                 Ok(res) => {
-                    futures::future::join_all(res.events.iter().map(|ev| ev.cancel_silent())).await;
+                    futures::future::join_all(
+                        res.events.iter().map(|ev| ev.stop_silent(Status::Canceled)),
+                    )
+                    .await;
 
                     self.state
                         .event_tx

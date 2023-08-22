@@ -2,6 +2,8 @@ use std::io::Error as IoError;
 
 use tokio_tungstenite::tungstenite;
 
+use crate::manager::FileTerminalState;
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Operation was canceled")]
@@ -46,8 +48,8 @@ pub enum Error {
     StorageError,
     #[error("Checksum validation failed")]
     ChecksumMismatch,
-    #[error("File is rejected")]
-    Rejected,
+    #[error("File in mismatched state: {0:?}")]
+    FileStateMismatch(FileTerminalState),
 }
 
 impl Error {
@@ -98,7 +100,9 @@ impl From<&Error> for u32 {
             Error::AuthenticationFailed => Status::AuthenticationFailed as _,
             Error::StorageError => Status::StorageError as _,
             Error::ChecksumMismatch => Status::FileChecksumMismatch as _,
-            Error::Rejected => Status::FileRejected as _,
+            Error::FileStateMismatch(FileTerminalState::Rejected) => Status::FileRejected as _,
+            Error::FileStateMismatch(FileTerminalState::Completed) => Status::FileFinished as _,
+            Error::FileStateMismatch(FileTerminalState::Failed) => Status::FileFailed as _,
         }
     }
 }
