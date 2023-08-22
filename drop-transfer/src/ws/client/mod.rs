@@ -529,7 +529,7 @@ async fn on_req(
             handler.issue_reject(socket, file.clone()).await?;
         }
         ClientReq::Fail { file } => {
-            handler.issue_faliure(socket, file.clone()).await?;
+            handler.issue_failure(socket, file.clone()).await?;
         }
         ClientReq::Close => {
             debug!(logger, "Stopping client connection gracefuly");
