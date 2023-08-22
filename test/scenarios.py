@@ -1,6 +1,6 @@
 from drop_test import action, event
 from drop_test.scenario import Scenario, ActionList
-from drop_test.error import Error
+from drop_test.error import Error, ReturnCodes
 from drop_test.config import FILES
 
 from pathlib import Path
@@ -58,6 +58,7 @@ scenarios = [
                                 "relative_path": "testfile-big",
                                 "base_path": "/tmp",
                                 "bytes": 10485760,
+                                "bytes_sent": 10485760,
                                 "states": [
                                     {
                                         "created_at": "*",
@@ -170,6 +171,7 @@ scenarios = [
                             {
                                 "relative_path": "testfile-big",
                                 "bytes": 10485760,
+                                "bytes_received": 10485760,
                                 "states": [
                                     {
                                         "created_at": "*",
@@ -223,7 +225,7 @@ scenarios = [
     ),
     Scenario(
         "scenario2",
-        "Send two files one by one",
+        "Send two files one by one, in a different transfers. Expect it to work",
         {
             "ren": ActionList(
                 [
@@ -494,7 +496,7 @@ scenarios = [
     ),
     Scenario(
         "scenario3",
-        "Send two files in parallel",
+        "Send two files in parallel in two different transfers",
         {
             "ren": ActionList(
                 [
@@ -627,7 +629,7 @@ scenarios = [
     ),
     Scenario(
         "scenario4-1",
-        "Send a request with one file, cancel the request from the sender side once it starts downloading",
+        "Send a request with one file, cancel the transfer from the sender side once it starts downloading",
         {
             "ren": ActionList(
                 [
@@ -683,7 +685,7 @@ scenarios = [
     ),
     Scenario(
         "scenario4-2",
-        "Send a request with one file, cancel the request from the sender side before downloading",
+        "Send a request with one file, cancel the transfer from the sender side before downloading",
         {
             "ren": ActionList(
                 [
@@ -734,7 +736,7 @@ scenarios = [
     ),
     Scenario(
         "scenario4-3",
-        "Send a request with one file, cancel from the receiver side once the download begins",
+        "Send a request with one file, cancel the transfer from the receiver side once the download begins",
         {
             "ren": ActionList(
                 [
@@ -794,7 +796,7 @@ scenarios = [
     ),
     Scenario(
         "scenario4-4",
-        "Send a request with one file, cancel from the receiver side before download begins",
+        "Send a request with one file, cancel the transfer from the receiver side before download begins",
         {
             "ren": ActionList(
                 [
@@ -1208,40 +1210,6 @@ scenarios = [
     ),
     Scenario(
         "scenario4-12",
-        "Send a request with one file to a peer that's offline. Wait for Queued event and cancel the transfer from the sender side. Expect no events on the receiver once it comes online",
-        {
-            "ren": ActionList(
-                [
-                    action.Start("172.20.0.5"),
-                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
-                    action.Wait(
-                        event.Queued(
-                            0,
-                            {
-                                event.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
-                                ),
-                            },
-                        )
-                    ),
-                    action.CancelTransferRequest(0),
-                    action.Wait(event.FinishTransferCanceled(0, False)),
-                    action.NoEvent(),
-                    action.Stop(),
-                ]
-            ),
-            "stimpy": ActionList(
-                [
-                    action.Sleep(8),
-                    action.Start("172.20.0.15"),
-                    action.NoEvent(),
-                    action.Stop(),
-                ]
-            ),
-        },
-    ),
-    Scenario(
-        "scenario4-13",
         "Send a request with one file to a peer that's offline. Cancel the transfer from the sender side immediately. Expect no events on the receiver once it comes online",
         {
             "ren": ActionList(
@@ -1595,7 +1563,7 @@ scenarios = [
     ),
     Scenario(
         "scenario8-1",
-        "Send two identical files one by one, expect no overwrites to happen",
+        "Send two identical files one by one within different transfers, expect no overwrites to happen",
         {
             "ren": ActionList(
                 [
@@ -1873,123 +1841,6 @@ scenarios = [
                                 "/tmp/received/testfile.small.with.complicated(1).extension",
                                 1048576,
                             ),
-                        ],
-                    ),
-                    action.CancelTransferRequest(0),
-                    action.CancelTransferRequest(1),
-                    action.ExpectCancel([0, 1], False),
-                    action.NoEvent(),
-                    action.Stop(),
-                ]
-            ),
-        },
-    ),
-    Scenario(
-        "scenario9",
-        "Send the same file twice, expect downloading the file again and appending (1) suffix",
-        {
-            "ren": ActionList(
-                [
-                    action.Start("172.20.0.5"),
-                    action.WaitForAnotherPeer(),
-                    action.NewTransfer("172.20.0.15", ["/tmp/deep/path/file1.ext1"]),
-                    action.Wait(
-                        event.Queued(
-                            0,
-                            {
-                                event.File(
-                                    FILES["deep/path/file1.ext1"].id,
-                                    "file1.ext1",
-                                    1048576,
-                                ),
-                            },
-                        )
-                    ),
-                    action.Wait(event.Start(0, FILES["deep/path/file1.ext1"].id)),
-                    action.Wait(
-                        event.FinishFileUploaded(0, FILES["deep/path/file1.ext1"].id)
-                    ),
-                    action.NewTransfer("172.20.0.15", ["/tmp/deep/path/file1.ext1"]),
-                    action.Wait(
-                        event.Queued(
-                            1,
-                            {
-                                event.File(
-                                    FILES["deep/path/file1.ext1"].id,
-                                    "file1.ext1",
-                                    1048576,
-                                ),
-                            },
-                        )
-                    ),
-                    action.Wait(event.Start(1, FILES["deep/path/file1.ext1"].id)),
-                    action.Wait(
-                        event.FinishFileUploaded(1, FILES["deep/path/file1.ext1"].id)
-                    ),
-                    action.ExpectCancel([0, 1], True),
-                    action.NoEvent(),
-                    action.Stop(),
-                ]
-            ),
-            "stimpy": ActionList(
-                [
-                    action.Start("172.20.0.15"),
-                    action.Wait(
-                        event.Receive(
-                            0,
-                            "172.20.0.5",
-                            {
-                                event.File(
-                                    FILES["deep/path/file1.ext1"].id,
-                                    "file1.ext1",
-                                    1048576,
-                                ),
-                            },
-                        )
-                    ),
-                    action.Download(
-                        0,
-                        FILES["deep/path/file1.ext1"].id,
-                        "/tmp/received",
-                    ),
-                    action.Wait(event.Start(0, FILES["deep/path/file1.ext1"].id)),
-                    action.Wait(
-                        event.FinishFileDownloaded(
-                            0,
-                            FILES["deep/path/file1.ext1"].id,
-                            "/tmp/received/file1.ext1",
-                        )
-                    ),
-                    action.Wait(
-                        event.Receive(
-                            1,
-                            "172.20.0.5",
-                            {
-                                event.File(
-                                    FILES["deep/path/file1.ext1"].id,
-                                    "file1.ext1",
-                                    1048576,
-                                ),
-                            },
-                        )
-                    ),
-                    action.Download(
-                        1,
-                        FILES["deep/path/file1.ext1"].id,
-                        "/tmp/received",
-                    ),
-                    action.Wait(event.Start(1, FILES["deep/path/file1.ext1"].id)),
-                    action.Wait(
-                        event.FinishFileDownloaded(
-                            1,
-                            FILES["deep/path/file1.ext1"].id,
-                            "/tmp/received/file1(1).ext1",
-                        )
-                    ),
-                    action.CheckDownloadedFiles(
-                        [
-                            action.File("/tmp/received/file1.ext1", 1048576),
-                            action.File("/tmp/received/file1(1).ext1", 1048576),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -4739,119 +4590,8 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario23-2",
-        "Send two files with the same name but different fs location simultaneously, expect them to transfer successfully",
-        {
-            "ren": ActionList(
-                [
-                    action.Start("172.20.0.5"),
-                    action.ConfigureNetwork(),
-                    action.WaitForAnotherPeer(),
-                    action.NewTransfer(
-                        "172.20.0.15",
-                        ["/tmp/testfile-big", "/tmp/duplicate/testfile-big"],
-                    ),
-                    action.Wait(
-                        event.Queued(
-                            0,
-                            {
-                                event.File(
-                                    FILES["testfile-big"].id,
-                                    "testfile-big",
-                                    10485760,
-                                ),
-                                event.File(
-                                    FILES["duplicate/testfile-big"].id,
-                                    "testfile-big",
-                                    20971520,
-                                ),
-                            },
-                        )
-                    ),
-                    action.WaitRacy(
-                        [
-                            event.Start(0, FILES["testfile-big"].id),
-                            event.FinishFileUploaded(
-                                0,
-                                FILES["testfile-big"].id,
-                            ),
-                            event.Start(0, FILES["duplicate/testfile-big"].id),
-                            event.FinishFileUploaded(
-                                0,
-                                FILES["duplicate/testfile-big"].id,
-                            ),
-                        ]
-                    ),
-                    action.ExpectCancel([0], True),
-                    action.NoEvent(),
-                    action.Stop(),
-                ]
-            ),
-            "stimpy": ActionList(
-                [
-                    action.Start("172.20.0.15"),
-                    action.ConfigureNetwork(),
-                    action.Wait(
-                        event.Receive(
-                            0,
-                            "172.20.0.5",
-                            {
-                                event.File(
-                                    FILES["testfile-big"].id,
-                                    "testfile-big",
-                                    10485760,
-                                ),
-                                event.File(
-                                    FILES["duplicate/testfile-big"].id,
-                                    "testfile-big",
-                                    20971520,
-                                ),
-                            },
-                        )
-                    ),
-                    action.Download(
-                        0,
-                        FILES["testfile-big"].id,
-                        "/tmp/received/23-2",
-                    ),
-                    action.Download(
-                        0,
-                        FILES["duplicate/testfile-big"].id,
-                        "/tmp/received/23-2",
-                    ),
-                    action.WaitRacy(
-                        [
-                            event.Start(0, FILES["testfile-big"].id),
-                            event.Start(0, FILES["duplicate/testfile-big"].id),
-                            event.FinishFileDownloaded(
-                                0,
-                                FILES["testfile-big"].id,
-                                "/tmp/received/23-2/testfile-big",
-                            ),
-                            event.FinishFileDownloaded(
-                                0,
-                                FILES["duplicate/testfile-big"].id,
-                                "/tmp/received/23-2/testfile-big(1)",
-                            ),
-                        ]
-                    ),
-                    action.CheckDownloadedFiles(
-                        [
-                            action.File("/tmp/received/23-2/testfile-big", 10485760),
-                            action.File("/tmp/received/23-2/testfile-big(1)", 20971520),
-                        ],
-                    ),
-                    action.CancelTransferRequest(0),
-                    action.ExpectCancel([0], False),
-                    action.NoEvent(),
-                    action.Stop(),
-                ]
-            ),
-        },
-    ),
-    Scenario(
         "scenario24",
-        "Download file into a readonly directory",
+        "Download file into a readonly directory. Expect failure",
         {
             "ren": ActionList(
                 [
@@ -5305,7 +5045,7 @@ scenarios = [
     ),
     Scenario(
         "scenario27-3",
-        "Reject currently transmitted file on sender side. Expect event on both peers plus cancel event",
+        "Reject currently transmitted file on sender side. Expect event on both peers",
         {
             "ren": ActionList(
                 [
@@ -5363,7 +5103,7 @@ scenarios = [
     ),
     Scenario(
         "scenario27-4",
-        "Reject currently transmitted file on receiver side. Expect event on both peers plus cancel event",
+        "Reject currently transmitted file on receiver side. Expect event on both peers",
         {
             "ren": ActionList(
                 [
@@ -6952,7 +6692,7 @@ scenarios = [
     ),
     Scenario(
         "scenario31-1",
-        "Remove file on sending side. Expect file not being present in the sender JSON output",
+        "Remove rejected file on sending side. Expect file not being present in the sender JSON output",
         {
             "ren": ActionList(
                 [
@@ -7078,7 +6818,7 @@ scenarios = [
     ),
     Scenario(
         "scenario31-2",
-        "Remove file on receiver side. Expect file not being present in the receiver JSON output",
+        "Remove rejected file on receiver side. Expect file not being present in the receiver JSON output",
         {
             "ren": ActionList(
                 [
@@ -7434,6 +7174,449 @@ scenarios = [
                             {
                                 "relative_path": "testfile-small",
                                 "bytes": 1048576,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario31-5",
+        "Remove completed file on sending side. Expect file not being present in the sender JSON output",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(0, FILES["testfile-small"].id)
+                    ),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.15",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "base_path": "/tmp",
+                                "bytes": 1048576,
+                                "bytes_sent": 1048576,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "started",
+                                        "bytes_sent": 0
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "completed"
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                    action.RemoveTransferFile(0, FILES["testfile-small"].id),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.15",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "outgoing",
+                        "paths": []
+                    }"""
+                        ]
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(0, FILES["testfile-small"].id, "/tmp/recv/31-5"),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-small"].id,
+                            "/tmp/recv/31-5/testfile-small",
+                        )
+                    ),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.5",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "incoming",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "bytes": 1048576,
+                                "bytes_received": 1048576,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "started",
+                                        "bytes_received": 0,
+                                        "base_dir": "/tmp/recv/31-5"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "completed",
+                                        "final_path": "/tmp/recv/31-5/testfile-small"
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario31-6",
+        "Remove completed file on receiving side. Expect file not being present in the sender JSON output",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(0, FILES["testfile-small"].id)
+                    ),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.15",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "base_path": "/tmp",
+                                "bytes": 1048576,
+                                "bytes_sent": 1048576,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "started",
+                                        "bytes_sent": 0
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "completed"
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(0, FILES["testfile-small"].id, "/tmp/recv/31-6"),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-small"].id,
+                            "/tmp/recv/31-6/testfile-small",
+                        )
+                    ),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.5",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "incoming",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "bytes": 1048576,
+                                "bytes_received": 1048576,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "started",
+                                        "bytes_received": 0,
+                                        "base_dir": "/tmp/recv/31-6"
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "completed",
+                                        "final_path": "/tmp/recv/31-6/testfile-small"
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                    action.RemoveTransferFile(0, FILES["testfile-small"].id),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.5",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "incoming",
+                        "paths": []
+                    }"""
+                        ]
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario31-7",
+        "Try to remove non terminated file on both sides. Expect removal failure",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.15",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "base_path": "/tmp",
+                                "bytes": 1048576,
+                                "bytes_sent": 0,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                    action.ExpectError(
+                        action.RemoveTransferFile(0, FILES["testfile-small"].id),
+                        ReturnCodes.BAD_INPUT,
+                    ),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.15",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "base_path": "/tmp",
+                                "bytes": 1048576,
+                                "bytes_sent": 0,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.5",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "incoming",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "bytes": 1048576,
+                                "bytes_received": 0,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "pending"
+                                    }
+                                ]
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                    action.ExpectError(
+                        action.RemoveTransferFile(0, FILES["testfile-small"].id),
+                        ReturnCodes.BAD_INPUT,
+                    ),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.5",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "incoming",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "bytes": 1048576,
+                                "bytes_received": 0,
                                 "states": [
                                     {
                                         "created_at": "*",

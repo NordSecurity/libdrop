@@ -39,3 +39,18 @@ class Error(IntEnum):
     FILE_PAUSED = (35,)
     FILE_FAILED = (36,)
     FILE_FINISHED = (37,)
+
+
+class ReturnCodes(IntEnum):
+    OK = (0,)
+    ERROR = (1,)
+    INVALID_STRING = (2,)
+    BAD_INPUT = (3,)
+    JSON_PARSE = (4,)
+    TRANSFER_CREATE = (5,)
+    NOT_STARTED = (6,)
+    ADDR_IN_USE = (7,)
+    INSTANCE_START = (8,)
+    INSTANCE_STOP = (9,)
+    INVALID_PRIVKEY = (10,)
+    DB_ERROR = (11,)
