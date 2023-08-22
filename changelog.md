@@ -10,6 +10,9 @@
 * Remove `ServiceStop` error
 * Disallow file cancels from the sending side
 * Introduce `TransferPaused` event signaling file download being paused because of peer disconnection
+* Allow removing file only upon reaching one Rejected, Failed or Finished state
+* Disallow re-downloading file after reaching Rejected, Failed or Finished state within single transfer
+* Include `bytes_sent/bytes_received` JSON field per file in the storage output
 
 ---
 <br>
