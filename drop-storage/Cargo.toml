@@ -15,6 +15,7 @@ uuid = { workspace = true }
 chrono = { version = "0.4.23", default-features = false, features = ["std"] }
 url = { workspace = true }
 tokio = { workspace = true }
+strum = { workspace = true }
 
 # Force bundled sqlite on linux, let moose choose on other platforms
 [target.'cfg(target_os = "linux")'.dependencies]

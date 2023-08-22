@@ -964,7 +964,7 @@ scenarios = [
     ),
     Scenario(
         "scenario4-8",
-        "Send one file, the receiver downloads it fully, both sides receive TransferDownloaded/TransferUploaded, then receiver issues cancel_file() - expect nothing to happen",
+        "Send one file, the receiver downloads it fully, both sides receive TransferDownloaded/TransferUploaded, then receiver issues cancel_file() - expect file is already downloaded error",
         {
             "ren": ActionList(
                 [
@@ -1032,6 +1032,11 @@ scenarios = [
                         ],
                     ),
                     action.CancelTransferFile(0, FILES["testfile-small"].id),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0, FILES["testfile-small"].id, Error.FILE_FINISHED
+                        )
+                    ),
                     action.NoEvent(),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
@@ -3098,7 +3103,7 @@ scenarios = [
     ),
     Scenario(
         "scenario15-1",
-        "Repeated file download within single transfer",
+        "Repeated file download within single transfer. Expect file is already download error",
         {
             "ren": ActionList(
                 [
@@ -3115,13 +3120,6 @@ scenarios = [
                                     1048576,
                                 ),
                             },
-                        )
-                    ),
-                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
-                    action.Wait(
-                        event.FinishFileUploaded(
-                            0,
-                            FILES["testfile-small"].id,
                         )
                     ),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
@@ -3170,18 +3168,14 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
-                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
-                        event.FinishFileDownloaded(
-                            0,
-                            FILES["testfile-small"].id,
-                            "/tmp/received/testfile-small(1)",
+                        event.FinishFileFailed(
+                            0, FILES["testfile-small"].id, Error.FILE_FINISHED
                         )
                     ),
                     action.CheckDownloadedFiles(
                         [
                             action.File("/tmp/received/testfile-small", 1048576),
-                            action.File("/tmp/received/testfile-small(1)", 1048576),
                         ],
                     ),
                     action.CancelTransferRequest(0),
@@ -3821,6 +3815,18 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
+                            event.Start(
+                                0,
+                                FILES[
+                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                ].id,
+                            ),
+                            event.Start(
+                                1,
+                                FILES[
+                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                ].id,
+                            ),
                             event.FinishFileFailed(
                                 0,
                                 FILES[
@@ -3893,6 +3899,18 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
+                            event.Start(
+                                0,
+                                FILES[
+                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                ].id,
+                            ),
+                            event.Start(
+                                1,
+                                FILES[
+                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
+                                ].id,
+                            ),
                             event.FinishFileFailed(
                                 0,
                                 FILES[
@@ -6652,6 +6670,11 @@ scenarios = [
                     action.DeleteFileFromFS("/tmp/testfile-big"),
                     # restart
                     action.Start("172.20.0.5", dbpath="/tmp/db/29-13-ren.sqlite"),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0, FILES["testfile-big"].id, Error.IO, os_err=2
+                        )
+                    ),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
                 ]
@@ -6677,16 +6700,6 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
-                    action.Wait(
-                        event.FinishFileFailed(
-                            0, FILES["testfile-big"].id, Error.BAD_TRANSFER_STATE
-                        )
-                    ),
-                    # Try to download it again
-                    action.Download(
-                        0, FILES["testfile-big"].id, "/tmp/received/29-13/"
-                    ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileFailed(

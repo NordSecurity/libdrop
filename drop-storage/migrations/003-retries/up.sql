@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS sync_outgoing_files (
   sync_id INTEGER NOT NULL,
   path_id INTEGER NOT NULL,
   local_state INTEGER NOT NULL,
-  remote_state INTEGER NOT NULL,
   PRIMARY KEY(sync_id, path_id)
   FOREIGN KEY(sync_id) REFERENCES sync_transfer(sync_id) ON DELETE CASCADE ON UPDATE CASCADE
   FOREIGN KEY(path_id) REFERENCES outgoing_paths(id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -30,7 +29,6 @@ CREATE TABLE IF NOT EXISTS sync_incoming_files (
   sync_id INTEGER NOT NULL,
   path_id INTEGER NOT NULL,
   local_state INTEGER NOT NULL,
-  remote_state INTEGER NOT NULL,
   PRIMARY KEY(sync_id, path_id)
   FOREIGN KEY(sync_id) REFERENCES sync_transfer(sync_id) ON DELETE CASCADE ON UPDATE CASCADE
   FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON DELETE CASCADE ON UPDATE CASCADE

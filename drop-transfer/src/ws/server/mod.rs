@@ -43,7 +43,10 @@ use crate::{
     tasks::AliveGuard,
     transfer::{IncomingTransfer, Transfer},
     utils::Hidden,
-    ws::{server::handler::Request, Pinger},
+    ws::{
+        server::handler::{MsgToSend, Request},
+        Pinger,
+    },
     Error, Event, File, FileId,
 };
 
@@ -56,6 +59,8 @@ pub enum ServerReq {
     Download { task: Box<FileXferTask> },
     Cancel { file: FileId },
     Reject { file: FileId },
+    Done { file: FileId },
+    Fail { file: FileId },
     Close,
 }
 
@@ -390,7 +395,7 @@ async fn handle_client(
 
                 // API request
                 req = req_rx.recv() => {
-                    if on_req(&mut socket, &mut jobs, &mut handler, req, logger).await?.is_break() {
+                    if on_req(&mut socket, &mut jobs, &mut handler, logger, req).await?.is_break() {
                         break;
                     }
                 },
@@ -405,7 +410,7 @@ async fn handle_client(
                 },
                 // Message to send down the wire
                 msg = send_rx.recv() => {
-                    let msg = msg.expect("Handler channel should always be open");
+                    let MsgToSend { msg } = msg.expect("Handler channel should always be open");
                     socket.send(msg).await?;
                 },
                 _ = ping.tick() => {
@@ -627,18 +632,36 @@ impl FileXferTask {
                     )
                     .await;
 
-                if let Err(err) = state
-                    .transfer_manager
-                    .incoming_finish_download(self.xfer.id(), self.file.id())
-                    .await
-                {
-                    warn!(logger, "Failed to store download finish: {err}");
-                }
-
                 match result {
-                    Ok(dst_location) => events.success(dst_location).await,
-                    Err(crate::Error::Canceled) => (),
+                    Err(crate::Error::Canceled) => {
+                        if let Err(err) = state
+                            .transfer_manager
+                            .incoming_download_cancel(self.xfer.id(), self.file.id())
+                            .await
+                        {
+                            warn!(logger, "Failed to store download finish: {err}");
+                        }
+                    }
+                    Ok(dst_location) => {
+                        if let Err(err) = state
+                            .transfer_manager
+                            .incoming_finish_post(self.xfer.id(), self.file.id(), true)
+                            .await
+                        {
+                            warn!(logger, "Failed to post finish: {err}");
+                        }
+
+                        events.success(dst_location).await;
+                    }
                     Err(err) => {
+                        if let Err(err) = state
+                            .transfer_manager
+                            .incoming_finish_post(self.xfer.id(), self.file.id(), false)
+                            .await
+                        {
+                            warn!(logger, "Failed to post finish: {err}");
+                        }
+
                         let _ = downloader.error(err.to_string()).await;
                         events.failed(err).await;
                     }
@@ -741,13 +764,16 @@ async fn on_req(
     socket: &mut WebSocket,
     jobs: &mut JoinSet<()>,
     handler: &mut impl HandlerLoop,
-    req: Option<ServerReq>,
     logger: &Logger,
+    req: Option<ServerReq>,
 ) -> anyhow::Result<ControlFlow<()>> {
     match req.context("API channel broken")? {
         ServerReq::Download { task } => handler.issue_download(socket, jobs, *task).await?,
         ServerReq::Cancel { file } => handler.issue_cancel(socket, file).await?,
-        ServerReq::Reject { file } => handler.issue_reject(socket, file).await?,
+        ServerReq::Reject { file } => handler.issue_reject(socket, file.clone()).await?,
+        ServerReq::Done { file } => handler.issue_done(socket, file.clone()).await?,
+        ServerReq::Fail { file } => handler.issue_failure(socket, file.clone()).await?,
+
         ServerReq::Close => {
             debug!(logger, "Stoppping server connection gracefuly");
             socket.send(Message::close()).await?;

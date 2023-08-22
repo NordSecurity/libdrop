@@ -32,14 +32,21 @@ use tokio_util::sync::CancellationToken;
 use self::handler::{HandlerInit, HandlerLoop, Uploader};
 use super::OutgoingFileEventTx;
 use crate::{
-    auth, file::FileId, protocol, service::State, tasks::AliveGuard, transfer::Transfer,
-    ws::Pinger, Event, OutgoingTransfer,
+    auth,
+    file::FileId,
+    protocol,
+    service::State,
+    tasks::AliveGuard,
+    transfer::Transfer,
+    ws::{client::handler::MsgToSend, Pinger},
+    Event, OutgoingTransfer,
 };
 
 pub type WebSocket = WebSocketStream<TcpStream>;
 
 pub enum ClientReq {
     Reject { file: FileId },
+    Fail { file: FileId },
     Close,
 }
 
@@ -345,7 +352,7 @@ impl RunContext<'_> {
 
                     // API request
                     req = api_req_rx.recv() => {
-                        if on_req(&mut self.socket, &mut handler, req, self.logger).await?.is_break() {
+                        if on_req(&mut self.socket, &mut handler, self.logger, req).await?.is_break() {
                             break;
                         }
                     },
@@ -360,7 +367,7 @@ impl RunContext<'_> {
                     },
                     // Message to send down the wire
                     msg = upload_rx.recv() => {
-                        let msg = msg.expect("Handler channel should always be open");
+                        let MsgToSend { msg } = msg.expect("Handler channel should always be open");
                         self.socket.send(msg).await.context("Socket sending upload msg")?;
                     },
                     _ = ping.tick() => {
@@ -427,7 +434,6 @@ async fn start_upload(
     events.start().await;
 
     let upload_job = {
-        let events = events.clone();
         async move {
             let _guard = guard;
             let xfile = &xfer.files()[&file_id];
@@ -465,8 +471,19 @@ async fn start_upload(
                         "Failed at service::download() while reading a file: {}", err
                     );
 
-                    uploader.error(err.to_string()).await;
-                    events.failed(err).await;
+                    let msg = err.to_string();
+
+                    match state
+                        .transfer_manager
+                        .outgoing_failure_post(xfer.id(), &file_id)
+                        .await
+                    {
+                        Err(err) => {
+                            warn!(logger, "Failed to post failure {err:?}");
+                        }
+                        Ok(res) => res.events.failed(err).await,
+                    }
+                    uploader.error(msg).await;
                 }
             };
         }
@@ -504,11 +521,16 @@ async fn acquire_throttle_permit<'a>(
 async fn on_req(
     socket: &mut WebSocket,
     handler: &mut impl HandlerLoop,
+    logger: &Logger,
     req: Option<ClientReq>,
-    logger: &slog::Logger,
 ) -> anyhow::Result<ControlFlow<()>> {
     match req.context("API channel broken")? {
-        ClientReq::Reject { file } => handler.issue_reject(socket, file).await?,
+        ClientReq::Reject { file } => {
+            handler.issue_reject(socket, file.clone()).await?;
+        }
+        ClientReq::Fail { file } => {
+            handler.issue_failure(socket, file.clone()).await?;
+        }
         ClientReq::Close => {
             debug!(logger, "Stopping client connection gracefuly");
             socket.close(None).await.context("Failed to close WS")?;

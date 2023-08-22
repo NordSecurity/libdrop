@@ -28,11 +28,11 @@ impl FromSql for TransferState {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, strum::FromRepr, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum FileState {
     Alive = 0,
-    Rejected = 1,
+    Terminal = 1,
 }
 
 impl ToSql for FileState {
@@ -43,11 +43,12 @@ impl ToSql for FileState {
 
 impl FromSql for FileState {
     fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
-        match value.as_i64()? {
-            0 => Ok(Self::Alive),
-            1 => Ok(Self::Rejected),
-            x => Err(rusqlite::types::FromSqlError::OutOfRange(x)),
-        }
+        let x = value.as_i64()?;
+
+        x.try_into()
+            .ok()
+            .and_then(Self::from_repr)
+            .ok_or(rusqlite::types::FromSqlError::OutOfRange(x))
     }
 }
 
@@ -56,12 +57,6 @@ pub struct Transfer {
     pub remote_state: TransferState,
     pub local_state: TransferState,
     pub is_outgoing: bool,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct File {
-    pub remote_state: FileState,
-    pub local_state: FileState,
 }
 
 #[derive(Debug, Clone)]
@@ -87,8 +82,8 @@ pub(super) fn insert_transfer(
     if is_incoming {
         conn.execute(
             r#"
-                INSERT INTO sync_incoming_files (sync_id, path_id, local_state, remote_state)
-                SELECT st.sync_id, ip.id, ?2, ?2
+                INSERT INTO sync_incoming_files (sync_id, path_id, local_state)
+                SELECT st.sync_id, ip.id, ?2
                 FROM transfers t
                 INNER JOIN sync_transfer st ON t.id = st.transfer_id
                 INNER JOIN incoming_paths ip ON t.id = ip.transfer_id
@@ -99,8 +94,8 @@ pub(super) fn insert_transfer(
     } else {
         conn.execute(
             r#"
-                INSERT INTO sync_outgoing_files (sync_id, path_id, local_state, remote_state)
-                SELECT st.sync_id, ip.id, ?2, ?2
+                INSERT INTO sync_outgoing_files (sync_id, path_id, local_state)
+                SELECT st.sync_id, ip.id, ?2
                 FROM transfers t
                 INNER JOIN sync_transfer st ON t.id = st.transfer_id
                 INNER JOIN outgoing_paths ip ON t.id = ip.transfer_id
@@ -180,17 +175,17 @@ pub(super) fn transfer_clear(conn: &Connection, transfer_id: Uuid) -> super::Res
     Ok(if count > 0 { Some(()) } else { None })
 }
 
-pub(super) fn outgoing_file_state(
+pub(super) fn outgoing_file_local_state(
     conn: &Connection,
     transfer_id: Uuid,
     file_id: &str,
-) -> super::Result<Option<File>> {
+) -> super::Result<Option<FileState>> {
     let tid = transfer_id.to_string();
 
     let res = conn
         .query_row(
             r#"
-            SELECT sof.local_state, sof.remote_state
+            SELECT sof.local_state
             FROM sync_outgoing_files sof
             INNER JOIN sync_transfer st USING(sync_id)
             INNER JOIN transfers t ON t.id = st.transfer_id
@@ -198,12 +193,7 @@ pub(super) fn outgoing_file_state(
             WHERE st.transfer_id = ?1 AND op.path_hash = ?2
             "#,
             params![tid, file_id],
-            |r| {
-                Ok(File {
-                    remote_state: r.get(1)?,
-                    local_state: r.get(0)?,
-                })
-            },
+            |r| r.get(0),
         )
         .optional()?;
 
@@ -236,56 +226,6 @@ pub(super) fn outgoing_file_set_local_state(
     Ok(if count > 0 { Some(()) } else { None })
 }
 
-pub(super) fn outgoing_file_set_remote_state(
-    conn: &Connection,
-    transfer_id: Uuid,
-    file_id: &str,
-    state: FileState,
-) -> super::Result<Option<()>> {
-    let tid = transfer_id.to_string();
-
-    let count = conn.execute(
-        r#"
-        UPDATE sync_outgoing_files
-        SET remote_state = ?3
-        WHERE ROWID IN (
-            SELECT sof.ROWID
-            FROM sync_outgoing_files sof
-            INNER JOIN sync_transfer st USING(sync_id)
-            INNER JOIN transfers t ON t.id = st.transfer_id
-            INNER JOIN outgoing_paths op ON t.id = op.transfer_id AND sof.path_id = op.id
-            WHERE st.transfer_id = ?1 AND op.path_hash = ?2
-        )
-        "#,
-        params![tid, file_id, state],
-    )?;
-    Ok(if count > 0 { Some(()) } else { None })
-}
-
-pub(super) fn outgoing_files_to_reject(
-    conn: &Connection,
-    transfer_id: Uuid,
-) -> super::Result<Vec<String>> {
-    let tid = transfer_id.to_string();
-
-    let res = conn
-        .prepare(
-            r#"
-        SELECT op.path_hash
-        FROM sync_outgoing_files sof
-        INNER JOIN sync_transfer st USING(sync_id)
-        INNER JOIN outgoing_paths op ON op.id = sof.path_id 
-        WHERE st.transfer_id = ?1
-            AND sof.local_state = ?2
-            AND NOT sof.remote_state = sof.local_state
-        "#,
-        )?
-        .query_map(params![tid, FileState::Rejected], |r| r.get(0))?
-        .collect::<QueryResult<_>>()?;
-
-    Ok(res)
-}
-
 pub(super) fn incoming_files_in_flight(
     conn: &Connection,
     transfer_id: Uuid,
@@ -310,30 +250,6 @@ pub(super) fn incoming_files_in_flight(
                 file_id: r.get(1)?,
             })
         })?
-        .collect::<QueryResult<_>>()?;
-
-    Ok(res)
-}
-
-pub(super) fn incoming_files_to_reject(
-    conn: &Connection,
-    transfer_id: Uuid,
-) -> super::Result<Vec<String>> {
-    let tid = transfer_id.to_string();
-
-    let res = conn
-        .prepare(
-            r#"
-        SELECT ip.path_hash
-        FROM sync_incoming_files sif
-        INNER JOIN sync_transfer st USING(sync_id)
-        INNER JOIN incoming_paths ip ON ip.id = sif.path_id 
-        WHERE st.transfer_id = ?1
-            AND sif.local_state = ?2
-            AND NOT sif.remote_state = sif.local_state
-        "#,
-        )?
-        .query_map(params![tid, FileState::Rejected], |r| r.get(0))?
         .collect::<QueryResult<_>>()?;
 
     Ok(res)
@@ -387,17 +303,17 @@ pub(super) fn start_incoming_file(
     Ok(if count > 0 { Some(()) } else { None })
 }
 
-pub(super) fn incoming_file_state(
+pub(super) fn incoming_file_local_state(
     conn: &Connection,
     transfer_id: Uuid,
     file_id: &str,
-) -> super::Result<Option<File>> {
+) -> super::Result<Option<FileState>> {
     let tid = transfer_id.to_string();
 
     let res = conn
         .query_row(
             r#"
-            SELECT sif.local_state, sif.remote_state
+            SELECT sif.local_state
             FROM sync_incoming_files sif
             INNER JOIN sync_transfer st USING(sync_id)
             INNER JOIN transfers t ON t.id = st.transfer_id
@@ -405,12 +321,7 @@ pub(super) fn incoming_file_state(
             WHERE st.transfer_id = ?1 AND ip.path_hash = ?2
             "#,
             params![tid, file_id],
-            |r| {
-                Ok(File {
-                    remote_state: r.get(1)?,
-                    local_state: r.get(0)?,
-                })
-            },
+            |r| r.get(0),
         )
         .optional()?;
 
@@ -429,32 +340,6 @@ pub(super) fn incoming_file_set_local_state(
         r#"
         UPDATE sync_incoming_files
         SET local_state = ?3
-        WHERE ROWID IN (
-            SELECT sif.ROWID
-            FROM sync_incoming_files sif
-            INNER JOIN sync_transfer st USING(sync_id)
-            INNER JOIN transfers t ON t.id = st.transfer_id
-            INNER JOIN incoming_paths ip ON t.id = ip.transfer_id AND sif.path_id = ip.id
-            WHERE st.transfer_id = ?1 AND ip.path_hash = ?2
-        )
-        "#,
-        params![tid, file_id, state],
-    )?;
-    Ok(if count > 0 { Some(()) } else { None })
-}
-
-pub(super) fn incoming_file_set_remote_state(
-    conn: &Connection,
-    transfer_id: Uuid,
-    file_id: &str,
-    state: FileState,
-) -> super::Result<Option<()>> {
-    let tid = transfer_id.to_string();
-
-    let count = conn.execute(
-        r#"
-        UPDATE sync_incoming_files
-        SET remote_state = ?3
         WHERE ROWID IN (
             SELECT sif.ROWID
             FROM sync_incoming_files sif

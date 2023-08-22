@@ -36,3 +36,6 @@ class Error(IntEnum):
     DB_LOST = (32,)
     FILE_CHECKSUM_MISMATCH = (33,)
     FILE_REJECTED = (34,)
+    FILE_PAUSED = (35,)
+    FILE_FAILED = (36,)
+    FILE_FINISHED = (37,)

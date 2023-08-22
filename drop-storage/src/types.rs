@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use chrono::NaiveDateTime;
 use serde::Serialize;
 
+use crate::sync;
+
 type TransferId = uuid::Uuid;
 type FileId = String;
 
@@ -168,6 +170,13 @@ pub struct OutgoingTransferToRetry {
 pub struct TempFileLocation {
     pub file_id: String,
     pub base_path: String,
+}
+
+pub struct FileSyncState {
+    pub sync: sync::FileState,
+    pub is_rejected: bool,
+    pub is_success: bool,
+    pub is_failed: bool,
 }
 
 #[derive(Debug)]

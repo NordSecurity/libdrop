@@ -6,6 +6,7 @@ use std::{
 use anyhow::Context;
 use async_cell::sync::AsyncCell;
 use drop_config::DropConfig;
+use drop_core::Status;
 use futures::{SinkExt, StreamExt};
 use slog::{debug, error, info, warn};
 use tokio::{
@@ -14,9 +15,10 @@ use tokio::{
 };
 use warp::ws::{Message, WebSocket};
 
-use super::handler;
+use super::handler::{self, MsgToSend};
 use crate::{
     file,
+    manager::FileTerminalState,
     protocol::v4,
     service::State,
     tasks::AliveGuard,
@@ -37,7 +39,7 @@ pub struct HandlerLoop<'a> {
     state: Arc<State>,
     logger: &'a slog::Logger,
     alive: &'a AliveGuard,
-    msg_tx: Sender<Message>,
+    msg_tx: Sender<MsgToSend>,
     xfer: Arc<IncomingTransfer>,
     jobs: HashMap<FileId, FileTask>,
     checksums: HashMap<FileId, Arc<AsyncCell<[u8; 32]>>>,
@@ -46,7 +48,7 @@ pub struct HandlerLoop<'a> {
 struct Downloader {
     logger: slog::Logger,
     file_id: FileId,
-    msg_tx: Sender<Message>,
+    msg_tx: Sender<MsgToSend>,
     csum_rx: mpsc::Receiver<v4::ReportChsum>,
     full_csum: Arc<AsyncCell<[u8; 32]>>,
     offset: u64,
@@ -112,7 +114,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
         mut self,
         ws: &mut WebSocket,
         jobs: &mut JoinSet<()>,
-        msg_tx: Sender<Message>,
+        msg_tx: Sender<MsgToSend>,
         xfer: Arc<IncomingTransfer>,
     ) -> Option<Self::Loop> {
         let task = async {
@@ -242,6 +244,27 @@ impl HandlerLoop<'_> {
         }
     }
 
+    async fn stop_task(&mut self, file_id: &FileId, status: Status) {
+        if let Some(FileTask {
+            job: task,
+            events,
+            chunks_tx: _,
+            csum_tx: _,
+        }) = self.jobs.remove(file_id)
+        {
+            if !task.is_finished() {
+                debug!(
+                    self.logger,
+                    "Aborting download job: {}:{file_id}",
+                    self.xfer.id()
+                );
+
+                task.abort();
+                events.stop_silent(status).await;
+            }
+        }
+    }
+
     async fn on_error(&mut self, file_id: Option<FileId>, msg: String) {
         error!(
             self.logger,
@@ -249,38 +272,26 @@ impl HandlerLoop<'_> {
         );
 
         if let Some(file_id) = file_id {
-            if let Some(FileTask {
-                job: task,
-                events,
-                chunks_tx: _,
-                csum_tx: _,
-            }) = self.jobs.remove(&file_id)
+            match self
+                .state
+                .transfer_manager
+                .incoming_terminal_recv(self.xfer.id(), &file_id, FileTerminalState::Failed)
+                .await
             {
-                if !task.is_finished() {
-                    debug!(
-                        self.logger,
-                        "Aborting download job: {}:{file_id}",
-                        self.xfer.id()
-                    );
-
-                    task.abort();
-
-                    if let Err(err) = self
-                        .state
-                        .transfer_manager
-                        .incoming_finish_download(self.xfer.id(), &file_id)
-                        .await
-                    {
-                        warn!(self.logger, "Failed to store download finish: {err}");
-                    }
-
-                    events
+                Err(err) => {
+                    warn!(self.logger, "Failed to accept failure: {err}");
+                }
+                Ok(Some(res)) => {
+                    res.events
                         .failed(crate::Error::BadTransferState(format!(
                             "Sender reported an error: {msg}"
                         )))
                         .await;
                 }
+                Ok(None) => (),
             }
+
+            self.stop_task(&file_id, Status::BadTransferState).await;
         }
     }
 
@@ -321,7 +332,7 @@ impl HandlerLoop<'_> {
         debug!(self.logger, "Stopping silently");
 
         let tasks = self.jobs.drain().map(|(_, task)| async move {
-            task.events.cancel_silent().await;
+            task.events.stop_silent(Status::Canceled).await;
         });
 
         futures::future::join_all(tasks).await;
@@ -410,31 +421,37 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         socket: &mut WebSocket,
         file_id: FileId,
     ) -> anyhow::Result<()> {
-        debug!(self.logger, "ServerHandler::issue_cancel");
-
         let msg = v4::ServerMsg::Cancel(v4::Cancel {
             file: file_id.clone(),
         });
         socket.send(Message::from(&msg)).await?;
 
-        self.state
-            .transfer_manager
-            .incoming_rejection_ack(self.xfer.id(), &file_id)
-            .await?;
+        self.stop_task(&file_id, Status::FileRejected).await;
+        Ok(())
+    }
 
-        if let Some(FileTask {
-            job: task,
-            events,
-            chunks_tx: _,
-            csum_tx: _,
-        }) = self.jobs.remove(&file_id)
-        {
-            if !task.is_finished() {
-                task.abort();
-                events.cancelled_on_rejection().await;
-            }
-        }
+    async fn issue_failure(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+    ) -> anyhow::Result<()> {
+        let msg = v4::ServerMsg::Error(v4::Error {
+            file: Some(file_id),
+            msg: String::from("File failed elsewhere"),
+        });
+        socket.send(Message::from(&msg)).await?;
 
+        Ok(())
+    }
+
+    async fn issue_done(&mut self, socket: &mut WebSocket, file_id: FileId) -> anyhow::Result<()> {
+        let file = self.xfer.files().get(&file_id).context("Invalid file")?;
+
+        let msg = v4::ServerMsg::Done(v4::Done {
+            file: file_id,
+            bytes_transfered: file.size(),
+        });
+        socket.send(Message::from(&msg)).await?;
         Ok(())
     }
 
@@ -530,7 +547,7 @@ impl Drop for HandlerLoop<'_> {
 impl Downloader {
     async fn send(&mut self, msg: impl Into<Message>) -> crate::Result<()> {
         self.msg_tx
-            .send(msg.into())
+            .send(msg.into().into())
             .await
             .map_err(|_| crate::Error::Canceled)
     }
