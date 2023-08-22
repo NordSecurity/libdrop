@@ -339,7 +339,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         Ok(())
     }
 
-    async fn issue_faliure(
+    async fn issue_failure(
         &mut self,
         socket: &mut WebSocket,
         file_id: FileId,
