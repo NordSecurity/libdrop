@@ -275,6 +275,7 @@ pub struct OutgoingPath {
     pub relative_path: String,
     pub file_id: String,
     pub bytes: i64,
+    pub bytes_sent: i64,
     pub states: Vec<OutgoingPathStateEvent>,
 }
 
@@ -288,5 +289,6 @@ pub struct IncomingPath {
     pub relative_path: String,
     pub file_id: String,
     pub bytes: i64,
+    pub bytes_received: i64,
     pub states: Vec<IncomingPathStateEvent>,
 }
