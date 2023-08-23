@@ -229,61 +229,6 @@ pub unsafe extern "C" fn norddrop_cancel_transfer(
     result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
 }
 
-/// # Cancel a file from either side
-///
-/// # Arguments
-///
-/// * `dev`: Pointer to the instance
-/// * `xfid`: Transfer ID
-/// * `fid`: File ID
-///
-/// # Safety
-/// The pointers provided must be valid
-#[no_mangle]
-pub unsafe extern "C" fn norddrop_cancel_file(
-    dev: &norddrop,
-    xfid: *const c_char,
-    fid: *const c_char,
-) -> norddrop_result {
-    let result = panic::catch_unwind(move || {
-        let str_xfid = {
-            if xfid.is_null() {
-                return norddrop_result::NORDDROP_RES_INVALID_STRING;
-            }
-            let cstr_xfid = CStr::from_ptr(xfid);
-            ffi_try!(cstr_xfid.to_str())
-        };
-
-        let str_fid = {
-            if fid.is_null() {
-                return norddrop_result::NORDDROP_RES_INVALID_STRING;
-            }
-
-            let cstr_fid = CStr::from_ptr(fid);
-            ffi_try!(cstr_fid.to_str())
-        };
-
-        let mut dev = ffi_try!(dev
-            .0
-            .lock()
-            .map_err(|_| norddrop_result::NORDDROP_RES_ERROR));
-
-        dev.cancel_file(
-            ffi_try!(str_xfid
-                .to_string()
-                .parse()
-                .map_err(|_| norddrop_result::NORDDROP_RES_BAD_INPUT)),
-            ffi_try!(str_fid
-                .parse()
-                .map_err(|_| norddrop_result::NORDDROP_RES_BAD_INPUT)),
-        );
-
-        norddrop_result::NORDDROP_RES_OK
-    });
-
-    result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
-}
-
 /// Reject a file from either side
 ///
 /// # Arguments

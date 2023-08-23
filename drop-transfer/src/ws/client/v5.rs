@@ -103,11 +103,11 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
 }
 
 impl HandlerLoop<'_> {
-    async fn on_cancel(&mut self, file_id: FileId, by_peer: bool) {
+    async fn on_cancel(&mut self, file_id: FileId) {
         if let Some(task) = self.tasks.remove(&file_id) {
             if !task.job.is_finished() {
                 task.job.abort();
-                task.events.cancelled(by_peer).await;
+                task.events.pause().await;
             }
         }
     }
@@ -414,7 +414,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             prot::ServerMsg::Start(prot::Start { file, offset }) => {
                 self.on_start(socket, jobs, file, offset).await?
             }
-            prot::ServerMsg::Cancel(prot::Cancel { file }) => self.on_cancel(file, true).await,
+            prot::ServerMsg::Cancel(prot::Cancel { file }) => self.on_cancel(file).await,
             prot::ServerMsg::Reject(prot::Reject { file }) => self.on_reject(file).await,
         }
         Ok(())

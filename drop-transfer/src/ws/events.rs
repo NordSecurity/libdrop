@@ -179,14 +179,6 @@ impl FileEventTx<IncomingTransfer> {
         .await
     }
 
-    pub async fn cancelled(&self, by_peer: bool) {
-        self.stop(
-            crate::Event::FileDownloadCancelled(self.xfer.clone(), self.file_id.clone(), by_peer),
-            Err(Status::Canceled as _),
-        )
-        .await
-    }
-
     pub async fn success(&self, final_path: impl Into<PathBuf>) {
         self.stop(
             crate::Event::FileDownloadSuccess(
@@ -236,14 +228,6 @@ impl FileEventTx<OutgoingTransfer> {
         self.force_stop(
             crate::Event::FileUploadFailed(self.xfer.clone(), self.file_id.clone(), err),
             Err(status),
-        )
-        .await
-    }
-
-    pub async fn cancelled(&self, by_peer: bool) {
-        self.stop(
-            crate::Event::FileUploadCancelled(self.xfer.clone(), self.file_id.clone(), by_peer),
-            Err(Status::Canceled as _),
         )
         .await
     }
