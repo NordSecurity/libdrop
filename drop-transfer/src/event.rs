@@ -29,9 +29,6 @@ pub enum Event {
     FileUploadSuccess(Arc<OutgoingTransfer>, FileId),
     FileDownloadSuccess(Arc<IncomingTransfer>, DownloadSuccess),
 
-    FileUploadCancelled(Arc<OutgoingTransfer>, FileId, bool),
-    FileDownloadCancelled(Arc<IncomingTransfer>, FileId, bool),
-
     FileUploadFailed(Arc<OutgoingTransfer>, FileId, Error),
     FileDownloadFailed(Arc<IncomingTransfer>, FileId, Error),
 

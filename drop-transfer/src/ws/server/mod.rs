@@ -57,7 +57,6 @@ const REPORT_PROGRESS_THRESHOLD: u64 = 1024 * 64;
 
 pub enum ServerReq {
     Download { task: Box<FileXferTask> },
-    Cancel { file: FileId },
     Reject { file: FileId },
     Done { file: FileId },
     Fail { file: FileId },
@@ -769,7 +768,6 @@ async fn on_req(
 ) -> anyhow::Result<ControlFlow<()>> {
     match req.context("API channel broken")? {
         ServerReq::Download { task } => handler.issue_download(socket, jobs, *task).await?,
-        ServerReq::Cancel { file } => handler.issue_cancel(socket, file).await?,
         ServerReq::Reject { file } => handler.issue_reject(socket, file.clone()).await?,
         ServerReq::Done { file } => handler.issue_done(socket, file.clone()).await?,
         ServerReq::Fail { file } => handler.issue_failure(socket, file.clone()).await?,

@@ -77,21 +77,6 @@ fn print_event(ev: &Event) {
                 progress
             );
         }
-        Event::FileUploadCancelled(xfer, file, by_peer) => {
-            info!(
-                "[EVENT] FileUploadCancelled {}: {:?}, by_peer: {by_peer}",
-                xfer.id(),
-                file,
-            );
-        }
-        Event::FileDownloadCancelled(xfer, file, by_peer) => {
-            let xfid = xfer.id();
-
-            info!(
-                "[EVENT] FileDownloadCancelled {}: {:?}, by_peer: {by_peer}",
-                xfid, file
-            );
-        }
         Event::FileUploadFailed(xfer, file, status) => {
             info!(
                 "[EVENT] FileUploadFailed {}: {:?}, status: {:?}",
@@ -203,6 +188,12 @@ async fn listen(
                     .insert(file);
             }
 
+            Event::FileDownloadProgress(xfer, file, _) => {
+                active_file_downloads
+                    .entry(xfer.id())
+                    .or_insert_with(HashSet::new)
+                    .insert(file);
+            }
             Event::FileDownloadSuccess(xfer, info) => {
                 let xfid = xfer.id();
                 if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
@@ -216,13 +207,7 @@ async fn listen(
                     }
                 }
             }
-            Event::FileDownloadProgress(xfer, file, _) => {
-                active_file_downloads
-                    .entry(xfer.id())
-                    .or_insert_with(HashSet::new)
-                    .insert(file);
-            }
-            Event::FileDownloadCancelled(xfer, file, _) => {
+            Event::FileDownloadFailed(xfer, file, _) => {
                 let xfid = xfer.id();
 
                 if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
@@ -230,6 +215,22 @@ async fn listen(
                     if occ.get().is_empty() {
                         service
                             .cancel_all(xfid)
+                            .await
+                            .context("Failed to cancled transfer")?;
+                        occ.remove_entry();
+                    }
+                }
+            }
+            Event::FileDownloadRejected {
+                transfer_id,
+                file_id,
+                ..
+            } => {
+                if let Entry::Occupied(mut occ) = active_file_downloads.entry(transfer_id) {
+                    occ.get_mut().remove(&file_id);
+                    if occ.get().is_empty() {
+                        service
+                            .cancel_all(transfer_id)
                             .await
                             .context("Failed to cancled transfer")?;
                         occ.remove_entry();

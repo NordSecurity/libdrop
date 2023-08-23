@@ -97,11 +97,6 @@ public class Norddrop : global::System.IDisposable {
     return ret;
   }
 
-  public NorddropResult CancelFile(string txid, string fid) {
-    NorddropResult ret = (NorddropResult)libnorddropPINVOKE.Norddrop_CancelFile(swigCPtr, txid, fid);
-    return ret;
-  }
-
   public NorddropResult RejectFile(string txid, string fid) {
     NorddropResult ret = (NorddropResult)libnorddropPINVOKE.Norddrop_RejectFile(swigCPtr, txid, fid);
     return ret;
@@ -344,9 +339,6 @@ class libnorddropPINVOKE {
 
   [global::System.Runtime.InteropServices.DllImport("norddrop", EntryPoint="CSharp_NordSecfNordDrop_Norddrop_CancelTransfer___")]
   public static extern int Norddrop_CancelTransfer(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2);
-
-  [global::System.Runtime.InteropServices.DllImport("norddrop", EntryPoint="CSharp_NordSecfNordDrop_Norddrop_CancelFile___")]
-  public static extern int Norddrop_CancelFile(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2, string jarg3);
 
   [global::System.Runtime.InteropServices.DllImport("norddrop", EntryPoint="CSharp_NordSecfNordDrop_Norddrop_RejectFile___")]
   public static extern int Norddrop_RejectFile(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2, string jarg3);

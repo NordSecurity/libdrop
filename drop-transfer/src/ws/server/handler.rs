@@ -36,7 +36,6 @@ pub trait HandlerLoop {
         jobs: &mut JoinSet<()>,
         task: super::FileXferTask,
     ) -> anyhow::Result<()>;
-    async fn issue_cancel(&mut self, ws: &mut WebSocket, file: FileId) -> anyhow::Result<()>;
     async fn issue_reject(&mut self, ws: &mut WebSocket, file: FileId) -> anyhow::Result<()>;
     async fn issue_failure(&mut self, ws: &mut WebSocket, file: FileId) -> anyhow::Result<()>;
     async fn issue_done(&mut self, ws: &mut WebSocket, file: FileId) -> anyhow::Result<()>;

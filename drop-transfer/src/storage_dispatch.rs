@@ -30,28 +30,6 @@ impl<'a> StorageDispatch<'a> {
                     .insert_incoming_path_started_state(transfer.id(), file_id.as_ref(), base_dir)
                     .await
             }
-            crate::Event::FileUploadCancelled(transfer, file_id, by_peer) => {
-                let progress = self.get_file_progress(transfer.id(), file_id);
-                self.storage
-                    .insert_outgoing_path_cancel_state(
-                        transfer.id(),
-                        file_id.as_ref(),
-                        *by_peer,
-                        progress,
-                    )
-                    .await
-            }
-            crate::Event::FileDownloadCancelled(transfer, file_id, by_peer) => {
-                let progress = self.get_file_progress(transfer.id(), file_id);
-                self.storage
-                    .insert_incoming_path_cancel_state(
-                        transfer.id(),
-                        file_id.as_ref(),
-                        *by_peer,
-                        progress,
-                    )
-                    .await
-            }
             crate::Event::FileDownloadSuccess(transfer, download) => {
                 self.storage
                     .insert_incoming_path_completed_state(

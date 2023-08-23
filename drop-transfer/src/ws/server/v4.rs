@@ -226,7 +226,7 @@ impl HandlerLoop<'_> {
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file_id: FileId, by_peer: bool) {
+    async fn on_cancel(&mut self, file_id: FileId) {
         if let Some(FileTask {
             job: task,
             events,
@@ -236,10 +236,7 @@ impl HandlerLoop<'_> {
         {
             if !task.is_finished() {
                 task.abort();
-
-                if by_peer {
-                    events.cancelled(by_peer).await;
-                }
+                events.pause().await;
             }
         }
     }
@@ -399,23 +396,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         Ok(())
     }
 
-    async fn issue_cancel(
-        &mut self,
-        socket: &mut WebSocket,
-        file_id: FileId,
-    ) -> anyhow::Result<()> {
-        debug!(self.logger, "ServerHandler::issue_cancel");
-
-        let msg = v4::ServerMsg::Cancel(v4::Cancel {
-            file: file_id.clone(),
-        });
-        socket.send(Message::from(&msg)).await?;
-
-        self.on_cancel(file_id, false).await;
-
-        Ok(())
-    }
-
     async fn issue_reject(
         &mut self,
         socket: &mut WebSocket,
@@ -478,7 +458,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
         match msg {
             v4::ClientMsg::Error(v4::Error { file, msg }) => self.on_error(file, msg).await,
-            v4::ClientMsg::Cancel(v4::Cancel { file }) => self.on_cancel(file, true).await,
+            v4::ClientMsg::Cancel(v4::Cancel { file }) => self.on_cancel(file).await,
             v4::ClientMsg::ReportChsum(report) => self.on_checksum(report).await,
         }
 

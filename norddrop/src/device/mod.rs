@@ -468,42 +468,6 @@ impl NordDropFFI {
         Ok(())
     }
 
-    pub(super) fn cancel_file(&mut self, xfid: uuid::Uuid, file: String) {
-        let instance = self.instance.clone();
-        let logger = self.logger.clone();
-        let ed = self.event_dispatcher.clone();
-
-        trace!(
-            logger,
-            "norddrop_cancel_file() for transfer {:?}, file {:?}",
-            xfid,
-            file
-        );
-
-        self.rt.spawn(async move {
-            let mut locked_inst = instance.lock().await;
-            let inst = locked_inst.as_mut().expect("Instance not initialized");
-
-            if let Err(e) = inst.cancel(xfid, file.clone().into()).await {
-                error!(
-                    logger,
-                    "Failed to cancel a file with xfid: {}, file: {:?}, error: {:?}",
-                    xfid,
-                    Hidden(&file),
-                    e
-                );
-
-                ed.dispatch(types::Event::TransferFinished {
-                    transfer: xfid.to_string(),
-                    data: FinishEvent::FileFailed {
-                        file,
-                        status: From::from(&e),
-                    },
-                })
-            }
-        });
-    }
-
     pub(super) fn reject_file(&self, xfid: uuid::Uuid, file: String) -> Result<()> {
         trace!(
             self.logger,

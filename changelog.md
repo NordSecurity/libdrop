@@ -8,7 +8,7 @@
 * Add file descriptors resolver callback based on content URI - Unix platform only
 * Fix database foreign keys not being enabled
 * Remove `ServiceStop` error
-* Disallow file cancels from the sending side
+* Remove `cancel_file()` method in favor of rejections
 * Introduce `TransferPaused` event signaling file download being paused because of peer disconnection
 * Allow removing file only upon reaching one Rejected, Failed or Finished state
 * Disallow re-downloading file after reaching Rejected, Failed or Finished state within single transfer
