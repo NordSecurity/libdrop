@@ -248,22 +248,6 @@ enum norddrop_result norddrop_download(const struct norddrop *dev,
 enum norddrop_result norddrop_cancel_transfer(const struct norddrop *dev, const char *xfid);
 
 /**
- * # Cancel a file from either side
- *
- * # Arguments
- *
- * * `dev`: Pointer to the instance
- * * `xfid`: Transfer ID
- * * `fid`: File ID
- *
- * # Safety
- * The pointers provided must be valid
- */
-enum norddrop_result norddrop_cancel_file(const struct norddrop *dev,
-                                          const char *xfid,
-                                          const char *fid);
-
-/**
  * Reject a file from either side
  *
  * # Arguments
