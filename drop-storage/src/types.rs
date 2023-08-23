@@ -183,66 +183,6 @@ pub struct FileSyncState {
     pub is_failed: bool,
 }
 
-#[derive(Debug)]
-pub enum Event {
-    FileUploadStarted {
-        transfer_id: TransferId,
-        file_id: FileId,
-    },
-    FileDownloadStarted {
-        transfer_id: TransferId,
-        file_id: FileId,
-        base_dir: String,
-    },
-    FileCanceled {
-        transfer_type: TransferType,
-        transfer_id: TransferId,
-        file_id: FileId,
-        by_peer: bool,
-    },
-    TransferCanceled {
-        transfer_type: TransferType,
-        transfer_info: TransferInfo,
-        by_peer: bool,
-    },
-    FileFailed {
-        transfer_type: TransferType,
-        transfer_id: TransferId,
-        file_id: FileId,
-        error_code: u32,
-    },
-    TransferFailed {
-        transfer_type: TransferType,
-        transfer_info: TransferInfo,
-        error_code: u32,
-    },
-    FileUploadComplete {
-        transfer_id: TransferId,
-        file_id: FileId,
-    },
-    FileDownloadComplete {
-        transfer_id: TransferId,
-        file_id: FileId,
-        final_path: String,
-    },
-    FileProgress {
-        transfer_id: TransferId,
-        file_id: FileId,
-        progress: i64,
-    },
-    FileReject {
-        transfer_type: TransferType,
-        transfer_id: TransferId,
-        file_id: FileId,
-        by_peer: bool,
-    },
-    FilePaused {
-        transfer_type: TransferType,
-        transfer_id: TransferId,
-        file_id: FileId,
-    },
-}
-
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", content = "paths")]
 pub enum DbTransferType {
@@ -250,13 +190,6 @@ pub enum DbTransferType {
     Incoming(Vec<IncomingPath>),
     #[serde(rename = "outgoing")]
     Outgoing(Vec<OutgoingPath>),
-}
-
-#[derive(Debug, Serialize)]
-pub struct Peer {
-    pub id: Option<String>,
-    #[serde(serialize_with = "serialize_datetime")]
-    pub created_at: NaiveDateTime,
 }
 
 #[derive(Debug, Serialize)]
