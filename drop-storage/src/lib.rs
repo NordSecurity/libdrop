@@ -2105,4 +2105,271 @@ mod tests {
         assert_eq!(paths.len(), 1); // 1 since we removed one of them
         assert_eq!(paths[0].file_id, "id4");
     }
+
+    #[tokio::test]
+    async fn check_storage_api() {
+        let logger = slog::Logger::root(slog::Discard, slog::o!());
+        let storage = Storage::new(logger, ":memory:").unwrap();
+
+        let transfer1_id: Uuid = "23e488a4-0521-11ee-be56-0242ac120002".parse().unwrap();
+
+        let transfer = TransferInfo {
+            id: transfer1_id,
+            peer: "5.6.7.8".to_string(),
+            files: TransferFiles::Incoming(vec![
+                TransferIncomingPath {
+                    file_id: "idi1".to_string(),
+                    size: 1024,
+                    relative_path: "1".to_string(),
+                },
+                TransferIncomingPath {
+                    file_id: "idi2".to_string(),
+                    size: 1024,
+                    relative_path: "2".to_string(),
+                },
+                TransferIncomingPath {
+                    file_id: "idi3".to_string(),
+                    size: 1024,
+                    relative_path: "3".to_string(),
+                },
+                TransferIncomingPath {
+                    file_id: "idi4".to_string(),
+                    relative_path: "4".to_string(),
+                    size: 2048,
+                },
+            ]),
+        };
+
+        storage.insert_transfer(&transfer).await;
+        storage
+            .insert_incoming_path_failed_state(transfer1_id, "idi1", 1, 123)
+            .await;
+        storage
+            .insert_incoming_path_completed_state(transfer1_id, "idi2", "/recv/idi2")
+            .await;
+        storage
+            .insert_incoming_path_reject_state(transfer1_id, "idi3", false, 234)
+            .await;
+        storage
+            .insert_incoming_path_started_state(transfer1_id, "idi4", "/recv/idi4")
+            .await;
+
+        let transfer2_id: Uuid = "f333302e-584b-42f8-9f66-6a5ef400297d".parse().unwrap();
+
+        let transfer = TransferInfo {
+            id: transfer2_id,
+            peer: "1.2.3.4".to_string(),
+            files: TransferFiles::Outgoing(vec![
+                TransferOutgoingPath {
+                    file_id: "ido1".to_string(),
+                    relative_path: "1".to_string(),
+                    uri: "file:///dir/1".parse().unwrap(),
+                    size: 1024,
+                },
+                TransferOutgoingPath {
+                    file_id: "ido2".to_string(),
+                    relative_path: "2".to_string(),
+                    uri: "file:///dir/2".parse().unwrap(),
+                    size: 1024,
+                },
+                TransferOutgoingPath {
+                    file_id: "ido3".to_string(),
+                    relative_path: "3".to_string(),
+                    uri: "file:///dir/3".parse().unwrap(),
+                    size: 1024,
+                },
+                TransferOutgoingPath {
+                    file_id: "ido4".to_string(),
+                    relative_path: "4".to_string(),
+                    uri: "file:///dir/4".parse().unwrap(),
+                    size: 2048,
+                },
+            ]),
+        };
+
+        storage.insert_transfer(&transfer).await;
+        storage
+            .insert_outgoing_path_failed_state(transfer2_id, "ido1", 1, 123)
+            .await;
+        storage
+            .insert_outgoing_path_completed_state(transfer2_id, "ido2")
+            .await;
+        storage
+            .insert_outgoing_path_reject_state(transfer2_id, "ido3", false, 234)
+            .await;
+        storage
+            .insert_outgoing_path_started_state(transfer2_id, "ido4")
+            .await;
+
+        let transfers = storage.transfers_since(0).await;
+        assert_eq!(transfers.len(), 2);
+
+        assert_eq!(transfers[0].id, transfer1_id);
+        assert_eq!(transfers[0].peer_id, "5.6.7.8");
+        assert_eq!(transfers[0].states.len(), 0);
+
+        match &transfers[0].transfer_type {
+            DbTransferType::Incoming(inc) => {
+                assert_eq!(inc[0].transfer_id, transfer1_id);
+                assert_eq!(inc[0].relative_path, "1");
+                assert_eq!(inc[0].bytes, 1024);
+                assert_eq!(inc[0].bytes_received, 123);
+                assert_eq!(inc[0].file_id, "idi1");
+                assert_eq!(inc[0].states.len(), 2);
+
+                assert!(matches!(
+                    inc[0].states[0].data,
+                    IncomingPathStateEventData::Pending
+                ));
+                assert!(matches!(
+                    inc[0].states[1].data,
+                    IncomingPathStateEventData::Failed {
+                        status_code: 1,
+                        bytes_received: 123
+                    }
+                ));
+
+                assert_eq!(inc[1].transfer_id, transfer1_id);
+                assert_eq!(inc[1].relative_path, "2");
+                assert_eq!(inc[1].bytes, 1024);
+                assert_eq!(inc[1].bytes_received, 1024);
+                assert_eq!(inc[1].file_id, "idi2");
+                assert_eq!(inc[1].states.len(), 2);
+
+                assert!(matches!(
+                    inc[1].states[0].data,
+                    IncomingPathStateEventData::Pending
+                ));
+                assert!(matches!(
+                    &inc[1].states[1].data,
+                    IncomingPathStateEventData::Completed {
+                        final_path
+                    } if final_path == "/recv/idi2"
+                ));
+
+                assert_eq!(inc[2].transfer_id, transfer1_id);
+                assert_eq!(inc[2].relative_path, "3");
+                assert_eq!(inc[2].bytes, 1024);
+                assert_eq!(inc[2].bytes_received, 234);
+                assert_eq!(inc[2].file_id, "idi3");
+                assert_eq!(inc[2].states.len(), 2);
+
+                assert!(matches!(
+                    inc[2].states[0].data,
+                    IncomingPathStateEventData::Pending
+                ));
+                assert!(matches!(
+                    inc[2].states[1].data,
+                    IncomingPathStateEventData::Rejected {
+                        by_peer: false,
+                        bytes_received: 234
+                    }
+                ));
+
+                assert_eq!(inc[3].transfer_id, transfer1_id);
+                assert_eq!(inc[3].relative_path, "4");
+                assert_eq!(inc[3].bytes, 2048);
+                assert_eq!(inc[3].bytes_received, 0);
+                assert_eq!(inc[3].file_id, "idi4");
+                assert_eq!(inc[3].states.len(), 2);
+
+                assert!(matches!(
+                    inc[3].states[0].data,
+                    IncomingPathStateEventData::Pending
+                ));
+                assert!(matches!(
+                    &inc[3].states[1].data,
+                    IncomingPathStateEventData::Started { base_dir, bytes_received: 0 } if base_dir == "/recv/idi4"
+                ));
+            }
+            _ => panic!("Unexpected transfer type"),
+        };
+
+        assert_eq!(transfers[1].id, transfer2_id);
+        assert_eq!(transfers[1].peer_id, "1.2.3.4");
+        assert_eq!(transfers[1].states.len(), 0);
+
+        match &transfers[1].transfer_type {
+            DbTransferType::Outgoing(inc) => {
+                assert_eq!(inc[0].transfer_id, transfer2_id);
+                assert_eq!(inc[0].relative_path, "1");
+                assert_eq!(inc[0].bytes, 1024);
+                assert_eq!(inc[0].bytes_sent, 123);
+                assert_eq!(inc[0].file_id, "ido1");
+                assert_eq!(inc[0].base_path.as_deref(), Some(Path::new("/dir")));
+                assert!(inc[0].content_uri.is_none());
+                assert_eq!(inc[0].states.len(), 2);
+
+                assert!(matches!(
+                    inc[0].states[0].data,
+                    OutgoingPathStateEventData::Pending
+                ));
+                assert!(matches!(
+                    inc[0].states[1].data,
+                    OutgoingPathStateEventData::Failed {
+                        status_code: 1,
+                        bytes_sent: 123
+                    }
+                ));
+
+                assert_eq!(inc[1].transfer_id, transfer2_id);
+                assert_eq!(inc[1].relative_path, "2");
+                assert_eq!(inc[1].bytes, 1024);
+                assert_eq!(inc[1].bytes_sent, 1024);
+                assert_eq!(inc[1].file_id, "ido2");
+                assert_eq!(inc[1].base_path.as_deref(), Some(Path::new("/dir")));
+                assert!(inc[1].content_uri.is_none());
+                assert_eq!(inc[1].states.len(), 2);
+
+                assert!(matches!(
+                    inc[1].states[0].data,
+                    OutgoingPathStateEventData::Pending
+                ));
+                assert!(matches!(
+                    inc[1].states[1].data,
+                    OutgoingPathStateEventData::Completed
+                ));
+
+                assert_eq!(inc[2].transfer_id, transfer2_id);
+                assert_eq!(inc[2].relative_path, "3");
+                assert_eq!(inc[2].bytes, 1024);
+                assert_eq!(inc[2].bytes_sent, 234);
+                assert_eq!(inc[2].file_id, "ido3");
+                assert_eq!(inc[2].base_path.as_deref(), Some(Path::new("/dir")));
+                assert!(inc[2].content_uri.is_none());
+                assert_eq!(inc[2].states.len(), 2);
+
+                assert!(matches!(
+                    inc[2].states[0].data,
+                    OutgoingPathStateEventData::Pending
+                ));
+                assert!(matches!(
+                    inc[2].states[1].data,
+                    OutgoingPathStateEventData::Rejected {
+                        by_peer: false,
+                        bytes_sent: 234
+                    }
+                ));
+
+                assert_eq!(inc[3].transfer_id, transfer2_id);
+                assert_eq!(inc[3].relative_path, "4");
+                assert_eq!(inc[3].bytes, 2048);
+                assert_eq!(inc[3].bytes_sent, 0);
+                assert_eq!(inc[3].file_id, "ido4");
+                assert_eq!(inc[3].base_path.as_deref(), Some(Path::new("/dir")));
+                assert!(inc[3].content_uri.is_none());
+                assert_eq!(inc[3].states.len(), 2);
+
+                assert!(matches!(
+                    inc[3].states[0].data,
+                    OutgoingPathStateEventData::Pending
+                ));
+                assert!(matches!(
+                    inc[3].states[1].data,
+                    OutgoingPathStateEventData::Started { bytes_sent: 0 }
+                ));
+            }
+            _ => panic!("Unexpected transfer type"),
+        };
+    }
 }
