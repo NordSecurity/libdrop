@@ -78,6 +78,8 @@ async def main():
 
     args = parser.parse_args()
 
+    print("Starting drop instance...")
+
     runner = args.runner
     scenario = args.scenario
     lib = args.lib

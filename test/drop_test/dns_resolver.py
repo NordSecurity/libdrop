@@ -42,14 +42,26 @@ class DNSResolver:  # TODO: the name is a lie, it's more of a PeerResolver
 
         import socket
 
-        ip = socket.gethostbyname(hostname)
-        self._cache[hostname] = ip
-        return ip
+        for _ in range(5):
+            try:
+                ip = socket.gethostbyname(hostname)
+                self._cache[hostname] = ip
+                return ip
+
+            except:
+                print("Unable to resolve hostname, retrying in 1s")
+                import time
+
+                time.sleep(1)
+
+        raise Exception(f"Unable to resolve hostname {hostname}")
 
     def reverse_lookup(self, ip: str) -> str:
         for hostname, cached_ip in self._cache.items():
             if cached_ip == ip:
                 return hostname.split("-")[0]  # TODO
+
+        raise Exception(f"Could not find hostname for ip {ip}")
 
 
 dns_resolver = DNSResolver()

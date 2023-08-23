@@ -149,7 +149,7 @@ class EventQueue:
                         return
 
                     raise Exception(
-                        f"TODO1 Unexpected event:\n{str(e)}\nwhile looking for:\n{str(target_event)}\n"
+                        f"Unexpected event:\n{str(e)}\nwhile looking for:\n{str(target_event)}\n"
                     )
 
             await asyncio.sleep(1)
@@ -202,7 +202,9 @@ class EventQueue:
 
 class KeysCtx:
     def __init__(self, runner: str):
-        self.this = RUNNERS[runner.split("-")[0]] # TODO
+        self.this = RUNNERS[
+            runner.split("-")[0]
+        ]  # TODO, because we reverse DNS, we get runner-X for the name
 
     def callback(self, ctx, ip, pubkey):
         ip = ip.decode("utf-8")

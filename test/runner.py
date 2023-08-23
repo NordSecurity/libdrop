@@ -8,15 +8,81 @@ import json
 import time
 import math
 import re
+import docker
+
+TESTCASE_TIMEOUT = 30
 
 STDERR_ERR_PATTERNS = [
     ["drop-storage", "ERROR"],
 ]
 
 
+def prepare_docker() -> docker.DockerClient:
+    # Initialize docker client
+    client = docker.DockerClient(base_url="unix://var/run/docker.sock")
+    network = client.networks.create(
+        "libdrop_test_network", driver="bridge", attachable=True
+    )
+
+    # Network creation
+    ipv4_net = client.networks.create(
+        name="interneciux",
+        driver="bridge",
+        ipam=docker.types.IPAMConfig(
+            pool_configs=[docker.types.IPAMPool(subnet="172.30.0.0/16")]
+        ),
+    )
+
+    ipv6_net = client.networks.create(
+        name="interneciux-v6",
+        driver="bridge",
+        options={"com.docker.network.enable_ipv6": "true"},
+        ipam=docker.types.IPAMConfig(
+            pool_configs=[
+                docker.types.IPAMPool(
+                    subnet="fd3e:0e6d:45fe:b0c2::/64", gateway="fd3e:0e6d:45fe:b0c2::1"
+                )
+            ]
+        ),
+    )
+
+    return client
+
+
+class ContainerInfo:
+    def __init__(
+        self, container: docker.models.containers.Container, scenario: str, timeout: int
+    ):
+        self._deadline = time.time() + timeout
+        self._missed_deadline = False
+        self._container = container
+        self._scenario = scenario
+        self._exit_code = None
+
+    def recheck(self):
+        self._container.reload()
+        if self._container.status == "exited":
+            self._exit_code = self._container.attrs["State"]["ExitCode"]
+        self._missed_deadline = self._deadline < time.time()
+
+    def success(self) -> bool:
+        return not self._missed_deadline and self._exit_code == 0
+
+    def done(self) -> bool:
+        return self._exit_code != None or self._missed_deadline
+
+    def name(self) -> str:
+        return self._container.name
+
+    def run(self):
+        self._container.run()
+
+    def logs(self):
+        return self._container.logs().decode("utf-8")
+
+
 def run():
     print("*** Test suite launched", flush=True)
-    print("This will run test suite")
 
     scenarios = []
     if "SCENARIO" in os.environ:
@@ -33,96 +99,136 @@ def run():
     else:
         scenarios = all_scenarios
 
-    failed_scenarios = []
+    total_time = 0
 
     print(f"Will execute {len(scenarios)} scenario(s): {[s.id() for s in scenarios]}")
-    for i, scenario in enumerate(scenarios):
-        time_start = time.time()
 
+    client = prepare_docker()
+
+    results: dict[str, list[ContainerInfo]] = {}
+
+    for i, scenario in enumerate(scenarios):
         print(
             f"Executing scenario {i+1}/{len(scenarios)}({scenario.id()}): {scenario.desc()}",
             flush=True,
         )
-        my_env = os.environ.copy()
-        my_env["SCENARIO"] = scenario.id()
 
-        # res = subprocess.run(
-        #     ["docker", "compose", "down", "--remove-orphans", "--timeout", "4"],
-        #     env=my_env,
-        # )
-        # if res.returncode != 0:
-        #     print("`docker compose down` was not successful")
-        #     exit(1)
+        results[scenario.id()] = []
+        for runner in scenario.runners():
+            COMMON_VOLUMES = {}
+            parent_dir = os.path.dirname(os.getcwd())
+            COMMON_VOLUMES[parent_dir] = {"bind": "/libdrop", "mode": "rw"}
 
-        args = [
-            "docker",
-            "compose",
-            "up",
-            "--force-recreate",
-        ]
-        args.extend(scenario.runners())
+            COMMON_WORKING_DIR = "/libdrop/test"
+            COMMON_CAP_ADD = ["NET_ADMIN"]
 
-        res = subprocess.Popen(
-            args,
-            env=my_env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+            hostname = f"{runner}-{scenario.id()}"
+            print(f"Starting {hostname}...")
+            LIB_PATH = os.environ["LIB_PATH"]
+            cmd = f"sh -c './run.py --runner={runner} --scenario={scenario.id()} --lib={LIB_PATH}'"
 
-        stdout, stderr = res.communicate()
+            env = [
+                "RUST_BACKTRACE=1",
+                f"DROP_PEER_REN=DROP_PEER_REN-{scenario.id()}",
+                f"DROP_PEER_STIMPY=DROP_PEER_STIMPY-{scenario.id()}",
+                f"DROP_PEER_GEORGE=DROP_PEER_GEORGE-{scenario.id()}",
+            ]
 
-        status_json = subprocess.check_output(
-            ["docker", "compose", "ps", "-a", "--format", "json"], env=my_env
-        )
-        status_json = json.loads(status_json)
-
-        failed = []
-
-        decoded_stderr: str = stderr.decode("unicode_escape")
-
-        stderr_captured_errored_lines = []
-        for line in decoded_stderr.splitlines():
-            for pattern in STDERR_ERR_PATTERNS:
-                if all(phrase in line for phrase in pattern):
-                    stderr_captured_errored_lines.append(line)
-                    break
-
-        for item in status_json:
-            service: str = item["Service"]
-
-            if service in scenario.runners() and (
-                item["ExitCode"] != 0 or len(stderr_captured_errored_lines) > 0
-            ):
-                failed.append(service)
-
-        if failed:
-            print(
-                f"Scenario '{scenario.id()}' has failed for runners: {failed}. Check the output below:",
-                flush=True,
+            print(f"Running {cmd}", flush=True)
+            container = client.containers.run(
+                image="libdrop-test-image",  # TODO: push the image
+                name=f"{hostname}",
+                command=cmd,
+                volumes=COMMON_VOLUMES,
+                working_dir=COMMON_WORKING_DIR,
+                cap_add=COMMON_CAP_ADD,
+                environment=env,
+                hostname=f"{hostname}",
+                detach=True,
+                network="libdrop_test_network",
             )
 
-            print("res=", res)
-            print(f"---STDOUT---")
-            print(stdout.decode("unicode_escape"))
+            info = ContainerInfo(container, scenario.id(), TESTCASE_TIMEOUT)
+            results[scenario.id()].append(info)
 
-            print(f"---STDERR---")
-            print(decoded_stderr)
+    # total_cnt is total count of containers in all scenarios
+    total_cnt = 0
 
-            if len(stderr_captured_errored_lines) > 0:
-                print(f"---SUSPICIOUS LINES---")
-                for line in stderr_captured_errored_lines:
-                    print(line)
+    # iterate results and count total_cnt of containers
+    for scn, info in results.items():
+        total_cnt += len(info)
 
-            print(f"------------")
-            print("", flush=True)
+    while True:
+        done_containers = 0
+        for scn, info in results.items():
+            for container in info:
+                container.recheck()
+                container_name = container.name()
+                if container.done():
+                    done_containers = done_containers + 1
 
-            failed_scenarios.append(f"{scenario.id()} for {failed}: {scenario.desc()}")
-        else:
-            time_taken = math.trunc(time.time() - time_start)
-            print(
-                f"Scenario '{scenario.id()}' ran successfuly in {time_taken}s",
-                flush=True,
-            )
+        print(
+            f"*** Test suite progress: {done_containers}/{total_cnt} containers finished",
+            flush=True,
+        )
+        if done_containers == total_cnt:
+            print("All containers finished job")
+            failed_scenarios = {}
+
+            for scn, info in results.items():
+                failed_scenarios[scn] = []
+
+                for container in info:
+                    container_name = container.name()
+                    if not container.success():
+                        failed_scenarios[scn].append(container_name)
+
+            failed_count = 0
+            for scn, info in results.items():
+                for container in info:
+                    if container.done() and not container.success():
+                        failed_count = failed_count + 1
+
+            if failed_count > 0:
+                print(
+                    f"*** Test suite finished unsuccessfully in {total_time}s",
+                    flush=True,
+                )
+                print("Failed scenarios and their logs")
+                for scn, info in results.items():
+                    print("------------------------")
+                    print(f"Scenario: {scn}:")
+                    for container in info:
+                        if not container.success():
+                            print("")
+                            print("")
+                            print(f"Container: {container.name()}")
+                            print(f"LOGS BELOW:\n\n{container.logs()}")
+
+                    print("------------------------")
+
+                print(f"Failed scenarios summary:")
+                for scn, info in results.items():
+                    print(f"  {scn}:")
+                    for container in info:
+                        if not container.success():
+                            print(f"    {container.name()}")
+                print("------------------------")
+
+                print(
+                    f"*** Test suite finished unsuccessfully in {total_time}s",
+                    flush=True,
+                )
+                sys.exit(1)
+
+            print(f"*** Test suite finished in {total_time}s", flush=True)
+            sys.exit(0)
+
+        sleep_between_tests_s = 2
+        total_time += sleep_between_tests_s
+        time.sleep(sleep_between_tests_s)
+
+    print(f"*** Test suite finished in {total_time}s", flush=True)
 
     if len(failed_scenarios) > 0:
         print(f"Failed scenarios:")
@@ -130,6 +236,7 @@ def run():
             print(f"- {s}")
         print("look into logs above for specific output")
         sys.exit(1)
+
     sys.exit(0)
 
 
