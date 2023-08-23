@@ -5290,6 +5290,221 @@ scenarios = [
         },
     ),
     Scenario(
+        "scenario27-7",
+        "Reject file on sender side, then try to reject it again from both sides. Expect event on both peers plus error upon rejecting again",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.RejectTransferFile(0, FILES["testfile-small"].id),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-small"].id, False)
+                    ),
+                    action.RejectTransferFile(0, FILES["testfile-small"].id),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0, FILES["testfile-small"].id, Error.FILE_REJECTED
+                        ),
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-small"].id, True)
+                    ),
+                    action.RejectTransferFile(0, FILES["testfile-small"].id),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0, FILES["testfile-small"].id, Error.FILE_REJECTED
+                        ),
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario27-8",
+        "Reject file on receiver side, then try to reject it again from both sides. Expect event on both peers plus error upon rejecting again",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-small"].id, True)
+                    ),
+                    action.RejectTransferFile(0, FILES["testfile-small"].id),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0, FILES["testfile-small"].id, Error.FILE_REJECTED
+                        ),
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.RejectTransferFile(0, FILES["testfile-small"].id),
+                    action.Wait(
+                        event.FinishFileRejected(0, FILES["testfile-small"].id, False)
+                    ),
+                    action.RejectTransferFile(0, FILES["testfile-small"].id),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0, FILES["testfile-small"].id, Error.FILE_REJECTED
+                        ),
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario27-9",
+        "Download file and then try to reject it from both peers. Expect not being able to reject competed files",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(0, FILES["testfile-small"].id)
+                    ),
+                    action.RejectTransferFile(0, FILES["testfile-small"].id),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0, FILES["testfile-small"].id, Error.FILE_FINISHED
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0, FILES["testfile-small"].id, "/tmp/received/27-9"
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-small"].id,
+                            "/tmp/received/27-9/testfile-small",
+                        )
+                    ),
+                    action.RejectTransferFile(0, FILES["testfile-small"].id),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0, FILES["testfile-small"].id, Error.FILE_FINISHED
+                        )
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
         "scenario28",
         "Send one file to a peer overt the IPv6 network, expect it to be transferred",
         {
