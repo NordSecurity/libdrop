@@ -226,7 +226,7 @@ impl NordDropFFI {
                 .as_mut()
                 .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
                 .storage()
-                .purge_transfers(transfer_ids)
+                .purge_transfers(&transfer_ids)
                 .await;
 
             Ok(())
