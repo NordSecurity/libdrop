@@ -65,8 +65,6 @@ struct norddrop {};
         
     enum norddrop_result cancel_transfer(const char* txid);
 
-    enum norddrop_result cancel_file(const char* txid, const char* fid);
-
     enum norddrop_result reject_file(const char* txid, const char* fid);
 
     enum norddrop_result download(const char* txid, const char* fid, const char* dst_path);
