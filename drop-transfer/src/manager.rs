@@ -32,11 +32,6 @@ pub struct CloseResult<T: Transfer> {
     pub events: Vec<Arc<FileEventTx<T>>>,
 }
 
-pub struct FileCancelResult {
-    pub xfer: Arc<IncomingTransfer>,
-    pub events: Arc<IncomingFileEventTx>,
-}
-
 pub struct FinishResult<T: Transfer> {
     pub xfer: Arc<T>,
     pub events: Arc<FileEventTx<T>>,
@@ -649,48 +644,6 @@ impl TransferManager {
             .conn
             .take();
         Ok(())
-    }
-
-    pub async fn incoming_cancel_file(
-        &self,
-        transfer_id: Uuid,
-        file_id: &FileId,
-    ) -> crate::Result<Option<FileCancelResult>> {
-        let mut lock = self.incoming.lock().await;
-
-        let state = lock
-            .get_mut(&transfer_id)
-            .ok_or(crate::Error::BadTransfer)?;
-        state.ensure_not_cancelled()?;
-
-        let sync = state.file_sync_mut(file_id)?;
-
-        let cancelled = match *sync {
-            IncomingLocalFlieState::Idle => false,
-            IncomingLocalFlieState::InFlight { .. } => {
-                *sync = IncomingLocalFlieState::Idle;
-
-                self.storage
-                    .stop_incoming_file(state.xfer.id(), file_id.as_ref())
-                    .await;
-
-                if let Some(conn) = &state.conn {
-                    let _ = conn.send(ServerReq::Cancel {
-                        file: file_id.clone(),
-                    });
-                }
-
-                true
-            }
-            IncomingLocalFlieState::Terminal(term) => {
-                return Err(crate::Error::FileStateMismatch(term));
-            }
-        };
-
-        Ok(cancelled.then(|| FileCancelResult {
-            xfer: state.xfer.clone(),
-            events: state.file_events(&self.event_factory, file_id),
-        }))
     }
 
     pub async fn outgoing_disconnect(&self, transfer_id: Uuid) -> crate::Result<()> {

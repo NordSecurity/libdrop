@@ -106,11 +106,11 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
 }
 
 impl<const PING: bool> HandlerLoop<'_, PING> {
-    async fn on_cancel(&mut self, file: FileSubPath, by_peer: bool) {
+    async fn on_cancel(&mut self, file: FileSubPath) {
         if let Some(task) = self.tasks.remove(&file) {
             if !task.job.is_finished() {
                 task.job.abort();
-                task.events.cancelled(by_peer).await;
+                task.events.pause().await;
             }
         }
     }
@@ -329,7 +329,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
             }) => self.on_done(file).await,
             v2::ServerMsg::Error(v2::Error { file, msg }) => self.on_error(file, msg).await,
             v2::ServerMsg::Start(v2::Download { file }) => self.on_download(jobs, file).await,
-            v2::ServerMsg::Cancel(v2::Download { file }) => self.on_cancel(file, true).await,
+            v2::ServerMsg::Cancel(v2::Download { file }) => self.on_cancel(file).await,
         }
 
         Ok(())

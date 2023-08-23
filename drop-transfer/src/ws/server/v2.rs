@@ -161,7 +161,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: FileSubPath, by_peer: bool) {
+    async fn on_cancel(&mut self, file: FileSubPath) {
         if let Some(FileTask {
             job: task,
             events,
@@ -170,9 +170,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         {
             if !task.is_finished() {
                 task.abort();
-                if by_peer {
-                    events.cancelled(by_peer).await;
-                }
+                events.pause().await;
             }
         }
     }
@@ -289,30 +287,6 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         Ok(())
     }
 
-    async fn issue_cancel(
-        &mut self,
-        socket: &mut WebSocket,
-        file_id: FileId,
-    ) -> anyhow::Result<()> {
-        debug!(self.logger, "ServerHandler::issue_cancel");
-
-        let file_subpath = if let Some(file) = self.xfer.files().get(&file_id) {
-            file.subpath().clone()
-        } else {
-            warn!(self.logger, "Missing file with ID: {file_id:?}");
-            return Ok(());
-        };
-
-        let msg = v2::ServerMsg::Cancel(v2::Download {
-            file: file_subpath.clone(),
-        });
-        socket.send(Message::from(&msg)).await?;
-
-        self.on_cancel(file_subpath, false).await;
-
-        Ok(())
-    }
-
     async fn issue_reject(
         &mut self,
         socket: &mut WebSocket,
@@ -397,7 +371,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 
         match msg {
             v2::ClientMsg::Error(v2::Error { file, msg }) => self.on_error(file, msg).await,
-            v2::ClientMsg::Cancel(v2::Download { file }) => self.on_cancel(file, true).await,
+            v2::ClientMsg::Cancel(v2::Download { file }) => self.on_cancel(file).await,
         }
 
         Ok(())

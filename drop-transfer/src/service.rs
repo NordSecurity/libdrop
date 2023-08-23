@@ -173,27 +173,6 @@ impl Service {
         Ok(())
     }
 
-    /// Cancel a single file in a transfer
-    pub async fn cancel(&mut self, transfer_id: Uuid, file: FileId) -> crate::Result<()> {
-        let res = self
-            .state
-            .transfer_manager
-            .incoming_cancel_file(transfer_id, &file)
-            .await?;
-
-        if let Some(res) = res {
-            res.events.stop_silent(Status::Canceled).await;
-
-            self.state
-                .event_tx
-                .send(crate::Event::FileDownloadCancelled(res.xfer, file, false))
-                .await
-                .expect("Event channel should be open");
-        }
-
-        Ok(())
-    }
-
     /// Reject a single file in a transfer. After rejection the file can no
     /// logner be transfered
     pub async fn reject(&self, transfer_id: Uuid, file: FileId) -> crate::Result<()> {

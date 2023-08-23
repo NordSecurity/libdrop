@@ -618,10 +618,6 @@ def new_event(event_str: str) -> event.Event:
             return event.FinishFailedTransfer(
                 transfer_slot, data["status"], data.get("os_error_code")
             )
-        elif reason == "FileCanceled":
-            return event.FinishFileCanceled(
-                transfer_slot, data["file"], data["by_peer"]
-            )
         elif reason == "FileFailed":
             return event.FinishFileFailed(
                 transfer_slot, data["file"], data["status"], data.get("os_error_code")
