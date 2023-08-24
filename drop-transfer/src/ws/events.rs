@@ -199,7 +199,7 @@ impl FileEventTx<IncomingTransfer> {
                 transfer_id: self.xfer.id(),
                 file_id: self.file_id.clone(),
             },
-            Err(Status::FilePaused as _),
+            Ok(()),
         )
         .await
     }
@@ -246,7 +246,7 @@ impl FileEventTx<OutgoingTransfer> {
                 transfer_id: self.xfer.id(),
                 file_id: self.file_id.clone(),
             },
-            Err(Status::FilePaused as _),
+            Ok(()),
         )
         .await
     }

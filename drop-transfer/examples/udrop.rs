@@ -107,14 +107,6 @@ fn print_event(ev: &Event) {
                 by_peer
             );
         }
-        Event::IncomingTransferFailed(xfer, err, by_peer) => {
-            info!(
-                "[EVENT] IncomingTransferFailed {}, status: {}, by peer? {}",
-                xfer.id(),
-                err,
-                by_peer
-            );
-        }
         Event::OutgoingTransferFailed(xfer, err, by_peer) => {
             info!(
                 "[EVENT] OutgoingTransferFailed {}, status: {}, by peer? {}",

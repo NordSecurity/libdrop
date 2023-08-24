@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use anyhow::Context;
 use futures::StreamExt;
 
 use crate::service::State;
@@ -34,7 +35,7 @@ where
     let msg = if let Some(timeout) = timeout {
         tokio::time::timeout(timeout, stream.next())
             .await
-            .map_err(|_| crate::Error::TransferTimeout)?
+            .context("Receive timeout")?
             .transpose()?
     } else {
         stream.next().await.transpose()?
