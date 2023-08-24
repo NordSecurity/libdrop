@@ -7,15 +7,10 @@ pub enum Status {
     BadTransfer = 7,
     BadTransferState = 8,
     BadFileId = 9,
-    Io = 15,
-    DirectoryNotExpected = 17,
+    IoError = 15,
     TransferLimitsExceeded = 20,
     MismatchedSize = 21,
-    UnexpectedData = 22,
     InvalidArgument = 23,
-    TransferTimeout = 24,
-    WsServer = 25,
-    WsClient = 26,
     AddrInUse = 27,
     FileModified = 28,
     FilenameTooLong = 29,
@@ -24,9 +19,8 @@ pub enum Status {
     DbLost = 32,
     FileChecksumMismatch = 33,
     FileRejected = 34,
-    FilePaused = 35,
-    FileFailed = 36,
-    FileFinished = 37,
+    FileFailed = 35,
+    FileFinished = 36,
 }
 
 impl serde::Serialize for Status {

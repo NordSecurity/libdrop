@@ -30,8 +30,6 @@ pub enum Error {
     TransferLimitsExceeded,
     #[error("Invalid argument")]
     InvalidArgument,
-    #[error("Transfer timeout")]
-    TransferTimeout,
     #[error("Server connection failure: {0}")]
     WsServer(#[from] warp::Error),
     #[error("Client connection failure: {0}")]
@@ -44,8 +42,8 @@ pub enum Error {
     FilenameTooLong,
     #[error("Failed to authenticate to the peer")]
     AuthenticationFailed,
-    #[error("Storage error")]
-    StorageError,
+    #[error("Storage error: {0}")]
+    StorageError(#[from] drop_storage::error::Error),
     #[error("Checksum validation failed")]
     ChecksumMismatch,
     #[error("File in mismatched state: {0:?}")]
@@ -85,20 +83,19 @@ impl From<&Error> for u32 {
             Error::BadTransfer => Status::BadTransfer as _,
             Error::BadTransferState(_) => Status::BadTransferState as _,
             Error::BadFileId => Status::BadFileId as _,
-            Error::Io(_) => Status::Io as _,
-            Error::DirectoryNotExpected => Status::DirectoryNotExpected as _,
+            Error::Io(_) => Status::IoError as _,
+            Error::DirectoryNotExpected => Status::BadFile as _,
             Error::TransferLimitsExceeded => Status::TransferLimitsExceeded as _,
             Error::MismatchedSize => Status::MismatchedSize as _,
-            Error::UnexpectedData => Status::UnexpectedData as _,
+            Error::UnexpectedData => Status::MismatchedSize as _,
             Error::InvalidArgument => Status::InvalidArgument as _,
-            Error::TransferTimeout => Status::TransferTimeout as _,
-            Error::WsServer(_) => Status::WsServer as _,
-            Error::WsClient(_) => Status::WsClient as _,
+            Error::WsServer(_) => Status::IoError as _,
+            Error::WsClient(_) => Status::IoError as _,
             Error::AddrInUse => Status::AddrInUse as _,
             Error::FileModified => Status::FileModified as _,
             Error::FilenameTooLong => Status::FilenameTooLong as _,
             Error::AuthenticationFailed => Status::AuthenticationFailed as _,
-            Error::StorageError => Status::StorageError as _,
+            Error::StorageError(_) => Status::StorageError as _,
             Error::ChecksumMismatch => Status::FileChecksumMismatch as _,
             Error::FileStateMismatch(FileTerminalState::Rejected) => Status::FileRejected as _,
             Error::FileStateMismatch(FileTerminalState::Completed) => Status::FileFinished as _,
@@ -132,11 +129,5 @@ impl From<walkdir::Error> for Error {
             .into_io_error()
             .map(Into::into)
             .unwrap_or_else(|| Error::BadPath("Filesystem loop detected".into()))
-    }
-}
-
-impl From<drop_storage::error::Error> for Error {
-    fn from(_: drop_storage::error::Error) -> Self {
-        Self::StorageError
     }
 }
