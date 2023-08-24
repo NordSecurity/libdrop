@@ -7856,4 +7856,54 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario36",
+        "Call stop() right after the download() call. Expect no errors",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.5"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Sleep(1),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/36",
+                    ),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]
