@@ -55,6 +55,5 @@ pub enum Event {
     IncomingTransferCanceled(Arc<IncomingTransfer>, bool),
     OutgoingTransferCanceled(Arc<OutgoingTransfer>, bool),
 
-    IncomingTransferFailed(Arc<IncomingTransfer>, Error, bool),
     OutgoingTransferFailed(Arc<OutgoingTransfer>, Error, bool),
 }
