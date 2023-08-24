@@ -211,14 +211,6 @@ impl From<drop_transfer::Event> for Event {
                     data: FinishEvent::TransferCanceled { by_peer },
                 }
             }
-            drop_transfer::Event::IncomingTransferFailed(tx, status, _) => {
-                Event::TransferFinished {
-                    transfer: tx.id().to_string(),
-                    data: FinishEvent::TransferFailed {
-                        status: From::from(&status),
-                    },
-                }
-            }
             drop_transfer::Event::OutgoingTransferFailed(tx, status, _) => {
                 Event::TransferFinished {
                     transfer: tx.id().to_string(),

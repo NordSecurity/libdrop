@@ -56,12 +56,6 @@ impl<'a> StorageDispatch<'a> {
                     .await;
                 self.clear_transfer(transfer.id());
             }
-            crate::Event::IncomingTransferFailed(transfer, err, _) => {
-                self.storage
-                    .insert_transfer_failed_state(transfer.id(), err.into())
-                    .await;
-                self.clear_transfer(transfer.id());
-            }
             crate::Event::OutgoingTransferFailed(transfer, err, _) => {
                 self.storage
                     .insert_transfer_failed_state(transfer.id(), err.into())
