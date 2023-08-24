@@ -160,6 +160,11 @@ impl NordDropFFI {
             }
         });
 
+        let mut instance = self.instance.clone().blocking_lock_owned();
+        if instance.is_some() {
+            return Err(ffi::types::NORDDROP_RES_INSTANCE_START);
+        }
+
         self.rt.block_on(async {
             let service = match Service::start(
                 addr,
@@ -187,7 +192,7 @@ impl NordDropFFI {
                 }
             };
 
-            self.instance.lock().await.replace(service);
+            instance.replace(service);
             Ok(())
         })?;
 
@@ -197,16 +202,14 @@ impl NordDropFFI {
     pub(super) fn stop(&mut self) -> Result<()> {
         trace!(self.logger, "norddrop_stop()");
 
-        self.rt.block_on(async {
-            self.instance
-                .lock()
-                .await
-                .take()
-                .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
-                .stop()
-                .await;
-            Ok(())
-        })
+        let instance = self
+            .instance
+            .blocking_lock()
+            .take()
+            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?;
+
+        self.rt.block_on(instance.stop());
+        Ok(())
     }
 
     pub(super) fn purge_transfers(&mut self, transfer_ids: &str) -> Result<()> {
@@ -219,18 +222,15 @@ impl NordDropFFI {
         let transfer_ids: Vec<String> =
             serde_json::from_str(transfer_ids).map_err(|_| ffi::types::NORDDROP_RES_JSON_PARSE)?;
 
-        self.rt.block_on(async {
-            self.instance
-                .lock()
-                .await
-                .as_mut()
-                .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
-                .storage()
-                .purge_transfers(&transfer_ids)
-                .await;
+        let mut instance = self.instance.blocking_lock();
+        let storage = instance
+            .as_mut()
+            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+            .storage();
 
-            Ok(())
-        })
+        self.rt.block_on(storage.purge_transfers(&transfer_ids));
+
+        Ok(())
     }
 
     pub(super) fn purge_transfers_until(&mut self, until_timestamp: i64) -> Result<()> {
@@ -249,18 +249,16 @@ impl NordDropFFI {
             return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
         }
 
-        self.rt.block_on(async {
-            self.instance
-                .lock()
-                .await
-                .as_mut()
-                .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
-                .storage()
-                .purge_transfers_until(until_timestamp)
-                .await;
+        let mut instance = self.instance.blocking_lock();
+        let storage = instance
+            .as_mut()
+            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+            .storage();
 
-            Ok(())
-        })
+        self.rt
+            .block_on(storage.purge_transfers_until(until_timestamp));
+
+        Ok(())
     }
 
     pub(super) fn transfers_since(&mut self, since_timestamp: i64) -> Result<String> {
@@ -279,23 +277,16 @@ impl NordDropFFI {
             return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
         }
 
-        let result = self.rt.block_on(async {
-            let transfers = self
-                .instance
-                .lock()
-                .await
-                .as_mut()
-                .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
-                .storage()
-                .transfers_since(since_timestamp)
-                .await;
+        let mut instance = self.instance.blocking_lock();
+        let storage = instance
+            .as_mut()
+            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+            .storage();
 
-            Ok::<Vec<_>, ffi::types::norddrop_result>(transfers)
-        })?;
+        let result = self.rt.block_on(storage.transfers_since(since_timestamp));
 
         let result =
             serde_json::to_string(&result).map_err(|_| ffi::types::NORDDROP_RES_JSON_PARSE)?;
-
         Ok(result)
     }
 
@@ -309,23 +300,17 @@ impl NordDropFFI {
             "remove_transfer_file() transfer_id: {transfer_id}, file_id: {file_id}",
         );
 
-        let res = self.rt.block_on(async {
-            Ok::<Option<()>, ffi::types::norddrop_result>(
-                self.instance
-                    .lock()
-                    .await
-                    .as_ref()
-                    .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
-                    .storage()
-                    .remove_transfer_file(transfer_id, file_id)
-                    .await,
-            )
-        })?;
+        let mut instance = self.instance.blocking_lock();
+        let storage = instance
+            .as_mut()
+            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+            .storage();
 
-        match res {
-            Some(_) => Ok(()),
-            None => Err(ffi::types::NORDDROP_RES_BAD_INPUT),
-        }
+        let res = self
+            .rt
+            .block_on(storage.remove_transfer_file(transfer_id, file_id));
+
+        res.ok_or(ffi::types::NORDDROP_RES_BAD_INPUT)
     }
 
     pub(super) fn new_transfer(&mut self, peer: &str, descriptors: &str) -> Result<uuid::Uuid> {
@@ -376,17 +361,12 @@ impl NordDropFFI {
 
         let xfid = xfer.id();
 
-        self.rt.block_on(async {
-            self.instance
-                .lock()
-                .await
-                .as_mut()
-                .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
-                .send_request(xfer)
-                .await;
+        let mut instance = self.instance.blocking_lock();
+        let instance = instance
+            .as_mut()
+            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?;
 
-            Result::Ok(())
-        })?;
+        self.rt.block_on(instance.send_request(xfer));
 
         Ok(xfid)
     }
@@ -397,7 +377,6 @@ impl NordDropFFI {
         file_id: String,
         dst: String,
     ) -> Result<()> {
-        let instance = self.instance.clone();
         let logger = self.logger.clone();
         let ed = self.event_dispatcher.clone();
 
@@ -409,9 +388,13 @@ impl NordDropFFI {
             dst
         );
 
+        let mut inst = self.instance.clone().blocking_lock_owned();
+        if inst.is_none() {
+            return Err(ffi::types::NORDDROP_RES_NOT_STARTED);
+        }
+
         self.rt.spawn(async move {
-            let mut locked_inst = instance.lock().await;
-            let inst = locked_inst.as_mut().expect("Instance not initialized");
+            let inst = inst.as_mut().expect("Instance not initialized");
 
             if let Err(e) = inst
                 .download(xfid, &file_id.clone().into(), dst.as_ref())
@@ -440,15 +423,18 @@ impl NordDropFFI {
     }
 
     pub(super) fn cancel_transfer(&mut self, xfid: uuid::Uuid) -> Result<()> {
-        let instance = self.instance.clone();
         let logger = self.logger.clone();
         let ed = self.event_dispatcher.clone();
 
         trace!(logger, "norddrop_cancel_transfer() for {:?}", xfid);
 
+        let mut inst = self.instance.clone().blocking_lock_owned();
+        if inst.is_none() {
+            return Err(ffi::types::NORDDROP_RES_NOT_STARTED);
+        }
+
         self.rt.spawn(async move {
-            let mut locked_inst = instance.lock().await;
-            let inst = locked_inst.as_mut().expect("Instance not initialized");
+            let inst = inst.as_mut().expect("Instance not initialized");
 
             if let Err(e) = inst.cancel_all(xfid).await {
                 error!(
@@ -478,7 +464,6 @@ impl NordDropFFI {
         let evdisp = self.event_dispatcher.clone();
 
         let inst = self.instance.clone().blocking_lock_owned();
-
         if inst.is_none() {
             return Err(ffi::types::NORDDROP_RES_NOT_STARTED);
         }
