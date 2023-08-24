@@ -7,7 +7,8 @@
 * Add `max_requests_per_sec` config option to limit the requests on per-peer basis
 * Add file descriptors resolver callback based on content URI - Unix platform only
 * Fix database foreign keys not being enabled
-* Remove `ServiceStop` error
+* Remove `ServiceStop`, `UnexpectedData`, `TransferTimeout`, `WsServer`, `WsClient` status codes
+* Add `FileRejected`, `FileFailed` and `FileFinished` status codes
 * Remove `cancel_file()` method in favor of rejections
 * Introduce `TransferPaused` event signaling file download being paused because of peer disconnection
 * Allow removing file only upon reaching one Rejected, Failed or Finished state
