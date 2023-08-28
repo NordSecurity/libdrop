@@ -7798,4 +7798,101 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario37-1",
+        "Don't start libdrop on the receiver side, expect the sender to resend the transfer once it starts libdrop within a few seconds",
+        {
+            "ren": ActionList(
+                [
+                    # create a transfer so there would be stuff to be retried
+                    action.Start("172.20.0.5", "/tmp/data.base"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Stop(),
+                    # try again and expect no events and no activity
+                    action.Start("172.20.0.5", "/tmp/data.base"),
+                    action.NoEvent(6),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    # Peer is online for a few seconds and then starts libdrop instance, expect nothing
+                    action.Sleep(4),
+                    action.Start("172.20.0.15"),
+                    # TODO: this event never arrives
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario37-2",
+        "Expect no activity when there's a failure in starting libdrop",
+        {
+            "ren": ActionList(
+                [
+                    # create a transfer so there would be transfer to be re-sent
+                    action.Start("172.20.0.5", "/tmp/data.base"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Stop(),
+                    # block the port on the interface libdrop's working on
+                    action.ListenOnPort("172.20.0.5"),
+                    # try again and expect no events and no activity
+                    action.ExpectError(
+                        action.Start("172.20.0.5", "/tmp/data.base"),
+                        ReturnCodes.ADDR_IN_USE,
+                    ),
+                    action.NoEvent(),
+                    action.ExpectError(action.Stop(), ReturnCodes.NOT_STARTED),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    # sleep some and enable libdrop instance
+                    action.Sleep(2),
+                    action.Start("172.20.0.15"),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]

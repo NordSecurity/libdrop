@@ -36,6 +36,12 @@ class LibResult(IntEnum):
     # Bad JSON input
     NORDDROP_RES_BAD_INPUT = (3,)
 
+    # Instance not started
+    NORDDROP_NOT_STARTED = (6,)
+
+    # Address already in used
+    NORDDROP_RES_ADDR_IN_USE = (7,)
+
 
 class LogLevel(IntEnum):
     Critical = 1

@@ -10,6 +10,7 @@ import typing
 import json
 import time
 import glob
+import socket
 
 from . import event, ffi
 from .logger import logger
@@ -67,6 +68,22 @@ class Action:
 
     async def run(self, drop: ffi.Drop):
         raise NotImplementedError("run() on base Action class")
+
+
+class ListenOnPort(Action):
+    def __init__(self, addr: str):
+        self._addr = addr
+        self._socket: None | socket.socket = None
+        pass
+
+    async def run(self, drop: ffi.Drop):
+        # bind socket to port 49111 and listen on itj
+        HOST = self._addr
+        PORT = 49111
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind((HOST, PORT))
+        s.listen()
+        self._socket = s
 
 
 class ExpectError(Action):
