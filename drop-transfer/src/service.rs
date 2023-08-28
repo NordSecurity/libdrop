@@ -77,16 +77,16 @@ impl Service {
 
             let guard = waiter.guard();
 
-            manager::resume(&state, &logger, &guard, &stop).await;
             ws::server::spawn(
                 addr,
                 state.clone(),
                 auth,
                 logger.clone(),
                 stop.clone(),
-                guard,
+                guard.clone(),
             )?;
-
+            
+            manager::resume(&state, &logger, &guard, &stop).await;
             Ok(Self {
                 state,
                 stop,
