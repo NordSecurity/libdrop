@@ -294,14 +294,15 @@ enum norddrop_result norddrop_set_fd_resolver_callback(const struct norddrop *de
  * * `transfer_file_limit` - when aggregating files from the path, if this
  * limit is reached, an error is returned.
  *
- * * `transfer_idle_lifetime_ms` - this timeout plays a role in an already
- * established transfer as sometimes one peer might go offline with no notice.
- * This timeout controls the amount of time we will wait for any action from
- * the peer and after that, we will fail the transfer.
- *
  * * `moose_event_path` - moose database path.
  *
  * * `storage_path` - storage path for persistence engine.
+ *
+ * * `max_uploads_in_flight` (optional) - number of files that can be
+ *   simultaneously transmited within a single transfer.
+ *
+ * * `max_requests_per_sec` (optional) - max number of request allowed from a
+ *   peer before triggering DDoS protection.
  *
  * # Safety
  * The pointers provided must be valid

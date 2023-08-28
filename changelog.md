@@ -14,6 +14,7 @@
 * Allow removing file only upon reaching one Rejected, Failed or Finished state
 * Disallow re-downloading file after reaching Rejected, Failed or Finished state within single transfer
 * Include `bytes_sent/bytes_received` JSON field per file in the storage output
+* Remove `transfer_idle_lifetime_ms` and `connection_max_retry_interval_ms` config parameters
 
 ---
 <br>

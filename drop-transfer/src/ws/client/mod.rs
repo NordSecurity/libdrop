@@ -156,7 +156,7 @@ async fn establish_ws_conn(
     ip: IpAddr,
     logger: &Logger,
 ) -> crate::Result<Option<(WebSocket, protocol::Version)>> {
-    let mut socket = tcp_connect(state, ip, logger).await;
+    let mut socket = tcp_connect(ip, logger).await;
 
     let mut versions_to_try = [
         protocol::Version::V5,
@@ -258,7 +258,7 @@ async fn make_request(
     Err(err)
 }
 
-async fn tcp_connect(state: &State, ip: IpAddr, logger: &Logger) -> TcpStream {
+async fn tcp_connect(ip: IpAddr, logger: &Logger) -> TcpStream {
     let mut sleep_time = Duration::from_millis(200);
 
     loop {
@@ -275,10 +275,7 @@ async fn tcp_connect(state: &State, ip: IpAddr, logger: &Logger) -> TcpStream {
                 tokio::time::sleep(sleep_time).await;
 
                 // Exponential backoff but with upper limit
-                sleep_time = state
-                    .config
-                    .connection_max_retry_interval
-                    .min(sleep_time * 2);
+                sleep_time = drop_config::CONNECTION_MAX_RETRY_INTERVAL.min(sleep_time * 2);
             }
         }
     }

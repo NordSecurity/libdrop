@@ -3,15 +3,13 @@ use std::time::Duration;
 use anyhow::Context;
 use futures::StreamExt;
 
-use crate::service::State;
-
 pub struct Pinger<const PING: bool = true> {
     interval: tokio::time::Interval,
 }
 
 impl<const PING: bool> Pinger<PING> {
-    pub(crate) fn new(state: &State) -> Self {
-        let interval = tokio::time::interval(state.config.ping_interval());
+    pub(crate) fn new() -> Self {
+        let interval = tokio::time::interval(drop_config::PING_INTERVAL);
         Self { interval }
     }
 }
