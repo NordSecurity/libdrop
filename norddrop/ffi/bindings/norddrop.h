@@ -298,12 +298,6 @@ enum norddrop_result norddrop_set_fd_resolver_callback(const struct norddrop *de
  *
  * * `storage_path` - storage path for persistence engine.
  *
- * * `max_uploads_in_flight` (optional) - number of files that can be
- *   simultaneously transmited within a single transfer.
- *
- * * `max_requests_per_sec` (optional) - max number of request allowed from a
- *   peer before triggering DDoS protection.
- *
  * # Safety
  * The pointers provided must be valid
  */
