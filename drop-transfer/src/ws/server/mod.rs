@@ -135,9 +135,7 @@ pub(crate) fn spawn(
         let stop = stop.clone();
 
         let rate_limiter = Arc::new(governor::RateLimiter::dashmap(governor::Quota::per_second(
-            state
-                .config
-                .max_reqs_per_sec
+            drop_config::MAX_REQUESTS_PER_SEC
                 .try_into()
                 .map_err(|_| crate::Error::InvalidArgument)?,
         )));
