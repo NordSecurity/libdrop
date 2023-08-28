@@ -22,9 +22,6 @@ pub enum OutgoingPathStateEventData {
     Pending,
     #[serde(rename = "started")]
     Started { bytes_sent: i64 },
-    // Legacy event
-    #[serde(rename = "cancel")]
-    Cancel { by_peer: bool, bytes_sent: i64 },
     #[serde(rename = "failed")]
     Failed { status_code: i64, bytes_sent: i64 },
     #[serde(rename = "completed")]
@@ -45,14 +42,11 @@ pub enum IncomingPathStateEventData {
         base_dir: String,
         bytes_received: i64,
     },
-    #[serde(rename = "cancel")]
-    Cancel { by_peer: bool, bytes_received: i64 },
     #[serde(rename = "failed")]
     Failed {
         status_code: i64,
         bytes_received: i64,
     },
-    // Legacy event
     #[serde(rename = "completed")]
     Completed { final_path: String },
     #[serde(rename = "rejected")]
