@@ -371,7 +371,7 @@ impl Storage {
             let conn = self.conn.lock().await;
 
             if sync::start_incoming_file(&conn, transfer_id, file_id, base_dir)?.is_some() {
-                Self::insert_incoming_path_pending_state(&conn, transfer_id, file_id)?;
+                Self::insert_incoming_path_pending_state(&conn, transfer_id, file_id, base_dir)?;
             }
 
             Result::Ok(())
@@ -542,16 +542,17 @@ impl Storage {
         conn: &Connection,
         transfer_id: Uuid,
         path_id: &str,
+        base_dir: &str,
     ) -> Result<()> {
         let tid = transfer_id.to_string();
 
         conn.execute(
             r#"
-            INSERT INTO incoming_path_pending_states (path_id)
-            SELECT id
+            INSERT INTO incoming_path_pending_states (path_id, base_dir)
+            SELECT id, ?3
             FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
             "#,
-            params![tid, path_id],
+            params![tid, path_id, base_dir],
         )?;
 
         Ok(())
@@ -585,30 +586,25 @@ impl Storage {
         }
     }
 
-    pub async fn insert_incoming_path_started_state(
-        &self,
-        transfer_id: Uuid,
-        path_id: &str,
-        base_dir: &str,
-    ) {
+    pub async fn insert_incoming_path_started_state(&self, transfer_id: Uuid, path_id: &str) {
         let tid = transfer_id.to_string();
 
         trace!(
-            self.logger,
-            "Inserting incoming path started state";
-            "transfer_id" => &tid,
-            "path_id" => path_id,
-            "base_dir" => base_dir);
+        self.logger,
+        "Inserting incoming path started state";
+        "transfer_id" => &tid,
+        "path_id" => path_id,
+        );
 
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 r#"
-                INSERT INTO incoming_path_started_states (path_id, base_dir, bytes_received)
-                SELECT id, ?3, ?4
+                INSERT INTO incoming_path_started_states (path_id, bytes_received)
+                SELECT id, ?3
                 FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
                 "#,
-                params![tid, path_id, base_dir, 0],
+                params![tid, path_id, 0],
             )?;
 
             Ok::<(), Error>(())
@@ -1251,7 +1247,7 @@ impl Storage {
                     r#"
                 SELECT DISTINCT path_hash, base_dir
                 FROM incoming_paths ip
-                INNER JOIN incoming_path_started_states ipss ON ip.id = ipss.path_id 
+                INNER JOIN incoming_path_pending_states ipss ON ip.id = ipss.path_id 
                 WHERE transfer_id = ?1
                 "#,
                 )?
@@ -1513,7 +1509,9 @@ impl Storage {
                         Ok(IncomingPathStateEvent {
                             path_id: row.get("path_id")?,
                             created_at: row.get("created_at")?,
-                            data: IncomingPathStateEventData::Pending,
+                            data: IncomingPathStateEventData::Pending {
+                                base_dir: row.get("base_dir")?,
+                            },
                         })
                     })?
                     .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
@@ -1531,7 +1529,6 @@ impl Storage {
                             created_at: row.get("created_at")?,
                             data: IncomingPathStateEventData::Started {
                                 bytes_received: row.get("bytes_received")?,
-                                base_dir: row.get("base_dir")?,
                             },
                         })
                     })?
@@ -1619,7 +1616,7 @@ impl Storage {
                     .iter()
                     .rev()
                     .find_map(|state| match state.data {
-                        IncomingPathStateEventData::Pending => None,
+                        IncomingPathStateEventData::Pending { .. } => None,
                         IncomingPathStateEventData::Started { bytes_received, .. } => {
                             Some(bytes_received)
                         }
@@ -1946,7 +1943,7 @@ mod tests {
             .insert_incoming_path_reject_state(transfer1_id, "idi3", false, 234)
             .await;
         storage
-            .insert_incoming_path_started_state(transfer1_id, "idi4", "/recv/idi4")
+            .insert_incoming_path_started_state(transfer1_id, "idi4")
             .await;
 
         let transfer2_id: Uuid = "f333302e-584b-42f8-9f66-6a5ef400297d".parse().unwrap();
@@ -2029,7 +2026,9 @@ mod tests {
 
                 assert!(matches!(
                     &inc[1].states[0].data,
-                    IncomingPathStateEventData::Pending,
+                    IncomingPathStateEventData::Pending{
+                        base_dir,
+                    } if base_dir == "/recv/idi2",
                 ));
                 assert!(matches!(
                     &inc[1].states[1].data,
@@ -2062,7 +2061,7 @@ mod tests {
 
                 assert!(matches!(
                     &inc[3].states[0].data,
-                    IncomingPathStateEventData::Started { base_dir, bytes_received: 0 } if base_dir == "/recv/idi4"
+                    IncomingPathStateEventData::Started { bytes_received: 0 }
                 ));
             }
             _ => panic!("Unexpected transfer type"),

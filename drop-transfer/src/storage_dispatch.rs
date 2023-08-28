@@ -25,9 +25,9 @@ impl<'a> StorageDispatch<'a> {
                     .insert_outgoing_path_started_state(transfer.id(), file_id.as_ref())
                     .await
             }
-            crate::Event::FileDownloadStarted(transfer, file_id, base_dir) => {
+            crate::Event::FileDownloadStarted(transfer, file_id, ..) => {
                 self.storage
-                    .insert_incoming_path_started_state(transfer.id(), file_id.as_ref(), base_dir)
+                    .insert_incoming_path_started_state(transfer.id(), file_id.as_ref())
                     .await
             }
             crate::Event::FileDownloadSuccess(transfer, download) => {
