@@ -84,8 +84,6 @@ pub struct IncomingPathStateEvent {
 #[derive(Debug, Serialize)]
 #[serde(tag = "state")]
 pub enum TransferStateEventData {
-    #[serde(rename = "active")]
-    Active,
     #[serde(rename = "cancel")]
     Cancel { by_peer: bool },
     #[serde(rename = "failed")]
