@@ -62,10 +62,6 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
-                                    },
-                                    {
-                                        "created_at": "*",
                                         "state": "started",
                                         "bytes_sent": 0
                                     },
@@ -293,10 +289,6 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
-                                    },
-                                    {
-                                        "created_at": "*",
                                         "state": "started",
                                         "bytes_sent": 0
                                     },
@@ -326,10 +318,6 @@ scenarios = [
                                 "base_path": "/tmp",
                                 "bytes": 10485760,
                                 "states": [
-                                    {
-                                        "created_at": "*",
-                                        "state": "pending"
-                                    },
                                     {
                                         "created_at": "*",
                                         "state": "started",
@@ -3095,10 +3083,6 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
-                                    },
-                                    {
-                                        "created_at": "*",
                                         "state": "started",
                                         "bytes_sent": 0
                                     },
@@ -4573,10 +4557,6 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
-                                    },
-                                    {
-                                        "created_at": "*",
                                         "state": "started",
                                         "bytes_sent": 0
                                     },
@@ -5311,10 +5291,6 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
-                                    },
-                                    {
-                                        "created_at": "*",
                                         "state": "started",
                                         "bytes_sent": 0
                                     },
@@ -5478,10 +5454,6 @@ scenarios = [
                                 "base_path": "/tmp",
                                 "bytes": 10485760,
                                 "states": [
-                                    {
-                                        "created_at": "*",
-                                        "state": "pending"
-                                    },
                                     {
                                         "created_at": "*",
                                         "state": "started",
@@ -6699,10 +6671,6 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
-                                    },
-                                    {
-                                        "created_at": "*",
                                         "state": "rejected",
                                         "by_peer": false
                                     }
@@ -6765,10 +6733,6 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
-                                    },
-                                    {
-                                        "created_at": "*",
                                         "state": "rejected",
                                         "by_peer": true
                                     }
@@ -6824,10 +6788,6 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
-                                    },
-                                    {
-                                        "created_at": "*",
                                         "state": "rejected",
                                         "by_peer": true
                                     }
@@ -6875,10 +6835,6 @@ scenarios = [
                                 "relative_path": "testfile-small",
                                 "bytes": 1048576,
                                 "states": [
-                                    {
-                                        "created_at": "*",
-                                        "state": "pending"
-                                    },
                                     {
                                         "created_at": "*",
                                         "state": "rejected",
@@ -6944,12 +6900,7 @@ scenarios = [
                                 "relative_path": "testfile-small",
                                 "base_path": "/tmp",
                                 "bytes": 1048576,
-                                "states": [
-                                    {
-                                        "created_at": "*",
-                                        "state": "pending"
-                                    }
-                                ]
+                                "states": []
                             }
                         ]
                     }"""
@@ -6972,12 +6923,7 @@ scenarios = [
                                 "relative_path": "testfile-small",
                                 "base_path": "/tmp",
                                 "bytes": 1048576,
-                                "states": [
-                                    {
-                                        "created_at": "*",
-                                        "state": "pending"
-                                    }
-                                ]
+                                "states": []
                             }
                         ]
                     }"""
@@ -7018,12 +6964,7 @@ scenarios = [
                             {
                                 "relative_path": "testfile-small",
                                 "bytes": 1048576,
-                                "states": [
-                                    {
-                                        "created_at": "*",
-                                        "state": "pending"
-                                    }
-                                ]
+                                "states": []
                             }
                         ]
                     }"""
@@ -7070,12 +7011,7 @@ scenarios = [
                                 "relative_path": "testfile-small",
                                 "base_path": "/tmp",
                                 "bytes": 1048576,
-                                "states": [
-                                    {
-                                        "created_at": "*",
-                                        "state": "pending"
-                                    }
-                                ]
+                                "states": []
                             }
                         ]
                     }"""
@@ -7116,12 +7052,7 @@ scenarios = [
                             {
                                 "relative_path": "testfile-small",
                                 "bytes": 1048576,
-                                "states": [
-                                    {
-                                        "created_at": "*",
-                                        "state": "pending"
-                                    }
-                                ]
+                                "states": []
                             }
                         ]
                     }"""
@@ -7143,12 +7074,7 @@ scenarios = [
                             {
                                 "relative_path": "testfile-small",
                                 "bytes": 1048576,
-                                "states": [
-                                    {
-                                        "created_at": "*",
-                                        "state": "pending"
-                                    }
-                                ]
+                                "states": []
                             }
                         ]
                     }"""
@@ -7200,10 +7126,6 @@ scenarios = [
                                 "bytes": 1048576,
                                 "bytes_sent": 1048576,
                                 "states": [
-                                    {
-                                        "created_at": "*",
-                                        "state": "pending"
-                                    },
                                     {
                                         "created_at": "*",
                                         "state": "started",
@@ -7346,10 +7268,6 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
-                                    },
-                                    {
-                                        "created_at": "*",
                                         "state": "started",
                                         "bytes_sent": 0
                                     },
@@ -7483,12 +7401,7 @@ scenarios = [
                                 "base_path": "/tmp",
                                 "bytes": 1048576,
                                 "bytes_sent": 0,
-                                "states": [
-                                    {
-                                        "created_at": "*",
-                                        "state": "pending"
-                                    }
-                                ]
+                                "states": []
                             }
                         ]
                     }"""
@@ -7512,12 +7425,7 @@ scenarios = [
                                 "base_path": "/tmp",
                                 "bytes": 1048576,
                                 "bytes_sent": 0,
-                                "states": [
-                                    {
-                                        "created_at": "*",
-                                        "state": "pending"
-                                    }
-                                ]
+                                "states": []
                             }
                         ]
                     }"""
@@ -7558,12 +7466,7 @@ scenarios = [
                                 "relative_path": "testfile-small",
                                 "bytes": 1048576,
                                 "bytes_received": 0,
-                                "states": [
-                                    {
-                                        "created_at": "*",
-                                        "state": "pending"
-                                    }
-                                ]
+                                "states": []
                             }
                         ]
                     }"""
@@ -7586,12 +7489,7 @@ scenarios = [
                                 "relative_path": "testfile-small",
                                 "bytes": 1048576,
                                 "bytes_received": 0,
-                                "states": [
-                                    {
-                                        "created_at": "*",
-                                        "state": "pending"
-                                    }
-                                ]
+                                "states": []
                             }
                         ]
                     }"""
@@ -7758,12 +7656,7 @@ scenarios = [
                                 "relative_path": "testfile-small",
                                 "base_path": "/tmp",
                                 "bytes": 1048576,
-                                "states": [
-                                    {
-                                        "created_at": "*",
-                                        "state": "pending"
-                                    }
-                                ]
+                                "states": []
                             }
                         ]
                     }"""
