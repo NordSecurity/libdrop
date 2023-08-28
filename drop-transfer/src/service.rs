@@ -57,7 +57,7 @@ impl Service {
     ) -> Result<Self, Error> {
         let task = async {
             let state = Arc::new(State {
-                throttle: Semaphore::new(config.max_uploads_in_flight),
+                throttle: Semaphore::new(drop_config::MAX_UPLOADS_IN_FLIGHT),
                 transfer_manager: TransferManager::new(
                     storage.clone(),
                     FileEventTxFactory::new(event_tx.clone(), moose.clone()),
