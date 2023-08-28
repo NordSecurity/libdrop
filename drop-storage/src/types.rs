@@ -18,8 +18,6 @@ where
 #[derive(Debug, Serialize)]
 #[serde(tag = "state")]
 pub enum OutgoingPathStateEventData {
-    #[serde(rename = "pending")]
-    Pending,
     #[serde(rename = "started")]
     Started { bytes_sent: i64 },
     #[serde(rename = "failed")]
