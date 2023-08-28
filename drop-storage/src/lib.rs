@@ -1152,22 +1152,6 @@ impl Storage {
                 transfer.states.extend(
                     conn.prepare(
                         r#"
-                    SELECT created_at FROM transfer_active_states WHERE transfer_id = ?1
-                    "#,
-                    )?
-                    .query_map(params![tid], |row| {
-                        Ok(TransferStateEvent {
-                            transfer_id: transfer.id,
-                            created_at: row.get("created_at")?,
-                            data: types::TransferStateEventData::Active,
-                        })
-                    })?
-                    .collect::<QueryResult<Vec<TransferStateEvent>>>()?,
-                );
-
-                transfer.states.extend(
-                    conn.prepare(
-                        r#"
                     SELECT created_at, by_peer FROM transfer_cancel_states WHERE transfer_id = ?1
                     "#,
                     )?

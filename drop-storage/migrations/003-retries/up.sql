@@ -65,4 +65,6 @@ CREATE TABLE IF NOT EXISTS outgoing_path_paused_states (
   FOREIGN KEY(path_id) REFERENCES outgoing_paths(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+-- transfer active state
+DROP TABLE transfer_active_states;
 
