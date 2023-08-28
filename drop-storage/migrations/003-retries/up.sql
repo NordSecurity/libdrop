@@ -78,3 +78,11 @@ DROP TABLE incoming_path_cancel_states;
 -- changes regarding file pending states
 DROP TABLE outgoing_path_pending_states;
 
+ALTER TABLE incoming_path_pending_states ADD COLUMN base_dir TEXT NOT NULL DEFAULT '';
+
+UPDATE incoming_path_pending_states SET base_dir = ipss.base_dir
+FROM (SELECT path_id, base_dir, MIN(created_at) FROM incoming_path_started_states GROUP BY path_id) as ipss
+WHERE incoming_path_pending_states.path_id = ipss.path_id;
+
+ALTER TABLE incoming_path_started_states DROP COLUMN base_dir;
+
