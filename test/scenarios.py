@@ -171,13 +171,13 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
+                                        "state": "pending",
+                                        "base_dir": "/tmp/received"
                                     },
                                     {
                                         "created_at": "*",
                                         "state": "started",
-                                        "bytes_received": 0,
-                                        "base_dir": "/tmp/received"
+                                        "bytes_received": 0
                                     },
                                     {
                                         "created_at": "*",
@@ -421,13 +421,13 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
+                                        "state": "pending",
+                                        "base_dir": "/tmp/received"
                                     },
                                     {
                                         "created_at": "*",
                                         "state": "started",
-                                        "bytes_received": 0,
-                                        "base_dir": "/tmp/received"
+                                        "bytes_received": 0
                                     },
                                     {
                                         "created_at": "*",
@@ -456,13 +456,13 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
+                                        "state": "pending",
+                                        "base_dir": "/tmp/received"
                                     },
                                     {
                                         "created_at": "*",
                                         "state": "started",
-                                        "bytes_received": 0,
-                                        "base_dir": "/tmp/received"
+                                        "bytes_received": 0
                                     },
                                     {
                                         "created_at": "*",
@@ -3186,13 +3186,13 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
+                                        "state": "pending",
+                                        "base_dir": "/tmp/received"
                                     },
                                     {
                                         "created_at": "*",
                                         "state": "started",
-                                        "bytes_received": 0,
-                                        "base_dir": "/tmp/received"
+                                        "bytes_received": 0
                                     },
                                     {
                                         "created_at": "*",
@@ -5367,13 +5367,13 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
+                                        "state": "pending",
+                                        "base_dir": "/tmp/received/28"
                                     },
                                     {
                                         "created_at": "*",
                                         "state": "started",
-                                        "bytes_received": 0,
-                                        "base_dir": "/tmp/received/28"
+                                        "bytes_received": 0
                                     },
                                     {
                                         "created_at": "*",
@@ -5543,13 +5543,13 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
+                                        "state": "pending",
+                                        "base_dir": "/tmp/received/29-1"
                                     },
                                     {
                                         "created_at": "*",
                                         "state": "started",
-                                        "bytes_received": 0,
-                                        "base_dir": "/tmp/received/29-1"
+                                        "bytes_received": 0
                                     },
                                     {
                                         "created_at": "*",
@@ -5559,8 +5559,7 @@ scenarios = [
                                     {
                                         "created_at": "*",
                                         "state": "started",
-                                        "bytes_received": "*",
-                                        "base_dir": "/tmp/received/29-1"
+                                        "bytes_received": "*"
                                     },
                                     {
                                         "created_at": "*",
@@ -7201,13 +7200,13 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
+                                        "state": "pending",
+                                        "base_dir": "/tmp/recv/31-5"
                                     },
                                     {
                                         "created_at": "*",
                                         "state": "started",
-                                        "bytes_received": 0,
-                                        "base_dir": "/tmp/recv/31-5"
+                                        "bytes_received": 0
                                     },
                                     {
                                         "created_at": "*",
@@ -7328,13 +7327,13 @@ scenarios = [
                                 "states": [
                                     {
                                         "created_at": "*",
-                                        "state": "pending"
+                                        "state": "pending",
+                                        "base_dir": "/tmp/recv/31-6"
                                     },
                                     {
                                         "created_at": "*",
                                         "state": "started",
-                                        "bytes_received": 0,
-                                        "base_dir": "/tmp/recv/31-6"
+                                        "bytes_received": 0
                                     },
                                     {
                                         "created_at": "*",
