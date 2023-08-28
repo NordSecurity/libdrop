@@ -1352,22 +1352,6 @@ impl Storage {
                 path.states.extend(
                     conn.prepare(
                         r#"
-                    SELECT * FROM outgoing_path_pending_states WHERE path_id = ?1
-                    "#,
-                    )?
-                    .query_map(params![path.id], |row| {
-                        Ok(OutgoingPathStateEvent {
-                            path_id: row.get("path_id")?,
-                            created_at: row.get("created_at")?,
-                            data: OutgoingPathStateEventData::Pending,
-                        })
-                    })?
-                    .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
-                );
-
-                path.states.extend(
-                    conn.prepare(
-                        r#"
                     SELECT * FROM outgoing_path_started_states WHERE path_id = ?1
                     "#,
                     )?
@@ -1461,14 +1445,14 @@ impl Storage {
                     .states
                     .iter()
                     .rev()
-                    .find_map(|state| match state.data {
-                        OutgoingPathStateEventData::Pending => None,
-                        OutgoingPathStateEventData::Started { bytes_sent } => Some(bytes_sent),
-                        OutgoingPathStateEventData::Failed { bytes_sent, .. } => Some(bytes_sent),
-                        OutgoingPathStateEventData::Completed => Some(path.bytes),
-                        OutgoingPathStateEventData::Rejected { bytes_sent, .. } => Some(bytes_sent),
-                        OutgoingPathStateEventData::Paused { bytes_sent } => Some(bytes_sent),
+                    .map(|state| match state.data {
+                        OutgoingPathStateEventData::Started { bytes_sent } => bytes_sent,
+                        OutgoingPathStateEventData::Failed { bytes_sent, .. } => bytes_sent,
+                        OutgoingPathStateEventData::Completed => path.bytes,
+                        OutgoingPathStateEventData::Rejected { bytes_sent, .. } => bytes_sent,
+                        OutgoingPathStateEventData::Paused { bytes_sent } => bytes_sent,
                     })
+                    .next()
                     .unwrap_or(0);
             }
 

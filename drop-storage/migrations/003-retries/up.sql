@@ -74,3 +74,7 @@ DROP TABLE transfer_active_states;
 DROP TABLE outgoing_path_cancel_states;
 DROP TABLE incoming_path_cancel_states;
 
+
+-- changes regarding file pending states
+DROP TABLE outgoing_path_pending_states;
+
