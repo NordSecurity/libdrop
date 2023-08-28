@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use drop_transfer::{utils::Hidden, File as _, Transfer};
 use serde::{Deserialize, Serialize};
 
@@ -108,9 +106,6 @@ pub enum Event {
 pub struct Config {
     pub dir_depth_limit: usize,
     pub transfer_file_limit: usize,
-    #[serde(default = "default_connection_max_retry_interval_ms")]
-    pub connection_max_retry_interval_ms: u64,
-    pub transfer_idle_lifetime_ms: u64,
     pub moose_event_path: String,
     pub moose_prod: bool,
     pub storage_path: String,
@@ -118,10 +113,6 @@ pub struct Config {
     pub max_uploads_in_flight: usize,
     #[serde(default = "default_max_requests_per_sec")]
     pub max_requests_per_sec: u32,
-}
-
-const fn default_connection_max_retry_interval_ms() -> u64 {
-    10000
 }
 
 const fn default_max_files_in_flight() -> usize {
@@ -302,8 +293,6 @@ impl From<Config> for drop_config::Config {
         let Config {
             dir_depth_limit,
             transfer_file_limit,
-            connection_max_retry_interval_ms,
-            transfer_idle_lifetime_ms,
             moose_event_path,
             moose_prod,
             storage_path,
@@ -315,10 +304,6 @@ impl From<Config> for drop_config::Config {
             drop: drop_config::DropConfig {
                 dir_depth_limit,
                 transfer_file_limit,
-                connection_max_retry_interval: Duration::from_millis(
-                    connection_max_retry_interval_ms,
-                ),
-                transfer_idle_lifetime: Duration::from_millis(transfer_idle_lifetime_ms),
                 storage_path,
                 max_uploads_in_flight,
                 max_reqs_per_sec: max_requests_per_sec,
@@ -351,7 +336,6 @@ mod tests {
         "#;
 
         let cfg: Config = serde_json::from_str(json).expect("Failed to deserialize config");
-        assert_eq!(cfg.connection_max_retry_interval_ms, 10000);
         assert_eq!(cfg.max_uploads_in_flight, 4);
         assert_eq!(cfg.max_requests_per_sec, 50);
 
@@ -376,8 +360,6 @@ mod tests {
                 drop_config::DropConfig {
                     dir_depth_limit,
                     transfer_file_limit,
-                    transfer_idle_lifetime,
-                    connection_max_retry_interval,
                     storage_path,
                     max_uploads_in_flight,
                     max_reqs_per_sec,
@@ -387,8 +369,6 @@ mod tests {
 
         assert_eq!(dir_depth_limit, 10);
         assert_eq!(transfer_file_limit, 100);
-        assert_eq!(connection_max_retry_interval, Duration::from_millis(500));
-        assert_eq!(transfer_idle_lifetime, Duration::from_millis(2000));
         assert_eq!(event_path, "test/path");
         assert_eq!(storage_path, ":memory:");
         assert_eq!(max_uploads_in_flight, 16);

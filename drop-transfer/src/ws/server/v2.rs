@@ -134,7 +134,7 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
     }
 
     fn pinger(&mut self) -> Self::Pinger {
-        ws::utils::Pinger::<PING>::new(self.state)
+        ws::utils::Pinger::<PING>::new()
     }
 }
 
@@ -393,12 +393,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 
     fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration> {
         if PING {
-            Some(
-                self.state
-                    .config
-                    .transfer_idle_lifetime
-                    .saturating_sub(last_recv_elapsed),
-            )
+            Some(drop_config::TRANFER_IDLE_LIFETIME.saturating_sub(last_recv_elapsed))
         } else {
             None
         }
