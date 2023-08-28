@@ -98,7 +98,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
     }
 
     fn pinger(&mut self) -> Self::Pinger {
-        tokio::time::interval(self.state.config.ping_interval())
+        tokio::time::interval(drop_config::PING_INTERVAL)
     }
 }
 
@@ -431,12 +431,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
     }
 
     fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration> {
-        Some(
-            self.state
-                .config
-                .transfer_idle_lifetime
-                .saturating_sub(last_recv_elapsed),
-        )
+        Some(drop_config::TRANFER_IDLE_LIFETIME.saturating_sub(last_recv_elapsed))
     }
 }
 impl Drop for HandlerLoop<'_> {
