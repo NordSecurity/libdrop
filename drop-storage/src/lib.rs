@@ -84,7 +84,6 @@ impl Storage {
                         Self::insert_incoming_path(&self.logger, &conn, transfer.id, file);
                     }
 
-                    Self::insert_incoming_path_pending_states(&self.logger, &conn, transfer.id);
                     true
                 }
                 TransferFiles::Outgoing(files) => {
@@ -98,7 +97,6 @@ impl Storage {
                         Self::insert_outgoing_path(&self.logger, &conn, transfer.id, file);
                     }
 
-                    Self::insert_outgoing_path_pending_states(&self.logger, &conn, transfer.id);
                     false
                 }
             };
@@ -368,23 +366,19 @@ impl Storage {
         }
     }
 
-    pub async fn start_incoming_file(
-        &self,
-        transfer_id: Uuid,
-        file_id: &str,
-        base_dir: &str,
-    ) -> Option<()> {
+    pub async fn start_incoming_file(&self, transfer_id: Uuid, file_id: &str, base_dir: &str) {
         let task = async {
             let conn = self.conn.lock().await;
-            sync::start_incoming_file(&conn, transfer_id, file_id, base_dir)
+
+            if sync::start_incoming_file(&conn, transfer_id, file_id, base_dir)?.is_some() {
+                Self::insert_incoming_path_pending_state(&conn, transfer_id, file_id, base_dir)?;
+            }
+
+            Result::Ok(())
         };
 
-        match task.await {
-            Ok(state) => state,
-            Err(e) => {
-                error!(self.logger, "Failed to start incoming file sync state"; "error" => %e);
-                None
-            }
+        if let Err(e) = task.await {
+            error!(self.logger, "Failed to start incoming file sync state"; "error" => %e);
         }
     }
 
@@ -544,56 +538,24 @@ impl Storage {
         }
     }
 
-    fn insert_outgoing_path_pending_states(
-        logger: &slog::Logger,
+    fn insert_incoming_path_pending_state(
         conn: &Connection,
         transfer_id: Uuid,
-    ) {
+        path_id: &str,
+        base_dir: &str,
+    ) -> Result<()> {
         let tid = transfer_id.to_string();
 
-        trace!(
-            logger,
-            "Inserting outgoing path pending state";
-            "transfer_id" => &tid);
-
-        let res = conn.execute(
+        conn.execute(
             r#"
-                INSERT INTO outgoing_path_pending_states (path_id)
-                SELECT id
-                FROM outgoing_paths WHERE transfer_id = ?1
-                "#,
-            params![tid,],
-        );
+            INSERT INTO incoming_path_pending_states (path_id, base_dir)
+            SELECT id, ?3
+            FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
+            "#,
+            params![tid, path_id, base_dir],
+        )?;
 
-        if let Err(e) = res {
-            error!(logger, "Failed to insert outgoing path pending state"; "error" => %e);
-        }
-    }
-
-    fn insert_incoming_path_pending_states(
-        logger: &slog::Logger,
-        conn: &Connection,
-        transfer_id: Uuid,
-    ) {
-        let tid = transfer_id.to_string();
-
-        trace!(
-            logger,
-            "Inserting incoming path pending state";
-            "transfer_id" => &tid);
-
-        let res = conn.execute(
-            r#"
-                INSERT INTO incoming_path_pending_states (path_id)
-                SELECT id
-                FROM incoming_paths WHERE transfer_id = ?1
-                "#,
-            params![tid,],
-        );
-
-        if let Err(e) = res {
-            error!(logger, "Failed to insert incoming path pending state"; "error" => %e);
-        }
+        Ok(())
     }
 
     pub async fn insert_outgoing_path_started_state(&self, transfer_id: Uuid, path_id: &str) {
@@ -624,30 +586,25 @@ impl Storage {
         }
     }
 
-    pub async fn insert_incoming_path_started_state(
-        &self,
-        transfer_id: Uuid,
-        path_id: &str,
-        base_dir: &str,
-    ) {
+    pub async fn insert_incoming_path_started_state(&self, transfer_id: Uuid, path_id: &str) {
         let tid = transfer_id.to_string();
 
         trace!(
-            self.logger,
-            "Inserting incoming path started state";
-            "transfer_id" => &tid,
-            "path_id" => path_id,
-            "base_dir" => base_dir);
+        self.logger,
+        "Inserting incoming path started state";
+        "transfer_id" => &tid,
+        "path_id" => path_id,
+        );
 
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
                 r#"
-                INSERT INTO incoming_path_started_states (path_id, base_dir, bytes_received)
-                SELECT id, ?3, ?4
+                INSERT INTO incoming_path_started_states (path_id, bytes_received)
+                SELECT id, ?3
                 FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
                 "#,
-                params![tid, path_id, base_dir, 0],
+                params![tid, path_id, 0],
             )?;
 
             Ok::<(), Error>(())
@@ -1290,7 +1247,7 @@ impl Storage {
                     r#"
                 SELECT DISTINCT path_hash, base_dir
                 FROM incoming_paths ip
-                INNER JOIN incoming_path_started_states ipss ON ip.id = ipss.path_id 
+                INNER JOIN incoming_path_pending_states ipss ON ip.id = ipss.path_id 
                 WHERE transfer_id = ?1
                 "#,
                 )?
@@ -1391,22 +1348,6 @@ impl Storage {
                 path.states.extend(
                     conn.prepare(
                         r#"
-                    SELECT * FROM outgoing_path_pending_states WHERE path_id = ?1
-                    "#,
-                    )?
-                    .query_map(params![path.id], |row| {
-                        Ok(OutgoingPathStateEvent {
-                            path_id: row.get("path_id")?,
-                            created_at: row.get("created_at")?,
-                            data: OutgoingPathStateEventData::Pending,
-                        })
-                    })?
-                    .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
-                );
-
-                path.states.extend(
-                    conn.prepare(
-                        r#"
                     SELECT * FROM outgoing_path_started_states WHERE path_id = ?1
                     "#,
                     )?
@@ -1500,14 +1441,14 @@ impl Storage {
                     .states
                     .iter()
                     .rev()
-                    .find_map(|state| match state.data {
-                        OutgoingPathStateEventData::Pending => None,
-                        OutgoingPathStateEventData::Started { bytes_sent } => Some(bytes_sent),
-                        OutgoingPathStateEventData::Failed { bytes_sent, .. } => Some(bytes_sent),
-                        OutgoingPathStateEventData::Completed => Some(path.bytes),
-                        OutgoingPathStateEventData::Rejected { bytes_sent, .. } => Some(bytes_sent),
-                        OutgoingPathStateEventData::Paused { bytes_sent } => Some(bytes_sent),
+                    .map(|state| match state.data {
+                        OutgoingPathStateEventData::Started { bytes_sent } => bytes_sent,
+                        OutgoingPathStateEventData::Failed { bytes_sent, .. } => bytes_sent,
+                        OutgoingPathStateEventData::Completed => path.bytes,
+                        OutgoingPathStateEventData::Rejected { bytes_sent, .. } => bytes_sent,
+                        OutgoingPathStateEventData::Paused { bytes_sent } => bytes_sent,
                     })
+                    .next()
                     .unwrap_or(0);
             }
 
@@ -1568,7 +1509,9 @@ impl Storage {
                         Ok(IncomingPathStateEvent {
                             path_id: row.get("path_id")?,
                             created_at: row.get("created_at")?,
-                            data: IncomingPathStateEventData::Pending,
+                            data: IncomingPathStateEventData::Pending {
+                                base_dir: row.get("base_dir")?,
+                            },
                         })
                     })?
                     .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
@@ -1586,7 +1529,6 @@ impl Storage {
                             created_at: row.get("created_at")?,
                             data: IncomingPathStateEventData::Started {
                                 bytes_received: row.get("bytes_received")?,
-                                base_dir: row.get("base_dir")?,
                             },
                         })
                     })?
@@ -1674,7 +1616,7 @@ impl Storage {
                     .iter()
                     .rev()
                     .find_map(|state| match state.data {
-                        IncomingPathStateEventData::Pending => None,
+                        IncomingPathStateEventData::Pending { .. } => None,
                         IncomingPathStateEventData::Started { bytes_received, .. } => {
                             Some(bytes_received)
                         }
@@ -1992,13 +1934,16 @@ mod tests {
             .insert_incoming_path_failed_state(transfer1_id, "idi1", 1, 123)
             .await;
         storage
+            .start_incoming_file(transfer1_id, "idi2", "/recv/idi2")
+            .await;
+        storage
             .insert_incoming_path_completed_state(transfer1_id, "idi2", "/recv/idi2")
             .await;
         storage
             .insert_incoming_path_reject_state(transfer1_id, "idi3", false, 234)
             .await;
         storage
-            .insert_incoming_path_started_state(transfer1_id, "idi4", "/recv/idi4")
+            .insert_incoming_path_started_state(transfer1_id, "idi4")
             .await;
 
         let transfer2_id: Uuid = "f333302e-584b-42f8-9f66-6a5ef400297d".parse().unwrap();
@@ -2062,14 +2007,10 @@ mod tests {
                 assert_eq!(inc[0].bytes, 1024);
                 assert_eq!(inc[0].bytes_received, 123);
                 assert_eq!(inc[0].file_id, "idi1");
-                assert_eq!(inc[0].states.len(), 2);
+                assert_eq!(inc[0].states.len(), 1);
 
                 assert!(matches!(
                     inc[0].states[0].data,
-                    IncomingPathStateEventData::Pending
-                ));
-                assert!(matches!(
-                    inc[0].states[1].data,
                     IncomingPathStateEventData::Failed {
                         status_code: 1,
                         bytes_received: 123
@@ -2084,8 +2025,10 @@ mod tests {
                 assert_eq!(inc[1].states.len(), 2);
 
                 assert!(matches!(
-                    inc[1].states[0].data,
-                    IncomingPathStateEventData::Pending
+                    &inc[1].states[0].data,
+                    IncomingPathStateEventData::Pending{
+                        base_dir,
+                    } if base_dir == "/recv/idi2",
                 ));
                 assert!(matches!(
                     &inc[1].states[1].data,
@@ -2099,14 +2042,10 @@ mod tests {
                 assert_eq!(inc[2].bytes, 1024);
                 assert_eq!(inc[2].bytes_received, 234);
                 assert_eq!(inc[2].file_id, "idi3");
-                assert_eq!(inc[2].states.len(), 2);
+                assert_eq!(inc[2].states.len(), 1);
 
                 assert!(matches!(
                     inc[2].states[0].data,
-                    IncomingPathStateEventData::Pending
-                ));
-                assert!(matches!(
-                    inc[2].states[1].data,
                     IncomingPathStateEventData::Rejected {
                         by_peer: false,
                         bytes_received: 234
@@ -2118,15 +2057,11 @@ mod tests {
                 assert_eq!(inc[3].bytes, 2048);
                 assert_eq!(inc[3].bytes_received, 0);
                 assert_eq!(inc[3].file_id, "idi4");
-                assert_eq!(inc[3].states.len(), 2);
+                assert_eq!(inc[3].states.len(), 1);
 
                 assert!(matches!(
-                    inc[3].states[0].data,
-                    IncomingPathStateEventData::Pending
-                ));
-                assert!(matches!(
-                    &inc[3].states[1].data,
-                    IncomingPathStateEventData::Started { base_dir, bytes_received: 0 } if base_dir == "/recv/idi4"
+                    &inc[3].states[0].data,
+                    IncomingPathStateEventData::Started { bytes_received: 0 }
                 ));
             }
             _ => panic!("Unexpected transfer type"),
@@ -2145,14 +2080,10 @@ mod tests {
                 assert_eq!(inc[0].file_id, "ido1");
                 assert_eq!(inc[0].base_path.as_deref(), Some(Path::new("/dir")));
                 assert!(inc[0].content_uri.is_none());
-                assert_eq!(inc[0].states.len(), 2);
+                assert_eq!(inc[0].states.len(), 1);
 
                 assert!(matches!(
                     inc[0].states[0].data,
-                    OutgoingPathStateEventData::Pending
-                ));
-                assert!(matches!(
-                    inc[0].states[1].data,
                     OutgoingPathStateEventData::Failed {
                         status_code: 1,
                         bytes_sent: 123
@@ -2166,14 +2097,10 @@ mod tests {
                 assert_eq!(inc[1].file_id, "ido2");
                 assert_eq!(inc[1].base_path.as_deref(), Some(Path::new("/dir")));
                 assert!(inc[1].content_uri.is_none());
-                assert_eq!(inc[1].states.len(), 2);
+                assert_eq!(inc[1].states.len(), 1);
 
                 assert!(matches!(
                     inc[1].states[0].data,
-                    OutgoingPathStateEventData::Pending
-                ));
-                assert!(matches!(
-                    inc[1].states[1].data,
                     OutgoingPathStateEventData::Completed
                 ));
 
@@ -2184,14 +2111,10 @@ mod tests {
                 assert_eq!(inc[2].file_id, "ido3");
                 assert_eq!(inc[2].base_path.as_deref(), Some(Path::new("/dir")));
                 assert!(inc[2].content_uri.is_none());
-                assert_eq!(inc[2].states.len(), 2);
+                assert_eq!(inc[2].states.len(), 1);
 
                 assert!(matches!(
                     inc[2].states[0].data,
-                    OutgoingPathStateEventData::Pending
-                ));
-                assert!(matches!(
-                    inc[2].states[1].data,
                     OutgoingPathStateEventData::Rejected {
                         by_peer: false,
                         bytes_sent: 234
@@ -2205,14 +2128,10 @@ mod tests {
                 assert_eq!(inc[3].file_id, "ido4");
                 assert_eq!(inc[3].base_path.as_deref(), Some(Path::new("/dir")));
                 assert!(inc[3].content_uri.is_none());
-                assert_eq!(inc[3].states.len(), 2);
+                assert_eq!(inc[3].states.len(), 1);
 
                 assert!(matches!(
                     inc[3].states[0].data,
-                    OutgoingPathStateEventData::Pending
-                ));
-                assert!(matches!(
-                    inc[3].states[1].data,
                     OutgoingPathStateEventData::Started { bytes_sent: 0 }
                 ));
             }
