@@ -32,12 +32,10 @@ class Scenario:
         id: str,
         desc: str,
         action_list: typing.Dict[str, ActionList],
-        dbpath: str = ":memory:",
     ):
         self._id = id
         self._desc = desc
         self._action_list = action_list
-        self._dbpath = dbpath
 
     def desc(self):
         return self._desc
