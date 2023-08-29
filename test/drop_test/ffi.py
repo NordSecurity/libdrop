@@ -36,11 +36,29 @@ class LibResult(IntEnum):
     # Bad JSON input
     NORDDROP_RES_BAD_INPUT = (3,)
 
+    # Bad JSON for API
+    NORDDROP_RES_JSON_PARSE = (4,)
+
+    # Failed to create a transfer
+    NORDDROP_RES_TRANSFER_CREATE = (5,)
+
     # Instance not started
     NORDDROP_NOT_STARTED = (6,)
 
     # Address already in used
     NORDDROP_RES_ADDR_IN_USE = (7,)
+
+    # Failed to start instance
+    NORDDROP_RES_INSTANCE_START = (8,)
+
+    # Failed to stop instance
+    NORDDROP_RES_INSTANCE_STOP = (9,)
+
+    # Invalid private key provided
+    NORDDROP_RES_INVALID_PRIVKEY = (10,)
+
+    # Database error
+    NORDDROP_RES_DB_ERROR = (11,)
 
 
 class LogLevel(IntEnum):
