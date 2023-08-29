@@ -7831,7 +7831,6 @@ scenarios = [
                     # Peer is online for a few seconds and then starts libdrop instance, expect nothing
                     action.Sleep(4),
                     action.Start("172.20.0.15"),
-                    # TODO: this event never arrives
                     action.Wait(
                         event.Receive(
                             0,

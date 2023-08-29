@@ -77,12 +77,11 @@ class ListenOnPort(Action):
         pass
 
     async def run(self, drop: ffi.Drop):
-        # bind socket to port 49111 and listen on itj
-        HOST = self._addr
-        PORT = 49111
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind((HOST, PORT))
+        s.bind((self._addr, 49111))
         s.listen()
+
+        # prevent socket from being closed
         self._socket = s
 
 
