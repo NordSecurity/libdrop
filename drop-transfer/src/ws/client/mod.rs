@@ -1,4 +1,5 @@
 mod handler;
+mod socket;
 mod v2;
 mod v4;
 mod v5;
@@ -8,11 +9,10 @@ use std::{
     net::{IpAddr, SocketAddr},
     ops::ControlFlow,
     sync::Arc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use anyhow::Context;
-use futures::{SinkExt, StreamExt};
 use hyper::{http::HeaderValue, StatusCode};
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
@@ -29,7 +29,10 @@ use tokio_tungstenite::{
 };
 use tokio_util::sync::CancellationToken;
 
-use self::handler::{HandlerInit, HandlerLoop, Uploader};
+use self::{
+    handler::{HandlerInit, HandlerLoop, Uploader},
+    socket::{WebSocket, WsStream},
+};
 use super::OutgoingFileEventTx;
 use crate::{
     auth,
@@ -42,8 +45,6 @@ use crate::{
     Event, OutgoingTransfer,
 };
 
-pub type WebSocket = WebSocketStream<TcpStream>;
-
 pub enum ClientReq {
     Reject { file: FileId },
     Fail { file: FileId },
@@ -53,7 +54,6 @@ pub enum ClientReq {
 struct RunContext<'a> {
     logger: &'a slog::Logger,
     state: &'a Arc<State>,
-    socket: WebSocket,
     xfer: &'a Arc<OutgoingTransfer>,
 }
 
@@ -129,22 +129,27 @@ async fn connect_to_peer(
     let ctx = RunContext {
         logger,
         state,
-        socket,
         xfer,
     };
 
     use protocol::Version;
     let control = match ver {
         Version::V1 => {
-            ctx.run(v2::HandlerInit::<false>::new(state, logger, alive))
+            ctx.run(socket, v2::HandlerInit::<false>::new(state, logger, alive))
                 .await
         }
         Version::V2 => {
-            ctx.run(v2::HandlerInit::<true>::new(state, logger, alive))
+            ctx.run(socket, v2::HandlerInit::<true>::new(state, logger, alive))
                 .await
         }
-        Version::V4 => ctx.run(v4::HandlerInit::new(state, logger, alive)).await,
-        Version::V5 => ctx.run(v5::HandlerInit::new(state, logger, alive)).await,
+        Version::V4 => {
+            ctx.run(socket, v4::HandlerInit::new(state, logger, alive))
+                .await
+        }
+        Version::V5 => {
+            ctx.run(socket, v5::HandlerInit::new(state, logger, alive))
+                .await
+        }
     };
 
     let _ = state.transfer_manager.outgoing_disconnect(xfer.id()).await;
@@ -155,7 +160,7 @@ async fn establish_ws_conn(
     state: &State,
     ip: IpAddr,
     logger: &Logger,
-) -> crate::Result<Option<(WebSocket, protocol::Version)>> {
+) -> crate::Result<Option<(WsStream, protocol::Version)>> {
     let mut socket = tcp_connect(ip, logger).await;
 
     let mut versions_to_try = [
@@ -284,9 +289,10 @@ async fn tcp_connect(ip: IpAddr, logger: &Logger) -> TcpStream {
 impl RunContext<'_> {
     async fn start(
         &mut self,
+        socket: &mut WebSocket,
         handler: &mut impl HandlerInit,
     ) -> crate::Result<Option<UnboundedReceiver<ClientReq>>> {
-        handler.start(&mut self.socket, self.xfer).await?;
+        handler.start(socket, self.xfer).await?;
 
         let (tx, rx) = mpsc::unbounded_channel();
         match self
@@ -303,18 +309,16 @@ impl RunContext<'_> {
         Ok(Some(rx))
     }
 
-    async fn run(mut self, mut handler: impl HandlerInit) -> ControlFlow<()> {
-        let mut api_req_rx = match self.start(&mut handler).await {
+    async fn run(mut self, socket: WsStream, mut handler: impl HandlerInit) -> ControlFlow<()> {
+        let mut socket =
+            WebSocket::new(socket, handler.recv_timeout(), drop_config::WS_SEND_TIMEOUT);
+
+        let mut api_req_rx = match self.start(&mut socket, &mut handler).await {
             Ok(Some(rx)) => rx,
             Ok(None) => {
                 let task = async {
-                    self.socket
-                        .close(None)
-                        .await
-                        .context("Failed to close WS")?;
-                    self.drain_socket()
-                        .await
-                        .context("Failed to drain socket")?;
+                    socket.close().await?;
+                    socket.drain().await?;
                     anyhow::Ok(())
                 };
                 if let Err(err) = task.await {
@@ -339,7 +343,6 @@ impl RunContext<'_> {
         let (upload_tx, mut upload_rx) = mpsc::channel(2);
         let mut ping = handler.pinger();
         let mut handler = handler.upgrade(upload_tx, self.xfer.clone());
-        let mut last_recv = Instant::now();
         let mut jobs = JoinSet::new();
 
         let task = async {
@@ -349,26 +352,25 @@ impl RunContext<'_> {
 
                     // API request
                     req = api_req_rx.recv() => {
-                        if on_req(&mut self.socket, &mut handler, self.logger, req).await?.is_break() {
+                        if on_req(&mut socket, &mut handler, self.logger, req).await?.is_break() {
                             break;
                         }
                     },
                     // Message received
-                    recv = super::utils::recv(&mut self.socket, handler.recv_timeout(last_recv.elapsed())) => {
-                        let msg =  recv?.context("Failed to receive WS message")?;
-                        last_recv = Instant::now();
+                    recv = socket.recv() => {
+                        let msg =  recv.context("Failed to receive WS message")?;
 
-                        if on_recv(&mut self.socket, &mut handler, msg, self.logger, &mut jobs).await.context("Handler on recv")?.is_break() {
+                        if on_recv(&mut socket, &mut handler, msg, self.logger, &mut jobs).await.context("Handler on recv")?.is_break() {
                             break;
                         }
                     },
                     // Message to send down the wire
                     msg = upload_rx.recv() => {
                         let MsgToSend { msg } = msg.expect("Handler channel should always be open");
-                        self.socket.send(msg).await.context("Socket sending upload msg")?;
+                        socket.send(msg).await.context("Socket sending upload msg")?;
                     },
                     _ = ping.tick() => {
-                        self.socket.send(Message::Ping(Vec::new())).await.context("Failed to send PING")?;
+                        socket.send(Message::Ping(Vec::new())).await.context("Failed to send PING")?;
                     }
                 }
             }
@@ -388,7 +390,7 @@ impl RunContext<'_> {
             ControlFlow::Continue(())
         } else {
             let drain_sock = async {
-                if let Err(err) = self.drain_socket().await {
+                if let Err(err) = socket.drain().await {
                     warn!(
                         self.logger,
                         "Failed to gracefully close the client connection: {err}"
@@ -406,11 +408,6 @@ impl RunContext<'_> {
         jobs.shutdown().await;
 
         cf
-    }
-
-    async fn drain_socket(&mut self) -> crate::Result<()> {
-        while self.socket.next().await.transpose()?.is_some() {}
-        Ok(())
     }
 }
 
@@ -530,7 +527,7 @@ async fn on_req(
         }
         ClientReq::Close => {
             debug!(logger, "Stopping client connection gracefuly");
-            socket.close(None).await.context("Failed to close WS")?;
+            socket.close().await?;
             handler.on_close(false).await;
 
             return Ok(ControlFlow::Break(()));

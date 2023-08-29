@@ -6,7 +6,6 @@ use std::{
 
 use anyhow::Context;
 use drop_core::Status;
-use futures::SinkExt;
 use slog::{debug, error, warn};
 use tokio::{
     sync::mpsc::Sender,
@@ -102,6 +101,14 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
 
     fn pinger(&mut self) -> Self::Pinger {
         ws::utils::Pinger::<PING>::new()
+    }
+
+    fn recv_timeout(&mut self) -> Duration {
+        if PING {
+            drop_config::TRANFER_IDLE_LIFETIME
+        } else {
+            Duration::MAX
+        }
     }
 }
 
@@ -343,14 +350,6 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         });
 
         futures::future::join_all(tasks).await;
-    }
-
-    fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration> {
-        if PING {
-            Some(drop_config::TRANFER_IDLE_LIFETIME.saturating_sub(last_recv_elapsed))
-        } else {
-            None
-        }
     }
 }
 

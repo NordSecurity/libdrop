@@ -20,6 +20,9 @@ pub trait HandlerInit {
 
     fn upgrade(self, msg_tx: Sender<MsgToSend>, xfer: Arc<OutgoingTransfer>) -> Self::Loop;
     fn pinger(&mut self) -> Self::Pinger;
+    fn recv_timeout(&mut self) -> Duration {
+        drop_config::TRANFER_IDLE_LIFETIME
+    }
 }
 
 #[async_trait::async_trait]
@@ -35,8 +38,6 @@ pub trait HandlerLoop {
         text: String,
     ) -> anyhow::Result<()>;
     async fn on_stop(&mut self);
-
-    fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration>;
 }
 
 #[async_trait::async_trait]
