@@ -1,21 +1,20 @@
-use std::{
-    cmp::Ordering, collections::HashMap, fs, io, net::IpAddr, path::PathBuf, sync::Arc,
-    time::Duration,
-};
+use std::{cmp::Ordering, collections::HashMap, fs, io, net::IpAddr, path::PathBuf, sync::Arc};
 
 use anyhow::Context;
 use async_cell::sync::AsyncCell;
 use drop_config::DropConfig;
 use drop_core::Status;
-use futures::{SinkExt, StreamExt};
 use slog::{debug, error, info, warn};
 use tokio::{
     sync::mpsc::{self, Sender, UnboundedSender},
     task::{AbortHandle, JoinSet},
 };
-use warp::ws::{Message, WebSocket};
+use warp::ws::Message;
 
-use super::handler::{self, MsgToSend};
+use super::{
+    handler::{self, MsgToSend},
+    socket::WebSocket,
+};
 use crate::{
     file::{self, FileToRecv},
     manager::FileTerminalState,
@@ -85,9 +84,8 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
 
     async fn recv_req(&mut self, ws: &mut WebSocket) -> anyhow::Result<Self::Request> {
         let msg = ws
-            .next()
+            .recv()
             .await
-            .context("Did not received transfer request")?
             .context("Failed to receive transfer request")?;
 
         let msg = msg.to_str().ok().context("Expected JOSN message")?;
@@ -516,10 +514,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
                 );
             }
         }
-    }
-
-    fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration> {
-        Some(drop_config::TRANFER_IDLE_LIFETIME.saturating_sub(last_recv_elapsed))
     }
 }
 

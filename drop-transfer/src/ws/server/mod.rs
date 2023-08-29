@@ -1,4 +1,5 @@
 mod handler;
+mod socket;
 mod v2;
 mod v4;
 mod v5;
@@ -11,12 +12,10 @@ use std::{
     ops::ControlFlow,
     path::{Path, PathBuf},
     sync::Arc,
-    time::Instant,
 };
 
 use anyhow::Context;
 use drop_auth::Nonce;
-use futures::{SinkExt, StreamExt};
 use handler::{Downloader, HandlerInit, HandlerLoop};
 use hyper::StatusCode;
 use slog::{debug, error, info, warn, Logger};
@@ -28,11 +27,9 @@ use tokio::{
     task::{AbortHandle, JoinSet},
 };
 use tokio_util::sync::CancellationToken;
-use warp::{
-    ws::{Message, WebSocket},
-    Filter,
-};
+use warp::{ws::Message, Filter};
 
+use self::socket::{WebSocket, WsStream};
 use super::{events::FileEventTx, IncomingFileEventTx};
 use crate::{
     auth,
@@ -203,36 +200,47 @@ pub(crate) fn spawn(
                         let ctx = RunContext {
                             logger: &logger,
                             state: state.clone(),
-                            socket,
                             stop: &stop,
                         };
 
                         match version {
                             protocol::Version::V1 => {
-                                ctx.run(v2::HandlerInit::<false>::new(
-                                    peer.ip(),
-                                    &state,
-                                    &logger,
-                                    &alive,
-                                ))
+                                ctx.run(
+                                    socket,
+                                    v2::HandlerInit::<false>::new(
+                                        peer.ip(),
+                                        &state,
+                                        &logger,
+                                        &alive,
+                                    ),
+                                )
                                 .await
                             }
                             protocol::Version::V2 => {
-                                ctx.run(v2::HandlerInit::<true>::new(
-                                    peer.ip(),
-                                    &state,
-                                    &logger,
-                                    &alive,
-                                ))
+                                ctx.run(
+                                    socket,
+                                    v2::HandlerInit::<true>::new(
+                                        peer.ip(),
+                                        &state,
+                                        &logger,
+                                        &alive,
+                                    ),
+                                )
                                 .await
                             }
                             protocol::Version::V4 => {
-                                ctx.run(v4::HandlerInit::new(peer.ip(), state, &logger, &alive))
-                                    .await
+                                ctx.run(
+                                    socket,
+                                    v4::HandlerInit::new(peer.ip(), state, &logger, &alive),
+                                )
+                                .await
                             }
                             protocol::Version::V5 => {
-                                ctx.run(v5::HandlerInit::new(peer.ip(), state, &logger, &alive))
-                                    .await
+                                ctx.run(
+                                    socket,
+                                    v5::HandlerInit::new(peer.ip(), state, &logger, &alive),
+                                )
+                                .await
                             }
                         }
                     })
@@ -287,13 +295,15 @@ pub(crate) fn spawn(
 struct RunContext<'a> {
     logger: &'a slog::Logger,
     state: Arc<State>,
-    socket: WebSocket,
     stop: &'a CancellationToken,
 }
 
 impl RunContext<'_> {
-    async fn run(mut self, mut handler: impl HandlerInit) {
-        let recv_task = handler.recv_req(&mut self.socket);
+    async fn run(self, socket: WsStream, mut handler: impl HandlerInit) {
+        let mut socket =
+            WebSocket::new(socket, handler.recv_timeout(), drop_config::WS_SEND_TIMEOUT);
+
+        let recv_task = handler.recv_req(&mut socket);
 
         let xfer = tokio::select! {
             biased;
@@ -319,7 +329,7 @@ impl RunContext<'_> {
                 xfer
             }
             Err(err) => {
-                if let Err(err) = handler.on_error(&mut self.socket, err).await {
+                if let Err(err) = handler.on_error(&mut socket, err).await {
                     error!(
                         self.logger,
                         "Failed to close connection on invalid request: {:?}", err
@@ -334,7 +344,7 @@ impl RunContext<'_> {
         let xfer_id = xfer.id();
 
         let job = async {
-            handle_client(&self.state, self.logger, self.socket, handler, xfer).await;
+            self.client_loop(socket, handler, xfer).await;
 
             let _ = self
                 .state
@@ -352,108 +362,108 @@ impl RunContext<'_> {
             _ = job => (),
         }
     }
-}
 
-async fn handle_client(
-    state: &Arc<State>,
-    logger: &slog::Logger,
-    mut socket: WebSocket,
-    mut handler: impl handler::HandlerInit,
-    xfer: Arc<IncomingTransfer>,
-) {
-    let (req_send, mut req_rx) = mpsc::unbounded_channel();
+    async fn client_loop(
+        &self,
+        mut socket: WebSocket,
+        mut handler: impl handler::HandlerInit,
+        xfer: Arc<IncomingTransfer>,
+    ) {
+        let (req_send, mut req_rx) = mpsc::unbounded_channel();
 
-    if let Err(err) = init_client_handler(state, &xfer, req_send).await {
-        error!(logger, "Failed to init trasfer: {err:?}");
-        let _ = handler.on_error(&mut socket, err).await;
-        return;
-    }
+        if let Err(err) = init_client_handler(&self.state, &xfer, req_send).await {
+            error!(self.logger, "Failed to init trasfer: {err:?}");
+            let _ = handler.on_error(&mut socket, err).await;
+            return;
+        }
 
-    let mut ping = handler.pinger();
+        let mut ping = handler.pinger();
 
-    let (send_tx, mut send_rx) = mpsc::channel(2);
-    let mut jobs = JoinSet::new();
+        let (send_tx, mut send_rx) = mpsc::channel(2);
+        let mut jobs = JoinSet::new();
 
-    let mut handler = if let Some(handler) = handler
-        .upgrade(&mut socket, &mut jobs, send_tx, xfer.clone())
-        .await
-    {
-        handler
-    } else {
-        return;
-    };
+        let mut handler = if let Some(handler) = handler
+            .upgrade(&mut socket, &mut jobs, send_tx, xfer.clone())
+            .await
+        {
+            handler
+        } else {
+            return;
+        };
 
-    let mut last_recv = Instant::now();
+        let task = async {
+            loop {
+                tokio::select! {
+                    biased;
 
-    let task = async {
-        loop {
-            tokio::select! {
-                biased;
+                    // API request
+                    req = req_rx.recv() => {
+                        if on_req(&mut socket, &mut jobs, &mut handler, self.logger, req).await?.is_break() {
+                            break;
+                        }
+                    },
+                    // Message received
+                    recv = socket.recv() => {
+                        let msg =  recv.context("Failed to receive WS message")?;
 
-                // API request
-                req = req_rx.recv() => {
-                    if on_req(&mut socket, &mut jobs, &mut handler, logger, req).await?.is_break() {
-                        break;
+                        if on_recv(&mut socket, &mut handler, msg, self.logger).await?.is_break() {
+                            break;
+                        }
+                    },
+                    // Message to send down the wire
+                    msg = send_rx.recv() => {
+                        let MsgToSend { msg } = msg.expect("Handler channel should always be open");
+                        socket.send(msg).await?;
+                    },
+                    _ = ping.tick() => {
+                        socket.send(Message::ping(Vec::new())).await.context("Failed to send PING message")?;
                     }
-                },
-                // Message received
-                recv = super::utils::recv(&mut socket, handler.recv_timeout(last_recv.elapsed())) => {
-                    let msg =  recv?.context("Failed to receive WS message")?;
-                    last_recv = Instant::now();
+                };
+            }
+            anyhow::Ok(())
+        };
 
-                    if on_recv(&mut socket, &mut handler, msg, logger).await?.is_break() {
-                        break;
-                    }
-                },
-                // Message to send down the wire
-                msg = send_rx.recv() => {
-                    let MsgToSend { msg } = msg.expect("Handler channel should always be open");
-                    socket.send(msg).await?;
-                },
-                _ = ping.tick() => {
-                    socket.send(Message::ping(Vec::new())).await.context("Failed to send PING message")?;
+        let result = task.await;
+
+        if let Err(err) = result {
+            info!(
+                self.logger,
+                "WS connection broke for {}: {err:?}",
+                xfer.id()
+            );
+        } else {
+            let drain_sock = async {
+                let task = async {
+                    // Drain messages
+                    let _ = socket.drain().await;
+                    socket.close().await
+                };
+
+                if let Err(err) = task.await {
+                    warn!(
+                        self.logger,
+                        "Failed to gracefully close the client connection: {}", err
+                    );
+                } else {
+                    debug!(self.logger, "WS client disconnected");
                 }
             };
-        }
-        anyhow::Ok(())
-    };
 
-    let result = task.await;
-
-    if let Err(err) = result {
-        info!(logger, "WS connection broke for {}: {err:?}", xfer.id());
-    } else {
-        let drain_sock = async {
-            let task = async {
-                // Drain messages
-                while socket.next().await.is_some() {}
-                socket.close().await
+            let remove_xfer = async {
+                if let Err(err) = self.state.transfer_manager.incoming_remove(xfer.id()).await {
+                    warn!(
+                        self.logger,
+                        "Failed to clear sync state for {}: {err}",
+                        xfer.id()
+                    );
+                }
             };
 
-            if let Err(err) = task.await {
-                warn!(
-                    logger,
-                    "Failed to gracefully close the client connection: {}", err
-                );
-            } else {
-                debug!(logger, "WS client disconnected");
-            }
-        };
+            tokio::join!(handler.finalize_success(), drain_sock, remove_xfer);
+        }
 
-        let remove_xfer = async {
-            if let Err(err) = state.transfer_manager.incoming_remove(xfer.id()).await {
-                warn!(
-                    logger,
-                    "Failed to clear sync state for {}: {err}",
-                    xfer.id()
-                );
-            }
-        };
-
-        tokio::join!(handler.finalize_success(), drain_sock, remove_xfer);
+        jobs.shutdown().await;
     }
-
-    jobs.shutdown().await;
 }
 
 impl FileXferTask {
