@@ -7822,7 +7822,7 @@ scenarios = [
                     action.Stop(),
                     # try again and expect no events and no activity
                     action.Start("172.20.0.5", "/tmp/data.base"),
-                    action.NoEvent(6),
+                    action.NoEvent(10),
                     action.Stop(),
                 ]
             ),
