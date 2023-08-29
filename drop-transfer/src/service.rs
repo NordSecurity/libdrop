@@ -85,7 +85,7 @@ impl Service {
                 stop.clone(),
                 guard.clone(),
             )?;
-            
+
             manager::resume(&state, &logger, &guard, &stop).await;
             Ok(Self {
                 state,
