@@ -669,7 +669,7 @@ fn open_database(
                             error as i32,
                             err.to_string(),
                             "Failed to open DB after cleanup".to_string(),
-                            "Database Error".to_string(),
+                            "DB Error".to_string(),
                         );
                         error!(
                             logger,
