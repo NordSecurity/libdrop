@@ -21,3 +21,7 @@ base64 = "0.21.3"
 uuid = { version = "1.4", features = ["v4", "serde"] }
 url = { version = "2.4.1", features = ["serde"] }
 strum = { version = "0.25.0", features = ["derive"] }
+anyhow = "1.0.75"
+libc = "0.2.147"
+sha2 = "0.10.7"
+thiserror = "1.0"
