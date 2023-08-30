@@ -7,7 +7,7 @@ use std::{path::Path, vec};
 use include_dir::{include_dir, Dir};
 use rusqlite::{params, Connection, Transaction};
 use rusqlite_migration::Migrations;
-use slog::{error, trace, warn, Logger};
+use slog::{debug, error, trace, warn, Logger};
 use tokio::sync::Mutex;
 use types::{
     DbTransferType, FileSyncState, IncomingFileToRetry, IncomingPath, IncomingPathStateEvent,
@@ -1272,6 +1272,33 @@ impl Storage {
                 error!(self.logger, "Failed to fetch temporary file locations"; "error" => %e);
                 vec![]
             }
+        }
+    }
+
+    pub async fn cleanup_garbage_transfers(&self) {
+        trace!(self.logger, "Removing garbage transfers");
+
+        let task = async {
+            let conn = self.conn.lock().await;
+
+            let count = conn.execute(
+                r#"
+                DELETE FROM transfers WHERE id IN (
+                    SELECT t.id 
+                    FROM transfers t
+                    LEFT JOIN sync_transfer st ON t.id = st.transfer_id
+                    WHERE t.is_deleted AND st.sync_id IS NULL                    
+                )
+                "#,
+                params![],
+            )?;
+
+            debug!(self.logger, "Removed {count} garbage transfers");
+            Result::Ok(())
+        };
+
+        if let Err(err) = task.await {
+            error!(self.logger, "Failed to remove garbage transfers: {err}");
         }
     }
 
