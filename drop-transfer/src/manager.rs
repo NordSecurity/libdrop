@@ -960,12 +960,25 @@ pub(crate) async fn resume(
     guard: &AliveGuard,
     stop: &CancellationToken,
 ) {
-    state.storage.cleanup_garbage_transfers().await;
+    let xfers = state.transfer_manager.outgoing.lock().await;
 
-    *state.transfer_manager.incoming.lock().await =
-        restore_incoming(&state.storage, &state.config, logger).await;
-    *state.transfer_manager.outgoing.lock().await =
-        restore_outgoing(state, logger, guard, stop).await;
+    for xstate in xfers.values() {
+        ws::client::spawn(
+            state.clone(),
+            xstate.xfer.clone(),
+            logger.clone(),
+            guard.clone(),
+            stop.clone(),
+        );
+    }
+}
+
+pub(crate) async fn restore_transfers_state(state: &Arc<State>, logger: &Logger) {
+    let incoming = restore_incoming(&state.storage, &state.config, logger).await;
+    *state.transfer_manager.incoming.lock().await = incoming;
+
+    let outgoing = restore_outgoing(state, logger).await;
+    *state.transfer_manager.outgoing.lock().await = outgoing;
 }
 
 async fn restore_incoming(
@@ -1084,12 +1097,7 @@ async fn restore_incoming(
     xfers
 }
 
-async fn restore_outgoing(
-    state: &Arc<State>,
-    logger: &Logger,
-    guard: &AliveGuard,
-    stop: &CancellationToken,
-) -> HashMap<Uuid, OutgoingState> {
+async fn restore_outgoing(state: &Arc<State>, logger: &Logger) -> HashMap<Uuid, OutgoingState> {
     let transfers = state.storage.outgoing_transfers_to_resume().await;
 
     let mut xfers = HashMap::new();
@@ -1165,16 +1173,6 @@ async fn restore_outgoing(
                 );
             }
         }
-    }
-
-    for xstate in xfers.values() {
-        ws::client::spawn(
-            state.clone(),
-            xstate.xfer.clone(),
-            logger.clone(),
-            guard.clone(),
-            stop.clone(),
-        );
     }
 
     xfers
