@@ -960,6 +960,8 @@ pub(crate) async fn resume(
     guard: &AliveGuard,
     stop: &CancellationToken,
 ) {
+    state.storage.cleanup_garbage_transfers().await;
+
     *state.transfer_manager.incoming.lock().await =
         restore_incoming(&state.storage, &state.config, logger).await;
     *state.transfer_manager.outgoing.lock().await =
