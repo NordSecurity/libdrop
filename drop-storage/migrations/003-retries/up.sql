@@ -86,3 +86,7 @@ WHERE incoming_path_pending_states.path_id = ipss.path_id;
 
 ALTER TABLE incoming_path_started_states DROP COLUMN base_dir;
 
+
+-- transfers soft deletion
+ALTER TABLE transfers ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT FALSE CHECK (is_deleted IN (FALSE, TRUE));
+

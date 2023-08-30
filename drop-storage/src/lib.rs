@@ -7,7 +7,7 @@ use std::{path::Path, vec};
 use include_dir::{include_dir, Dir};
 use rusqlite::{params, Connection, Transaction};
 use rusqlite_migration::Migrations;
-use slog::{error, trace, warn, Logger};
+use slog::{debug, error, trace, warn, Logger};
 use tokio::sync::Mutex;
 use types::{
     DbTransferType, FileSyncState, IncomingFileToRetry, IncomingPath, IncomingPathStateEvent,
@@ -865,7 +865,8 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
-                "DELETE FROM transfers WHERE created_at < datetime(?1, 'unixepoch')",
+                "UPDATE transfers SET is_deleted = TRUE WHERE created_at < datetime(?1, \
+                 'unixepoch')",
                 params![until_timestamp],
             )?;
 
@@ -886,7 +887,10 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             for id in transfer_ids {
-                conn.execute("DELETE FROM transfers WHERE id = ?1", params![id])?;
+                conn.execute(
+                    "UPDATE transfers SET is_deleted = TRUE WHERE id = ?1",
+                    params![id],
+                )?;
             }
 
             Ok::<(), Error>(())
@@ -1064,7 +1068,7 @@ impl Storage {
                 .prepare(
                     r#"
                 SELECT id, peer, created_at, is_outgoing FROM transfers
-                WHERE created_at >= datetime(?1, 'unixepoch')
+                WHERE created_at >= datetime(?1, 'unixepoch') AND NOT is_deleted
                 "#,
                 )?
                 .query_map(params![since_timestamp], |row| {
@@ -1268,6 +1272,37 @@ impl Storage {
                 error!(self.logger, "Failed to fetch temporary file locations"; "error" => %e);
                 vec![]
             }
+        }
+    }
+
+    pub async fn cleanup_garbage_transfers(&self) -> usize {
+        trace!(self.logger, "Removing garbage transfers");
+
+        let task = async {
+            let conn = self.conn.lock().await;
+
+            let count = conn.execute(
+                r#"
+                DELETE FROM transfers WHERE id IN (
+                    SELECT t.id 
+                    FROM transfers t
+                    LEFT JOIN sync_transfer st ON t.id = st.transfer_id
+                    WHERE t.is_deleted AND st.sync_id IS NULL                    
+                )
+                "#,
+                params![],
+            )?;
+
+            debug!(self.logger, "Removed {count} garbage transfers");
+            Result::Ok(count)
+        };
+
+        match task.await {
+            Err(err) => {
+                error!(self.logger, "Failed to remove garbage transfers: {err}");
+                0
+            }
+            Ok(count) => count,
         }
     }
 
@@ -2137,5 +2172,53 @@ mod tests {
             }
             _ => panic!("Unexpected transfer type"),
         };
+    }
+
+    #[tokio::test]
+    async fn removing_garbage_transfers() {
+        let logger = slog::Logger::root(slog::Discard, slog::o!());
+        let storage = Storage::new(logger, ":memory:").unwrap();
+
+        let transfer_id_1: Uuid = "23e488a4-0521-11ee-be56-0242ac120002".parse().unwrap();
+        let transfer_id_2: Uuid = "23e48d7c-0521-11ee-be56-0242ac120002".parse().unwrap();
+
+        let transfer = TransferInfo {
+            id: transfer_id_1,
+            peer: "1.2.3.4".to_string(),
+            files: TransferFiles::Incoming(vec![]),
+        };
+        storage.insert_transfer(&transfer).await;
+
+        let transfer = TransferInfo {
+            id: transfer_id_2,
+            peer: "5.6.7.8".to_string(),
+            files: TransferFiles::Outgoing(vec![]),
+        };
+        storage.insert_transfer(&transfer).await;
+
+        // No garbage to collect
+        let count = storage.cleanup_garbage_transfers().await;
+        assert_eq!(count, 0);
+
+        storage.purge_transfers(&[transfer_id_1.to_string()]).await;
+
+        // Still the transfer was not synced
+        let count = storage.cleanup_garbage_transfers().await;
+        assert_eq!(count, 0);
+
+        let cleared = storage.transfer_sync_clear(transfer_id_1).await;
+        assert!(cleared.is_some());
+
+        // Now the transfer can be garbage collected
+        let count = storage.cleanup_garbage_transfers().await;
+        assert_eq!(count, 1);
+
+        let count = storage.cleanup_garbage_transfers().await;
+        assert_eq!(count, 0);
+
+        // Ensure we haven't deleted the second transfer
+        let transfers = storage.transfers_since(0).await;
+        assert_eq!(transfers.len(), 1);
+        assert_eq!(transfers[0].id, transfer_id_2);
     }
 }
