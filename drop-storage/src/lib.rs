@@ -1275,7 +1275,7 @@ impl Storage {
         }
     }
 
-    pub async fn cleanup_garbage_transfers(&self) {
+    pub async fn cleanup_garbage_transfers(&self) -> usize {
         trace!(self.logger, "Removing garbage transfers");
 
         let task = async {
@@ -1294,11 +1294,15 @@ impl Storage {
             )?;
 
             debug!(self.logger, "Removed {count} garbage transfers");
-            Result::Ok(())
+            Result::Ok(count)
         };
 
-        if let Err(err) = task.await {
-            error!(self.logger, "Failed to remove garbage transfers: {err}");
+        match task.await {
+            Err(err) => {
+                error!(self.logger, "Failed to remove garbage transfers: {err}");
+                0
+            }
+            Ok(count) => count,
         }
     }
 
@@ -2168,5 +2172,53 @@ mod tests {
             }
             _ => panic!("Unexpected transfer type"),
         };
+    }
+
+    #[tokio::test]
+    async fn removing_garbage_transfers() {
+        let logger = slog::Logger::root(slog::Discard, slog::o!());
+        let storage = Storage::new(logger, ":memory:").unwrap();
+
+        let transfer_id_1: Uuid = "23e488a4-0521-11ee-be56-0242ac120002".parse().unwrap();
+        let transfer_id_2: Uuid = "23e48d7c-0521-11ee-be56-0242ac120002".parse().unwrap();
+
+        let transfer = TransferInfo {
+            id: transfer_id_1,
+            peer: "1.2.3.4".to_string(),
+            files: TransferFiles::Incoming(vec![]),
+        };
+        storage.insert_transfer(&transfer).await;
+
+        let transfer = TransferInfo {
+            id: transfer_id_2,
+            peer: "5.6.7.8".to_string(),
+            files: TransferFiles::Outgoing(vec![]),
+        };
+        storage.insert_transfer(&transfer).await;
+
+        // No garbage to collect
+        let count = storage.cleanup_garbage_transfers().await;
+        assert_eq!(count, 0);
+
+        storage.purge_transfers(&[transfer_id_1.to_string()]).await;
+
+        // Still the transfer was not synced
+        let count = storage.cleanup_garbage_transfers().await;
+        assert_eq!(count, 0);
+
+        let cleared = storage.transfer_sync_clear(transfer_id_1).await;
+        assert!(cleared.is_some());
+
+        // Now the transfer can be garbage collected
+        let count = storage.cleanup_garbage_transfers().await;
+        assert_eq!(count, 1);
+
+        let count = storage.cleanup_garbage_transfers().await;
+        assert_eq!(count, 0);
+
+        // Ensure we haven't deleted the second transfer
+        let transfers = storage.transfers_since(0).await;
+        assert_eq!(transfers.len(), 1);
+        assert_eq!(transfers[0].id, transfer_id_2);
     }
 }
