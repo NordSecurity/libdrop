@@ -10,13 +10,13 @@ name = "udrop"
 [dev-dependencies]
 clap = { version = "4.2", features = ["cargo"] }
 tokio = { version = "1", features = ["signal"] }
-slog-async = "2.7.0"
+slog-async = "2.8.0"
 slog-scope = "4.4.0"
 slog-term = "2.9"
-tempfile = "3.5.0"
+tempfile = "3.8.0"
 
 [dependencies]
-anyhow = "1.0.70"
+anyhow = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 url = { workspace = true }
@@ -28,24 +28,24 @@ drop-storage = { version = "1.0.0", path = "../drop-storage" }
 futures = "0.3"
 futures-util = "0.3"
 hex = { version = "0.4.3", features = ["serde"] }
-hyper = "0.14.26"
+hyper = "0.14.27"
 infer = "0.13.0"
-libc = "0.2"
+libc = { workspace = true }
 serde = { workspace = true }
-serde_json = "1.0.96"
+serde_json = { workspace = true }
 sha-1 = "0.10"
-sha2 = "0.10.6"
+sha2 = { workspace = true }
 slog = { workspace = true }
 strum = { workspace = true }
-thiserror = "1.0"
+thiserror = { workspace = true }
 tokio = { workspace = true }
-tokio-tungstenite = "0.18.0"
-tokio-util = "0.7.7"
+tokio-tungstenite = "0.20.0"
+tokio-util = "0.7.8"
 uuid = { workspace = true }
-warp = { version = "0.3.4", default-features = false, features = ["websocket"] }
+warp = { version = "0.3.5", default-features = false, features = ["websocket"] }
 walkdir = "2.3.3"
 async_cell = "0.2.2"
-governor = { version = "0.5.1", default-features = false, features = ["dashmap", "std"] }
+governor = { version = "0.6.0", default-features = false, features = ["dashmap", "std"] }
 once_cell = "1.18.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
