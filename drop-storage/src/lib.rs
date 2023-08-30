@@ -865,7 +865,8 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
-                "DELETE FROM transfers WHERE created_at < datetime(?1, 'unixepoch')",
+                "UPDATE transfers SET is_deleted = TRUE WHERE created_at < datetime(?1, \
+                 'unixepoch')",
                 params![until_timestamp],
             )?;
 
@@ -886,7 +887,10 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             for id in transfer_ids {
-                conn.execute("DELETE FROM transfers WHERE id = ?1", params![id])?;
+                conn.execute(
+                    "UPDATE transfers SET is_deleted = TRUE WHERE id = ?1",
+                    params![id],
+                )?;
             }
 
             Ok::<(), Error>(())
@@ -1064,7 +1068,7 @@ impl Storage {
                 .prepare(
                     r#"
                 SELECT id, peer, created_at, is_outgoing FROM transfers
-                WHERE created_at >= datetime(?1, 'unixepoch')
+                WHERE created_at >= datetime(?1, 'unixepoch') AND NOT is_deleted
                 "#,
                 )?
                 .query_map(params![since_timestamp], |row| {
