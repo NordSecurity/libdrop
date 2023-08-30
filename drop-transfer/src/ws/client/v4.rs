@@ -1,12 +1,10 @@
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     sync::Arc,
-    time::Duration,
 };
 
 use anyhow::Context;
 use drop_core::Status;
-use futures::SinkExt;
 use slog::{debug, error, warn};
 use tokio::{
     sync::mpsc::Sender,
@@ -409,10 +407,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         });
 
         futures::future::join_all(tasks).await;
-    }
-
-    fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration> {
-        Some(drop_config::TRANFER_IDLE_LIFETIME.saturating_sub(last_recv_elapsed))
     }
 }
 

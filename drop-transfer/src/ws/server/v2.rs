@@ -10,16 +10,18 @@ use std::{
 use anyhow::Context;
 use drop_config::DropConfig;
 use drop_core::Status;
-use futures::{SinkExt, StreamExt};
 use sha1::Digest;
 use slog::{debug, error, warn};
 use tokio::{
     sync::mpsc::{self, Sender, UnboundedSender},
     task::{AbortHandle, JoinSet},
 };
-use warp::ws::{Message, WebSocket};
+use warp::ws::Message;
 
-use super::handler::{self, MsgToSend};
+use super::{
+    handler::{self, MsgToSend},
+    socket::WebSocket,
+};
 use crate::{
     file::FileSubPath,
     manager::FileTerminalState,
@@ -85,9 +87,8 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
 
     async fn recv_req(&mut self, ws: &mut WebSocket) -> anyhow::Result<Self::Request> {
         let msg = ws
-            .next()
+            .recv()
             .await
-            .context("Did not received transfer request")?
             .context("Failed to receive transfer request")?;
 
         let msg = msg.to_str().ok().context("Expected JOSN message")?;
@@ -135,6 +136,14 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
 
     fn pinger(&mut self) -> Self::Pinger {
         ws::utils::Pinger::<PING>::new()
+    }
+
+    fn recv_timeout(&mut self) -> Duration {
+        if PING {
+            drop_config::TRANFER_IDLE_LIFETIME
+        } else {
+            Duration::MAX
+        }
     }
 }
 
@@ -389,14 +398,6 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     async fn finalize_success(mut self) {
         debug!(self.logger, "Finalizing");
         self.on_stop().await;
-    }
-
-    fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration> {
-        if PING {
-            Some(drop_config::TRANFER_IDLE_LIFETIME.saturating_sub(last_recv_elapsed))
-        } else {
-            None
-        }
     }
 }
 
