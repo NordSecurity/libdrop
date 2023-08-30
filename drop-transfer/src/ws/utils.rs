@@ -1,8 +1,3 @@
-use std::time::Duration;
-
-use anyhow::Context;
-use futures::StreamExt;
-
 pub struct Pinger<const PING: bool = true> {
     interval: tokio::time::Interval,
 }
@@ -23,23 +18,6 @@ impl<const PING: bool> super::Pinger for Pinger<PING> {
             std::future::pending::<()>().await;
         }
     }
-}
-
-pub async fn recv<S, M, E>(stream: &mut S, timeout: Option<Duration>) -> anyhow::Result<Option<M>>
-where
-    S: StreamExt<Item = Result<M, E>> + Unpin,
-    E: std::error::Error + Send + Sync + 'static,
-{
-    let msg = if let Some(timeout) = timeout {
-        tokio::time::timeout(timeout, stream.next())
-            .await
-            .context("Receive timeout")?
-            .transpose()?
-    } else {
-        stream.next().await.transpose()?
-    };
-
-    Ok(msg)
 }
 
 #[async_trait::async_trait]

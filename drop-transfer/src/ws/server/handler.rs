@@ -1,8 +1,9 @@
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use tokio::{sync::mpsc::Sender, task::JoinSet};
-use warp::ws::{Message, WebSocket};
+use warp::ws::Message;
 
+use super::socket::WebSocket;
 use crate::{transfer::IncomingTransfer, utils::Hidden, ws, FileId};
 
 pub struct MsgToSend {
@@ -26,6 +27,9 @@ pub trait HandlerInit {
     ) -> Option<Self::Loop>;
 
     fn pinger(&mut self) -> Self::Pinger;
+    fn recv_timeout(&mut self) -> Duration {
+        drop_config::TRANFER_IDLE_LIFETIME
+    }
 }
 
 #[async_trait::async_trait]
@@ -45,8 +49,6 @@ pub trait HandlerLoop {
     async fn on_bin_msg(&mut self, ws: &mut WebSocket, bytes: Vec<u8>) -> anyhow::Result<()>;
 
     async fn finalize_success(self);
-
-    fn recv_timeout(&mut self, last_recv_elapsed: Duration) -> Option<Duration>;
 }
 
 pub trait Request {
