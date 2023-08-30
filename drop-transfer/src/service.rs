@@ -77,6 +77,10 @@ impl Service {
 
             let guard = waiter.guard();
 
+            state.storage.cleanup_garbage_transfers().await;
+
+            manager::restore_transfers_state(&state, &logger).await;
+
             ws::server::spawn(
                 addr,
                 state.clone(),
@@ -87,6 +91,7 @@ impl Service {
             )?;
 
             manager::resume(&state, &logger, &guard, &stop).await;
+
             Ok(Self {
                 state,
                 stop,
