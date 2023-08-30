@@ -1,11 +1,12 @@
 from typing import Callable
 import os
 import socket
+import time
 
 
 class DNSResolver:  # TODO: the name is a lie, it's more of a PeerResolver
     def __init__(self):
-        self._peers = {}
+        self._peer_mappings = {}
         self._cache = {}
 
         # peers do not know initially how their peers are named, and because
@@ -28,19 +29,23 @@ class DNSResolver:  # TODO: the name is a lie, it's more of a PeerResolver
         for peer_env_var in peer_env_vars:
             if peer_env_var in os.environ:
                 peer = os.environ[peer_env_var]
-                self._peers[peer_env_var] = peer
+                self._peer_mappings[peer_env_var] = peer
                 print(f"Found peer {peer_env_var}={peer}", flush=True)
 
-        if len(self._peers) == 0:
+        if len(self._peer_mappings) == 0:
             print("No peers found in DNSResolver", flush=True)
 
+        print(
+            f"Initialized DNS resolver with {len(self._peer_mappings)} peers",
+            flush=True,
+        )
+        print(f"Initialized DNS resolver with {self._peer_mappings} peers", flush=True)
+
     def resolve(self, peer: str) -> str:
-        hostname = self._peers[peer]
+        hostname = self._peer_mappings[peer]
 
         if hostname in self._cache:
             return self._cache[hostname]
-
-        import socket
 
         for _ in range(5):
             try:
@@ -49,8 +54,7 @@ class DNSResolver:  # TODO: the name is a lie, it's more of a PeerResolver
                 return ip
 
             except:
-                print("Unable to resolve hostname, retrying in 1s")
-                import time
+                print(f"Unable to resolve hostname({hostname}), retrying in 1s")
 
                 time.sleep(1)
 
