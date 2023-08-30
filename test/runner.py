@@ -100,7 +100,7 @@ def run():
         scenarios = all_scenarios
 
     total_time = 0
-
+    start_time = time.time()
     print(f"Will execute {len(scenarios)} scenario(s): {[s.id() for s in scenarios]}")
 
     client = prepare_docker()
@@ -151,6 +151,7 @@ def run():
             info = ContainerInfo(container, scenario.id(), TESTCASE_TIMEOUT)
             results[scenario.id()].append(info)
 
+    total_time = start_time - time.time()
     # total_cnt is total count of containers in all scenarios
     total_cnt = 0
 
@@ -221,7 +222,7 @@ def run():
                 )
                 sys.exit(1)
 
-            print(f"*** Test suite finished in {total_time}s", flush=True)
+            print(f"*** Test suite finished in {round(total_time)}s", flush=True)
             sys.exit(0)
 
         sleep_between_tests_s = 2
