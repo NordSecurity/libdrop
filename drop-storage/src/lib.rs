@@ -865,8 +865,14 @@ impl Storage {
         let task = async {
             let conn = self.conn.lock().await;
             conn.execute(
-                "UPDATE transfers SET is_deleted = TRUE WHERE created_at < datetime(?1, \
-                 'unixepoch')",
+                r#"
+                UPDATE transfers SET is_deleted = TRUE
+                WHERE created_at < datetime(?1, 'unixepoch')
+                    AND (
+                        id IN(SELECT transfer_id FROM transfer_cancel_states) OR
+                        id IN(SELECT transfer_id FROM transfer_failed_states)
+                    )
+                "#,
                 params![until_timestamp],
             )?;
 
@@ -886,11 +892,26 @@ impl Storage {
 
         let task = async {
             let conn = self.conn.lock().await;
+
             for id in transfer_ids {
-                conn.execute(
-                    "UPDATE transfers SET is_deleted = TRUE WHERE id = ?1",
+                let count = conn.execute(
+                    r#"
+                    UPDATE transfers SET is_deleted = TRUE
+                    WHERE id = ?1
+                        AND (
+                            id IN(SELECT transfer_id FROM transfer_cancel_states) OR
+                            id IN(SELECT transfer_id FROM transfer_failed_states)
+                        )
+                    "#,
                     params![id],
                 )?;
+
+                if count < 1 {
+                    warn!(
+                        self.logger,
+                        "Failed to purge transfer: {id}. It may not be in the terminal state"
+                    );
+                }
             }
 
             Ok::<(), Error>(())
@@ -1756,8 +1777,22 @@ mod tests {
             .purge_transfers(&[transfer_id_1.to_string(), transfer_id_2.to_string()])
             .await;
 
+        // Because the transfers haven't reached the terminal state
         let transfers = storage.transfers_since(0).await;
+        assert_eq!(transfers.len(), 2);
 
+        storage
+            .insert_transfer_cancel_state(transfer_id_1, false)
+            .await;
+        storage
+            .insert_transfer_failed_state(transfer_id_2, 42)
+            .await;
+
+        storage
+            .purge_transfers(&[transfer_id_1.to_string(), transfer_id_2.to_string()])
+            .await;
+
+        let transfers = storage.transfers_since(0).await;
         assert_eq!(transfers.len(), 0);
     }
 
@@ -2195,6 +2230,14 @@ mod tests {
             files: TransferFiles::Outgoing(vec![]),
         };
         storage.insert_transfer(&transfer).await;
+
+        // Transfers need to be termiated before any purging is allowed
+        storage
+            .insert_transfer_cancel_state(transfer_id_1, false)
+            .await;
+        storage
+            .insert_transfer_cancel_state(transfer_id_2, false)
+            .await;
 
         // No garbage to collect
         let count = storage.cleanup_garbage_transfers().await;
