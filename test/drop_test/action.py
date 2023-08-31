@@ -515,7 +515,9 @@ class WaitForResume(Action):
         file_list = glob.glob(self._tmp_file_path)
         stat = os.stat(file_list[0])  # just take the first find
 
-        await drop._events.wait_for(event.Start(self._uuid_slot, self._file_id), False)
+        await drop._events.wait_for(
+            event.Start(self._uuid_slot, self._file_id, transferred=stat.st_size), False
+        )
         await drop._events.wait_for(
             event.Progress(self._uuid_slot, self._file_id, stat.st_size), False
         )
