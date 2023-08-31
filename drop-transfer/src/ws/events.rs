@@ -149,11 +149,12 @@ impl FileEventTx<IncomingTransfer> {
         .await
     }
 
-    pub async fn start(&self, base_dir: impl Into<String>) {
+    pub async fn start(&self, base_dir: impl Into<String>, offset: u64) {
         self.start_inner(crate::Event::FileDownloadStarted(
             self.xfer.clone(),
             self.file_id.clone(),
             base_dir.into(),
+            offset,
         ))
         .await
     }
@@ -206,10 +207,11 @@ impl FileEventTx<IncomingTransfer> {
 }
 
 impl FileEventTx<OutgoingTransfer> {
-    pub async fn start(&self) {
+    pub async fn start(&self, offset: u64) {
         self.start_inner(crate::Event::FileUploadStarted(
             self.xfer.clone(),
             self.file_id.clone(),
+            offset,
         ))
         .await
     }
