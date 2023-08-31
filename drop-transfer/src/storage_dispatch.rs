@@ -20,14 +20,24 @@ impl<'a> StorageDispatch<'a> {
 
     pub async fn handle_event(&mut self, event: &crate::Event) {
         match event {
-            crate::Event::FileUploadStarted(transfer, file_id) => {
+            crate::Event::FileUploadStarted(transfer, file_id, bytes) => {
+                self.store_progres(transfer.id(), file_id, *bytes as _);
                 self.storage
-                    .insert_outgoing_path_started_state(transfer.id(), file_id.as_ref())
+                    .insert_outgoing_path_started_state(
+                        transfer.id(),
+                        file_id.as_ref(),
+                        *bytes as _,
+                    )
                     .await
             }
-            crate::Event::FileDownloadStarted(transfer, file_id, ..) => {
+            crate::Event::FileDownloadStarted(transfer, file_id, _, bytes) => {
+                self.store_progres(transfer.id(), file_id, *bytes as _);
                 self.storage
-                    .insert_incoming_path_started_state(transfer.id(), file_id.as_ref())
+                    .insert_incoming_path_started_state(
+                        transfer.id(),
+                        file_id.as_ref(),
+                        *bytes as _,
+                    )
                     .await
             }
             crate::Event::FileDownloadSuccess(transfer, download) => {

@@ -425,7 +425,7 @@ async fn start_upload(
         .outgoing_file_events(xfer.id(), &file_id)
         .await?;
 
-    events.start().await;
+    events.start(uploader.offset()).await;
 
     let upload_job = {
         async move {

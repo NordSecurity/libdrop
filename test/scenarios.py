@@ -3447,18 +3447,6 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
-                            event.Start(
-                                0,
-                                FILES[
-                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                                ].id,
-                            ),
-                            event.Start(
-                                1,
-                                FILES[
-                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                                ].id,
-                            ),
                             event.FinishFileFailed(
                                 0,
                                 FILES[
@@ -3531,18 +3519,6 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
-                            event.Start(
-                                0,
-                                FILES[
-                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                                ].id,
-                            ),
-                            event.Start(
-                                1,
-                                FILES[
-                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                                ].id,
-                            ),
                             event.FinishFileFailed(
                                 0,
                                 FILES[
@@ -3866,7 +3842,9 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.Start(0, FILES["testfile-big"].id, transferred=None)
+                    ),
                     action.Wait(event.FinishFileUploaded(0, FILES["testfile-big"].id)),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
@@ -4044,8 +4022,12 @@ scenarios = [
                             event.Start(0, FILES["nested/big/testfile-02"].id),
                             event.Paused(0, FILES["nested/big/testfile-01"].id),
                             event.Paused(0, FILES["nested/big/testfile-02"].id),
-                            event.Start(0, FILES["nested/big/testfile-01"].id),
-                            event.Start(0, FILES["nested/big/testfile-02"].id),
+                            event.Start(
+                                0, FILES["nested/big/testfile-01"].id, transferred=None
+                            ),
+                            event.Start(
+                                0, FILES["nested/big/testfile-02"].id, transferred=None
+                            ),
                             event.FinishFileUploaded(
                                 0, FILES["nested/big/testfile-01"].id
                             ),
@@ -4113,8 +4095,12 @@ scenarios = [
                     action.Start("172.20.0.15", dbpath="/tmp/db/21-3-stimpy.sqlite"),
                     action.WaitRacy(
                         [
-                            event.Start(0, FILES["nested/big/testfile-01"].id),
-                            event.Start(0, FILES["nested/big/testfile-02"].id),
+                            event.Start(
+                                0, FILES["nested/big/testfile-01"].id, transferred=None
+                            ),
+                            event.Start(
+                                0, FILES["nested/big/testfile-02"].id, transferred=None
+                            ),
                             event.FinishFileDownloaded(
                                 0,
                                 FILES["nested/big/testfile-01"].id,
@@ -5424,7 +5410,9 @@ scenarios = [
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     # start the sender again
                     action.Start("172.20.0.5", dbpath="/tmp/db/29-1-ren.sqlite"),
-                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.Start(0, FILES["testfile-big"].id, transferred=None)
+                    ),
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileUploaded(
@@ -5506,7 +5494,9 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.Start(0, FILES["testfile-big"].id, transferred=None)
+                    ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
@@ -5600,7 +5590,9 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.Start(0, FILES["testfile-big"].id, transferred=None)
+                    ),
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileUploaded(
@@ -5644,7 +5636,9 @@ scenarios = [
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     # start the receiver again
                     action.Start("172.20.0.15", dbpath="/tmp/db/29-2-stimpy.sqlite"),
-                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.Start(0, FILES["testfile-big"].id, transferred=None)
+                    ),
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -5718,7 +5712,9 @@ scenarios = [
                     action.WaitForAnotherPeer(),
                     # start the sender again
                     action.Start("172.20.0.5", dbpath="/tmp/db/29-3-ren.sqlite"),
-                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.Start(0, FILES["testfile-big"].id, transferred=None)
+                    ),
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileUploaded(
@@ -5769,7 +5765,9 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.Start(0, FILES["testfile-big"].id, transferred=None)
+                    ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
@@ -5834,7 +5832,9 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.Start(0, FILES["testfile-big"].id, transferred=None)
+                    ),
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileUploaded(
@@ -5893,7 +5893,9 @@ scenarios = [
                     action.WaitForAnotherPeer(),
                     # start the receiver again
                     action.Start("172.20.0.15", dbpath="/tmp/db/29-4-stimpy.sqlite"),
-                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.Start(0, FILES["testfile-big"].id, transferred=None)
+                    ),
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -5958,7 +5960,11 @@ scenarios = [
                     # start the sender again
                     action.Start("172.20.0.5", dbpath="/tmp/db/29-5-ren.sqlite"),
                     action.Wait(
-                        event.Start(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
+                        event.Start(
+                            0,
+                            "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
+                            transferred=None,
+                        )
                     ),
                     action.Wait(
                         event.Progress(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
@@ -6003,7 +6009,11 @@ scenarios = [
                         event.Paused(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
                     ),
                     action.Wait(
-                        event.Start(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
+                        event.Start(
+                            0,
+                            "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
+                            transferred=None,
+                        )
                     ),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -6487,7 +6497,6 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileFailed(
                             0, FILES["testfile-big"].id, Error.BAD_TRANSFER_STATE
