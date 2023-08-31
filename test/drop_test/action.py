@@ -11,6 +11,7 @@ import json
 import time
 import glob
 import socket
+import requests
 
 from . import event, ffi
 from .logger import logger
@@ -102,6 +103,19 @@ class ExpectError(Action):
                 return
 
         raise Exception(f"Action must have thrown DropException")
+
+
+class ExpectAnyError(Action):
+    def __init__(self, action: Action):
+        self._action = action
+
+    async def run(self, drop: ffi.Drop):
+        try:
+            await self._action.run(drop)
+        except:
+            return
+
+        raise Exception("Action must have thrown an exception")
 
 
 class Parallel(Action):
@@ -597,13 +611,12 @@ class PurgeTransfers(Action):
 
 
 class Start(Action):
-    def __init__(self, addr: str, dbpath: str = ":memory:", max_reqs: int = 50):
+    def __init__(self, addr: str, dbpath: str = ":memory:"):
         self._addr = addr
         self._dbpath = dbpath
-        self._max_reqs = max_reqs
 
     async def run(self, drop: ffi.Drop):
-        drop.start(self._addr, self._dbpath, self._max_reqs)
+        drop.start(self._addr, self._dbpath)
 
     def __str__(self):
         return f"Start(addr={self._addr}, dbpath={self._dbpath})"
@@ -667,3 +680,20 @@ class EnsureTakesNoLonger(Action):
 
     def __str__(self):
         return f"EnsureTakesNoLonger({self._action}, {self._secs})"
+
+
+class MakeHttpGetRequest(Action):
+    def __init__(self, url: str, status: int):
+        self._url = url
+        self._status = status
+
+    async def run(self, drop: ffi.Drop):
+        res = requests.get(self._url)
+
+        if res.status_code != self._status:
+            raise Exception(
+                f"Unexpected status code ({res.status_code}) from GET {self._url}. Expecting {self._status}"
+            )
+
+    def __str__(self):
+        return f"MakeHttpGetRequest({self._url}, {self._status})"
