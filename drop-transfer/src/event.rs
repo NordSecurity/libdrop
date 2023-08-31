@@ -20,8 +20,8 @@ pub enum Event {
     RequestReceived(Arc<IncomingTransfer>),
     RequestQueued(Arc<OutgoingTransfer>),
 
-    FileUploadStarted(Arc<OutgoingTransfer>, FileId),
-    FileDownloadStarted(Arc<IncomingTransfer>, FileId, String),
+    FileUploadStarted(Arc<OutgoingTransfer>, FileId, u64),
+    FileDownloadStarted(Arc<IncomingTransfer>, FileId, String, u64),
 
     FileUploadProgress(Arc<OutgoingTransfer>, FileId, u64),
     FileDownloadProgress(Arc<IncomingTransfer>, FileId, u64),
