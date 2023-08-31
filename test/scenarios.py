@@ -6506,125 +6506,37 @@ scenarios = [
         {
             "ren": ActionList(
                 [
-                    action.Start("172.20.0.5"),
-                    action.WaitForAnotherPeer(),
-                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
-                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
-                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
-                    action.WaitRacy(
+                    action.SleepMs(500),
+                    # There is a hardocded limit of 50 connections per second.
+                    action.Repeated(
                         [
-                            event.Queued(
-                                2,
-                                {
-                                    event.File(
-                                        FILES["testfile-small"].id,
-                                        "testfile-small",
-                                        1048576,
-                                    ),
-                                },
-                            ),
-                            event.Queued(
-                                0,
-                                {
-                                    event.File(
-                                        FILES["testfile-small"].id,
-                                        "testfile-small",
-                                        1048576,
-                                    ),
-                                },
-                            ),
-                            event.Queued(
-                                1,
-                                {
-                                    event.File(
-                                        FILES["testfile-small"].id,
-                                        "testfile-small",
-                                        1048576,
-                                    ),
-                                },
-                            ),
-                        ]
+                            action.MakeHttpGetRequest(
+                                "http://172.20.0.15:49111/non-existing-path", 404
+                            )
+                        ],
+                        50,
                     ),
-                    action.WaitForOneOf(
-                        [
-                            event.FinishFailedTransfer(
-                                0,
-                                Error.IO,
-                            ),
-                            event.FinishFailedTransfer(
-                                1,
-                                Error.IO,
-                            ),
-                            event.FinishFailedTransfer(
-                                2,
-                                Error.IO,
-                            ),
-                        ]
+                    # Let's issure 10 more than the limit to ensure we triggered the protection
+                    action.ExpectAnyError(
+                        action.Repeated(
+                            [
+                                action.MakeHttpGetRequest(
+                                    "http://172.20.0.15:49111/non-existing-path", 404
+                                )
+                            ],
+                            10,
+                        ),
                     ),
-                    action.Sleep(2),
-                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
-                    action.Wait(
-                        event.Queued(
-                            3,
-                            {
-                                event.File(
-                                    FILES["testfile-small"].id,
-                                    "testfile-small",
-                                    1048576,
-                                ),
-                            },
-                        )
+                    # Check if we get an apporpiate HTTP error code
+                    action.MakeHttpGetRequest(
+                        "http://172.20.0.15:49111/non-existing-path", 429
                     ),
-                    action.Stop(),
                 ]
             ),
             "stimpy": ActionList(
                 [
-                    # There are 2 request per transfer, the first one for
-                    # authentication nonce and the second with transfer. One
-                    # more is needed because that's how the implementation
-                    # works.
-                    action.Sleep(3),
-                    action.Start("172.20.0.15", max_reqs=5),
-                    action.WaitRacy(
-                        [
-                            event.Receive(
-                                0,
-                                "172.20.0.5",
-                                {
-                                    event.File(
-                                        FILES["testfile-small"].id,
-                                        "testfile-small",
-                                        1048576,
-                                    ),
-                                },
-                            ),
-                            event.Receive(
-                                1,
-                                "172.20.0.5",
-                                {
-                                    event.File(
-                                        FILES["testfile-small"].id,
-                                        "testfile-small",
-                                        1048576,
-                                    ),
-                                },
-                            ),
-                        ]
-                    ),
-                    action.Wait(
-                        event.Receive(
-                            2,
-                            "172.20.0.5",
-                            {
-                                event.File(
-                                    FILES["testfile-small"].id,
-                                    "testfile-small",
-                                    1048576,
-                                ),
-                            },
-                        )
-                    ),
+                    action.Start("172.20.0.15"),
+                    action.Sleep(2),
                     action.Stop(),
                 ]
             ),
