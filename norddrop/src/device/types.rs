@@ -37,6 +37,7 @@ struct File {
 pub struct StartEvent {
     transfer: String,
     file: String,
+    transfered: u64,
 }
 
 #[derive(Serialize)]
@@ -125,16 +126,18 @@ impl From<drop_transfer::Event> for Event {
         match e {
             drop_transfer::Event::RequestReceived(tx) => Event::RequestReceived(tx.as_ref().into()),
             drop_transfer::Event::RequestQueued(tx) => Event::RequestQueued(tx.as_ref().into()),
-            drop_transfer::Event::FileUploadStarted(tx, fid, _) => {
+            drop_transfer::Event::FileUploadStarted(tx, fid, transfered) => {
                 Event::TransferStarted(StartEvent {
                     transfer: tx.id().to_string(),
                     file: fid.to_string(),
+                    transfered,
                 })
             }
-            drop_transfer::Event::FileDownloadStarted(tx, fid, _, _) => {
+            drop_transfer::Event::FileDownloadStarted(tx, fid, _, transfered) => {
                 Event::TransferStarted(StartEvent {
                     transfer: tx.id().to_string(),
                     file: fid.to_string(),
+                    transfered,
                 })
             }
             drop_transfer::Event::FileUploadProgress(tx, fid, progress) => {
