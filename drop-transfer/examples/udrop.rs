@@ -35,9 +35,9 @@ fn print_event(ev: &Event) {
 
             info!("[EVENT] RequestReceived {}: {:?}", xfid, files);
         }
-        Event::FileDownloadStarted(xfer, file, base_dir) => {
+        Event::FileDownloadStarted(xfer, file, base_dir, offset) => {
             info!(
-                "[EVENT] [{}] FileDownloadStarted {:?} transfer started, to {:?}",
+                "[EVENT] [{}] FileDownloadStarted {:?} transfer started, to {:?}, offset: {offset}",
                 xfer.id(),
                 file,
                 base_dir
@@ -66,8 +66,12 @@ fn print_event(ev: &Event) {
         Event::RequestQueued(xfer) => {
             info!("[EVENT] RequestQueued {}: {:?}", xfer.id(), xfer.files(),);
         }
-        Event::FileUploadStarted(xfer, file) => {
-            info!("[EVENT] FileUploadStarted {}: {:?}", xfer.id(), file,);
+        Event::FileUploadStarted(xfer, file, offset) => {
+            info!(
+                "[EVENT] FileUploadStarted {}: {:?}, offset {offset}",
+                xfer.id(),
+                file,
+            );
         }
         Event::FileDownloadProgress(xfer, file, progress) => {
             info!(
@@ -173,7 +177,7 @@ async fn listen(
                         .context("Cannot issue download call")?;
                 }
             }
-            Event::FileDownloadStarted(xfer, file, _) => {
+            Event::FileDownloadStarted(xfer, file, _, _) => {
                 active_file_downloads
                     .entry(xfer.id())
                     .or_insert_with(HashSet::new)

@@ -558,7 +558,12 @@ impl Storage {
         Ok(())
     }
 
-    pub async fn insert_outgoing_path_started_state(&self, transfer_id: Uuid, path_id: &str) {
+    pub async fn insert_outgoing_path_started_state(
+        &self,
+        transfer_id: Uuid,
+        path_id: &str,
+        bytes_sent: i64,
+    ) {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -575,7 +580,7 @@ impl Storage {
                 SELECT id, ?3
                 FROM outgoing_paths WHERE transfer_id = ?1 AND path_hash = ?2
                 "#,
-                params![tid, path_id, 0],
+                params![tid, path_id, bytes_sent],
             )?;
 
             Ok::<(), Error>(())
@@ -586,7 +591,12 @@ impl Storage {
         }
     }
 
-    pub async fn insert_incoming_path_started_state(&self, transfer_id: Uuid, path_id: &str) {
+    pub async fn insert_incoming_path_started_state(
+        &self,
+        transfer_id: Uuid,
+        path_id: &str,
+        bytes_received: i64,
+    ) {
         let tid = transfer_id.to_string();
 
         trace!(
@@ -604,7 +614,7 @@ impl Storage {
                 SELECT id, ?3
                 FROM incoming_paths WHERE transfer_id = ?1 AND path_hash = ?2
                 "#,
-                params![tid, path_id, 0],
+                params![tid, path_id, bytes_received],
             )?;
 
             Ok::<(), Error>(())
@@ -2013,7 +2023,7 @@ mod tests {
             .insert_incoming_path_reject_state(transfer1_id, "idi3", false, 234)
             .await;
         storage
-            .insert_incoming_path_started_state(transfer1_id, "idi4")
+            .insert_incoming_path_started_state(transfer1_id, "idi4", 12345)
             .await;
 
         let transfer2_id: Uuid = "f333302e-584b-42f8-9f66-6a5ef400297d".parse().unwrap();
@@ -2060,7 +2070,7 @@ mod tests {
             .insert_outgoing_path_reject_state(transfer2_id, "ido3", false, 234)
             .await;
         storage
-            .insert_outgoing_path_started_state(transfer2_id, "ido4")
+            .insert_outgoing_path_started_state(transfer2_id, "ido4", 12345)
             .await;
 
         let transfers = storage.transfers_since(0).await;
@@ -2125,13 +2135,15 @@ mod tests {
                 assert_eq!(inc[3].transfer_id, transfer1_id);
                 assert_eq!(inc[3].relative_path, "4");
                 assert_eq!(inc[3].bytes, 2048);
-                assert_eq!(inc[3].bytes_received, 0);
+                assert_eq!(inc[3].bytes_received, 12345);
                 assert_eq!(inc[3].file_id, "idi4");
                 assert_eq!(inc[3].states.len(), 1);
 
                 assert!(matches!(
                     &inc[3].states[0].data,
-                    IncomingPathStateEventData::Started { bytes_received: 0 }
+                    IncomingPathStateEventData::Started {
+                        bytes_received: 12345
+                    }
                 ));
             }
             _ => panic!("Unexpected transfer type"),
@@ -2194,7 +2206,7 @@ mod tests {
                 assert_eq!(inc[3].transfer_id, transfer2_id);
                 assert_eq!(inc[3].relative_path, "4");
                 assert_eq!(inc[3].bytes, 2048);
-                assert_eq!(inc[3].bytes_sent, 0);
+                assert_eq!(inc[3].bytes_sent, 12345);
                 assert_eq!(inc[3].file_id, "ido4");
                 assert_eq!(inc[3].base_path.as_deref(), Some(Path::new("/dir")));
                 assert!(inc[3].content_uri.is_none());
@@ -2202,7 +2214,7 @@ mod tests {
 
                 assert!(matches!(
                     inc[3].states[0].data,
-                    OutgoingPathStateEventData::Started { bytes_sent: 0 }
+                    OutgoingPathStateEventData::Started { bytes_sent: 12345 }
                 ));
             }
             _ => panic!("Unexpected transfer type"),

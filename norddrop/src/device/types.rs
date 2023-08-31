@@ -125,13 +125,13 @@ impl From<drop_transfer::Event> for Event {
         match e {
             drop_transfer::Event::RequestReceived(tx) => Event::RequestReceived(tx.as_ref().into()),
             drop_transfer::Event::RequestQueued(tx) => Event::RequestQueued(tx.as_ref().into()),
-            drop_transfer::Event::FileUploadStarted(tx, fid) => {
+            drop_transfer::Event::FileUploadStarted(tx, fid, _) => {
                 Event::TransferStarted(StartEvent {
                     transfer: tx.id().to_string(),
                     file: fid.to_string(),
                 })
             }
-            drop_transfer::Event::FileDownloadStarted(tx, fid, _) => {
+            drop_transfer::Event::FileDownloadStarted(tx, fid, _, _) => {
                 Event::TransferStarted(StartEvent {
                     transfer: tx.id().to_string(),
                     file: fid.to_string(),
