@@ -18,7 +18,8 @@ const DROP_MOOSE_TRACKER_VERSION: &str = "0.5.1";
 
 pub struct MooseImpl {
     logger: slog::Logger,
-    context_update_task: tokio::task::JoinHandle<()>,
+    task_abort_channel: SyncSender<()>,
+    context_update_task: Option<std::thread::JoinHandle<()>>,
 }
 
 struct MooseInitCallback {
@@ -109,21 +110,21 @@ impl MooseImpl {
         moose_debug!(logger, res, "init");
 
         anyhow::ensure!(res.is_ok(), "Failed to initialize moose: {:?}", res.err());
-
         populate_context(&logger);
 
+        let (tx, rx) = sync_channel(1);
         let task_logger = logger.clone();
-        let context_update_task = tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(60 * 10));
-            loop {
-                populate_context(&task_logger);
-                interval.tick().await;
+        let context_update_task = std::thread::spawn(move || loop {
+            match rx.recv_timeout(Duration::from_secs(60 * 10)) {
+                Ok(_) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => populate_context(&task_logger),
             }
         });
 
         Ok(Self {
             logger,
-            context_update_task,
+            task_abort_channel: tx,
+            context_update_task: Some(context_update_task),
         })
     }
 }
@@ -131,7 +132,11 @@ impl MooseImpl {
 impl Drop for MooseImpl {
     fn drop(&mut self) {
         moose!(self.logger, moose_deinit);
-        self.context_update_task.abort();
+
+        if let Some(context_update_task) = self.context_update_task.take() {
+            let _ = self.task_abort_channel.send(());
+            let _ = context_update_task.join();
+        }
     }
 }
 
