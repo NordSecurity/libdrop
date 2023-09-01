@@ -103,24 +103,26 @@ impl NordDropFFI {
             return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
         }
 
-        let moose = match drop_analytics::init_moose(
-            logger.clone(),
-            self.config.moose.event_path.clone(),
-            env!("DROP_VERSION").to_string(),
-            self.config.moose.prod,
-        ) {
-            Ok(moose) => moose,
-            Err(err) => {
-                error!(logger, "Failed to init moose: {:?}", err);
+        let moose = self.rt.block_on(async {
+            match drop_analytics::init_moose(
+                logger.clone(),
+                self.config.moose.event_path.clone(),
+                env!("DROP_VERSION").to_string(),
+                self.config.moose.prod,
+            ) {
+                Ok(moose) => Ok(moose),
+                Err(err) => {
+                    error!(logger, "Failed to init moose: {:?}", err);
 
-                if !self.config.moose.prod {
-                    return Err(ffi::types::NORDDROP_RES_ERROR);
+                    if !self.config.moose.prod {
+                        return Err(ffi::types::NORDDROP_RES_ERROR);
+                    }
+
+                    warn!(logger, "Falling back to mock moose implementation");
+                    Ok(drop_analytics::moose_mock())
                 }
-
-                warn!(logger, "Falling back to mock moose implementation");
-                drop_analytics::moose_mock()
             }
-        };
+        })?;
 
         let addr: IpAddr = match listen_addr.parse() {
             Ok(addr) => addr,

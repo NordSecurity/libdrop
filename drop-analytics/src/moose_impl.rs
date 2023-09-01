@@ -18,6 +18,7 @@ const DROP_MOOSE_TRACKER_VERSION: &str = "0.5.1";
 
 pub struct MooseImpl {
     logger: slog::Logger,
+    context_update_task: tokio::task::JoinHandle<()>,
 }
 
 struct MooseInitCallback {
@@ -110,17 +111,27 @@ impl MooseImpl {
         anyhow::ensure!(res.is_ok(), "Failed to initialize moose: {:?}", res.err());
 
         populate_context(&logger);
-        let res = moose::flush_changes();
-        moose_debug!(logger, res, "flush_changes");
-        res.context("Failed to flush moose context")?;
 
-        Ok(Self { logger })
+        let task_logger = logger.clone();
+        let context_update_task = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60 * 10));
+            loop {
+                populate_context(&task_logger);
+                interval.tick().await;
+            }
+        });
+
+        Ok(Self {
+            logger,
+            context_update_task,
+        })
     }
 }
 
 impl Drop for MooseImpl {
     fn drop(&mut self) {
         moose!(self.logger, moose_deinit);
+        self.context_update_task.abort();
     }
 }
 
