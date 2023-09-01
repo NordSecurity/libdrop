@@ -44,13 +44,13 @@ pub enum FileTerminalState {
     Failed,
 }
 
-enum IncomingLocalFlieState {
+enum IncomingLocalFileState {
     Idle,
     InFlight { path: PathBuf },
     Terminal(FileTerminalState),
 }
 
-enum OutgoingLocalFlieState {
+enum OutgoingLocalFileState {
     Alive,
     Terminal(FileTerminalState),
 }
@@ -65,7 +65,7 @@ pub struct IncomingState {
     conn: Option<UnboundedSender<ServerReq>>,
     pub dir_mappings: DirMapping,
     xfer_sync: TransferSync,
-    file_sync: HashMap<FileId, IncomingLocalFlieState>,
+    file_sync: HashMap<FileId, IncomingLocalFileState>,
     events: HashMap<FileId, Arc<IncomingFileEventTx>>,
 }
 
@@ -73,7 +73,7 @@ pub struct OutgoingState {
     pub xfer: Arc<OutgoingTransfer>,
     conn: Option<UnboundedSender<ClientReq>>,
     xfer_sync: TransferSync,
-    file_sync: HashMap<FileId, OutgoingLocalFlieState>,
+    file_sync: HashMap<FileId, OutgoingLocalFileState>,
     events: HashMap<FileId, Arc<OutgoingFileEventTx>>,
 }
 
@@ -157,7 +157,7 @@ impl TransferManager {
                     file_sync: xfer
                         .files()
                         .keys()
-                        .map(|file_id| (file_id.clone(), IncomingLocalFlieState::Idle))
+                        .map(|file_id| (file_id.clone(), IncomingLocalFileState::Idle))
                         .collect(),
                     xfer,
                     events: HashMap::new(),
@@ -246,7 +246,7 @@ impl TransferManager {
                     file_sync: xfer
                         .files()
                         .keys()
-                        .map(|file_id| (file_id.clone(), OutgoingLocalFlieState::Alive))
+                        .map(|file_id| (file_id.clone(), OutgoingLocalFileState::Alive))
                         .collect(),
                     xfer,
                     events: HashMap::new(),
@@ -427,7 +427,7 @@ impl TransferManager {
         let state = state.file_sync_mut(file_id)?;
         state.ensure_not_terminated()?;
 
-        *state = IncomingLocalFlieState::Idle;
+        *state = IncomingLocalFileState::Idle;
 
         self.storage
             .stop_incoming_file(transfer_id, file_id.as_ref())
@@ -564,8 +564,8 @@ impl TransferManager {
         }
 
         for val in state.file_sync.values_mut() {
-            if let IncomingLocalFlieState::InFlight { .. } = &*val {
-                *val = IncomingLocalFlieState::Idle;
+            if let IncomingLocalFileState::InFlight { .. } = &*val {
+                *val = IncomingLocalFileState::Idle;
             }
         }
 
@@ -663,14 +663,14 @@ impl OutgoingState {
             .file_sync
             .iter()
             .filter_map(|(file_id, state)| match state {
-                OutgoingLocalFlieState::Terminal(FileTerminalState::Rejected) => {
+                OutgoingLocalFileState::Terminal(FileTerminalState::Rejected) => {
                     info!(logger, "Rejecting file: {file_id}",);
 
                     Some(ClientReq::Reject {
                         file: file_id.clone(),
                     })
                 }
-                OutgoingLocalFlieState::Terminal(FileTerminalState::Failed) => {
+                OutgoingLocalFileState::Terminal(FileTerminalState::Failed) => {
                     info!(logger, "Failing file: {file_id}",);
 
                     Some(ClientReq::Fail {
@@ -708,7 +708,7 @@ impl OutgoingState {
             .clone()
     }
 
-    fn file_sync_mut(&mut self, file_id: &FileId) -> crate::Result<&mut OutgoingLocalFlieState> {
+    fn file_sync_mut(&mut self, file_id: &FileId) -> crate::Result<&mut OutgoingLocalFileState> {
         self.file_sync
             .get_mut(file_id)
             .ok_or(crate::Error::BadFileId)
@@ -723,9 +723,9 @@ impl IncomingState {
 
         let state = self.file_sync.get(file_id).ok_or(crate::Error::BadFileId)?;
         let start = match state {
-            IncomingLocalFlieState::Idle => true,
-            IncomingLocalFlieState::InFlight { .. } => false,
-            IncomingLocalFlieState::Terminal(term) => {
+            IncomingLocalFileState::Idle => true,
+            IncomingLocalFileState::InFlight { .. } => false,
+            IncomingLocalFileState::Terminal(term) => {
                 return Err(crate::Error::FileStateMismatch(*term));
             }
         };
@@ -742,7 +742,7 @@ impl IncomingState {
         let state = self.file_sync_mut(file_id)?;
 
         state.ensure_not_terminated()?;
-        *state = IncomingLocalFlieState::InFlight {
+        *state = IncomingLocalFileState::InFlight {
             path: parent_dir.to_path_buf(),
         };
 
@@ -795,7 +795,7 @@ impl IncomingState {
             .file_sync
             .iter()
             .filter_map(|(file_id, state)| match state {
-                IncomingLocalFlieState::InFlight { path } => {
+                IncomingLocalFileState::InFlight { path } => {
                     info!(logger, "Resuming file: {file_id}",);
 
                     let xfile = &self.xfer.files()[file_id];
@@ -804,21 +804,21 @@ impl IncomingState {
                         task: Box::new(task),
                     })
                 }
-                IncomingLocalFlieState::Terminal(FileTerminalState::Rejected) => {
+                IncomingLocalFileState::Terminal(FileTerminalState::Rejected) => {
                     info!(logger, "Rejecting file: {file_id}",);
 
                     Some(ServerReq::Reject {
                         file: file_id.clone(),
                     })
                 }
-                IncomingLocalFlieState::Terminal(FileTerminalState::Completed) => {
+                IncomingLocalFileState::Terminal(FileTerminalState::Completed) => {
                     info!(logger, "Finishing file: {file_id}",);
 
                     Some(ServerReq::Done {
                         file: file_id.clone(),
                     })
                 }
-                IncomingLocalFlieState::Terminal(FileTerminalState::Failed) => {
+                IncomingLocalFileState::Terminal(FileTerminalState::Failed) => {
                     info!(logger, "Failing file: {file_id}",);
 
                     Some(ServerReq::Fail {
@@ -833,7 +833,7 @@ impl IncomingState {
         }
     }
 
-    fn file_sync_mut(&mut self, file_id: &FileId) -> crate::Result<&mut IncomingLocalFlieState> {
+    fn file_sync_mut(&mut self, file_id: &FileId) -> crate::Result<&mut IncomingLocalFileState> {
         self.file_sync
             .get_mut(file_id)
             .ok_or(crate::Error::BadFileId)
@@ -916,7 +916,7 @@ impl DirMapping {
     }
 }
 
-impl IncomingLocalFlieState {
+impl IncomingLocalFileState {
     fn ensure_not_terminated(&self) -> crate::Result<()> {
         match self {
             Self::Terminal(term) => Err(crate::Error::FileStateMismatch(*term)),
@@ -926,16 +926,16 @@ impl IncomingLocalFlieState {
 
     fn try_terminate_local(&mut self, to_set: FileTerminalState) -> crate::Result<()> {
         match self {
-            IncomingLocalFlieState::Idle | IncomingLocalFlieState::InFlight { .. } => {
-                *self = IncomingLocalFlieState::Terminal(to_set);
+            IncomingLocalFileState::Idle | IncomingLocalFileState::InFlight { .. } => {
+                *self = IncomingLocalFileState::Terminal(to_set);
                 Ok(())
             }
-            IncomingLocalFlieState::Terminal(state) => Err(crate::Error::FileStateMismatch(*state)),
+            IncomingLocalFileState::Terminal(state) => Err(crate::Error::FileStateMismatch(*state)),
         }
     }
 }
 
-impl OutgoingLocalFlieState {
+impl OutgoingLocalFileState {
     fn ensure_not_terminated(&self) -> crate::Result<()> {
         match self {
             Self::Terminal(term) => Err(crate::Error::FileStateMismatch(*term)),
@@ -945,11 +945,11 @@ impl OutgoingLocalFlieState {
 
     fn try_terminate(&mut self, to_set: FileTerminalState) -> crate::Result<()> {
         match self {
-            OutgoingLocalFlieState::Alive => {
-                *self = OutgoingLocalFlieState::Terminal(to_set);
+            OutgoingLocalFileState::Alive => {
+                *self = OutgoingLocalFileState::Terminal(to_set);
                 Ok(())
             }
-            OutgoingLocalFlieState::Terminal(state) => Err(crate::Error::FileStateMismatch(*state)),
+            OutgoingLocalFileState::Terminal(state) => Err(crate::Error::FileStateMismatch(*state)),
         }
     }
 }
@@ -1021,16 +1021,16 @@ async fn restore_incoming(
                     .context("Missing sync state for file")?;
 
                 let local = if state.is_rejected {
-                    IncomingLocalFlieState::Terminal(FileTerminalState::Rejected)
+                    IncomingLocalFileState::Terminal(FileTerminalState::Rejected)
                 } else if state.is_success {
-                    IncomingLocalFlieState::Terminal(FileTerminalState::Completed)
+                    IncomingLocalFileState::Terminal(FileTerminalState::Completed)
                 } else if state.is_failed {
-                    IncomingLocalFlieState::Terminal(FileTerminalState::Failed)
+                    IncomingLocalFileState::Terminal(FileTerminalState::Failed)
                 } else {
                     match state.sync {
-                        sync::FileState::Alive => IncomingLocalFlieState::Idle,
+                        sync::FileState::Alive => IncomingLocalFileState::Idle,
                         sync::FileState::Terminal => {
-                            IncomingLocalFlieState::Terminal(FileTerminalState::Failed)
+                            IncomingLocalFileState::Terminal(FileTerminalState::Failed)
                         } // Assume it's failed
                     }
                 };
@@ -1043,7 +1043,7 @@ async fn restore_incoming(
             for file in in_flights {
                 if let Some(state) = file_sync.get_mut(&file.file_id) {
                     if state.ensure_not_terminated().is_ok() {
-                        *state = IncomingLocalFlieState::InFlight {
+                        *state = IncomingLocalFileState::InFlight {
                             path: file.base_dir.into(),
                         };
                     }
@@ -1132,16 +1132,16 @@ async fn restore_outgoing(state: &Arc<State>, logger: &Logger) -> HashMap<Uuid, 
                     .context("Missing sync state for file")?;
 
                 let local = if state.is_rejected {
-                    OutgoingLocalFlieState::Terminal(FileTerminalState::Rejected)
+                    OutgoingLocalFileState::Terminal(FileTerminalState::Rejected)
                 } else if state.is_success {
-                    OutgoingLocalFlieState::Terminal(FileTerminalState::Completed)
+                    OutgoingLocalFileState::Terminal(FileTerminalState::Completed)
                 } else if state.is_failed {
-                    OutgoingLocalFlieState::Terminal(FileTerminalState::Failed)
+                    OutgoingLocalFileState::Terminal(FileTerminalState::Failed)
                 } else {
                     match state.sync {
-                        sync::FileState::Alive => OutgoingLocalFlieState::Alive,
+                        sync::FileState::Alive => OutgoingLocalFileState::Alive,
                         sync::FileState::Terminal => {
-                            OutgoingLocalFlieState::Terminal(FileTerminalState::Failed)
+                            OutgoingLocalFileState::Terminal(FileTerminalState::Failed)
                         } // Assume it's failed
                     }
                 };
