@@ -419,7 +419,7 @@ class ExpectCancel(Action):
 # Shape egress traffic. Slowing down and adding latency helps introducing
 # determinism in the testing environment
 class ConfigureNetwork(Action):
-    def __init__(self, rate: str = "10mbit", latency: str = "3000ms"):
+    def __init__(self, rate: str = "10mbit", latency: str = "0ms"):
         self._rate = rate
         self._latency = latency
 
@@ -436,7 +436,7 @@ class ConfigureNetwork(Action):
 
         device = "eth0"
         ex(
-            f"tc qdisc add dev {device} root tbf rate {self._rate} burst 64k latency {self._latency}"
+            f"tc qdisc add dev {device} root netem rate {self._rate} delay {self._latency}"
         )
         ex(f"tc qdisc show dev {device}")
 
