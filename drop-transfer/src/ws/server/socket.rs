@@ -48,12 +48,6 @@ impl WebSocket {
         Ok(msg)
     }
 
-    pub async fn close(self) -> crate::Result<()> {
-        self.stream.close().await?;
-
-        Ok(())
-    }
-
     pub async fn drain(&mut self) -> crate::Result<()> {
         while self.stream.next().await.transpose()?.is_some() {}
         Ok(())

@@ -7903,4 +7903,63 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario38",
+        "Cancel the transfers from the receiver while the sender is offline and file were in flight, but the receiver did not catched the disconnection yet. Expect clean cancelation",
+        {
+            "ren": ActionList(
+                [
+                    action.ConfigureNetwork(latency="300ms"),
+                    action.Start("172.20.0.5", "/tmp/db/38.sqlite"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Stop(),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
+                    action.SleepMs(100),
+                    action.Start("172.20.0.5", "/tmp/db/38.sqlite"),
+                    action.Wait(event.FinishTransferCanceled(0, True)),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.ConfigureNetwork(latency="300ms"),
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/38",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.SleepMs(100),
+                    action.CancelTransferRequest(0),
+                    action.Wait(event.FinishTransferCanceled(0, False)),
+                    action.NoEvent(duration=5),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]

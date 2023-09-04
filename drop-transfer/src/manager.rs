@@ -138,7 +138,17 @@ impl TransferManager {
                 Ok(false)
             }
             Entry::Vacant(vacc) => {
-                self.storage.insert_transfer(&xfer.storage_info()).await;
+                if self
+                    .storage
+                    .insert_transfer(&xfer.storage_info())
+                    .await
+                    .is_none()
+                {
+                    warn!(self.logger, "Transfer was closed already");
+                    let _ = conn.send(ServerReq::Close);
+                    return Ok(false);
+                }
+
                 self.storage
                     .update_transfer_sync_states(
                         xfer.id(),
