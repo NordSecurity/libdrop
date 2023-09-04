@@ -7909,7 +7909,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
-                    action.ConfigureNetwork(delay="300ms"),
+                    action.ConfigureNetwork(latency="300ms"),
                     action.Start("172.20.0.5", "/tmp/db/38.sqlite"),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
                     action.Wait(
@@ -7934,7 +7934,7 @@ scenarios = [
             ),
             "stimpy": ActionList(
                 [
-                    action.ConfigureNetwork(delay="300ms"),
+                    action.ConfigureNetwork(latency="300ms"),
                     action.Start("172.20.0.15"),
                     action.Wait(
                         event.Receive(
