@@ -425,29 +425,20 @@ impl RunContext<'_> {
 
         let result = task.await;
 
-        if let Err(err) = result {
+        let task = async {
+            result.context("Connection broke in the loop")?;
+            socket.drain().await.context("Failed to drain the socket")?;
+            anyhow::Ok(())
+        };
+
+        if let Err(err) = task.await {
             info!(
                 self.logger,
                 "WS connection broke for {}: {err:?}",
                 xfer.id()
             );
         } else {
-            let drain_sock = async {
-                let task = async {
-                    // Drain messages
-                    let _ = socket.drain().await;
-                    socket.close().await
-                };
-
-                if let Err(err) = task.await {
-                    warn!(
-                        self.logger,
-                        "Failed to gracefully close the client connection: {}", err
-                    );
-                } else {
-                    debug!(self.logger, "WS client disconnected");
-                }
-            };
+            debug!(self.logger, "Sucesfully finalizing transfer loop");
 
             let remove_xfer = async {
                 if let Err(err) = self.state.transfer_manager.incoming_remove(xfer.id()).await {
@@ -459,7 +450,7 @@ impl RunContext<'_> {
                 }
             };
 
-            tokio::join!(handler.finalize_success(), drain_sock, remove_xfer);
+            tokio::join!(handler.finalize_success(), remove_xfer);
         }
 
         jobs.shutdown().await;
