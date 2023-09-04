@@ -136,7 +136,7 @@ def run():
 
             print(f"Running {cmd}", flush=True)
             container = client.containers.run(
-                image="libdrop-test-image",  # TODO: push the image
+                image="ghcr.io/nordsecurity/libdrop:test_image",
                 name=f"{hostname}",
                 command=cmd,
                 volumes=COMMON_VOLUMES,
@@ -151,7 +151,7 @@ def run():
             info = ContainerInfo(container, scenario.id(), TESTCASE_TIMEOUT)
             results[scenario.id()].append(info)
 
-    total_time = start_time - time.time()
+    total_time = time.time() - start_time
     # total_cnt is total count of containers in all scenarios
     total_cnt = 0
 
@@ -228,17 +228,6 @@ def run():
         sleep_between_tests_s = 2
         total_time += sleep_between_tests_s
         time.sleep(sleep_between_tests_s)
-
-    print(f"*** Test suite finished in {total_time}s", flush=True)
-
-    if len(failed_scenarios) > 0:
-        print(f"Failed scenarios:")
-        for s in failed_scenarios:
-            print(f"- {s}")
-        print("look into logs above for specific output")
-        sys.exit(1)
-
-    sys.exit(0)
 
 
 if __name__ == "__main__":

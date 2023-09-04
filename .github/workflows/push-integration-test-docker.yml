@@ -2,39 +2,33 @@ name: Build and Push to GitHub Container Registry
 
 on:
   push:
-  #   branches:
-  #     - dev
-  # pull_request:
-  #   branches:
-  #     - dev
+    branches:
+      - dev
+  pull_request:
+    branches:
+      - dev
+
 
 jobs:
   build:
-
+    permissions:
+      packages: write
     runs-on: ubuntu-latest
-    env:
-      REPO_NAME: ${{ github.repository }}}
 
     steps:
-    - name: Lowercase repo name to be compatible with Docker
-      run: |
-        echo "REPO_NAME=$(echo $REPO_NAME | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-        echo $REPO_NAME
-
     - name: Checkout code
       uses: actions/checkout@v2
-
     - name: Login to GitHub Container Registry
       if: github.event_name == 'push'
-      uses: docker/login-action@v1
+      uses: docker/login-action@v2
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
-        password: ${{ secrets.GHCR_TOKEN }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build Docker image
-      run: docker build -t ghcr.io/$REPO_NAME:libdrop-test-image test
+      run: docker build -t ghcr.io/nordsecurity/libdrop:test_image test
 
     - name: Push Docker image to GitHub Container Registry
       if: github.event_name == 'push'
-      run: docker push ghcr.io/$REPO_NAME:libdrop-test-image
+      run: docker push ghcr.io/nordsecurity/libdrop:test_image

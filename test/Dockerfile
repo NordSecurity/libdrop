@@ -1,5 +1,7 @@
 FROM ubuntu:22.04
 
+LABEL org.opencontainers.image.source=https://github.com/NordSecurity/libdrop
+
 RUN \
     export DEBIAN_FRONTEND=noninteractive && \
     apt-get update && \
