@@ -49,7 +49,7 @@ impl Storage {
         })
     }
 
-    pub async fn insert_transfer(&self, transfer: &TransferInfo) {
+    pub async fn insert_transfer(&self, transfer: &TransferInfo) -> Option<()> {
         let transfer_type_int = match &transfer.files {
             TransferFiles::Incoming(_) => TransferType::Incoming as u32,
             TransferFiles::Outgoing(_) => TransferType::Outgoing as u32,
@@ -67,10 +67,15 @@ impl Storage {
             let mut conn = self.conn.lock().await;
             let conn = conn.transaction()?;
 
-            conn.execute(
-                "INSERT INTO transfers (id, peer, is_outgoing) VALUES (?1, ?2, ?3)",
+            let inserted = conn.execute(
+                "INSERT INTO transfers (id, peer, is_outgoing) VALUES (?1, ?2, ?3) ON CONFLICT DO \
+                 NOTHING",
                 params![tid, transfer.peer, transfer_type_int],
             )?;
+
+            if inserted < 1 {
+                return Ok(None);
+            }
 
             let is_incoming = match &transfer.files {
                 TransferFiles::Incoming(files) => {
@@ -105,11 +110,16 @@ impl Storage {
 
             conn.commit()?;
 
-            Ok::<(), Error>(())
+            Ok::<_, Error>(Some(()))
         };
 
-        if let Err(e) = task.await {
-            error!(self.logger, "Failed to insert transfer"; "error" => %e);
+        match task.await {
+            Err(e) => {
+                error!(self.logger, "Failed to insert transfer"; "error" => %e);
+                // DB error. Let's pretend the transfer was inserted
+                Some(())
+            }
+            Ok(res) => res,
         }
     }
 
