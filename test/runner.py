@@ -9,6 +9,7 @@ import time
 import math
 import re
 import docker
+from threading import Semaphore, Thread
 
 TESTCASE_TIMEOUT = 30
 
@@ -110,49 +111,51 @@ def run():
 
     results: dict[str, list[ContainerInfo]] = {}
 
+    sem = Semaphore(2)
     for i, scenario in enumerate(scenarios):
         print(
             f"Executing scenario {i+1}/{len(scenarios)}({scenario.id()}): {scenario.desc()}",
             flush=True,
         )
 
-        results[scenario.id()] = []
-        for runner in scenario.runners():
-            COMMON_VOLUMES = {}
-            parent_dir = os.path.dirname(os.getcwd())
-            COMMON_VOLUMES[parent_dir] = {"bind": "/libdrop", "mode": "rw"}
+        with sem:
+            results[scenario.id()] = []
+            for runner in scenario.runners():
+                COMMON_VOLUMES = {}
+                parent_dir = os.path.dirname(os.getcwd())
+                COMMON_VOLUMES[parent_dir] = {"bind": "/libdrop", "mode": "rw"}
 
-            COMMON_WORKING_DIR = "/libdrop/test"
-            COMMON_CAP_ADD = ["NET_ADMIN"]
+                COMMON_WORKING_DIR = "/libdrop/test"
+                COMMON_CAP_ADD = ["NET_ADMIN"]
 
-            hostname = f"{runner}-{scenario.id()}"
-            print(f"Starting {hostname}...")
-            LIB_PATH = os.environ["LIB_PATH"]
-            cmd = f"sh -c './run.py --runner={runner} --scenario={scenario.id()} --lib={LIB_PATH}'"
+                hostname = f"{runner}-{scenario.id()}"
+                print(f"Starting {hostname}...")
+                LIB_PATH = os.environ["LIB_PATH"]
+                cmd = f"sh -c './run.py --runner={runner} --scenario={scenario.id()} --lib={LIB_PATH}'"
 
-            env = [
-                "RUST_BACKTRACE=1",
-                f"DROP_PEER_REN=DROP_PEER_REN-{scenario.id()}",
-                f"DROP_PEER_STIMPY=DROP_PEER_STIMPY-{scenario.id()}",
-                f"DROP_PEER_GEORGE=DROP_PEER_GEORGE-{scenario.id()}",
-            ]
+                env = [
+                    "RUST_BACKTRACE=1",
+                    f"DROP_PEER_REN=DROP_PEER_REN-{scenario.id()}",
+                    f"DROP_PEER_STIMPY=DROP_PEER_STIMPY-{scenario.id()}",
+                    f"DROP_PEER_GEORGE=DROP_PEER_GEORGE-{scenario.id()}",
+                ]
 
-            print(f"Running {cmd}", flush=True)
-            container = client.containers.run(
-                image="ghcr.io/nordsecurity/libdrop:libdroptestimage",
-                name=f"{hostname}",
-                command=cmd,
-                volumes=COMMON_VOLUMES,
-                working_dir=COMMON_WORKING_DIR,
-                cap_add=COMMON_CAP_ADD,
-                environment=env,
-                hostname=f"{hostname}",
-                detach=True,
-                network="libdrop_test_network",
-            )
+                print(f"Running {cmd}", flush=True)
+                container = client.containers.run(
+                    image="ghcr.io/nordsecurity/libdrop:libdroptestimage",
+                    name=f"{hostname}",
+                    command=cmd,
+                    volumes=COMMON_VOLUMES,
+                    working_dir=COMMON_WORKING_DIR,
+                    cap_add=COMMON_CAP_ADD,
+                    environment=env,
+                    hostname=f"{hostname}",
+                    detach=True,
+                    network="libdrop_test_network",
+                )
 
-            info = ContainerInfo(container, scenario.id(), TESTCASE_TIMEOUT)
-            results[scenario.id()].append(info)
+                info = ContainerInfo(container, scenario.id(), TESTCASE_TIMEOUT)
+                results[scenario.id()].append(info)
 
     total_time = time.time() - start_time
     # total_cnt is total count of containers in all scenarios
@@ -201,7 +204,7 @@ def run():
                 )
 
                 print(f"Failed scenarios: {len(failed_scenarios)}/{len(scenarios)}")
-                
+
                 print("Failed scenarios and their logs")
                 for scn, info in results.items():
                     print("------------------------")
