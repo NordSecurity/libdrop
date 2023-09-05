@@ -136,7 +136,7 @@ class EventQueue:
         self, target_event: event.Event, ignore_progress: bool = True
     ) -> None:
         # TODO: a better solution would be to have infinite loop with a timeout check for all wait commands
-        for _ in range(10):
+        for _ in range(100): # TODO: this doesn't make sense
             with self._lock:
                 while len(self._events) > 0:
                     e = self._events[0]
