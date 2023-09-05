@@ -136,7 +136,7 @@ def run():
 
             print(f"Running {cmd}", flush=True)
             container = client.containers.run(
-                image="ghcr.io/nordsecurity/libdrop:test_image",
+                image="ghcr.io/nordsecurity/libdrop:libdroptestimage",
                 name=f"{hostname}",
                 command=cmd,
                 volumes=COMMON_VOLUMES,
@@ -168,8 +168,9 @@ def run():
                 if container.done():
                     done_containers = done_containers + 1
 
+        curr_time = time.strftime("%H:%M:%S", time.localtime())
         print(
-            f"*** Test suite progress: {done_containers}/{total_cnt} containers finished",
+            f"*** Test suite progress: {curr_time} {done_containers}/{total_cnt} containers finished",
             flush=True,
         )
         if done_containers == total_cnt:
@@ -195,6 +196,9 @@ def run():
                     f"*** Test suite finished unsuccessfully in {total_time}s",
                     flush=True,
                 )
+
+                print(f"Failed scenarios: {len(failed_scenarios)}/{len(scenarios)}")
+                
                 print("Failed scenarios and their logs")
                 for scn, info in results.items():
                     print("------------------------")

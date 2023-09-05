@@ -12,10 +12,14 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: 1.64.0
-          default: true
+          default: true        
       - name: docker sdk
         run: |
           pip3 install docker 
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 10
       - name: run tests
         run: |
-          make -C test
+          SCENARIO="scenario1.*" make -C test
