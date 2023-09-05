@@ -78,7 +78,10 @@ class ContainerInfo:
         self._container.run()
 
     def logs(self):
-        return self._container.logs().decode("utf-8")
+        logs = self._container.logs().decode("utf-8")
+        # prepend each log line with container name
+        logs = "\n".join([f"{self.name()}: {line}" for line in logs.split("\n")])
+        return logs
 
 
 def run():
