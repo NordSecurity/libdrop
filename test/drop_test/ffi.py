@@ -510,16 +510,13 @@ class Drop:
                 f"remove_transfer_file has failed with code: {err}({err_type})", err
             )
 
-    def start(self, addr: str, dbpath: str, max_reqs_per_sec: int):
+    def start(self, addr: str, dbpath: str):
         cfg = {
             "dir_depth_limit": 5,
             "transfer_file_limit": 1000,
-            "connection_max_retry_interval_ms": 2000,
-            "transfer_idle_lifetime_ms": 10000,
             "moose_event_path": "/tmp/moose-events.json",
             "moose_prod": False,
             "storage_path": dbpath,
-            "max_requests_per_sec": max_reqs_per_sec,
         }
 
         err = self._lib.norddrop_start(
