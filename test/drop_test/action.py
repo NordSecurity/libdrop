@@ -466,6 +466,7 @@ class Stop(Action):
         pass
 
     async def run(self, drop: ffi.Drop):
+        Sleep(10).run(drop)
         drop.stop()
 
     def __str__(self):
