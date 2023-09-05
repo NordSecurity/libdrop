@@ -18,12 +18,12 @@ make -C test
 ## Individual tests
 Testsuite takes a long time to complete so running specific tests might be preferential and much faster while developing. To run a specific testsuite:
 ```
-$SCENARIO=scenario_name make -C test
+SCENARIO=scenario_name make -C test
 ```
 
 ## Code coverage single test
 ```
-$SCENARIO=scenario_name make -C test coverage
+SCENARIO=scenario_name make -C test coverage
 ```
 
 ## Code coverage all testcases
