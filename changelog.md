@@ -1,7 +1,8 @@
 ### v5.0.1
-### **UNRELEASED**
+### **Broken Records**
 ---
 * Mitigate trasnfer cancelation being out of sync on high latency network
+* Periodic moose context updates(600s)
 
 ---
 <br>
