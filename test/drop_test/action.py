@@ -80,7 +80,8 @@ class ListenOnPort(Action):
 
     async def run(self, drop: ffi.Drop):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind((self._addr, 49111))
+        addr = dns_resolver.resolve(self._addr)
+        s.bind((addr, 49111))
         s.listen()
 
         # prevent socket from being closed
@@ -135,9 +136,11 @@ class Repeated(Action):
         self._times = times
 
     async def run(self, drop: ffi.Drop):
-        print(f"Running {self._times} times")
+        print(f"Running {self._times} times", flush=True)
         for _ in range(self._times):
+            print(f"  running 1 time...", flush=True)
             for action in self._actions:
+                print(f"    running {action}", flush=True)
                 await action.run(drop)
 
 
@@ -164,6 +167,10 @@ class NewTransfer(Action):
         self._paths: list[str] = paths
 
     async def run(self, drop: ffi.Drop):
+        print(">>>>>>>>>>")
+        print(os.listdir("/tmp"), flush=True)
+        print(">>>>>>>>>>")
+        
         with UUIDS_LOCK:
             xfid = drop.new_transfer(dns_resolver.resolve(self._peer), self._paths)
             UUIDS.append(xfid)
@@ -466,7 +473,6 @@ class Stop(Action):
         pass
 
     async def run(self, drop: ffi.Drop):
-        Sleep(10).run(drop)
         drop.stop()
 
     def __str__(self):
@@ -622,7 +628,7 @@ class Start(Action):
         self._dbpath = dbpath
 
     async def run(self, drop: ffi.Drop):
-        drop.start(self._addr, self._dbpath)
+        drop.start(dns_resolver.resolve(self._addr), self._dbpath)
 
     def __str__(self):
         return f"Start(addr={dns_resolver.resolve(self._addr)}, dbpath={self._dbpath})"
@@ -689,12 +695,16 @@ class EnsureTakesNoLonger(Action):
 
 
 class MakeHttpGetRequest(Action):
-    def __init__(self, url: str, status: int):
+    def __init__(self, peer: str, url: str, status: int, timeout=2):
+        self._timeout = timeout
+        self._peer = peer
         self._url = url
         self._status = status
 
     async def run(self, drop: ffi.Drop):
-        res = requests.get(self._url)
+        addr = dns_resolver.resolve(self._peer)
+        url = f"http://{addr}:49111{self._url}"
+        res = requests.get(url, timeout=self._timeout)
 
         if res.status_code != self._status:
             raise Exception(

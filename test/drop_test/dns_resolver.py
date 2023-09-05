@@ -41,17 +41,31 @@ class DNSResolver:  # TODO: the name is a lie, it's more of a PeerResolver
         )
         print(f"Initialized DNS resolver with {self._peer_mappings} peers", flush=True)
 
+    # Assumes IPV6 if peer name contains "6"
     def resolve(self, peer: str) -> str:
         hostname = self._peer_mappings[peer]
 
         if hostname in self._cache:
             return self._cache[hostname]
 
+        ipv6 = "6" in peer
+        
         for _ in range(5):
             try:
-                ip = socket.gethostbyname(hostname)
-                self._cache[hostname] = ip
-                return ip
+                if ipv6:
+                    ip = socket.getaddrinfo(hostname, 49111, socket.AF_INET6)
+                else:                    
+                    ip = socket.getaddrinfo(hostname, 49111, socket.AF_INET)
+                
+                #print all hosts
+                for i in ip:
+                   print("HOST: ", i[4], flush=True)
+                
+                
+                host = ip[0][4][0]
+                    
+                self._cache[hostname] = host
+                return host
 
             except:
                 print(f"Unable to resolve hostname({hostname}), retrying in 1s")
@@ -60,6 +74,7 @@ class DNSResolver:  # TODO: the name is a lie, it's more of a PeerResolver
 
         raise Exception(f"Unable to resolve hostname {hostname}")
 
+    # TODO: should really use OS network to resolve this
     def reverse_lookup(self, ip: str) -> str:
         for hostname, cached_ip in self._cache.items():
             if cached_ip == ip:

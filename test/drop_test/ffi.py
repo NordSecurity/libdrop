@@ -136,7 +136,7 @@ class EventQueue:
         self, target_event: event.Event, ignore_progress: bool = True
     ) -> None:
         # TODO: a better solution would be to have infinite loop with a timeout check for all wait commands
-        for _ in range(100): # TODO: this doesn't make sense
+        for _ in range(100):  # TODO: this doesn't make sense
             with self._lock:
                 while len(self._events) > 0:
                     e = self._events[0]
@@ -381,6 +381,7 @@ class Drop:
         self._retain = [logger_instance, eventer_instance, pubkey_instance, fd_instance]
 
     def new_transfer(self, peer: str, descriptors: typing.List[str]) -> str:
+        print(f">>>>>>>>> new_transfer: {peer}", flush=True)
         descriptors_json = []
         for descriptor in descriptors:
             descriptors_json.append({"path": descriptor})
@@ -395,7 +396,7 @@ class Drop:
             raise DropException(
                 "norddrop_new_transfer has failed to return a transfer ID"
             )
-
+        
         return xfid.decode("utf-8")
 
     def new_transfer_with_fd(self, peer: str, path: str, uri: str) -> str:
@@ -514,6 +515,7 @@ class Drop:
             )
 
     def start(self, addr: str, dbpath: str):
+        print(f">>>>>>>>> start: {addr}", flush=True)        
         cfg = {
             "dir_depth_limit": 5,
             "transfer_file_limit": 1000,
