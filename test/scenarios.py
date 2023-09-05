@@ -6516,7 +6516,7 @@ scenarios = [
                         ],
                         50,
                     ),
-                    # Let's issure 10 more than the limit to ensure we triggered the protection
+                    # Let's issue 10 more than the limit to ensure we triggered the protection
                     action.ExpectAnyError(
                         action.Repeated(
                             [
@@ -6527,7 +6527,7 @@ scenarios = [
                             10,
                         ),
                     ),
-                    # Check if we get an apporpiate HTTP error code
+                    # Check if we get an appropriate HTTP error code
                     action.MakeHttpGetRequest(
                         "http://172.20.0.15:49111/non-existing-path", 429
                     ),
