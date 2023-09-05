@@ -322,16 +322,6 @@ impl HandlerLoop<'_> {
             }
         }
     }
-
-    async fn on_stop(&mut self) {
-        debug!(self.logger, "Stopping silently");
-
-        let tasks = self.jobs.drain().map(|(_, task)| async move {
-            task.events.stop_silent(Status::Canceled).await;
-        });
-
-        futures::future::join_all(tasks).await;
-    }
 }
 
 #[async_trait::async_trait]
@@ -433,21 +423,14 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         Ok(())
     }
 
-    async fn on_close(&mut self, by_peer: bool) {
-        debug!(self.logger, "ServerHandler::on_close(by_peer: {})", by_peer);
+    async fn on_close(&mut self) {
+        debug!(self.logger, "ServerHandler::on_close(), stopping silently",);
 
-        self.on_stop().await;
+        let tasks = self.jobs.drain().map(|(_, task)| async move {
+            task.events.stop_silent(Status::Canceled).await;
+        });
 
-        if by_peer {
-            self.state
-                .event_tx
-                .send(crate::Event::IncomingTransferCanceled(
-                    self.xfer.clone(),
-                    by_peer,
-                ))
-                .await
-                .expect("Could not send a file cancelled event, channel closed");
-        }
+        futures::future::join_all(tasks).await;
     }
 
     async fn on_text_msg(&mut self, _: &mut WebSocket, text: &str) -> anyhow::Result<()> {
@@ -474,7 +457,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
     async fn finalize_success(mut self) {
         debug!(self.logger, "Finalizing");
-        self.on_stop().await;
 
         let files = self
             .state
