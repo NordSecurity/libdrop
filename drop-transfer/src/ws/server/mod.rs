@@ -370,7 +370,7 @@ impl RunContext<'_> {
     ) {
         let (req_send, mut req_rx) = mpsc::unbounded_channel();
 
-        if let Err(err) = init_client_handler(&self.state, &xfer, req_send).await {
+        if let Err(err) = self.init_manager(req_send, &xfer).await {
             error!(self.logger, "Failed to init trasfer: {err:?}");
             let _ = handler.on_error(&mut socket, err).await;
             return;
@@ -405,7 +405,7 @@ impl RunContext<'_> {
                     recv = socket.recv() => {
                         let msg =  recv.context("Failed to receive WS message")?;
 
-                        if on_recv(&mut socket, &mut handler, msg, self.logger).await?.is_break() {
+                        if self.on_recv(&mut socket, &mut handler, &xfer, msg).await?.is_break() {
                             break;
                         }
                     },
@@ -453,6 +453,63 @@ impl RunContext<'_> {
         }
 
         jobs.shutdown().await;
+    }
+
+    async fn init_manager(
+        &self,
+        req_send: mpsc::UnboundedSender<ServerReq>,
+        xfer: &Arc<IncomingTransfer>,
+    ) -> anyhow::Result<()> {
+        let is_new = self
+            .state
+            .transfer_manager
+            .register_incoming(xfer.clone(), req_send)
+            .await?;
+
+        if is_new {
+            self.state
+                .event_tx
+                .send(Event::RequestReceived(xfer.clone()))
+                .await
+                .expect("Failed to notify receiving peer!");
+        }
+
+        Ok(())
+    }
+
+    async fn on_recv(
+        &self,
+        socket: &mut WebSocket,
+        handler: &mut impl HandlerLoop,
+        xfer: &Arc<IncomingTransfer>,
+        msg: Message,
+    ) -> anyhow::Result<ControlFlow<()>> {
+        if let Ok(text) = msg.to_str() {
+            debug!(self.logger, "Received:\n\t{text}");
+            handler.on_text_msg(socket, text).await?;
+        } else if msg.is_binary() {
+            handler.on_bin_msg(socket, msg.into_bytes()).await?;
+        } else if msg.is_close() {
+            debug!(self.logger, "Got CLOSE frame");
+
+            handler.on_close().await;
+
+            self.state
+                .event_tx
+                .send(crate::Event::IncomingTransferCanceled(xfer.clone(), true))
+                .await
+                .expect("Could not send a file cancelled event, channel closed");
+
+            return Ok(ControlFlow::Break(()));
+        } else if msg.is_ping() {
+            debug!(self.logger, "PING");
+        } else if msg.is_pong() {
+            debug!(self.logger, "PONG");
+        } else {
+            warn!(self.logger, "Server received invalid WS message type");
+        }
+
+        anyhow::Ok(ControlFlow::Continue(()))
     }
 }
 
@@ -738,27 +795,6 @@ fn move_tmp_to_dst(
     Ok(dst_location)
 }
 
-async fn init_client_handler(
-    state: &State,
-    xfer: &Arc<IncomingTransfer>,
-    req_send: mpsc::UnboundedSender<ServerReq>,
-) -> anyhow::Result<()> {
-    let is_new = state
-        .transfer_manager
-        .register_incoming(xfer.clone(), req_send)
-        .await?;
-
-    if is_new {
-        state
-            .event_tx
-            .send(Event::RequestReceived(xfer.clone()))
-            .await
-            .expect("Failed to notify receiving peer!");
-    }
-
-    Ok(())
-}
-
 async fn on_req(
     socket: &mut WebSocket,
     jobs: &mut JoinSet<()>,
@@ -775,39 +811,12 @@ async fn on_req(
         ServerReq::Close => {
             debug!(logger, "Stoppping server connection gracefuly");
             socket.send(Message::close()).await?;
-            handler.on_close(false).await;
+            handler.on_close().await;
             return Ok(ControlFlow::Break(()));
         }
     }
 
     Ok(ControlFlow::Continue(()))
-}
-
-async fn on_recv(
-    socket: &mut WebSocket,
-    handler: &mut impl HandlerLoop,
-    msg: Message,
-    logger: &slog::Logger,
-) -> anyhow::Result<ControlFlow<()>> {
-    if let Ok(text) = msg.to_str() {
-        debug!(logger, "Received:\n\t{text}");
-        handler.on_text_msg(socket, text).await?;
-    } else if msg.is_binary() {
-        handler.on_bin_msg(socket, msg.into_bytes()).await?;
-    } else if msg.is_close() {
-        debug!(logger, "Got CLOSE frame");
-        handler.on_close(true).await;
-
-        return Ok(ControlFlow::Break(()));
-    } else if msg.is_ping() {
-        debug!(logger, "PING");
-    } else if msg.is_pong() {
-        debug!(logger, "PONG");
-    } else {
-        warn!(logger, "Server received invalid WS message type");
-    }
-
-    anyhow::Ok(ControlFlow::Continue(()))
 }
 
 async fn start_download(
