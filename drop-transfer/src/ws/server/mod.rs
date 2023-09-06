@@ -137,28 +137,27 @@ pub(crate) fn spawn(
                 .map_err(|_| crate::Error::InvalidArgument)?,
         )));
 
-        warp::path("drop")
+        warp::filters::addr::remote()
+            .and_then(move |peer: Option<SocketAddr>| {
+                let peer = peer.expect("Transport should use IP addresses");
+                let check = rate_limiter.check_key(&peer.ip());
+
+                async move {
+                    match check {
+                        Ok(_) => Ok(peer),
+                        Err(_) => Err(warp::reject::custom(ToManyReqs)),
+                    }
+                }
+            })
+            .and(warp::path("drop"))
             .and(warp::path::param().and_then(|version: String| async move {
                 version
                     .parse::<protocol::Version>()
                     .map_err(|_| warp::reject::not_found())
             }))
-            .and(
-                warp::filters::addr::remote().and_then(move |peer: Option<SocketAddr>| {
-                    let peer = peer.expect("Transport should use IP addresses");
-                    let check = rate_limiter.check_key(&peer.ip());
-
-                    async move {
-                        match check {
-                            Ok(_) => Ok(peer),
-                            Err(_) => Err(warp::reject::custom(ToManyReqs)),
-                        }
-                    }
-                }),
-            )
             .and(warp::filters::header::optional("authorization"))
             .and_then(
-                move |version: protocol::Version, peer: SocketAddr, auth_header: Option<String>| {
+                move |peer: SocketAddr, version: protocol::Version, auth_header: Option<String>| {
                     let nonces = nonces.clone();
                     let auth = auth.clone();
 
