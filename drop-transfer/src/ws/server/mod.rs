@@ -79,176 +79,114 @@ struct StreamCtx<'a> {
     events: &'a FileEventTx<IncomingTransfer>,
 }
 
+#[derive(Debug)]
+struct MissingAuth(SocketAddr);
+impl warp::reject::Reject for MissingAuth {}
+
+#[derive(Debug)]
+struct Unauthrorized;
+impl warp::reject::Reject for Unauthrorized {}
+
+#[derive(Debug)]
+struct ToManyReqs;
+impl warp::reject::Reject for ToManyReqs {}
+
 pub(crate) fn spawn(
     addr: IpAddr,
     state: Arc<State>,
-    auth: Arc<auth::Context>,
     logger: Logger,
     stop: CancellationToken,
     alive: AliveGuard,
 ) -> crate::Result<()> {
     let nonce_store = Arc::new(Mutex::new(HashMap::new()));
 
-    #[derive(Debug)]
-    struct MissingAuth(SocketAddr);
-    impl warp::reject::Reject for MissingAuth {}
-
-    #[derive(Debug)]
-    struct Unauthrorized;
-    impl warp::reject::Reject for Unauthrorized {}
-
-    #[derive(Debug)]
-    struct ToManyReqs;
-    impl warp::reject::Reject for ToManyReqs {}
-
-    async fn handle_rejection(
-        nonces: &Mutex<HashMap<SocketAddr, Nonce>>,
-        err: warp::Rejection,
-    ) -> Result<Box<dyn warp::Reply>, warp::Rejection> {
-        if let Some(MissingAuth(peer)) = err.find() {
-            let nonce = Nonce::generate();
-            let value = drop_auth::http::WWWAuthenticate::new(nonce);
-
-            nonces.lock().await.insert(*peer, nonce);
-
-            Ok(Box::new(warp::reply::with_header(
-                StatusCode::UNAUTHORIZED,
-                drop_auth::http::WWWAuthenticate::KEY,
-                value.to_string(),
-            )))
-        } else if let Some(Unauthrorized) = err.find() {
-            Ok(Box::new(StatusCode::UNAUTHORIZED))
-        } else if let Some(ToManyReqs) = err.find() {
-            Ok(Box::new(StatusCode::TOO_MANY_REQUESTS))
-        } else {
-            Err(err)
-        }
-    }
-
     let service = {
-        let logger = logger.clone();
-        let nonces = nonce_store.clone();
-        let alive = alive.clone();
-        let stop = stop.clone();
-
         let rate_limiter = Arc::new(governor::RateLimiter::dashmap(governor::Quota::per_second(
             drop_config::MAX_REQUESTS_PER_SEC
                 .try_into()
                 .map_err(|_| crate::Error::InvalidArgument)?,
         )));
 
-        warp::filters::addr::remote()
-            .and_then(move |peer: Option<SocketAddr>| {
-                let peer = peer.expect("Transport should use IP addresses");
-                let check = rate_limiter.check_key(&peer.ip());
+        let remote = warp::filters::addr::remote()
+            .map(move |peer: Option<SocketAddr>| peer.expect("Transport should use IP addresses"));
 
+        let ddos = remote
+            .and_then(move |peer: SocketAddr| {
+                let check = rate_limiter.check_key(&peer.ip());
                 async move {
                     match check {
-                        Ok(_) => Ok(peer),
+                        Ok(_) => Ok(()),
                         Err(_) => Err(warp::reject::custom(ToManyReqs)),
                     }
                 }
             })
-            .and(warp::path("drop"))
-            .and(warp::path::param().and_then(|version: String| async move {
+            .untuple_one();
+
+        let route =
+            warp::path("drop").and(warp::path::param().and_then(|version: String| async move {
                 version
                     .parse::<protocol::Version>()
                     .map_err(|_| warp::reject::not_found())
-            }))
-            .and(warp::filters::header::optional("authorization"))
-            .and_then(
-                move |peer: SocketAddr, version: protocol::Version, auth_header: Option<String>| {
-                    let nonces = nonces.clone();
-                    let auth = auth.clone();
+            }));
 
-                    async move {
-                        // Uncache the peer nonce first
-                        let nonce = nonces.lock().await.remove(&peer);
+        let base = remote.and(route).and(warp::filters::header::optional(
+            drop_auth::http::Authorization::KEY,
+        ));
 
-                        match version {
-                            protocol::Version::V1 | protocol::Version::V2 => (),
-                            _ => {
-                                let auth_header = auth_header
-                                    .ok_or_else(|| warp::reject::custom(MissingAuth(peer)))?;
+        let ws_route = {
+            let logger = logger.clone();
+            let nonces = nonce_store.clone();
+            let alive = alive.clone();
+            let stop = stop.clone();
+            let state = state.clone();
 
-                                let nonce =
-                                    nonce.ok_or_else(|| warp::reject::custom(Unauthrorized))?;
-
-                                if !auth.authorize(peer.ip(), &auth_header, &nonce) {
-                                    return Err(warp::reject::custom(Unauthrorized));
-                                }
-                            }
-                        };
-
-                        Ok((version, peer))
-                    }
-                },
-            )
-            .untuple_one()
-            .and(warp::ws())
-            .map(
-                move |version: protocol::Version, peer: SocketAddr, ws: warp::ws::Ws| {
+            base.and(warp::ws()).and_then(
+                move |peer: SocketAddr,
+                      version: protocol::Version,
+                      auth_header: Option<String>,
+                      ws: warp::ws::Ws| {
                     let state = Arc::clone(&state);
                     let alive = alive.clone();
                     let stop = stop.clone();
                     let logger = logger.clone();
+                    let nonces = nonces.clone();
 
-                    ws.on_upgrade(move |socket| async move {
-                        info!(logger, "Client requested protocol version: {}", version);
+                    async move {
+                        authorize(&state.auth, &nonces, peer, version, auth_header).await?;
 
-                        let ctx = RunContext {
-                            logger: &logger,
-                            state: state.clone(),
-                            stop: &stop,
-                        };
+                        let reply = ws.on_upgrade(move |socket| async move {
+                            info!(logger, "Client requested protocol version: {}", version);
+                            websocket_start(socket, state, alive, stop, version, peer, logger)
+                                .await;
+                        });
 
-                        match version {
-                            protocol::Version::V1 => {
-                                ctx.run(
-                                    socket,
-                                    v2::HandlerInit::<false>::new(
-                                        peer.ip(),
-                                        &state,
-                                        &logger,
-                                        &alive,
-                                    ),
-                                )
-                                .await
-                            }
-                            protocol::Version::V2 => {
-                                ctx.run(
-                                    socket,
-                                    v2::HandlerInit::<true>::new(
-                                        peer.ip(),
-                                        &state,
-                                        &logger,
-                                        &alive,
-                                    ),
-                                )
-                                .await
-                            }
-                            protocol::Version::V4 => {
-                                ctx.run(
-                                    socket,
-                                    v4::HandlerInit::new(peer.ip(), state, &logger, &alive),
-                                )
-                                .await
-                            }
-                            protocol::Version::V5 => {
-                                ctx.run(
-                                    socket,
-                                    v5::HandlerInit::new(peer.ip(), state, &logger, &alive),
-                                )
-                                .await
-                            }
-                        }
-                    })
+                        Ok::<_, warp::Rejection>(reply)
+                    }
                 },
             )
-            .recover(move |err| {
-                let nonces = Arc::clone(&nonce_store);
-                async move { handle_rejection(&nonces, err).await }
-            })
+        };
+
+        let check_route = {
+            let nonces = nonce_store.clone();
+
+            base.and(warp::path!("check" / String))
+                .and(warp::get())
+                .and_then(move |peer, version, auth_header, uuid: String| {
+                    let state = Arc::clone(&state);
+                    let nonces = nonces.clone();
+
+                    async move {
+                        authorize(&state.auth, &nonces, peer, version, auth_header).await?;
+
+                        Ok::<_, warp::Rejection>(format!("Hello {uuid}"))
+                    }
+                })
+        };
+
+        ddos.and(ws_route.or(check_route)).recover(move |err| {
+            let nonces = Arc::clone(&nonce_store);
+            async move { handle_rejection(&nonces, err).await }
+        })
     };
 
     let future = match warp::serve(service)
@@ -289,6 +227,103 @@ pub(crate) fn spawn(
     });
 
     Ok(())
+}
+
+async fn websocket_start(
+    socket: warp::ws::WebSocket,
+    state: Arc<State>,
+    alive: AliveGuard,
+    stop: CancellationToken,
+    version: protocol::Version,
+    peer: SocketAddr,
+    logger: Logger,
+) {
+    let ctx = RunContext {
+        logger: &logger,
+        state: state.clone(),
+        stop: &stop,
+    };
+
+    match version {
+        protocol::Version::V1 => {
+            ctx.run(
+                socket,
+                v2::HandlerInit::<false>::new(peer.ip(), &state, &logger, &alive),
+            )
+            .await
+        }
+        protocol::Version::V2 => {
+            ctx.run(
+                socket,
+                v2::HandlerInit::<true>::new(peer.ip(), &state, &logger, &alive),
+            )
+            .await
+        }
+        protocol::Version::V4 => {
+            ctx.run(
+                socket,
+                v4::HandlerInit::new(peer.ip(), state, &logger, &alive),
+            )
+            .await
+        }
+        protocol::Version::V5 => {
+            ctx.run(
+                socket,
+                v5::HandlerInit::new(peer.ip(), state, &logger, &alive),
+            )
+            .await
+        }
+    }
+}
+
+async fn authorize(
+    auth: &auth::Context,
+    nonces: &Mutex<HashMap<SocketAddr, Nonce>>,
+    peer: SocketAddr,
+    version: protocol::Version,
+    auth_header: Option<String>,
+) -> Result<(), warp::Rejection> {
+    // Uncache the peer nonce first
+    let nonce = nonces.lock().await.remove(&peer);
+
+    match version {
+        protocol::Version::V1 | protocol::Version::V2 => (),
+        _ => {
+            let auth_header = auth_header.ok_or_else(|| warp::reject::custom(MissingAuth(peer)))?;
+
+            let nonce = nonce.ok_or_else(|| warp::reject::custom(Unauthrorized))?;
+
+            if !auth.authorize(peer.ip(), &auth_header, &nonce) {
+                return Err(warp::reject::custom(Unauthrorized));
+            }
+        }
+    };
+
+    Ok(())
+}
+
+async fn handle_rejection(
+    nonces: &Mutex<HashMap<SocketAddr, Nonce>>,
+    err: warp::Rejection,
+) -> Result<Box<dyn warp::Reply>, warp::Rejection> {
+    if let Some(MissingAuth(peer)) = err.find() {
+        let nonce = Nonce::generate();
+        let value = drop_auth::http::WWWAuthenticate::new(nonce);
+
+        nonces.lock().await.insert(*peer, nonce);
+
+        Ok(Box::new(warp::reply::with_header(
+            StatusCode::UNAUTHORIZED,
+            drop_auth::http::WWWAuthenticate::KEY,
+            value.to_string(),
+        )))
+    } else if let Some(Unauthrorized) = err.find() {
+        Ok(Box::new(StatusCode::UNAUTHORIZED))
+    } else if let Some(ToManyReqs) = err.find() {
+        Ok(Box::new(StatusCode::TOO_MANY_REQUESTS))
+    } else {
+        Err(err)
+    }
 }
 
 struct RunContext<'a> {
