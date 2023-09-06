@@ -36,3 +36,4 @@ pub const CONNECTION_MAX_RETRY_INTERVAL: Duration = Duration::new(10, 0);
 pub const MAX_UPLOADS_IN_FLIGHT: usize = 4;
 pub const MAX_REQUESTS_PER_SEC: u32 = 50;
 pub const WS_SEND_TIMEOUT: Duration = Duration::new(20, 0);
+pub const ALIVE_CHECK_INTERVAL: Duration = Duration::new(60, 0);

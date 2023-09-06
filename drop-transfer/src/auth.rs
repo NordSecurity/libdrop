@@ -1,6 +1,7 @@
 use std::net::IpAddr;
 
 use drop_auth::{PublicKey, SecretKey};
+use hyper::{http::HeaderValue, Response};
 
 pub struct Context {
     secret: SecretKey,
@@ -32,14 +33,20 @@ impl Context {
         .is_some()
     }
 
-    pub fn create_ticket_header_val(
+    pub fn create_authorization_header<T>(
         &self,
+        response: &Response<T>,
         peer_ip: IpAddr,
-        www_auth_header_value: &str,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<(&'static str, HeaderValue)> {
         use anyhow::Context;
 
         tokio::task::block_in_place(|| {
+            let www_auth_header_value = response
+                .headers()
+                .get(drop_auth::http::WWWAuthenticate::KEY)
+                .context("Missing 'www-authenticate' header")?
+                .to_str()?;
+
             let resp = drop_auth::http::WWWAuthenticate::parse(www_auth_header_value)
                 .context("Failed to parse 'www-authenticate' header")?;
 
@@ -48,7 +55,8 @@ impl Context {
             let ticket = drop_auth::create_ticket(&self.secret, &public, resp)
                 .context("Failed to create auth ticket")?;
 
-            anyhow::Ok(ticket.to_string())
+            let value = HeaderValue::from_str(&ticket.to_string())?;
+            anyhow::Ok((drop_auth::http::Authorization::KEY, value))
         })
     }
 }
