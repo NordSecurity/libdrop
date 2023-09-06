@@ -14,7 +14,7 @@ use std::{
 };
 
 use anyhow::Context;
-use hyper::{http::HeaderValue, StatusCode};
+use hyper::StatusCode;
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
     net::TcpStream,
@@ -245,26 +245,13 @@ async fn make_request(
         if resp.status() == StatusCode::UNAUTHORIZED {
             debug!(logger, "Creating 'authorization' header");
 
-            let extract_www_auth = || {
-                let val = resp
-                    .headers()
-                    .get(drop_auth::http::WWWAuthenticate::KEY)
-                    .context("Missing 'www-authenticate' header")?
-                    .to_str()?;
-
-                auth.create_ticket_header_val(ip, val)
-            };
-
             debug!(logger, "Extracting peers ({ip}) public key");
-            match extract_www_auth() {
-                Ok(auth_header) => {
+            match auth.create_authorization_header(resp, ip) {
+                Ok((key, value)) => {
                     debug!(logger, "Building 'authorization' request");
 
                     let mut req = url.into_client_request()?;
-                    req.headers_mut().insert(
-                        drop_auth::http::Authorization::KEY,
-                        HeaderValue::from_str(&auth_header.to_string())?,
-                    );
+                    req.headers_mut().insert(key, value);
 
                     debug!(logger, "Re-sending request with the 'authorization' header");
                     tokio_tungstenite::client_async(req, &mut *socket).await?;

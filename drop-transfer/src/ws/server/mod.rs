@@ -32,7 +32,7 @@ use warp::{ws::Message, Filter};
 use self::socket::{WebSocket, WsStream};
 use super::{events::FileEventTx, IncomingFileEventTx};
 use crate::{
-    auth,
+    auth, check,
     file::{self, FileToRecv},
     protocol,
     quarantine::PathExt,
@@ -84,8 +84,8 @@ struct MissingAuth(SocketAddr);
 impl warp::reject::Reject for MissingAuth {}
 
 #[derive(Debug)]
-struct Unauthrorized;
-impl warp::reject::Reject for Unauthrorized {}
+struct Unauthorized;
+impl warp::reject::Reject for Unauthorized {}
 
 #[derive(Debug)]
 struct ToManyReqs;
@@ -242,6 +242,7 @@ async fn websocket_start(
         logger: &logger,
         state: state.clone(),
         stop: &stop,
+        alive: &alive,
     };
 
     match version {
@@ -291,10 +292,10 @@ async fn authorize(
         _ => {
             let auth_header = auth_header.ok_or_else(|| warp::reject::custom(MissingAuth(peer)))?;
 
-            let nonce = nonce.ok_or_else(|| warp::reject::custom(Unauthrorized))?;
+            let nonce = nonce.ok_or_else(|| warp::reject::custom(Unauthorized))?;
 
             if !auth.authorize(peer.ip(), &auth_header, &nonce) {
-                return Err(warp::reject::custom(Unauthrorized));
+                return Err(warp::reject::custom(Unauthorized));
             }
         }
     };
@@ -317,7 +318,7 @@ async fn handle_rejection(
             drop_auth::http::WWWAuthenticate::KEY,
             value.to_string(),
         )))
-    } else if let Some(Unauthrorized) = err.find() {
+    } else if let Some(Unauthorized) = err.find() {
         Ok(Box::new(StatusCode::UNAUTHORIZED))
     } else if let Some(ToManyReqs) = err.find() {
         Ok(Box::new(StatusCode::TOO_MANY_REQUESTS))
@@ -330,6 +331,7 @@ struct RunContext<'a> {
     logger: &'a slog::Logger,
     state: Arc<State>,
     stop: &'a CancellationToken,
+    alive: &'a AliveGuard,
 }
 
 impl RunContext<'_> {
@@ -507,6 +509,14 @@ impl RunContext<'_> {
                 .send(Event::RequestReceived(xfer.clone()))
                 .await
                 .expect("Failed to notify receiving peer!");
+
+            check::spawn(
+                self.state.clone(),
+                xfer.clone(),
+                self.logger.clone(),
+                self.alive.clone(),
+                self.stop.clone(),
+            );
         }
 
         Ok(())
