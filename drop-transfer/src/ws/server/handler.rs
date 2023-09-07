@@ -44,7 +44,7 @@ pub trait HandlerLoop {
     async fn issue_failure(&mut self, ws: &mut WebSocket, file: FileId) -> anyhow::Result<()>;
     async fn issue_done(&mut self, ws: &mut WebSocket, file: FileId) -> anyhow::Result<()>;
 
-    async fn on_close(&mut self, by_peer: bool);
+    async fn on_close(&mut self);
     async fn on_text_msg(&mut self, ws: &mut WebSocket, text: &str) -> anyhow::Result<()>;
     async fn on_bin_msg(&mut self, ws: &mut WebSocket, bytes: Vec<u8>) -> anyhow::Result<()>;
 

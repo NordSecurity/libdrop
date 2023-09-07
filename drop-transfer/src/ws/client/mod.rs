@@ -5,6 +5,7 @@ mod v4;
 mod v5;
 
 use std::{
+    future::Future,
     io,
     net::{IpAddr, SocketAddr},
     ops::ControlFlow,
@@ -57,6 +58,13 @@ struct RunContext<'a> {
     xfer: &'a Arc<OutgoingTransfer>,
 }
 
+enum WsConnection {
+    Stopped,
+    Unrecoverable(crate::Error),
+    Recoverable,
+    Connected(WsStream, protocol::Version),
+}
+
 pub(crate) fn spawn(
     state: Arc<State>,
     xfer: Arc<OutgoingTransfer>,
@@ -83,18 +91,20 @@ pub(crate) fn spawn(
 
 async fn run(state: Arc<State>, xfer: Arc<OutgoingTransfer>, logger: Logger, alive: AliveGuard) {
     loop {
-        let cf = connect_to_peer(&state, &xfer, &logger, &alive).await;
-        if cf.is_break() {
-            if let Err(err) = state.transfer_manager.outgoing_remove(xfer.id()).await {
-                warn!(
-                    logger,
-                    "Failed to clear sync state for {}: {err}",
-                    xfer.id()
-                );
-            }
-
-            return;
+        if connect_to_peer(&state, &xfer, &logger, &alive)
+            .await
+            .is_break()
+        {
+            break;
         }
+    }
+
+    if let Err(err) = state.transfer_manager.outgoing_remove(xfer.id()).await {
+        warn!(
+            logger,
+            "Failed to clear sync state for {}: {err}",
+            xfer.id()
+        );
     }
 }
 
@@ -104,10 +114,11 @@ async fn connect_to_peer(
     logger: &Logger,
     alive: &AliveGuard,
 ) -> ControlFlow<()> {
-    let (socket, ver) = match establish_ws_conn(state, xfer.peer(), logger).await {
-        Ok(Some(res)) => res,
-        Ok(None) => return ControlFlow::Continue(()),
-        Err(err) => {
+    let (socket, ver) = match establish_ws_conn(state, xfer, logger).await {
+        WsConnection::Connected(sock, ver) => (sock, ver),
+        WsConnection::Recoverable => return ControlFlow::Continue(()),
+        WsConnection::Stopped => return ControlFlow::Break(()),
+        WsConnection::Unrecoverable(err) => {
             error!(logger, "Could not connect to peer {}: {}", xfer.id(), err);
 
             state
@@ -158,10 +169,15 @@ async fn connect_to_peer(
 
 async fn establish_ws_conn(
     state: &State,
-    ip: IpAddr,
+    xfer: &OutgoingTransfer,
     logger: &Logger,
-) -> crate::Result<Option<(WsStream, protocol::Version)>> {
-    let mut socket = tcp_connect(ip, logger).await;
+) -> WsConnection {
+    let break_check = || async { !state.transfer_manager.is_outgoing_alive(xfer.id()).await };
+
+    let mut socket = match tcp_connect(xfer.peer(), break_check, logger).await {
+        Some(socket) => socket,
+        None => return WsConnection::Stopped,
+    };
 
     let mut versions_to_try = [
         protocol::Version::V5,
@@ -172,18 +188,20 @@ async fn establish_ws_conn(
     .into_iter();
 
     let ver = loop {
-        let ver = versions_to_try.next().ok_or_else(|| {
-            crate::Error::Io(io::Error::new(
+        let ver = if let Some(ver) = versions_to_try.next() {
+            ver
+        } else {
+            return WsConnection::Unrecoverable(crate::Error::Io(io::Error::new(
                 io::ErrorKind::NotFound,
                 "Server did not respond for any of known protocol versions",
-            ))
-        })?;
+            )));
+        };
 
-        match make_request(&mut socket, ip, ver, state.auth.as_ref(), logger).await {
+        match make_request(&mut socket, xfer.peer(), ver, state.auth.as_ref(), logger).await {
             Ok(_) => break ver,
             Err(tungstenite::Error::Http(resp)) if resp.status().is_client_error() => {
                 if resp.status() == StatusCode::UNAUTHORIZED {
-                    return Err(crate::Error::AuthenticationFailed);
+                    return WsConnection::Unrecoverable(crate::Error::AuthenticationFailed);
                 } else {
                     debug!(
                         logger,
@@ -193,13 +211,13 @@ async fn establish_ws_conn(
             }
             Err(err) => {
                 info!(logger, "Error while making the HTTP request: {err:?}");
-                return Ok(None);
+                return WsConnection::Recoverable;
             }
         }
     };
 
     let client = WebSocketStream::from_raw_socket(socket, Role::Client, None).await;
-    Ok(Some((client, ver)))
+    WsConnection::Connected(client, ver)
 }
 
 async fn make_request(
@@ -263,12 +281,20 @@ async fn make_request(
     Err(err)
 }
 
-async fn tcp_connect(ip: IpAddr, logger: &Logger) -> TcpStream {
+async fn tcp_connect<Fut: Future<Output = bool>>(
+    ip: IpAddr,
+    break_check: impl Fn() -> Fut,
+    logger: &Logger,
+) -> Option<TcpStream> {
     let mut sleep_time = Duration::from_millis(200);
 
     loop {
+        if break_check().await {
+            break;
+        }
+
         match TcpStream::connect((ip, drop_config::PORT)).await {
-            Ok(sock) => break sock,
+            Ok(sock) => return Some(sock),
             Err(err) => {
                 debug!(
                     logger,
@@ -284,6 +310,8 @@ async fn tcp_connect(ip: IpAddr, logger: &Logger) -> TcpStream {
             }
         }
     }
+
+    None
 }
 
 impl RunContext<'_> {
