@@ -91,6 +91,10 @@ impl warp::reject::Reject for Unauthorized {}
 struct ToManyReqs;
 impl warp::reject::Reject for ToManyReqs {}
 
+#[derive(Debug)]
+struct BadRequest;
+impl warp::reject::Reject for BadRequest {}
+
 pub(crate) fn spawn(
     addr: IpAddr,
     state: Arc<State>,
@@ -178,7 +182,14 @@ pub(crate) fn spawn(
                     async move {
                         authorize(&state.auth, &nonces, peer, version, auth_header).await?;
 
-                        Ok::<_, warp::Rejection>(format!("Hello {uuid}"))
+                        let uuid = uuid.parse().map_err(|_| warp::reject::custom(BadRequest))?;
+                        let status = if state.transfer_manager.is_outgoing_alive(uuid).await {
+                            StatusCode::OK
+                        } else {
+                            StatusCode::GONE
+                        };
+
+                        Ok::<_, warp::Rejection>(status)
                     }
                 })
         };
@@ -322,6 +333,8 @@ async fn handle_rejection(
         Ok(Box::new(StatusCode::UNAUTHORIZED))
     } else if let Some(ToManyReqs) = err.find() {
         Ok(Box::new(StatusCode::TOO_MANY_REQUESTS))
+    } else if let Some(BadRequest) = err.find() {
+        Ok(Box::new(StatusCode::BAD_REQUEST))
     } else {
         Err(err)
     }
