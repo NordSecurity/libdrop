@@ -692,6 +692,7 @@ scenarios = [
                             },
                         )
                     ),
+                    action.Sleep(1),
                     action.CancelTransferRequest(0),
                     action.Wait(event.FinishTransferCanceled(0, False)),
                     action.NoEvent(),
@@ -956,6 +957,7 @@ scenarios = [
                             },
                         )
                     ),
+                    action.SleepMs(200),
                     action.CancelTransferRequest(0),
                     action.Wait(event.FinishTransferCanceled(0, False)),
                     action.NoEvent(),
@@ -1000,28 +1002,31 @@ scenarios = [
             "ren": ActionList(
                 [
                     action.Start("172.20.0.5"),
-                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-big"]),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
                             0,
                             {
                                 event.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
                                 ),
                             },
                         )
                     ),
                     action.CancelTransferRequest(0),
                     action.Wait(event.FinishTransferCanceled(0, False)),
-                    action.NoEvent(),
+                    action.Sleep(4),
                     action.Stop(),
                 ]
             ),
             "stimpy": ActionList(
                 [
-                    action.Sleep(8),
+                    action.Sleep(1),
                     action.Start("172.20.0.15"),
-                    action.NoEvent(),
+                    action.NoEvent(4),
+                    action.AssertTransfers([], 0),
                     action.Stop(),
                 ]
             ),
@@ -5034,12 +5039,14 @@ scenarios = [
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-small"].id, False)
                     ),
+                    action.SleepMs(200),
                     action.RejectTransferFile(0, FILES["testfile-small"].id),
                     action.Wait(
                         event.FinishFileFailed(
                             0, FILES["testfile-small"].id, Error.FILE_REJECTED
                         ),
                     ),
+                    action.SleepMs(200),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
@@ -6148,28 +6155,18 @@ scenarios = [
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
                     action.Stop(),
-                    action.Sleep(4),
+                    action.Sleep(2),
                     action.Start("172.20.0.5", dbpath="/tmp/db/29-8-ren.sqlite"),
                 ]
             ),
             "stimpy": ActionList(
                 [
-                    action.Sleep(4),
+                    action.Sleep(1),
                     action.Start("172.20.0.15"),
-                    action.Wait(
-                        event.Receive(
-                            0,
-                            "172.20.0.5",
-                            {
-                                event.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
-                                ),
-                            },
-                        )
-                    ),
-                    action.Wait(
-                        event.FinishTransferCanceled(0, True),
-                    ),
+                    action.Sleep(4),
+                    # No events, just updated database
+                    action.AssertTransfers([], 0),
+                    action.Stop(),
                 ]
             ),
         },
@@ -6793,6 +6790,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.SleepMs(400),
                     action.Start("172.20.0.5", dbpath="/tmp/db/31-1-ren.sqlite"),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -6849,6 +6847,7 @@ scenarios = [
                     }"""
                         ]
                     ),
+                    action.SleepMs(200),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
@@ -7293,6 +7292,7 @@ scenarios = [
         {
             "ren": ActionList(
                 [
+                    action.SleepMs(400),
                     action.Start("172.20.0.5"),
                     action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -7351,6 +7351,7 @@ scenarios = [
                     }"""
                         ]
                     ),
+                    action.SleepMs(200),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),

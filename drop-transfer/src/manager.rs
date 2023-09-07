@@ -178,6 +178,20 @@ impl TransferManager {
         }
     }
 
+    pub async fn is_outgoing_alive(&self, transfer_id: Uuid) -> bool {
+        let lock = self.outgoing.lock().await;
+        let state = match lock.get(&transfer_id) {
+            Some(state) => state,
+            None => return false,
+        };
+
+        !matches!(
+            (state.xfer_sync.local, state.xfer_sync.remote),
+            (sync::TransferState::Canceled, sync::TransferState::New)
+                | (sync::TransferState::Canceled, sync::TransferState::Canceled)
+        )
+    }
+
     pub async fn outgoing_connected(
         &self,
         transfer_id: Uuid,
