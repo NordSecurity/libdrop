@@ -15,4 +15,4 @@ jobs:
           default: true
       - name: run tests
         run: |
-          make -C test
+          docker compose version && make -C test
