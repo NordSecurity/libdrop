@@ -447,7 +447,7 @@ impl RunContext<'_> {
 
                     // API request
                     req = req_rx.recv() => {
-                        if on_req(&mut socket, &mut jobs, &mut handler, self.logger, req).await?.is_break() {
+                        if self.on_req(&mut socket, &mut jobs, &mut handler, &xfer, req).await?.is_break() {
                             break;
                         }
                     },
@@ -472,14 +472,6 @@ impl RunContext<'_> {
             anyhow::Ok(())
         };
 
-        let result = task.await;
-
-        let task = async {
-            result.context("Connection broke in the loop")?;
-            socket.drain().await.context("Failed to drain the socket")?;
-            anyhow::Ok(())
-        };
-
         if let Err(err) = task.await {
             info!(
                 self.logger,
@@ -488,18 +480,7 @@ impl RunContext<'_> {
             );
         } else {
             debug!(self.logger, "Sucesfully finalizing transfer loop");
-
-            let remove_xfer = async {
-                if let Err(err) = self.state.transfer_manager.incoming_remove(xfer.id()).await {
-                    warn!(
-                        self.logger,
-                        "Failed to clear sync state for {}: {err}",
-                        xfer.id()
-                    );
-                }
-            };
-
-            tokio::join!(handler.finalize_success(), remove_xfer);
+            handler.finalize_success().await;
         }
 
         jobs.shutdown().await;
@@ -552,11 +533,23 @@ impl RunContext<'_> {
 
             handler.on_close().await;
 
-            self.state
-                .event_tx
-                .send(crate::Event::IncomingTransferCanceled(xfer.clone(), true))
-                .await
-                .expect("Could not send a file cancelled event, channel closed");
+            match self.state.transfer_manager.incoming_remove(xfer.id()).await {
+                Err(err) => {
+                    warn!(
+                        self.logger,
+                        "Failed to clear sync state (on message) for {}: {err}",
+                        xfer.id()
+                    );
+                }
+                Ok(false) => {
+                    self.state
+                        .event_tx
+                        .send(crate::Event::IncomingTransferCanceled(xfer.clone(), true))
+                        .await
+                        .expect("Could not send a file cancelled event, channel closed");
+                }
+                _ => (),
+            }
 
             return Ok(ControlFlow::Break(()));
         } else if msg.is_ping() {
@@ -568,6 +561,41 @@ impl RunContext<'_> {
         }
 
         anyhow::Ok(ControlFlow::Continue(()))
+    }
+
+    async fn on_req(
+        &self,
+        socket: &mut WebSocket,
+        jobs: &mut JoinSet<()>,
+        handler: &mut impl HandlerLoop,
+        xfer: &Arc<IncomingTransfer>,
+        req: Option<ServerReq>,
+    ) -> anyhow::Result<ControlFlow<()>> {
+        match req.context("API channel broken")? {
+            ServerReq::Download { task } => handler.issue_download(socket, jobs, *task).await?,
+            ServerReq::Reject { file } => handler.issue_reject(socket, file.clone()).await?,
+            ServerReq::Done { file } => handler.issue_done(socket, file.clone()).await?,
+            ServerReq::Fail { file } => handler.issue_failure(socket, file.clone()).await?,
+
+            ServerReq::Close => {
+                debug!(self.logger, "Stoppping server connection gracefuly");
+                socket.send(Message::close()).await?;
+                handler.on_close().await;
+                socket.drain().await.context("Failed to drain the socket")?;
+
+                if let Err(err) = self.state.transfer_manager.incoming_remove(xfer.id()).await {
+                    warn!(
+                        self.logger,
+                        "Failed to clear sync state (on request) for {}: {err}",
+                        xfer.id()
+                    );
+                }
+
+                return Ok(ControlFlow::Break(()));
+            }
+        }
+
+        Ok(ControlFlow::Continue(()))
     }
 }
 
@@ -851,30 +879,6 @@ fn move_tmp_to_dst(
     }
 
     Ok(dst_location)
-}
-
-async fn on_req(
-    socket: &mut WebSocket,
-    jobs: &mut JoinSet<()>,
-    handler: &mut impl HandlerLoop,
-    logger: &Logger,
-    req: Option<ServerReq>,
-) -> anyhow::Result<ControlFlow<()>> {
-    match req.context("API channel broken")? {
-        ServerReq::Download { task } => handler.issue_download(socket, jobs, *task).await?,
-        ServerReq::Reject { file } => handler.issue_reject(socket, file.clone()).await?,
-        ServerReq::Done { file } => handler.issue_done(socket, file.clone()).await?,
-        ServerReq::Fail { file } => handler.issue_failure(socket, file.clone()).await?,
-
-        ServerReq::Close => {
-            debug!(logger, "Stoppping server connection gracefuly");
-            socket.send(Message::close()).await?;
-            handler.on_close().await;
-            return Ok(ControlFlow::Break(()));
-        }
-    }
-
-    Ok(ControlFlow::Continue(()))
 }
 
 async fn start_download(
