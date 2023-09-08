@@ -44,8 +44,19 @@ async fn run(state: Arc<State>, xfer: Arc<IncomingTransfer>, logger: Logger) {
     }
 
     info!(logger, "Transfer {} is gone. Clearing", xfer.id());
-    if let Err(err) = state.transfer_manager.incoming_remove(xfer.id()).await {
-        warn!(logger, "Failed to clear incoming transfer: {err:?}");
+
+    match state.transfer_manager.incoming_remove(xfer.id()).await {
+        Err(err) => {
+            warn!(logger, "Failed to clear incoming transfer: {err:?}");
+        }
+        Ok(false) => {
+            state
+                .event_tx
+                .send(crate::Event::IncomingTransferCanceled(xfer.clone(), true))
+                .await
+                .expect("Could not send a file cancelled event, channel closed");
+        }
+        _ => (),
     }
 }
 
