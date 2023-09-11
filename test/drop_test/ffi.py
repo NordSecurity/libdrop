@@ -9,8 +9,9 @@ from threading import Lock
 from . import event
 from .logger import logger
 from .config import RUNNERS
-
+from .dns_resolver import Peer
 from .dns_resolver import dns_resolver
+
 
 DEBUG_PRINT_EVENT = True
 
@@ -186,7 +187,7 @@ class EventQueue:
 
                     if not found:
                         raise Exception(
-                            f"Unexpected event:\n{str(e)}\nwhile looking for(racy):\n{', '.join(str(e) for e in target_events if e not in success)}\n"
+                            f"Unexpected event:\n{str(e)}\nwhile looking for(racy):\n{''.join(str(e) + chr(10) for e in target_events if e not in success)}\n"
                         )
 
                     i -= 1
@@ -196,15 +197,14 @@ class EventQueue:
             await asyncio.sleep(1)
 
         raise Exception(
-            f"Events not received\nwhile looking for(racy), remained:\n{', '.join(str(e) for e in target_events if e not in success)}\n"
+            f"Events not received\nwhile looking for(racy), remained:\n{''.join(str(e) + chr(10) for e in target_events if e not in success)}\n"
         )
 
 
 class KeysCtx:
-    def __init__(self, runner: str):
-        self.this = RUNNERS[
-            runner.split("-")[0]
-        ]  # TODO, because we reverse DNS, we get runner-X for the name
+    def __init__(self, hostname: str):
+        self.this = RUNNERS[hostname]
+        print(f">>>>>>>>> KeysCtx: {hostname}", flush=True)
 
     def callback(self, ctx, ip, pubkey):
         ip = ip.decode("utf-8")
@@ -396,7 +396,7 @@ class Drop:
             raise DropException(
                 "norddrop_new_transfer has failed to return a transfer ID"
             )
-        
+
         return xfid.decode("utf-8")
 
     def new_transfer_with_fd(self, peer: str, path: str, uri: str) -> str:
@@ -515,7 +515,7 @@ class Drop:
             )
 
     def start(self, addr: str, dbpath: str):
-        print(f">>>>>>>>> start: {addr}", flush=True)        
+        print(f">>>>>>>>> start: {addr}", flush=True)
         cfg = {
             "dir_depth_limit": 5,
             "transfer_file_limit": 1000,

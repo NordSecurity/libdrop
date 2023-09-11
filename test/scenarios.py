@@ -3545,86 +3545,86 @@ scenarios = [
         },
     ),
     # TODO: for some reason after migration to paralllel runner this test started to fail
-    #       the files are not inside of docker image so there might be differences in how these files were generated
-    # Scenario(
-    #     "scenario19-2",
-    #     # While we do replace ASCII control chars, they are technically allowed on Linux. So we can write and run the test
-    #     "Send a file with a ASCII control char in the name, expect it to being renamed to '_'",
-    #     {
-    #         "DROP_PEER_REN": ActionList(
-    #             [
-    #                 action.Start("DROP_PEER_REN"),
-    #                 # Wait for another peer to appear
-    #                 action.WaitForAnotherPeer(),
-    #                 action.NewTransfer(
-    #                     "DROP_PEER_STIMPY", ["/tmp/with-illegal-char-\x0A-"]
-    #                 ),
-    #                 action.Wait(
-    #                     event.Queued(
-    #                         0,
-    #                         {
-    #                             event.File(
-    #                                 FILES["with-illegal-char-\x0A-"].id,
-    #                                 "with-illegal-char-\x0A-",
-    #                                 1048576,
-    #                             ),
-    #                         },
-    #                     )
-    #                 ),
-    #                 action.Wait(event.Start(0, FILES["with-illegal-char-\x0A-"].id)),
-    #                 action.Wait(
-    #                     event.FinishFileUploaded(
-    #                         0,
-    #                         FILES["with-illegal-char-\x0A-"].id,
-    #                     )
-    #                 ),
-    #                 action.ExpectCancel([0], True),
-    #                 action.NoEvent(),
-    #                 action.Stop(),
-    #             ]
-    #         ),
-    #         "DROP_PEER_STIMPY": ActionList(
-    #             [
-    #                 action.Start("DROP_PEER_STIMPY"),
-    #                 action.Wait(
-    #                     event.Receive(
-    #                         0,
-    #                         "DROP_PEER_REN",
-    #                         {
-    #                             event.File(
-    #                                 FILES["with-illegal-char-\x0A-"].id,
-    #                                 "with-illegal-char-\x0A-",
-    #                                 1048576,
-    #                             ),
-    #                         },
-    #                     )
-    #                 ),
-    #                 action.Download(
-    #                     0,
-    #                     FILES["with-illegal-char-\x0A-"].id,
-    #                     "/tmp/received",
-    #                 ),
-    #                 action.Wait(event.Start(0, FILES["with-illegal-char-\x0A-"].id)),
-    #                 action.Wait(
-    #                     event.FinishFileDownloaded(
-    #                         0,
-    #                         FILES["with-illegal-char-\x0A-"].id,
-    #                         "/tmp/received/with-illegal-char-_-",
-    #                     )
-    #                 ),
-    #                 action.CheckDownloadedFiles(
-    #                     [
-    #                         action.File("/tmp/received/with-illegal-char-_-", 1048576),
-    #                     ],
-    #                 ),
-    #                 action.CancelTransferRequest(0),
-    #                 action.ExpectCancel([0], False),
-    #                 action.NoEvent(),
-    #                 action.Stop(),
-    #             ]
-    #         ),
-    #     },
-    # ),
+    # the new runner expects the files already created, but the old one created at runtime, maybe there was a difference
+    Scenario(
+        "scenario19-2",
+        # While we do replace ASCII control chars, they are technically allowed on Linux. So we can write and run the test
+        "Send a file with a ASCII control char in the name, expect it to being renamed to '_'",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN"),
+                    # Wait for another peer to appear
+                    action.WaitForAnotherPeer(),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY", ["/tmp/with-illegal-char-\x0A-"]
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["with-illegal-char-\x0A-"].id,
+                                    "with-illegal-char-\x0A-",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["with-illegal-char-\x0A-"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["with-illegal-char-\x0A-"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["with-illegal-char-\x0A-"].id,
+                                    "with-illegal-char-\x0A-",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["with-illegal-char-\x0A-"].id,
+                        "/tmp/received",
+                    ),
+                    action.Wait(event.Start(0, FILES["with-illegal-char-\x0A-"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["with-illegal-char-\x0A-"].id,
+                            "/tmp/received/with-illegal-char-_-",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/with-illegal-char-_-", 1048576),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
     Scenario(
         "scenario20",
         "Send multiple files within a single transfer",
@@ -5237,24 +5237,6 @@ scenarios = [
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
-                ]
-            ),
-        },
-    ),
-    Scenario(
-        "scenario288",
-        "Send one file to a peer overt the IPv6 network, expect it to be transferred",
-        {
-            "DROP_PEER_REN6": ActionList(
-                [
-                    action.Start("DROP_PEER_REN6"),
-                    action.Sleep(10000),
-                ]
-            ),
-            "DROP_PEER_STIMPY6": ActionList(
-                [
-                    action.Start("DROP_PEER_STIMPY6"),
-                    action.Sleep(10000),
                 ]
             ),
         },

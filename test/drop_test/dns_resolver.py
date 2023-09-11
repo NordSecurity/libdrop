@@ -4,7 +4,28 @@ import socket
 import time
 
 
-class DNSResolver:  # TODO: the name is a lie, it's more of a PeerResolver
+class Peer:
+    def __init__(self, name: str, scenario: str):
+        self._name = name
+        self._scenario = scenario
+
+    @classmethod
+    def from_hostname(cls, hostname: str) -> "Peer":
+        print(f"Creating peer from hostname {hostname}", flush=True)
+        (name, scenario) = hostname.split("-", maxsplit=1)
+        return cls(name, scenario)
+
+    def get_hostname(self) -> str:
+        return f"{self._name}-{self._scenario}"
+
+    def get_name(self) -> str:
+        return self._name
+
+    def get_scenario(self) -> str:
+        return self._scenario
+
+
+class PEERResolver:
     def __init__(self):
         self._peer_mappings = {}
         self._cache = {}
@@ -23,14 +44,14 @@ class DNSResolver:  # TODO: the name is a lie, it's more of a PeerResolver
         ]
 
         print(
-            f"Initializing DNS resolver. Looking for peers in {peer_env_vars}",
+            f"Initializing DNS resolver. Looking for peer mappings: {peer_env_vars}",
             flush=True,
         )
         for peer_env_var in peer_env_vars:
             if peer_env_var in os.environ:
                 peer = os.environ[peer_env_var]
                 self._peer_mappings[peer_env_var] = peer
-                print(f"Found peer {peer_env_var}={peer}", flush=True)
+                print(f"Found peer mapping {peer_env_var}={peer}", flush=True)
 
         if len(self._peer_mappings) == 0:
             print("No peers found in DNSResolver", flush=True)
@@ -39,9 +60,8 @@ class DNSResolver:  # TODO: the name is a lie, it's more of a PeerResolver
             f"Initialized DNS resolver with {len(self._peer_mappings)} peers",
             flush=True,
         )
-        print(f"Initialized DNS resolver with {self._peer_mappings} peers", flush=True)
 
-    # Assumes IPV6 if peer name contains "6"
+    # TOOD: Hack assumes IPV6 if peer name contains "6"
     def resolve(self, peer: str) -> str:
         hostname = self._peer_mappings[peer]
 
@@ -49,21 +69,16 @@ class DNSResolver:  # TODO: the name is a lie, it's more of a PeerResolver
             return self._cache[hostname]
 
         ipv6 = "6" in peer
-        
+
         for _ in range(5):
             try:
                 if ipv6:
                     ip = socket.getaddrinfo(hostname, 49111, socket.AF_INET6)
-                else:                    
+                else:
                     ip = socket.getaddrinfo(hostname, 49111, socket.AF_INET)
-                
-                #print all hosts
-                for i in ip:
-                   print("HOST: ", i[4], flush=True)
-                
-                
+
                 host = ip[0][4][0]
-                    
+
                 self._cache[hostname] = host
                 return host
 
@@ -74,13 +89,14 @@ class DNSResolver:  # TODO: the name is a lie, it's more of a PeerResolver
 
         raise Exception(f"Unable to resolve hostname {hostname}")
 
-    # TODO: should really use OS network to resolve this
+    # TODO: should really use OS network to resolve this but then we need to take care to resolve IPV4 or IPV6
     def reverse_lookup(self, ip: str) -> str:
+        print(f">>>>>> Reverse lookup for ip {ip}", flush=True)
         for hostname, cached_ip in self._cache.items():
             if cached_ip == ip:
-                return hostname.split("-")[0]  # TODO
+                return Peer.from_hostname(hostname).get_name()
 
         raise Exception(f"Could not find hostname for ip {ip}")
 
 
-dns_resolver = DNSResolver()
+dns_resolver = PEERResolver()
