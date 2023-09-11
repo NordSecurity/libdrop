@@ -191,8 +191,6 @@ def run():
                         network="net6",
                     )
 
-                    # TODO: killing container due to timeout should kill the whole scenario
-                    # TODO: cpu should be gimped down as tests might use too much
                     info = ContainerInfo(container, scenario.id(), TESTCASE_TIMEOUT)
                     scenario_results[scenario.id()].append(info)
 
@@ -227,7 +225,6 @@ def run():
                 failed_scenarios_count += 1
                 break
 
-    # TODO: kill after timeout actually
     print(
         f"*** Test suite results: {total_scenarios_count} scenarios, {failed_scenarios_count} failed. Succeeded ({round((1.0-(failed_scenarios_count/total_scenarios_count)) * 100, 2)}%), on average one scenario took {math.ceil(total_time/total_scenarios_count)} seconds",
         flush=True,
