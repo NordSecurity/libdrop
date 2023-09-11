@@ -56,16 +56,11 @@ enum OutgoingLocalFileState {
     Terminal(FileTerminalState),
 }
 
-struct TransferSync {
-    local: sync::TransferState,
-    remote: sync::TransferState,
-}
-
 pub struct IncomingState {
     pub xfer: Arc<IncomingTransfer>,
     conn: Option<UnboundedSender<ServerReq>>,
     pub dir_mappings: DirMapping,
-    xfer_sync: TransferSync,
+    xfer_sync: sync::TransferState,
     file_sync: HashMap<FileId, IncomingLocalFileState>,
     events: HashMap<FileId, Arc<IncomingFileEventTx>>,
 }
@@ -73,7 +68,7 @@ pub struct IncomingState {
 pub struct OutgoingState {
     pub xfer: Arc<OutgoingTransfer>,
     conn: Option<UnboundedSender<ClientReq>>,
-    xfer_sync: TransferSync,
+    xfer_sync: sync::TransferState,
     file_sync: HashMap<FileId, OutgoingLocalFileState>,
     events: HashMap<FileId, Arc<OutgoingFileEventTx>>,
 }
@@ -124,7 +119,7 @@ impl TransferManager {
                     xfer.id()
                 );
 
-                match state.xfer_sync.local {
+                match state.xfer_sync {
                     sync::TransferState::Canceled => {
                         debug!(self.logger, "Incoming transfer is locally cancelled");
                         let _ = conn.send(ServerReq::Close);
@@ -161,10 +156,7 @@ impl TransferManager {
                 vacc.insert(IncomingState {
                     conn: Some(conn),
                     dir_mappings: Default::default(),
-                    xfer_sync: TransferSync {
-                        local: sync::TransferState::Active,
-                        remote: sync::TransferState::Active,
-                    },
+                    xfer_sync: sync::TransferState::Active,
                     file_sync: xfer
                         .files()
                         .keys()
@@ -181,16 +173,7 @@ impl TransferManager {
 
     pub async fn is_outgoing_alive(&self, transfer_id: Uuid) -> bool {
         let lock = self.outgoing.lock().await;
-        let state = match lock.get(&transfer_id) {
-            Some(state) => state,
-            None => return false,
-        };
-
-        !matches!(
-            (state.xfer_sync.local, state.xfer_sync.remote),
-            (sync::TransferState::Canceled, sync::TransferState::New)
-                | (sync::TransferState::Canceled, sync::TransferState::Canceled)
-        )
+        lock.get(&transfer_id).is_some()
     }
 
     pub async fn outgoing_connected(
@@ -203,33 +186,19 @@ impl TransferManager {
             .get_mut(&transfer_id)
             .ok_or(crate::Error::BadTransfer)?;
 
-        match (state.xfer_sync.local, state.xfer_sync.remote) {
-            (sync::TransferState::New, _) => {
-                self.storage
-                    .update_transfer_sync_states(
-                        transfer_id,
-                        Some(sync::TransferState::Active),
-                        Some(sync::TransferState::Active),
-                    )
-                    .await;
+        if let sync::TransferState::New = state.xfer_sync {
+            self.storage
+                .update_transfer_sync_states(
+                    transfer_id,
+                    Some(sync::TransferState::Active),
+                    Some(sync::TransferState::Active),
+                )
+                .await;
 
-                state.xfer_sync.local = sync::TransferState::Active;
-                state.xfer_sync.remote = sync::TransferState::Active;
-            }
-            (_, sync::TransferState::New) => {
-                self.storage
-                    .update_transfer_sync_states(
-                        transfer_id,
-                        Some(sync::TransferState::Active),
-                        None,
-                    )
-                    .await;
-                state.xfer_sync.remote = sync::TransferState::Active;
-            }
-            _ => (),
+            state.xfer_sync = sync::TransferState::Active;
         }
 
-        match state.xfer_sync.local {
+        match state.xfer_sync {
             sync::TransferState::Canceled => {
                 debug!(self.logger, "Outgoing transfer is locally cancelled");
                 let _ = conn.send(ClientReq::Close);
@@ -264,10 +233,7 @@ impl TransferManager {
 
                 entry.insert(OutgoingState {
                     conn: None,
-                    xfer_sync: TransferSync {
-                        local: sync::TransferState::New,
-                        remote: sync::TransferState::New,
-                    },
+                    xfer_sync: sync::TransferState::New,
                     file_sync: xfer
                         .files()
                         .keys()
@@ -434,7 +400,7 @@ impl TransferManager {
         self.storage.transfer_sync_clear(transfer_id).await;
 
         let was_cancelled = if let Some(state) = lock.remove(&transfer_id) {
-            matches!(state.xfer_sync.local, sync::TransferState::Canceled)
+            matches!(state.xfer_sync, sync::TransferState::Canceled)
         } else {
             true
         };
@@ -449,10 +415,7 @@ impl TransferManager {
             None => return false,
         };
 
-        !matches!(
-            (state.xfer_sync.local, state.xfer_sync.remote),
-            (sync::TransferState::Canceled, sync::TransferState::Canceled)
-        )
+        !matches!(state.xfer_sync, sync::TransferState::Canceled)
     }
 
     pub async fn incoming_download_cancel(
@@ -601,7 +564,7 @@ impl TransferManager {
                 Some(drop_storage::sync::TransferState::Canceled),
             )
             .await;
-        state.xfer_sync.local = sync::TransferState::Canceled;
+        state.xfer_sync = sync::TransferState::Canceled;
 
         if let Some(conn) = state.conn.take() {
             let _ = conn.send(ServerReq::Close);
@@ -631,27 +594,41 @@ impl TransferManager {
             .get_mut(&transfer_id)
             .ok_or(crate::Error::BadTransfer)?;
 
-        state.ensure_not_cancelled()?;
+        match state.xfer_sync {
+            // If it's new, then suppress transfer synchronization by deleting the state
+            sync::TransferState::New => {
+                self.storage.transfer_sync_clear(transfer_id).await;
 
-        self.storage
-            .update_transfer_sync_states(
-                transfer_id,
-                None,
-                Some(drop_storage::sync::TransferState::Canceled),
-            )
-            .await;
-        state.xfer_sync.local = sync::TransferState::Canceled;
+                let res = CloseResult {
+                    xfer: state.xfer.clone(),
+                    events: state.events.values().cloned().collect(),
+                };
 
-        if let Some(conn) = state.conn.take() {
-            let _ = conn.send(ClientReq::Close);
+                lock.remove(&transfer_id);
+
+                Ok(res)
+            }
+            sync::TransferState::Active => {
+                self.storage
+                    .update_transfer_sync_states(
+                        transfer_id,
+                        None,
+                        Some(drop_storage::sync::TransferState::Canceled),
+                    )
+                    .await;
+                state.xfer_sync = sync::TransferState::Canceled;
+
+                if let Some(conn) = state.conn.take() {
+                    let _ = conn.send(ClientReq::Close);
+                }
+
+                Ok(CloseResult {
+                    xfer: state.xfer.clone(),
+                    events: state.events.values().cloned().collect(),
+                })
+            }
+            sync::TransferState::Canceled => Err(crate::Error::BadTransfer),
         }
-
-        let res = CloseResult {
-            xfer: state.xfer.clone(),
-            events: state.events.values().cloned().collect(),
-        };
-
-        Ok(res)
     }
 
     pub async fn outgoing_ensure_file_not_terminated(
@@ -730,10 +707,7 @@ impl OutgoingState {
     }
 
     fn ensure_not_cancelled(&self) -> crate::Result<()> {
-        if matches!(
-            self.xfer_sync.local,
-            drop_storage::sync::TransferState::Canceled
-        ) {
+        if let sync::TransferState::Canceled = self.xfer_sync {
             return Err(crate::Error::BadTransfer);
         }
         Ok(())
@@ -825,10 +799,7 @@ impl IncomingState {
     }
 
     fn ensure_not_cancelled(&self) -> crate::Result<()> {
-        if matches!(
-            self.xfer_sync.local,
-            drop_storage::sync::TransferState::Canceled
-        ) {
+        if let sync::TransferState::Canceled = self.xfer_sync {
             return Err(crate::Error::BadTransfer);
         }
         Ok(())
@@ -1117,20 +1088,16 @@ async fn restore_incoming(
                 xfer: Arc::new(xfer),
                 conn: None,
                 dir_mappings: Default::default(),
-                xfer_sync: TransferSync {
-                    local: sync.local_state,
-                    remote: sync.remote_state,
-                },
+                xfer_sync: sync.local_state,
                 file_sync,
                 events: HashMap::new(),
             };
 
             debug!(
                 logger,
-                "Restoring transfer: {}, states: local {:?}, remote {:?}",
+                "Restoring transfer: {}, state: {:?}",
                 xstate.xfer.id(),
-                xstate.xfer_sync.local,
-                xstate.xfer_sync.remote
+                xstate.xfer_sync,
             );
 
             let paths = storage.finished_incoming_files(xstate.xfer.id()).await;
@@ -1215,10 +1182,7 @@ async fn restore_outgoing(state: &Arc<State>, logger: &Logger) -> HashMap<Uuid, 
             let xstate = OutgoingState {
                 xfer: Arc::new(xfer),
                 conn: None,
-                xfer_sync: TransferSync {
-                    local: sync.local_state,
-                    remote: sync.remote_state,
-                },
+                xfer_sync: sync.local_state,
                 file_sync,
                 events: HashMap::new(),
             };
