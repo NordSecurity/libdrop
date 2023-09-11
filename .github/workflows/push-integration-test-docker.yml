@@ -21,8 +21,8 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build Docker image
-      run: docker build -t ghcr.io/nordsecurity/libdrop:libdroptestimage test
+      run: docker build -t ghcr.io/nordsecurity/libdrop/testimage:1.0.0 test
 
     - name: Push Docker image to GitHub Container Registry
       if: github.event_name == 'push'
-      run: docker push ghcr.io/nordsecurity/libdrop:libdroptestimage
+      run: docker push ghcr.io/nordsecurity/libdrop/testimage:1.0.0
