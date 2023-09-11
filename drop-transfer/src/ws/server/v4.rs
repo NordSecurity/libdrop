@@ -37,7 +37,6 @@ pub struct HandlerInit<'a> {
 pub struct HandlerLoop<'a> {
     state: Arc<State>,
     logger: &'a slog::Logger,
-    alive: &'a AliveGuard,
     msg_tx: Sender<MsgToSend>,
     xfer: Arc<IncomingTransfer>,
     jobs: HashMap<FileId, FileTask>,
@@ -192,7 +191,6 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             jobs: HashMap::new(),
             logger,
             checksums,
-            alive,
         })
     }
 
@@ -326,15 +324,10 @@ impl HandlerLoop<'_> {
 
 #[async_trait::async_trait]
 impl handler::HandlerLoop for HandlerLoop<'_> {
-    async fn issue_download(
-        &mut self,
-        _: &mut WebSocket,
-        jobs: &mut JoinSet<()>,
-        task: super::FileXferTask,
-    ) -> anyhow::Result<()> {
+    async fn start_download(&mut self, ctx: super::FileStreamCtx<'_>) -> anyhow::Result<()> {
         let is_running = self
             .jobs
-            .get(task.file.id())
+            .get(ctx.task.file.id())
             .map_or(false, |state| !state.job.is_finished());
 
         if is_running {
@@ -343,7 +336,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
 
         let full_csum_cell = self
             .checksums
-            .get(task.file.id())
+            .get(ctx.task.file.id())
             .context("Missing file checksum cell")?
             .clone();
 
@@ -351,7 +344,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         let (csum_tx, csum_rx) = mpsc::channel(4);
 
         let downloader = Downloader {
-            file_id: task.file.id().clone(),
+            file_id: ctx.task.file.id().clone(),
             msg_tx: self.msg_tx.clone(),
             logger: self.logger.clone(),
             csum_rx,
@@ -359,17 +352,8 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             offset: 0,
         };
 
-        let file_id = task.file.id().clone();
-        let (job, events) = super::start_download(
-            jobs,
-            self.alive.clone(),
-            self.state.clone(),
-            task,
-            downloader,
-            chunks_rx,
-            self.logger.clone(),
-        )
-        .await?;
+        let file_id = ctx.task.file.id().clone();
+        let (job, events) = ctx.start(downloader, chunks_rx).await?;
 
         self.jobs.insert(
             file_id,
@@ -402,10 +386,11 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         &mut self,
         socket: &mut WebSocket,
         file_id: FileId,
+        msg: String,
     ) -> anyhow::Result<()> {
         let msg = v4::ServerMsg::Error(v4::Error {
             file: Some(file_id),
-            msg: String::from("File failed elsewhere"),
+            msg,
         });
         socket.send(Message::from(&msg)).await?;
 
@@ -418,6 +403,20 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         let msg = v4::ServerMsg::Done(v4::Done {
             file: file_id,
             bytes_transfered: file.size(),
+        });
+        socket.send(Message::from(&msg)).await?;
+        Ok(())
+    }
+
+    async fn issue_start(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+        offset: u64,
+    ) -> anyhow::Result<()> {
+        let msg = v4::ServerMsg::Start(v4::Start {
+            file: file_id.clone(),
+            offset,
         });
         socket.send(Message::from(&msg)).await?;
         Ok(())
@@ -585,12 +584,6 @@ impl handler::Downloader for Downloader {
             }
         };
 
-        let msg = v4::ServerMsg::Start(v4::Start {
-            file: self.file_id.clone(),
-            offset: self.offset,
-        });
-        self.send(Message::from(&msg)).await?;
-
         Ok(handler::DownloadInit::Stream {
             offset: self.offset,
             tmp_location,
@@ -611,22 +604,6 @@ impl handler::Downloader for Downloader {
         self.send(&v4::ServerMsg::Progress(v4::Progress {
             file: self.file_id.clone(),
             bytes_transfered: bytes,
-        }))
-        .await
-    }
-
-    async fn done(&mut self, bytes: u64) -> crate::Result<()> {
-        self.send(&v4::ServerMsg::Done(v4::Done {
-            file: self.file_id.clone(),
-            bytes_transfered: bytes,
-        }))
-        .await
-    }
-
-    async fn error(&mut self, msg: String) -> crate::Result<()> {
-        self.send(&v4::ServerMsg::Error(v4::Error {
-            file: Some(self.file_id.clone()),
-            msg,
         }))
         .await
     }

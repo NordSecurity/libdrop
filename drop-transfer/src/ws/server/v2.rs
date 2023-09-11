@@ -27,7 +27,6 @@ use crate::{
     manager::FileTerminalState,
     protocol::v2,
     service::State,
-    tasks::AliveGuard,
     transfer::{IncomingTransfer, Transfer},
     utils::Hidden,
     ws::{self, events::FileEventTx},
@@ -38,13 +37,11 @@ pub struct HandlerInit<'a, const PING: bool = true> {
     peer: IpAddr,
     state: &'a Arc<State>,
     logger: &'a slog::Logger,
-    alive: &'a AliveGuard,
 }
 
 pub struct HandlerLoop<'a, const PING: bool> {
     state: &'a Arc<State>,
     logger: &'a slog::Logger,
-    alive: &'a AliveGuard,
     msg_tx: Sender<MsgToSend>,
     xfer: Arc<IncomingTransfer>,
     jobs: HashMap<FileSubPath, FileTask>,
@@ -64,17 +61,11 @@ struct FileTask {
 }
 
 impl<'a, const PING: bool> HandlerInit<'a, PING> {
-    pub(crate) fn new(
-        peer: IpAddr,
-        state: &'a Arc<State>,
-        logger: &'a slog::Logger,
-        alive: &'a AliveGuard,
-    ) -> Self {
+    pub(crate) fn new(peer: IpAddr, state: &'a Arc<State>, logger: &'a slog::Logger) -> Self {
         Self {
             peer,
             state,
             logger,
-            alive,
         }
     }
 }
@@ -121,7 +112,6 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
             peer: _,
             state,
             logger,
-            alive,
         } = self;
 
         Some(HandlerLoop {
@@ -130,7 +120,6 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
             xfer,
             jobs: HashMap::new(),
             logger,
-            alive,
         })
     }
 
@@ -239,40 +228,26 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
 
 #[async_trait::async_trait]
 impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
-    async fn issue_download(
-        &mut self,
-        _: &mut WebSocket,
-        jobs: &mut JoinSet<()>,
-        task: super::FileXferTask,
-    ) -> anyhow::Result<()> {
+    async fn start_download(&mut self, ctx: super::FileStreamCtx<'_>) -> anyhow::Result<()> {
         let is_running = self
             .jobs
-            .get(task.file.subpath())
+            .get(ctx.task.file.subpath())
             .map_or(false, |state| !state.job.is_finished());
 
         if is_running {
             return Ok(());
         }
 
-        let subpath = task.file.subpath().clone();
+        let subpath = ctx.task.file.subpath().clone();
         let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
 
         let downloader = Downloader {
             state: self.state.clone(),
-            file_subpath: task.file.subpath().clone(),
+            file_subpath: ctx.task.file.subpath().clone(),
             msg_tx: self.msg_tx.clone(),
             tmp_loc: None,
         };
-        let (job, events) = super::start_download(
-            jobs,
-            self.alive.clone(),
-            self.state.clone(),
-            task,
-            downloader,
-            chunks_rx,
-            self.logger.clone(),
-        )
-        .await?;
+        let (job, events) = ctx.start(downloader, chunks_rx).await?;
 
         self.jobs.insert(
             subpath,
@@ -314,6 +289,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         &mut self,
         socket: &mut WebSocket,
         file_id: FileId,
+        msg: String,
     ) -> anyhow::Result<()> {
         let file_subpath = if let Some(file) = self.xfer.files().get(&file_id) {
             file.subpath().clone()
@@ -324,7 +300,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 
         let msg = v2::ServerMsg::Error(v2::Error {
             file: Some(file_subpath),
-            msg: String::from("File failed elsewhere"),
+            msg,
         });
         socket.send(Message::from(&msg)).await?;
 
@@ -341,6 +317,28 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 
         let msg = v2::ServerMsg::Done(v2::Progress {
             bytes_transfered: file.size(),
+            file: file.subpath().clone(),
+        });
+        socket.send(Message::from(&msg)).await?;
+        Ok(())
+    }
+
+    async fn issue_start(
+        &mut self,
+        socket: &mut WebSocket,
+        file_id: FileId,
+        offset: u64,
+    ) -> anyhow::Result<()> {
+        anyhow::ensure!(offset == 0, "V2 does not support non zero offset");
+
+        let file = if let Some(file) = self.xfer.files().get(&file_id) {
+            file
+        } else {
+            warn!(self.logger, "Missing file with ID: {file_id:?}");
+            return Ok(());
+        };
+
+        let msg = v2::ServerMsg::Start(v2::Download {
             file: file.subpath().clone(),
         });
         socket.send(Message::from(&msg)).await?;
@@ -443,11 +441,6 @@ impl handler::Downloader for Downloader {
 
         super::validate_tmp_location_path(&tmp_location)?;
 
-        let msg = v2::ServerMsg::Start(v2::Download {
-            file: self.file_subpath.clone(),
-        });
-        self.send(Message::from(&msg)).await?;
-
         self.tmp_loc = Some(tmp_location.clone());
         Ok(handler::DownloadInit::Stream {
             offset: 0,
@@ -468,22 +461,6 @@ impl handler::Downloader for Downloader {
         self.send(&v2::ServerMsg::Progress(v2::Progress {
             file: self.file_subpath.clone(),
             bytes_transfered: bytes,
-        }))
-        .await
-    }
-
-    async fn done(&mut self, bytes: u64) -> crate::Result<()> {
-        self.send(&v2::ServerMsg::Done(v2::Progress {
-            file: self.file_subpath.clone(),
-            bytes_transfered: bytes,
-        }))
-        .await
-    }
-
-    async fn error(&mut self, msg: String) -> crate::Result<()> {
-        self.send(&v2::ServerMsg::Error(v2::Error {
-            file: Some(self.file_subpath.clone()),
-            msg,
         }))
         .await
     }
