@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import argparse
 import json
 import math
 import os
@@ -13,8 +14,8 @@ from typing import Tuple
 import docker
 from scenarios import scenarios as all_scenarios
 
-TESTCASE_TIMEOUT = 6000 # TOOD
-SCENARIOS_AT_ONCE = 1000 # TODO
+TESTCASE_TIMEOUT = 100
+SCENARIOS_AT_ONCE = 100
 
 STDERR_ERR_PATTERNS = [
     ["drop-storage", "ERROR"],
@@ -262,4 +263,18 @@ def run():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run drop instance")
+    parser.add_argument(
+        "--testcase-timeout", required=False, help="timeout for each scenario"
+    )
+    parser.add_argument(
+        "--scenarios-at-once", required=False, help="batch size for scenarios"
+    )
+    args = parser.parse_args()
+    if args.testcase_timeout:
+        TESTCASE_TIMEOUT = int(args.testcase_timeout)
+    if args.scenarios_at_once:
+        SCENARIOS_AT_ONCE = int(args.scenarios_at_once)
+
+    print(f"Running with timeout {TESTCASE_TIMEOUT} and batch size {SCENARIOS_AT_ONCE}")
     run()

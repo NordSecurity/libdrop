@@ -6,6 +6,9 @@ COVERAGE_PATH ?= coverage
 HTML_PATH ?= html
 RUSTFLAGS_COVERAGE ?= -C instrument-coverage -Zprofile -Copt-level=0 -Clink-dead-code -Coverflow-checks=off
 
+SCENARIOS_AT_ONCE ?= 10
+TESTCASE_TIMEOUT ?= 100
+
 .DEFAULT_GOAL := test
 .PHONY: build build-coverage test coverage clean
 
@@ -19,7 +22,7 @@ build-coverage:
 
 # Test the project
 test: build
-	LIB_PATH=$(LIB_DOCKER) ./runner.py
+	LIB_PATH=$(LIB_DOCKER) ./runner.py --testcase-timeout=$(TESTCASE_TIMEOUT) --scenarios-at-once=$(SCENARIOS_AT_ONCE)
 
 # Generate and view coverage report
 coverage: build-coverage
