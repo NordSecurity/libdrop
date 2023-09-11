@@ -176,7 +176,7 @@ def run():
 
                     print(f"  running {cmd}", flush=True)
                     container = client.containers.run(
-                        image="ghcr.io/nordsecurity/libdrop:libdroptestimage",  # TODO: could be extracted for easy change
+                        image="ghcr.io/nordsecurity/libdroptestimage:latest",
                         name=f"{hostname}",
                         command=cmd,
                         volumes=COMMON_VOLUMES,
