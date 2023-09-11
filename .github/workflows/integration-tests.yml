@@ -20,6 +20,8 @@ jobs:
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 10
+      - name: Print images
+        run: docker images
       - name: run tests
         run: |
           SCENARIO="scenario1.*" make -C test
