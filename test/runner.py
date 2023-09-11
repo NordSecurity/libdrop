@@ -74,9 +74,13 @@ def run():
         status_json = subprocess.check_output(
             ["docker", "compose", "ps", "-a", "--format", "json"], env=my_env
         )
-        status_json = json.loads(status_json)
 
-        failed = []
+        statuses = []
+        for line in status_json.splitlines():
+            item = json.loads(line)
+            service: str = item["Service"]
+            code: int = item["ExitCode"]
+            statuses.append((service, code))
 
         decoded_stderr: str = stderr.decode("unicode_escape")
 
@@ -87,11 +91,10 @@ def run():
                     stderr_captured_errored_lines.append(line)
                     break
 
-        for item in status_json:
-            service: str = item["Service"]
-
-            if service in scenario.runners() and (
-                item["ExitCode"] != 0 or len(stderr_captured_errored_lines) > 0
+        failed = []
+        for item in statuses:
+            if item[0] in scenario.runners() and (
+                item[1] != 0 or len(stderr_captured_errored_lines) > 0
             ):
                 failed.append(service)
 
