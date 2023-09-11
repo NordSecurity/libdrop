@@ -170,7 +170,7 @@ class NewTransfer(Action):
         print(">>>>>>>>>>")
         print(os.listdir("/tmp"), flush=True)
         print(">>>>>>>>>>")
-        
+
         with UUIDS_LOCK:
             xfid = drop.new_transfer(dns_resolver.resolve(self._peer), self._paths)
             UUIDS.append(xfid)

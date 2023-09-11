@@ -25,9 +25,6 @@ STDERR_ERR_PATTERNS = [
 def prepare_docker() -> docker.DockerClient:
     # Initialize docker client
     client = docker.DockerClient(base_url="unix://var/run/docker.sock")
-    # network = client.networks.create(
-    #     "libdrop_test_network", driver="bridge", attachable=True
-    # )
 
     # Network creation
     ipv4_net = client.networks.create(
@@ -121,7 +118,7 @@ def run():
 
     already_done = []
 
-    # TODO: semaphore is not needed it we don't spawn multiple threads
+    # a semaphore is not actually needed as there's no multithreading
     sem = Semaphore(SCENARIOS_AT_ONCE)
 
     total_containers = 0
@@ -235,13 +232,13 @@ def run():
         for scenario in scenarios:
             for container in scenario_results[scenario.id()]:
                 success, reason = container.success()
-                # if not success:
-                #     print(
-                #         f"*** Container {container.name()} exited with failure: {reason}",
-                #         flush=True,
-                #     )
-                #     print(f"*** Logs:", flush=True)
-                #     print(container.logs(), flush=True)
+                if not success:
+                    print(
+                        f"*** Container {container.name()} exited with failure: {reason}",
+                        flush=True,
+                    )
+                    print(f"*** Logs:", flush=True)
+                    print(container.logs(), flush=True)
 
         print("Failure summary:", flush=True)
         for scenario in scenarios:

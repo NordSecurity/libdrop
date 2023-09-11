@@ -3545,7 +3545,7 @@ scenarios = [
         },
     ),
     # TODO: for some reason after migration to paralllel runner this test started to fail
-    #       the files are not inside of docker image so there might be differences in how these files were generated            
+    #       the files are not inside of docker image so there might be differences in how these files were generated
     # Scenario(
     #     "scenario19-2",
     #     # While we do replace ASCII control chars, they are technically allowed on Linux. So we can write and run the test
@@ -5245,16 +5245,19 @@ scenarios = [
         "scenario288",
         "Send one file to a peer overt the IPv6 network, expect it to be transferred",
         {
-            "DROP_PEER_REN6": ActionList([
-                action.Start("DROP_PEER_REN6"),
-                action.Sleep(10000),
-            ]),
-            "DROP_PEER_STIMPY6": ActionList([
-                action.Start("DROP_PEER_STIMPY6"),
-                action.Sleep(10000),
-            ]),
-            
-        }
+            "DROP_PEER_REN6": ActionList(
+                [
+                    action.Start("DROP_PEER_REN6"),
+                    action.Sleep(10000),
+                ]
+            ),
+            "DROP_PEER_STIMPY6": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY6"),
+                    action.Sleep(10000),
+                ]
+            ),
+        },
     ),
     Scenario(
         "scenario28",
@@ -6137,10 +6140,8 @@ scenarios = [
                         event.FinishFileRejected(0, FILES["testfile-big"].id, False)
                     ),
                     action.Stop(),
-                    
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-7-ren.sqlite"),
-                    action.Sleep(10)
-                    
+                    action.Sleep(10),
                 ]
             ),
             "DROP_PEER_STIMPY": ActionList(
@@ -7625,9 +7626,7 @@ scenarios = [
                     ),
                 ]
             ),
-            "DROP_PEER_STIMPY": ActionList([
-                action.Sleep(10)
-            ]),
+            "DROP_PEER_STIMPY": ActionList([action.Sleep(10)]),
         },
     ),
     Scenario(
