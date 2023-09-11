@@ -34,14 +34,20 @@ pub trait HandlerInit {
 
 #[async_trait::async_trait]
 pub trait HandlerLoop {
-    async fn issue_download(
+    async fn start_download(&mut self, ctx: super::FileStreamCtx<'_>) -> anyhow::Result<()>;
+    async fn issue_start(
         &mut self,
         ws: &mut WebSocket,
-        jobs: &mut JoinSet<()>,
-        task: super::FileXferTask,
+        file: FileId,
+        offset: u64,
     ) -> anyhow::Result<()>;
     async fn issue_reject(&mut self, ws: &mut WebSocket, file: FileId) -> anyhow::Result<()>;
-    async fn issue_failure(&mut self, ws: &mut WebSocket, file: FileId) -> anyhow::Result<()>;
+    async fn issue_failure(
+        &mut self,
+        ws: &mut WebSocket,
+        file: FileId,
+        msg: String,
+    ) -> anyhow::Result<()>;
     async fn issue_done(&mut self, ws: &mut WebSocket, file: FileId) -> anyhow::Result<()>;
 
     async fn on_close(&mut self);
@@ -68,8 +74,6 @@ pub trait Downloader {
     async fn init(&mut self, task: &super::FileXferTask) -> crate::Result<DownloadInit>;
     async fn open(&mut self, tmp_location: &Hidden<PathBuf>) -> crate::Result<fs::File>;
     async fn progress(&mut self, bytes: u64) -> crate::Result<()>;
-    async fn done(&mut self, bytes: u64) -> crate::Result<()>;
-    async fn error(&mut self, msg: String) -> crate::Result<()>;
     async fn validate(&mut self, location: &Hidden<PathBuf>) -> crate::Result<()>;
 }
 
