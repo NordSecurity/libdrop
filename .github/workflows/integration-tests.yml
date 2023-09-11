@@ -24,4 +24,4 @@ jobs:
         run: docker images
       - name: run tests
         run: |
-          SCENARIO="scenario1.*" make -C test
+          make -C test
