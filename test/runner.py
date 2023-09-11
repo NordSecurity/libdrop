@@ -52,7 +52,7 @@ def prepare_docker() -> docker.DockerClient:
     return client
 
 
-class ContainerInfo:
+class ContainerHolder:
     def __init__(
         self, container: docker.models.containers.Container, scenario: str, timeout: int
     ):
@@ -114,7 +114,7 @@ def run():
 
     client = prepare_docker()
 
-    scenario_results: dict[str, list[ContainerInfo]] = {}
+    scenario_results: dict[str, list[ContainerHolder]] = {}
 
     already_done = []
 
@@ -176,8 +176,7 @@ def run():
 
                     print(f"  running {cmd}", flush=True)
                     container = client.containers.run(
-                        # image="ghcr.io/nordsecurity/libdrop:libdroptestimage",
-                        image="libdroptestimage",
+                        image="ghcr.io/nordsecurity/libdrop:libdroptestimage",  # TODO: could be extracted for easy change
                         name=f"{hostname}",
                         command=cmd,
                         volumes=COMMON_VOLUMES,
@@ -189,7 +188,7 @@ def run():
                         network="net6",
                     )
 
-                    info = ContainerInfo(container, scenario.id(), TESTCASE_TIMEOUT)
+                    info = ContainerHolder(container, scenario.id(), TESTCASE_TIMEOUT)
                     scenario_results[scenario.id()].append(info)
 
         curr_time = time.strftime("%H:%M:%S", time.localtime())
