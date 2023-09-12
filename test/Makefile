@@ -18,7 +18,7 @@ build:
 
 # Build the project with coverage instrumentation
 build-coverage:
-	CARGO_INCREMENTAL=0 RUSTFLAGS="$(RUSTFLAGS_COVERAGE)" cargo build $(FEATURES)
+	CARGO_INCREMENTAL=0 RUSTFLAGS="$(RUSTFLAGS_COVERAGE)" cargo +nightly build $(FEATURES)
 
 # Test the project
 test: build
