@@ -5,6 +5,7 @@
 This fixes the case when transfer cancelled on the sender side caused `TransferCancelled` being fired immedieatly after `TransferRequest`.\
 With this change the transfer would not be seen on the receiver side at all.
 * Implement a periodic transfer state check in case of stalled transfer for the receiver
+* Fix occasional events reordering, for example file done swapped transfer cancelation, on the sender side 
 
 ---
 <br>
