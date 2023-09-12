@@ -54,7 +54,6 @@ impl FromSql for FileState {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Transfer {
-    pub remote_state: TransferState,
     pub local_state: TransferState,
     pub is_outgoing: bool,
 }
@@ -73,8 +72,7 @@ pub(super) fn insert_transfer(
     let tid = transfer_id.to_string();
 
     let sync_id: i64 = conn.query_row(
-        "INSERT INTO sync_transfer (transfer_id, local_state, remote_state) VALUES (?1, ?2, ?2) \
-         RETURNING sync_id",
+        "INSERT INTO sync_transfer (transfer_id, local_state) VALUES (?1, ?2) RETURNING sync_id",
         params![tid, TransferState::New],
         |r| r.get(0),
     )?;
@@ -117,7 +115,7 @@ pub(super) fn transfer_state(
     let res = conn
         .query_row(
             r#"
-            SELECT st.local_state, st.remote_state, t.is_outgoing
+            SELECT st.local_state, t.is_outgoing
             FROM sync_transfer st
             INNER JOIN transfers t ON t.id = st.transfer_id
             WHERE st.transfer_id = ?1
@@ -125,30 +123,14 @@ pub(super) fn transfer_state(
             params![tid],
             |r| {
                 Ok(Transfer {
-                    remote_state: r.get(1)?,
                     local_state: r.get(0)?,
-                    is_outgoing: r.get(2)?,
+                    is_outgoing: r.get(1)?,
                 })
             },
         )
         .optional()?;
 
     Ok(res)
-}
-
-pub(super) fn transfer_set_remote_state(
-    conn: &Connection,
-    transfer_id: Uuid,
-    state: TransferState,
-) -> super::Result<Option<()>> {
-    let tid = transfer_id.to_string();
-
-    let count = conn.execute(
-        "UPDATE sync_transfer SET remote_state = ?2 WHERE transfer_id = ?1",
-        params![tid, state],
-    )?;
-
-    Ok(if count > 0 { Some(()) } else { None })
 }
 
 pub(super) fn transfer_set_local_state(
