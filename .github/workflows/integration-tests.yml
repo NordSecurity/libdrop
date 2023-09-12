@@ -12,7 +12,19 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: 1.64.0
-          default: true
+          default: true        
+      - name: docker sdk
+        run: |
+          pip3 install docker 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Print images
+        run: docker images
       - name: run tests
         run: |
-          docker compose version && make -C test
+          make -C test
+  
