@@ -20,8 +20,11 @@ build:
 build-coverage:
 	CARGO_INCREMENTAL=0 RUSTFLAGS="$(RUSTFLAGS_COVERAGE)" cargo +nightly build $(FEATURES)
 
+build-image:
+	docker build -t libdroptestimage .
+
 # Test the project
-test: build
+test: build build-image
 	docker kill $(docker ps -q) || true
 	docker network prune -f
 	docker container prune -f
