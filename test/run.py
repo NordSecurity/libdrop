@@ -15,6 +15,8 @@ from drop_test import ffi, config
 
 
 async def main():
+    print(f"Python version: {sys.version}", flush=True)
+
     parser = argparse.ArgumentParser(description="Run drop instance")
     parser.add_argument("--runner", required=True, help="peer name for the scenario")
     parser.add_argument("--scenario", required=True, help="scenario name")
