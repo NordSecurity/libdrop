@@ -867,6 +867,9 @@ impl IncomingState {
 
                     Some(ServerReq::Fail {
                         file: file_id.clone(),
+                        msg: String::from(
+                            "File failed. The failed state was retrieved from the database.",
+                        ),
                     })
                 }
                 _ => None,

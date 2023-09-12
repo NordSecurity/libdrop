@@ -54,9 +54,10 @@ const REPORT_PROGRESS_THRESHOLD: u64 = 1024 * 64;
 
 pub enum ServerReq {
     Download { task: Box<FileXferTask> },
+    Start { file: FileId, offset: u64 },
     Reject { file: FileId },
     Done { file: FileId },
-    Fail { file: FileId },
+    Fail { file: FileId, msg: String },
     Close,
 }
 
@@ -64,6 +65,15 @@ pub struct FileXferTask {
     pub file: FileToRecv,
     pub xfer: Arc<IncomingTransfer>,
     pub base_dir: Hidden<PathBuf>,
+}
+
+pub struct FileStreamCtx<'a> {
+    jobs: &'a mut JoinSet<()>,
+    guard: AliveGuard,
+    state: Arc<State>,
+    logger: Logger,
+    req_send: mpsc::UnboundedSender<ServerReq>,
+    task: FileXferTask,
 }
 
 struct TmpFileState {
@@ -260,14 +270,14 @@ async fn websocket_start(
         protocol::Version::V1 => {
             ctx.run(
                 socket,
-                v2::HandlerInit::<false>::new(peer.ip(), &state, &logger, &alive),
+                v2::HandlerInit::<false>::new(peer.ip(), &state, &logger),
             )
             .await
         }
         protocol::Version::V2 => {
             ctx.run(
                 socket,
-                v2::HandlerInit::<true>::new(peer.ip(), &state, &logger, &alive),
+                v2::HandlerInit::<true>::new(peer.ip(), &state, &logger),
             )
             .await
         }
@@ -420,7 +430,7 @@ impl RunContext<'_> {
     ) {
         let (req_send, mut req_rx) = mpsc::unbounded_channel();
 
-        if let Err(err) = self.init_manager(req_send, &xfer).await {
+        if let Err(err) = self.init_manager(req_send.clone(), &xfer).await {
             error!(self.logger, "Failed to init trasfer: {err:?}");
             let _ = handler.on_error(&mut socket, err).await;
             return;
@@ -447,7 +457,7 @@ impl RunContext<'_> {
 
                     // API request
                     req = req_rx.recv() => {
-                        if self.on_req(&mut socket, &mut jobs, &mut handler, &xfer, req).await?.is_break() {
+                        if self.on_req(&mut socket, &mut jobs, &mut handler, &xfer, &req_send, req).await?.is_break() {
                             break;
                         }
                     },
@@ -569,13 +579,26 @@ impl RunContext<'_> {
         jobs: &mut JoinSet<()>,
         handler: &mut impl HandlerLoop,
         xfer: &Arc<IncomingTransfer>,
+        req_send: &mpsc::UnboundedSender<ServerReq>,
         req: Option<ServerReq>,
     ) -> anyhow::Result<ControlFlow<()>> {
         match req.context("API channel broken")? {
-            ServerReq::Download { task } => handler.issue_download(socket, jobs, *task).await?,
-            ServerReq::Reject { file } => handler.issue_reject(socket, file.clone()).await?,
-            ServerReq::Done { file } => handler.issue_done(socket, file.clone()).await?,
-            ServerReq::Fail { file } => handler.issue_failure(socket, file.clone()).await?,
+            ServerReq::Download { task } => {
+                let ctx = FileStreamCtx {
+                    jobs,
+                    guard: self.alive.clone(),
+                    state: self.state.clone(),
+                    logger: self.logger.clone(),
+                    req_send: req_send.clone(),
+                    task: *task,
+                };
+
+                handler.start_download(ctx).await?
+            }
+            ServerReq::Start { file, offset } => handler.issue_start(socket, file, offset).await?,
+            ServerReq::Reject { file } => handler.issue_reject(socket, file).await?,
+            ServerReq::Done { file } => handler.issue_done(socket, file).await?,
+            ServerReq::Fail { file, msg } => handler.issue_failure(socket, file, msg).await?,
 
             ServerReq::Close => {
                 debug!(self.logger, "Stoppping server connection gracefuly");
@@ -666,22 +689,18 @@ impl FileXferTask {
             }
 
             downloader.validate(tmp_loc).await?;
-            Ok(bytes_received)
+            Ok(())
         };
 
-        let bytes_received = match consume_file_chunks.await {
-            Ok(br) => br,
-            Err(err) => {
-                if let Err(ioerr) = fs::remove_file(&tmp_loc.0) {
-                    error!(
-                        logger,
-                        "Could not remove temporary file {tmp_loc:?} after failed download: {}",
-                        ioerr
-                    );
-                }
-
-                return Err(err);
+        if let Err(err) = consume_file_chunks.await {
+            if let Err(ioerr) = fs::remove_file(&tmp_loc.0) {
+                error!(
+                    logger,
+                    "Could not remove temporary file {tmp_loc:?} after failed download: {}", ioerr
+                );
             }
+
+            return Err(err);
         };
 
         let dst = match self.place_file_into_dest(state, logger, tmp_loc).await {
@@ -695,8 +714,6 @@ impl FileXferTask {
                 return Err(err);
             }
         };
-
-        downloader.done(bytes_received).await?;
 
         Ok(dst)
     }
@@ -739,6 +756,7 @@ impl FileXferTask {
         events: Arc<FileEventTx<IncomingTransfer>>,
         mut downloader: impl Downloader,
         mut stream: UnboundedReceiver<Vec<u8>>,
+        req_send: mpsc::UnboundedSender<ServerReq>,
         logger: Logger,
     ) {
         let init_res = match downloader.init(&self).await {
@@ -758,6 +776,17 @@ impl FileXferTask {
                 offset,
                 tmp_location,
             } => {
+                if req_send
+                    .send(ServerReq::Start {
+                        file: self.file.id().clone(),
+                        offset,
+                    })
+                    .is_err()
+                {
+                    debug!(logger, "Client is disconnected. Stopping file stream");
+                    return;
+                }
+
                 events.start(self.base_dir.to_string_lossy(), offset).await;
 
                 let result = self
@@ -793,6 +822,10 @@ impl FileXferTask {
                             warn!(logger, "Failed to post finish: {err}");
                         }
 
+                        let _ = req_send.send(ServerReq::Done {
+                            file: self.file.id().clone(),
+                        });
+
                         events.success(dst_location).await;
                     }
                     Err(err) => {
@@ -804,7 +837,11 @@ impl FileXferTask {
                             warn!(logger, "Failed to post finish: {err}");
                         }
 
-                        let _ = downloader.error(err.to_string()).await;
+                        let _ = req_send.send(ServerReq::Fail {
+                            file: self.file.id().clone(),
+                            msg: err.to_string(),
+                        });
+
                         events.failed(err).await;
                     }
                 }
@@ -881,28 +918,38 @@ fn move_tmp_to_dst(
     Ok(dst_location)
 }
 
-async fn start_download(
-    jobs: &mut JoinSet<()>,
-    guard: AliveGuard,
-    state: Arc<State>,
-    job: FileXferTask,
-    downloader: impl Downloader + Send + 'static,
-    stream: UnboundedReceiver<Vec<u8>>,
-    logger: Logger,
-) -> anyhow::Result<(AbortHandle, Arc<IncomingFileEventTx>)> {
-    let events = state
-        .transfer_manager
-        .incoming_file_events(job.xfer.id(), job.file.id())
-        .await?;
+impl<'a> FileStreamCtx<'a> {
+    async fn start(
+        self,
+        downloader: impl Downloader + Send + 'static,
+        stream: UnboundedReceiver<Vec<u8>>,
+    ) -> anyhow::Result<(AbortHandle, Arc<IncomingFileEventTx>)> {
+        let events = self
+            .state
+            .transfer_manager
+            .incoming_file_events(self.task.xfer.id(), self.task.file.id())
+            .await?;
 
-    let job = {
-        let events = events.clone();
+        let job = {
+            let events = events.clone();
 
-        jobs.spawn(async move {
-            let _guard = guard;
-            job.run(state, events, downloader, stream, logger).await;
-        })
-    };
+            let Self {
+                jobs,
+                guard,
+                state,
+                logger,
+                req_send,
+                task,
+            } = self;
 
-    Ok((job, events))
+            jobs.spawn(async move {
+                let _guard = guard;
+
+                task.run(state, events, downloader, stream, req_send, logger)
+                    .await;
+            })
+        };
+
+        Ok((job, events))
+    }
 }
