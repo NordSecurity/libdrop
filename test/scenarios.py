@@ -7875,4 +7875,169 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario39-1",
+        "Produce a situation in which the receiver has stalled transfer, but sender does not have it anymore. Expect receiver to check the transfer state eventually",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.SleepMs(200),
+                    action.Stop(),
+                    action.Start(
+                        "172.20.0.5"
+                    ),  # starting with in memory database, effectively loosing all the data
+                    action.Sleep(61),  # 60s is a check request interval
+                    action.AssertTransfers([]),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.5",
+                        "created_at": "*",
+                        "states": [
+                            {
+                                "created_at": "*",
+                                "state": "cancel",
+                                "by_peer": true
+                            }
+                        ],
+                        "type": "incoming",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "bytes": 1048576,
+                                "bytes_received": 0,
+                                "states": []
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario39-2",
+        "Wait for the receiver -> sender GET /check request in case of alive transfer. Expect the check to not cancel the transfer",
+        {
+            "ren": ActionList(
+                [
+                    action.Start("172.20.0.5"),
+                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.NoEvent(
+                        duration=61
+                    ),  # the check interval is 60s so wait a bit longer
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.15",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "base_path": "/tmp",
+                                "bytes": 1048576,
+                                "bytes_sent": 0,
+                                "states": []
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                    action.Stop(),
+                ]
+            ),
+            "stimpy": ActionList(
+                [
+                    action.Start("172.20.0.15"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "172.20.0.5",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.NoEvent(
+                        duration=61
+                    ),  # the check interval is 60s so wait a bit longer
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "peer_id": "172.20.0.5",
+                        "created_at": "*",
+                        "states": [],
+                        "type": "incoming",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "bytes": 1048576,
+                                "bytes_received": 0,
+                                "states": []
+                            }
+                        ]
+                    }"""
+                        ]
+                    ),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]

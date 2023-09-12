@@ -84,7 +84,6 @@ impl Service {
             ws::server::spawn(
                 addr,
                 state.clone(),
-                auth,
                 logger.clone(),
                 stop.clone(),
                 guard.clone(),

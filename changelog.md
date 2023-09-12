@@ -1,3 +1,14 @@
+### v5.1.0
+### **Silver Bullet**
+---
+* Suppress synchronization of transfers cancelled before the receiver got a chance to receive the transfer request.\
+This fixes the case when transfer cancelled on the sender side caused `TransferCancelled` being fired immedieatly after `TransferRequest`.\
+With this change the transfer would not be seen on the receiver side at all.
+* Implement a periodic transfer state check in case of stalled transfer for the receiver
+
+---
+<br>
+
 ### v5.0.1
 ### **Broken Records**
 ---

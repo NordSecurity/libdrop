@@ -32,7 +32,7 @@ use warp::{ws::Message, Filter};
 use self::socket::{WebSocket, WsStream};
 use super::{events::FileEventTx, IncomingFileEventTx};
 use crate::{
-    auth,
+    auth, check,
     file::{self, FileToRecv},
     protocol,
     quarantine::PathExt,
@@ -79,176 +79,125 @@ struct StreamCtx<'a> {
     events: &'a FileEventTx<IncomingTransfer>,
 }
 
+#[derive(Debug)]
+struct MissingAuth(SocketAddr);
+impl warp::reject::Reject for MissingAuth {}
+
+#[derive(Debug)]
+struct Unauthorized;
+impl warp::reject::Reject for Unauthorized {}
+
+#[derive(Debug)]
+struct ToManyReqs;
+impl warp::reject::Reject for ToManyReqs {}
+
+#[derive(Debug)]
+struct BadRequest;
+impl warp::reject::Reject for BadRequest {}
+
 pub(crate) fn spawn(
     addr: IpAddr,
     state: Arc<State>,
-    auth: Arc<auth::Context>,
     logger: Logger,
     stop: CancellationToken,
     alive: AliveGuard,
 ) -> crate::Result<()> {
     let nonce_store = Arc::new(Mutex::new(HashMap::new()));
 
-    #[derive(Debug)]
-    struct MissingAuth(SocketAddr);
-    impl warp::reject::Reject for MissingAuth {}
-
-    #[derive(Debug)]
-    struct Unauthrorized;
-    impl warp::reject::Reject for Unauthrorized {}
-
-    #[derive(Debug)]
-    struct ToManyReqs;
-    impl warp::reject::Reject for ToManyReqs {}
-
-    async fn handle_rejection(
-        nonces: &Mutex<HashMap<SocketAddr, Nonce>>,
-        err: warp::Rejection,
-    ) -> Result<Box<dyn warp::Reply>, warp::Rejection> {
-        if let Some(MissingAuth(peer)) = err.find() {
-            let nonce = Nonce::generate();
-            let value = drop_auth::http::WWWAuthenticate::new(nonce);
-
-            nonces.lock().await.insert(*peer, nonce);
-
-            Ok(Box::new(warp::reply::with_header(
-                StatusCode::UNAUTHORIZED,
-                drop_auth::http::WWWAuthenticate::KEY,
-                value.to_string(),
-            )))
-        } else if let Some(Unauthrorized) = err.find() {
-            Ok(Box::new(StatusCode::UNAUTHORIZED))
-        } else if let Some(ToManyReqs) = err.find() {
-            Ok(Box::new(StatusCode::TOO_MANY_REQUESTS))
-        } else {
-            Err(err)
-        }
-    }
-
     let service = {
-        let logger = logger.clone();
-        let nonces = nonce_store.clone();
-        let alive = alive.clone();
-        let stop = stop.clone();
-
         let rate_limiter = Arc::new(governor::RateLimiter::dashmap(governor::Quota::per_second(
             drop_config::MAX_REQUESTS_PER_SEC
                 .try_into()
                 .map_err(|_| crate::Error::InvalidArgument)?,
         )));
 
-        warp::filters::addr::remote()
-            .and_then(move |peer: Option<SocketAddr>| {
-                let peer = peer.expect("Transport should use IP addresses");
-                let check = rate_limiter.check_key(&peer.ip());
+        let remote = warp::filters::addr::remote()
+            .map(move |peer: Option<SocketAddr>| peer.expect("Transport should use IP addresses"));
 
+        let ddos = remote
+            .and_then(move |peer: SocketAddr| {
+                let check = rate_limiter.check_key(&peer.ip());
                 async move {
                     match check {
-                        Ok(_) => Ok(peer),
+                        Ok(_) => Ok(()),
                         Err(_) => Err(warp::reject::custom(ToManyReqs)),
                     }
                 }
             })
-            .and(warp::path("drop"))
-            .and(warp::path::param().and_then(|version: String| async move {
+            .untuple_one();
+
+        let route =
+            warp::path("drop").and(warp::path::param().and_then(|version: String| async move {
                 version
                     .parse::<protocol::Version>()
                     .map_err(|_| warp::reject::not_found())
-            }))
-            .and(warp::filters::header::optional("authorization"))
-            .and_then(
-                move |peer: SocketAddr, version: protocol::Version, auth_header: Option<String>| {
-                    let nonces = nonces.clone();
-                    let auth = auth.clone();
+            }));
 
-                    async move {
-                        // Uncache the peer nonce first
-                        let nonce = nonces.lock().await.remove(&peer);
+        let base = remote.and(route).and(warp::filters::header::optional(
+            drop_auth::http::Authorization::KEY,
+        ));
 
-                        match version {
-                            protocol::Version::V1 | protocol::Version::V2 => (),
-                            _ => {
-                                let auth_header = auth_header
-                                    .ok_or_else(|| warp::reject::custom(MissingAuth(peer)))?;
+        let ws_route = {
+            let logger = logger.clone();
+            let nonces = nonce_store.clone();
+            let alive = alive.clone();
+            let stop = stop.clone();
+            let state = state.clone();
 
-                                let nonce =
-                                    nonce.ok_or_else(|| warp::reject::custom(Unauthrorized))?;
-
-                                if !auth.authorize(peer.ip(), &auth_header, &nonce) {
-                                    return Err(warp::reject::custom(Unauthrorized));
-                                }
-                            }
-                        };
-
-                        Ok((version, peer))
-                    }
-                },
-            )
-            .untuple_one()
-            .and(warp::ws())
-            .map(
-                move |version: protocol::Version, peer: SocketAddr, ws: warp::ws::Ws| {
+            base.and(warp::ws()).and_then(
+                move |peer: SocketAddr,
+                      version: protocol::Version,
+                      auth_header: Option<String>,
+                      ws: warp::ws::Ws| {
                     let state = Arc::clone(&state);
                     let alive = alive.clone();
                     let stop = stop.clone();
                     let logger = logger.clone();
+                    let nonces = nonces.clone();
 
-                    ws.on_upgrade(move |socket| async move {
-                        info!(logger, "Client requested protocol version: {}", version);
+                    async move {
+                        authorize(&state.auth, &nonces, peer, version, auth_header).await?;
 
-                        let ctx = RunContext {
-                            logger: &logger,
-                            state: state.clone(),
-                            stop: &stop,
-                        };
+                        let reply = ws.on_upgrade(move |socket| async move {
+                            info!(logger, "Client requested protocol version: {}", version);
+                            websocket_start(socket, state, alive, stop, version, peer, logger)
+                                .await;
+                        });
 
-                        match version {
-                            protocol::Version::V1 => {
-                                ctx.run(
-                                    socket,
-                                    v2::HandlerInit::<false>::new(
-                                        peer.ip(),
-                                        &state,
-                                        &logger,
-                                        &alive,
-                                    ),
-                                )
-                                .await
-                            }
-                            protocol::Version::V2 => {
-                                ctx.run(
-                                    socket,
-                                    v2::HandlerInit::<true>::new(
-                                        peer.ip(),
-                                        &state,
-                                        &logger,
-                                        &alive,
-                                    ),
-                                )
-                                .await
-                            }
-                            protocol::Version::V4 => {
-                                ctx.run(
-                                    socket,
-                                    v4::HandlerInit::new(peer.ip(), state, &logger, &alive),
-                                )
-                                .await
-                            }
-                            protocol::Version::V5 => {
-                                ctx.run(
-                                    socket,
-                                    v5::HandlerInit::new(peer.ip(), state, &logger, &alive),
-                                )
-                                .await
-                            }
-                        }
-                    })
+                        Ok::<_, warp::Rejection>(reply)
+                    }
                 },
             )
-            .recover(move |err| {
-                let nonces = Arc::clone(&nonce_store);
-                async move { handle_rejection(&nonces, err).await }
-            })
+        };
+
+        let check_route = {
+            let nonces = nonce_store.clone();
+
+            base.and(warp::path!("check" / String))
+                .and(warp::get())
+                .and_then(move |peer, version, auth_header, uuid: String| {
+                    let state = Arc::clone(&state);
+                    let nonces = nonces.clone();
+
+                    async move {
+                        authorize(&state.auth, &nonces, peer, version, auth_header).await?;
+
+                        let uuid = uuid.parse().map_err(|_| warp::reject::custom(BadRequest))?;
+                        let status = if state.transfer_manager.is_outgoing_alive(uuid).await {
+                            StatusCode::OK
+                        } else {
+                            StatusCode::GONE
+                        };
+
+                        Ok::<_, warp::Rejection>(status)
+                    }
+                })
+        };
+
+        ddos.and(ws_route.or(check_route)).recover(move |err| {
+            let nonces = Arc::clone(&nonce_store);
+            async move { handle_rejection(&nonces, err).await }
+        })
     };
 
     let future = match warp::serve(service)
@@ -291,10 +240,111 @@ pub(crate) fn spawn(
     Ok(())
 }
 
+async fn websocket_start(
+    socket: warp::ws::WebSocket,
+    state: Arc<State>,
+    alive: AliveGuard,
+    stop: CancellationToken,
+    version: protocol::Version,
+    peer: SocketAddr,
+    logger: Logger,
+) {
+    let ctx = RunContext {
+        logger: &logger,
+        state: state.clone(),
+        stop: &stop,
+        alive: &alive,
+    };
+
+    match version {
+        protocol::Version::V1 => {
+            ctx.run(
+                socket,
+                v2::HandlerInit::<false>::new(peer.ip(), &state, &logger, &alive),
+            )
+            .await
+        }
+        protocol::Version::V2 => {
+            ctx.run(
+                socket,
+                v2::HandlerInit::<true>::new(peer.ip(), &state, &logger, &alive),
+            )
+            .await
+        }
+        protocol::Version::V4 => {
+            ctx.run(
+                socket,
+                v4::HandlerInit::new(peer.ip(), state, &logger, &alive),
+            )
+            .await
+        }
+        protocol::Version::V5 => {
+            ctx.run(
+                socket,
+                v5::HandlerInit::new(peer.ip(), state, &logger, &alive),
+            )
+            .await
+        }
+    }
+}
+
+async fn authorize(
+    auth: &auth::Context,
+    nonces: &Mutex<HashMap<SocketAddr, Nonce>>,
+    peer: SocketAddr,
+    version: protocol::Version,
+    auth_header: Option<String>,
+) -> Result<(), warp::Rejection> {
+    // Uncache the peer nonce first
+    let nonce = nonces.lock().await.remove(&peer);
+
+    match version {
+        protocol::Version::V1 | protocol::Version::V2 => (),
+        _ => {
+            let auth_header = auth_header.ok_or_else(|| warp::reject::custom(MissingAuth(peer)))?;
+
+            let nonce = nonce.ok_or_else(|| warp::reject::custom(Unauthorized))?;
+
+            if !auth.authorize(peer.ip(), &auth_header, &nonce) {
+                return Err(warp::reject::custom(Unauthorized));
+            }
+        }
+    };
+
+    Ok(())
+}
+
+async fn handle_rejection(
+    nonces: &Mutex<HashMap<SocketAddr, Nonce>>,
+    err: warp::Rejection,
+) -> Result<Box<dyn warp::Reply>, warp::Rejection> {
+    if let Some(MissingAuth(peer)) = err.find() {
+        let nonce = Nonce::generate();
+        let value = drop_auth::http::WWWAuthenticate::new(nonce);
+
+        nonces.lock().await.insert(*peer, nonce);
+
+        Ok(Box::new(warp::reply::with_header(
+            StatusCode::UNAUTHORIZED,
+            drop_auth::http::WWWAuthenticate::KEY,
+            value.to_string(),
+        )))
+    } else if let Some(Unauthorized) = err.find() {
+        Ok(Box::new(StatusCode::UNAUTHORIZED))
+    } else if let Some(ToManyReqs) = err.find() {
+        Ok(Box::new(StatusCode::TOO_MANY_REQUESTS))
+    } else if let Some(BadRequest) = err.find() {
+        Ok(Box::new(StatusCode::BAD_REQUEST))
+    } else {
+        Err(err)
+    }
+}
+
 struct RunContext<'a> {
     logger: &'a slog::Logger,
     state: Arc<State>,
     stop: &'a CancellationToken,
+    alive: &'a AliveGuard,
 }
 
 impl RunContext<'_> {
@@ -397,7 +447,7 @@ impl RunContext<'_> {
 
                     // API request
                     req = req_rx.recv() => {
-                        if on_req(&mut socket, &mut jobs, &mut handler, self.logger, req).await?.is_break() {
+                        if self.on_req(&mut socket, &mut jobs, &mut handler, &xfer, req).await?.is_break() {
                             break;
                         }
                     },
@@ -422,14 +472,6 @@ impl RunContext<'_> {
             anyhow::Ok(())
         };
 
-        let result = task.await;
-
-        let task = async {
-            result.context("Connection broke in the loop")?;
-            socket.drain().await.context("Failed to drain the socket")?;
-            anyhow::Ok(())
-        };
-
         if let Err(err) = task.await {
             info!(
                 self.logger,
@@ -438,18 +480,7 @@ impl RunContext<'_> {
             );
         } else {
             debug!(self.logger, "Sucesfully finalizing transfer loop");
-
-            let remove_xfer = async {
-                if let Err(err) = self.state.transfer_manager.incoming_remove(xfer.id()).await {
-                    warn!(
-                        self.logger,
-                        "Failed to clear sync state for {}: {err}",
-                        xfer.id()
-                    );
-                }
-            };
-
-            tokio::join!(handler.finalize_success(), remove_xfer);
+            handler.finalize_success().await;
         }
 
         jobs.shutdown().await;
@@ -472,6 +503,14 @@ impl RunContext<'_> {
                 .send(Event::RequestReceived(xfer.clone()))
                 .await
                 .expect("Failed to notify receiving peer!");
+
+            check::spawn(
+                self.state.clone(),
+                xfer.clone(),
+                self.logger.clone(),
+                self.alive.clone(),
+                self.stop.clone(),
+            );
         }
 
         Ok(())
@@ -494,11 +533,23 @@ impl RunContext<'_> {
 
             handler.on_close().await;
 
-            self.state
-                .event_tx
-                .send(crate::Event::IncomingTransferCanceled(xfer.clone(), true))
-                .await
-                .expect("Could not send a file cancelled event, channel closed");
+            match self.state.transfer_manager.incoming_remove(xfer.id()).await {
+                Err(err) => {
+                    warn!(
+                        self.logger,
+                        "Failed to clear sync state (on message) for {}: {err}",
+                        xfer.id()
+                    );
+                }
+                Ok(false) => {
+                    self.state
+                        .event_tx
+                        .send(crate::Event::IncomingTransferCanceled(xfer.clone(), true))
+                        .await
+                        .expect("Could not send a file cancelled event, channel closed");
+                }
+                _ => (),
+            }
 
             return Ok(ControlFlow::Break(()));
         } else if msg.is_ping() {
@@ -510,6 +561,41 @@ impl RunContext<'_> {
         }
 
         anyhow::Ok(ControlFlow::Continue(()))
+    }
+
+    async fn on_req(
+        &self,
+        socket: &mut WebSocket,
+        jobs: &mut JoinSet<()>,
+        handler: &mut impl HandlerLoop,
+        xfer: &Arc<IncomingTransfer>,
+        req: Option<ServerReq>,
+    ) -> anyhow::Result<ControlFlow<()>> {
+        match req.context("API channel broken")? {
+            ServerReq::Download { task } => handler.issue_download(socket, jobs, *task).await?,
+            ServerReq::Reject { file } => handler.issue_reject(socket, file.clone()).await?,
+            ServerReq::Done { file } => handler.issue_done(socket, file.clone()).await?,
+            ServerReq::Fail { file } => handler.issue_failure(socket, file.clone()).await?,
+
+            ServerReq::Close => {
+                debug!(self.logger, "Stoppping server connection gracefuly");
+                socket.send(Message::close()).await?;
+                handler.on_close().await;
+                socket.drain().await.context("Failed to drain the socket")?;
+
+                if let Err(err) = self.state.transfer_manager.incoming_remove(xfer.id()).await {
+                    warn!(
+                        self.logger,
+                        "Failed to clear sync state (on request) for {}: {err}",
+                        xfer.id()
+                    );
+                }
+
+                return Ok(ControlFlow::Break(()));
+            }
+        }
+
+        Ok(ControlFlow::Continue(()))
     }
 }
 
@@ -793,30 +879,6 @@ fn move_tmp_to_dst(
     }
 
     Ok(dst_location)
-}
-
-async fn on_req(
-    socket: &mut WebSocket,
-    jobs: &mut JoinSet<()>,
-    handler: &mut impl HandlerLoop,
-    logger: &Logger,
-    req: Option<ServerReq>,
-) -> anyhow::Result<ControlFlow<()>> {
-    match req.context("API channel broken")? {
-        ServerReq::Download { task } => handler.issue_download(socket, jobs, *task).await?,
-        ServerReq::Reject { file } => handler.issue_reject(socket, file.clone()).await?,
-        ServerReq::Done { file } => handler.issue_done(socket, file.clone()).await?,
-        ServerReq::Fail { file } => handler.issue_failure(socket, file.clone()).await?,
-
-        ServerReq::Close => {
-            debug!(logger, "Stoppping server connection gracefuly");
-            socket.send(Message::close()).await?;
-            handler.on_close().await;
-            return Ok(ControlFlow::Break(()));
-        }
-    }
-
-    Ok(ControlFlow::Continue(()))
 }
 
 async fn start_download(
