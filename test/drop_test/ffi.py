@@ -185,7 +185,7 @@ class EventQueue:
 
                     if not found:
                         raise Exception(
-                            f"Unexpected event1:\n{str(e)}\nwhile looking for(racy):\n{', '.join(str(e) for e in target_events if e not in success)}\n"
+                            f"Unexpected event:\n{str(e)}\nwhile looking for(racy):\n{''.join(str(e) + chr(10) for e in target_events if e not in success)}\n"
                         )
 
                     i -= 1
@@ -195,7 +195,7 @@ class EventQueue:
             await asyncio.sleep(1)
 
         raise Exception(
-            f"Events not received\nwhile looking for(racy), remained:\n{', '.join(str(e) for e in target_events if e not in success)}\n"
+            f"Events not received\nwhile looking for(racy), remained:\n{''.join(str(e) + chr(10) for e in target_events if e not in success)}\n"
         )
 
 
