@@ -1,4 +1,5 @@
 pub mod auth;
+mod check;
 mod error;
 pub mod event;
 pub mod file;

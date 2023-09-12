@@ -14,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
+    check,
     file::FileSubPath,
     service::State,
     tasks::AliveGuard,
@@ -424,15 +425,34 @@ impl TransferManager {
         })
     }
 
-    pub async fn incoming_remove(&self, transfer_id: Uuid) -> crate::Result<()> {
+    /// Returns `true` if the cancel event should be suppressed
+    pub async fn incoming_remove(&self, transfer_id: Uuid) -> crate::Result<bool> {
         let mut lock = self.incoming.lock().await;
         if !lock.contains_key(&transfer_id) {
             return Err(crate::Error::BadTransfer);
         }
         self.storage.transfer_sync_clear(transfer_id).await;
-        lock.remove(&transfer_id);
 
-        Ok(())
+        let was_cancelled = if let Some(state) = lock.remove(&transfer_id) {
+            matches!(state.xfer_sync.local, sync::TransferState::Canceled)
+        } else {
+            true
+        };
+
+        Ok(was_cancelled)
+    }
+
+    pub async fn is_incoming_alive(&self, transfer_id: Uuid) -> bool {
+        let lock = self.incoming.lock().await;
+        let state = match lock.get(&transfer_id) {
+            Some(state) => state,
+            None => return false,
+        };
+
+        !matches!(
+            (state.xfer_sync.local, state.xfer_sync.remote),
+            (sync::TransferState::Canceled, sync::TransferState::Canceled)
+        )
     }
 
     pub async fn incoming_download_cancel(
@@ -984,16 +1004,32 @@ pub(crate) async fn resume(
     guard: &AliveGuard,
     stop: &CancellationToken,
 ) {
-    let xfers = state.transfer_manager.outgoing.lock().await;
+    {
+        let xfers = state.transfer_manager.outgoing.lock().await;
 
-    for xstate in xfers.values() {
-        ws::client::spawn(
-            state.clone(),
-            xstate.xfer.clone(),
-            logger.clone(),
-            guard.clone(),
-            stop.clone(),
-        );
+        for xstate in xfers.values() {
+            ws::client::spawn(
+                state.clone(),
+                xstate.xfer.clone(),
+                logger.clone(),
+                guard.clone(),
+                stop.clone(),
+            );
+        }
+    }
+
+    {
+        let xfers = state.transfer_manager.incoming.lock().await;
+
+        for xstate in xfers.values() {
+            check::spawn(
+                state.clone(),
+                xstate.xfer.clone(),
+                logger.clone(),
+                guard.clone(),
+                stop.clone(),
+            );
+        }
     }
 }
 
