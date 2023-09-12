@@ -22,6 +22,9 @@ build-coverage:
 
 # Test the project
 test: build
+	docker kill $(docker ps -q) || true
+	docker network prune -f
+	docker container prune -f
 	LIB_PATH=$(LIB_DOCKER) ./runner.py --testcase-timeout=$(TESTCASE_TIMEOUT) --scenarios-at-once=$(SCENARIOS_AT_ONCE)
 
 # Generate and view coverage report
