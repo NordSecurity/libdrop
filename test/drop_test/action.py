@@ -16,6 +16,7 @@ import requests
 from . import event, ffi
 from .logger import logger
 from .event import Event, print_uuid, get_uuid, UUIDS, UUIDS_LOCK
+from .peer_resolver import peer_resolver
 
 import sys
 
@@ -79,7 +80,8 @@ class ListenOnPort(Action):
 
     async def run(self, drop: ffi.Drop):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind((self._addr, 49111))
+        addr = peer_resolver.resolve(self._addr)
+        s.bind((addr, 49111))
         s.listen()
 
         # prevent socket from being closed
@@ -147,14 +149,14 @@ class NewTransferFails(Action):
 
     async def run(self, drop: ffi.Drop):
         try:
-            xfid = drop.new_transfer(self._peer, [self._path])
+            xfid = drop.new_transfer(peer_resolver.resolve(self._peer), [self._path])
         except:
             return
 
         raise Exception("NewTransferFails did not fail")
 
     def __str__(self):
-        return f"NewTransferFails({self._peer}, {self._path})"
+        return f"NewTransferFails({peer_resolver.resolve(self._peer)}, {self._path})"
 
 
 class NewTransfer(Action):
@@ -164,11 +166,11 @@ class NewTransfer(Action):
 
     async def run(self, drop: ffi.Drop):
         with UUIDS_LOCK:
-            xfid = drop.new_transfer(self._peer, self._paths)
+            xfid = drop.new_transfer(peer_resolver.resolve(self._peer), self._paths)
             UUIDS.append(xfid)
 
     def __str__(self):
-        return f"NewTransfer({self._peer}, {self._paths})"
+        return f"NewTransfer({peer_resolver.resolve(self._peer)}, {self._paths})"
 
 
 # New transfer just with files preopened. Used to test Android. Android can't share directories
@@ -185,11 +187,13 @@ class NewTransferWithFD(Action):
 
     async def run(self, drop: ffi.Drop):
         with UUIDS_LOCK:
-            xfid = drop.new_transfer_with_fd(self._peer, self._path, self._uri)
+            xfid = drop.new_transfer_with_fd(
+                peer_resolver.resolve(self._peer), self._path, self._uri
+            )
             UUIDS.append(xfid)
 
     def __str__(self):
-        return f"NewTransferWithFD({self._peer}, {self._uri})"
+        return f"NewTransferWithFD({peer_resolver.resolve(self._peer)}, {self._uri})"
 
 
 class Download(Action):
@@ -200,7 +204,7 @@ class Download(Action):
 
     async def run(self, drop: ffi.Drop):
         with UUIDS_LOCK:
-            drop.download(UUIDS[self._uuid_slot], self._fid, self._dst)  # TODO
+            drop.download(UUIDS[self._uuid_slot], self._fid, self._dst)
 
     def __str__(self):
         return f"DownloadFile({print_uuid(self._uuid_slot)}, {self._fid}, {self._dst})"
@@ -618,10 +622,10 @@ class Start(Action):
         self._dbpath = dbpath
 
     async def run(self, drop: ffi.Drop):
-        drop.start(self._addr, self._dbpath)
+        drop.start(peer_resolver.resolve(self._addr), self._dbpath)
 
     def __str__(self):
-        return f"Start(addr={self._addr}, dbpath={self._dbpath})"
+        return f"Start(addr={peer_resolver.resolve(self._addr)}, dbpath={self._dbpath})"
 
 
 class RemoveTransferFile(Action):
@@ -685,12 +689,16 @@ class EnsureTakesNoLonger(Action):
 
 
 class MakeHttpGetRequest(Action):
-    def __init__(self, url: str, status: int):
+    def __init__(self, peer: str, url: str, status: int, timeout=2):
+        self._timeout = timeout
+        self._peer = peer
         self._url = url
         self._status = status
 
     async def run(self, drop: ffi.Drop):
-        res = requests.get(self._url)
+        addr = peer_resolver.resolve(self._peer)
+        url = f"http://{addr}:49111{self._url}"
+        res = requests.get(url, timeout=self._timeout)
 
         if res.status_code != self._status:
             raise Exception(

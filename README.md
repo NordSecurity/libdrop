@@ -10,6 +10,11 @@ version. The format is `v{semver}`. An API call to `norddrop_version()` should b
 - After changes are introduced it might need an appsec review. This is especially true if the major semver component is increased.
 
 # Tests
+Tests depend on `libdroptestimage` Docker image which can be built with:
+```
+docker build -t libdroptestimage test
+```
+
 ## Whole testsuite
 ```
 make -C test

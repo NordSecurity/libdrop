@@ -9,6 +9,8 @@ from threading import Lock
 from . import event
 from .logger import logger
 from .config import RUNNERS
+from .peer_resolver import Peer
+from .peer_resolver import peer_resolver
 
 
 DEBUG_PRINT_EVENT = True
@@ -200,22 +202,22 @@ class EventQueue:
 
 
 class KeysCtx:
-    def __init__(self, runner: str):
-        self.this = RUNNERS[runner]
+    def __init__(self, hostname: str):
+        self.this = RUNNERS[hostname]
 
     def callback(self, ctx, ip, pubkey):
         ip = ip.decode("utf-8")
 
         peer = None
-        for pr in RUNNERS.values():
-            if pr.ip == ip:
+        for pr in RUNNERS.keys():
+            if peer_resolver.resolve(pr) == ip:
                 peer = pr
                 break
 
         if peer is None:
             return 1
 
-        found = peer.pubkey
+        found = RUNNERS[peer].pubkey
 
         ctypes.memmove(pubkey, found, len(found))
         return 0
@@ -592,7 +594,7 @@ def new_event(event_str: str) -> event.Event:
 
         return event.Receive(
             transfer_slot,
-            event_data["peer"],
+            peer_resolver.reverse_lookup(event_data["peer"]),
             {event.File(f["id"], f["path"], f["size"]) for f in event_data["files"]},
         )
 
