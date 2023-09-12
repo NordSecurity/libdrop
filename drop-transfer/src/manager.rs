@@ -146,11 +146,7 @@ impl TransferManager {
                 }
 
                 self.storage
-                    .update_transfer_sync_states(
-                        xfer.id(),
-                        Some(sync::TransferState::Active),
-                        Some(sync::TransferState::Active),
-                    )
+                    .update_transfer_sync_states(xfer.id(), sync::TransferState::Active)
                     .await;
 
                 vacc.insert(IncomingState {
@@ -188,11 +184,7 @@ impl TransferManager {
 
         if let sync::TransferState::New = state.xfer_sync {
             self.storage
-                .update_transfer_sync_states(
-                    transfer_id,
-                    Some(sync::TransferState::Active),
-                    Some(sync::TransferState::Active),
-                )
+                .update_transfer_sync_states(transfer_id, sync::TransferState::Active)
                 .await;
 
             state.xfer_sync = sync::TransferState::Active;
@@ -558,11 +550,7 @@ impl TransferManager {
         state.ensure_not_cancelled()?;
 
         self.storage
-            .update_transfer_sync_states(
-                transfer_id,
-                None,
-                Some(drop_storage::sync::TransferState::Canceled),
-            )
+            .update_transfer_sync_states(transfer_id, drop_storage::sync::TransferState::Canceled)
             .await;
         state.xfer_sync = sync::TransferState::Canceled;
 
@@ -612,8 +600,7 @@ impl TransferManager {
                 self.storage
                     .update_transfer_sync_states(
                         transfer_id,
-                        None,
-                        Some(drop_storage::sync::TransferState::Canceled),
+                        drop_storage::sync::TransferState::Canceled,
                     )
                     .await;
                 state.xfer_sync = sync::TransferState::Canceled;
