@@ -8,7 +8,7 @@ use std::{
     collections::HashMap,
     fs,
     io::{self, Write},
-    net::{IpAddr, SocketAddr},
+    net::SocketAddr,
     ops::ControlFlow,
     path::{Path, PathBuf},
     sync::Arc,
@@ -106,12 +106,13 @@ struct BadRequest;
 impl warp::reject::Reject for BadRequest {}
 
 pub(crate) fn spawn(
-    addr: IpAddr,
     state: Arc<State>,
     logger: Logger,
     stop: CancellationToken,
     alive: AliveGuard,
 ) -> crate::Result<()> {
+    let addr = SocketAddr::new(state.addr, drop_config::PORT);
+
     let nonce_store = Arc::new(Mutex::new(HashMap::new()));
 
     let service = {
@@ -210,36 +211,32 @@ pub(crate) fn spawn(
         })
     };
 
-    let future = match warp::serve(service)
-        .try_bind_with_graceful_shutdown((addr, drop_config::PORT), stop.cancelled_owned())
-    {
-        Ok((socket, future)) => {
-            debug!(logger, "WS server is bound to: {socket}");
-            future
-        }
-        Err(err) => {
-            // Check if this is IO error about address already in use
-            if let Some(ioerr) = std::error::Error::source(&err)
-                .and_then(|src| src.downcast_ref::<hyper::Error>())
-                .and_then(std::error::Error::source)
-                .and_then(|src| src.downcast_ref::<io::Error>())
-            {
-                if ioerr.kind() == io::ErrorKind::AddrInUse {
-                    error!(
-                        logger,
-                        "Found that the address {}:{} is already used, while trying to bind the \
-                         WS server: {}",
-                        addr,
-                        drop_config::PORT,
-                        ioerr
-                    );
-                    return Err(Error::AddrInUse);
-                }
+    let future =
+        match warp::serve(service).try_bind_with_graceful_shutdown(addr, stop.cancelled_owned()) {
+            Ok((socket, future)) => {
+                debug!(logger, "WS server is bound to: {socket}");
+                future
             }
+            Err(err) => {
+                // Check if this is IO error about address already in use
+                if let Some(ioerr) = std::error::Error::source(&err)
+                    .and_then(|src| src.downcast_ref::<hyper::Error>())
+                    .and_then(std::error::Error::source)
+                    .and_then(|src| src.downcast_ref::<io::Error>())
+                {
+                    if ioerr.kind() == io::ErrorKind::AddrInUse {
+                        error!(
+                            logger,
+                            "Found that the address {addr} is already used, while trying to bind \
+                             the WS server: {ioerr}",
+                        );
+                        return Err(Error::AddrInUse);
+                    }
+                }
 
-            return Err(err.into());
-        }
-    };
+                return Err(err.into());
+            }
+        };
 
     tokio::spawn(async move {
         let _guard = alive;

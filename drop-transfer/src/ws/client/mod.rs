@@ -17,7 +17,7 @@ use anyhow::Context;
 use hyper::StatusCode;
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
-    net::TcpStream,
+    net::{TcpSocket, TcpStream},
     sync::{
         mpsc::{self, UnboundedReceiver},
         Semaphore, SemaphorePermit, TryAcquireError,
@@ -174,7 +174,7 @@ async fn establish_ws_conn(
 ) -> WsConnection {
     let break_check = || async { !state.transfer_manager.is_outgoing_alive(xfer.id()).await };
 
-    let mut socket = match tcp_connect(xfer.peer(), break_check, logger).await {
+    let mut socket = match tcp_connect(state.addr, xfer.peer(), break_check, logger).await {
         Some(socket) => socket,
         None => return WsConnection::Stopped,
     };
@@ -269,18 +269,33 @@ async fn make_request(
 }
 
 async fn tcp_connect<Fut: Future<Output = bool>>(
-    ip: IpAddr,
+    local_ip: IpAddr,
+    remote_ip: IpAddr,
     break_check: impl Fn() -> Fut,
     logger: &Logger,
 ) -> Option<TcpStream> {
     let mut sleep_time = Duration::from_millis(200);
+    let remote = SocketAddr::new(remote_ip, drop_config::PORT);
+    let local = SocketAddr::new(local_ip, 0);
+
+    let try_connect = || async {
+        let sock = if local_ip.is_ipv4() {
+            TcpSocket::new_v4()
+        } else {
+            TcpSocket::new_v6()
+        }?;
+
+        sock.bind(local)?;
+
+        sock.connect(remote).await
+    };
 
     loop {
         if break_check().await {
             break;
         }
 
-        match TcpStream::connect((ip, drop_config::PORT)).await {
+        match try_connect().await {
             Ok(sock) => return Some(sock),
             Err(err) => {
                 debug!(

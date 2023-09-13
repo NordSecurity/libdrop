@@ -31,6 +31,7 @@ pub(super) struct State {
     pub(crate) config: Arc<DropConfig>,
     pub(crate) storage: Arc<Storage>,
     pub(crate) throttle: Semaphore,
+    pub(crate) addr: IpAddr,
     #[cfg(unix)]
     pub fdresolv: Option<Arc<crate::file::FdResolver>>,
 }
@@ -68,6 +69,7 @@ impl Service {
                 config,
                 auth: auth.clone(),
                 storage,
+                addr,
                 #[cfg(unix)]
                 fdresolv,
             });
@@ -81,13 +83,7 @@ impl Service {
 
             manager::restore_transfers_state(&state, &logger).await;
 
-            ws::server::spawn(
-                addr,
-                state.clone(),
-                logger.clone(),
-                stop.clone(),
-                guard.clone(),
-            )?;
+            ws::server::spawn(state.clone(), logger.clone(), stop.clone(), guard.clone())?;
 
             manager::resume(&state, &logger, &guard, &stop).await;
 
