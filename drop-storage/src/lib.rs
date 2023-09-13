@@ -123,25 +123,10 @@ impl Storage {
         }
     }
 
-    pub async fn update_transfer_sync_states(
-        &self,
-        transfer_id: Uuid,
-        remote: Option<sync::TransferState>,
-        local: Option<sync::TransferState>,
-    ) {
+    pub async fn update_transfer_sync_states(&self, transfer_id: Uuid, local: sync::TransferState) {
         let task = async {
-            let mut conn = self.conn.lock().await;
-            let conn = conn.transaction()?;
-
-            if let Some(remote) = remote {
-                sync::transfer_set_remote_state(&conn, transfer_id, remote)?;
-            }
-            if let Some(local) = local {
-                sync::transfer_set_local_state(&conn, transfer_id, local)?;
-            }
-
-            conn.commit()?;
-
+            let conn = self.conn.lock().await;
+            sync::transfer_set_local_state(&conn, transfer_id, local)?;
             Ok::<(), Error>(())
         };
 
