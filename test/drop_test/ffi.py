@@ -206,14 +206,10 @@ class KeysCtx:
         self.this = RUNNERS[hostname]
 
     def callback(self, ctx, ip, pubkey):
+        print(f"KeysCtx.callback({ctx}, {ip}, {pubkey})")
         ip = ip.decode("utf-8")
-
-        peer = None
-        for pr in RUNNERS.keys():
-            if peer_resolver.resolve(pr) == ip:
-                peer = pr
-                break
-
+        peer = peer_resolver.reverse_lookup(ip)
+        print(f"KeysCtx.callback({ctx}, {ip}, {pubkey}) -> {peer}")
         if peer is None:
             return 1
 

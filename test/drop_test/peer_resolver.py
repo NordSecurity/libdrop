@@ -28,7 +28,6 @@ class Peer:
 class PEERResolver:
     def __init__(self):
         self._peer_mappings = {}
-        self._cache = {}
 
         # peers do not know initially how their peers are named, and because
         # everyone lives in the same network we need to dynamically allocate
@@ -64,13 +63,10 @@ class PEERResolver:
     # TOOD: Hack assumes IPV6 if peer name contains "6"
     def resolve(self, peer: str) -> str:
         hostname = self._peer_mappings[peer]
-
-        if hostname in self._cache:
-            return self._cache[hostname]
-
         ipv6 = "6" in peer
 
         for _ in range(5):
+            print(f"Resolving hostname {hostname} ...", flush=True)
             try:
                 if ipv6:
                     ip = socket.getaddrinfo(hostname, 49111, socket.AF_INET6)
@@ -79,7 +75,7 @@ class PEERResolver:
 
                 host = ip[0][4][0]
 
-                self._cache[hostname] = host
+                print(f"hostname {hostname} resolved to {host}", flush=True)
                 return host
 
             except:
@@ -89,12 +85,10 @@ class PEERResolver:
 
         raise Exception(f"Unable to resolve hostname {hostname}")
 
+    @classmethod
     def reverse_lookup(self, ip: str) -> str:
-        for hostname, cached_ip in self._cache.items():
-            if cached_ip == ip:
-                return Peer.from_hostname(hostname).get_name()
-
-        raise Exception(f"Could not find hostname for ip {ip}")
+        # format: hostname.network
+        return socket.gethostbyaddr(ip)[0].split("-", maxsplit=1)[0]
 
 
 peer_resolver = PEERResolver()
