@@ -9,7 +9,6 @@ from threading import Lock
 from . import event
 from .logger import logger
 from .config import RUNNERS
-from .peer_resolver import Peer
 from .peer_resolver import peer_resolver
 
 
