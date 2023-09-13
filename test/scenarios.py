@@ -6352,7 +6352,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-12-ren.sqlite"),
+                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-11-ren.sqlite"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -6369,7 +6369,7 @@ scenarios = [
                     ),
                     action.Stop(),
                     action.Sleep(3),
-                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-12-ren.sqlite"),
+                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-11-ren.sqlite"),
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-small"].id, True)
                     ),
@@ -6379,7 +6379,7 @@ scenarios = [
             "DROP_PEER_STIMPY": ActionList(
                 [
                     action.Start(
-                        "DROP_PEER_STIMPY", dbpath="/tmp/db/29-12-stimpy.sqlite"
+                        "DROP_PEER_STIMPY", dbpath="/tmp/db/29-11-stimpy.sqlite"
                     ),
                     action.Wait(
                         event.Receive(
@@ -6410,7 +6410,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-11-ren.sqlite"),
+                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-12-ren.sqlite"),
                     action.WaitForAnotherPeer(),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -6427,7 +6427,7 @@ scenarios = [
                     ),
                     action.Stop(),
                     action.Sleep(3),
-                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-11-ren.sqlite"),
+                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-12-ren.sqlite"),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
                 ]
@@ -6435,7 +6435,7 @@ scenarios = [
             "DROP_PEER_STIMPY": ActionList(
                 [
                     action.Start(
-                        "DROP_PEER_STIMPY", dbpath="/tmp/db/29-11-stimpy.sqlite"
+                        "DROP_PEER_STIMPY", dbpath="/tmp/db/29-12-stimpy.sqlite"
                     ),
                     action.Wait(
                         event.Receive(
@@ -7898,10 +7898,10 @@ scenarios = [
         "scenario39-1",
         "Produce a situation in which the receiver has stalled transfer, but sender does not have it anymore. Expect receiver to check the transfer state eventually",
         {
-            "ren": ActionList(
+            "DROP_PEER_REN": ActionList(
                 [
-                    action.Start("172.20.0.5"),
-                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Start("DROP_PEER_REN"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -7917,20 +7917,20 @@ scenarios = [
                     action.SleepMs(200),
                     action.Stop(),
                     action.Start(
-                        "172.20.0.5"
+                        "DROP_PEER_REN"
                     ),  # starting with in memory database, effectively loosing all the data
                     action.Sleep(61),  # 60s is a check request interval
                     action.AssertTransfers([]),
                     action.Stop(),
                 ]
             ),
-            "stimpy": ActionList(
+            "DROP_PEER_STIMPY": ActionList(
                 [
-                    action.Start("172.20.0.15"),
+                    action.Start("DROP_PEER_STIMPY"),
                     action.Wait(
                         event.Receive(
                             0,
-                            "172.20.0.5",
+                            "DROP_PEER_REN",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -7941,11 +7941,12 @@ scenarios = [
                         )
                     ),
                     action.ExpectCancel([0], True),
+                    # TODO: would be nice if peer ID could be matched dynamically with peer_resolver
                     action.AssertTransfers(
                         [
                             """{
                         "id": "*",
-                        "peer_id": "172.20.0.5",
+                        "peer_id": "*",
                         "created_at": "*",
                         "states": [
                             {
@@ -7974,10 +7975,10 @@ scenarios = [
         "scenario39-2",
         "Wait for the receiver -> sender GET /check request in case of alive transfer. Expect the check to not cancel the transfer",
         {
-            "ren": ActionList(
+            "DROP_PEER_REN": ActionList(
                 [
-                    action.Start("172.20.0.5"),
-                    action.NewTransfer("172.20.0.15", ["/tmp/testfile-small"]),
+                    action.Start("DROP_PEER_REN"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
                             0,
@@ -7997,7 +7998,7 @@ scenarios = [
                         [
                             """{
                         "id": "*",
-                        "peer_id": "172.20.0.15",
+                        "peer_id": "*",
                         "created_at": "*",
                         "states": [],
                         "type": "outgoing",
@@ -8016,13 +8017,13 @@ scenarios = [
                     action.Stop(),
                 ]
             ),
-            "stimpy": ActionList(
+            "DROP_PEER_STIMPY": ActionList(
                 [
-                    action.Start("172.20.0.15"),
+                    action.Start("DROP_PEER_STIMPY"),
                     action.Wait(
                         event.Receive(
                             0,
-                            "172.20.0.5",
+                            "DROP_PEER_REN",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -8039,7 +8040,7 @@ scenarios = [
                         [
                             """{
                         "id": "*",
-                        "peer_id": "172.20.0.5",
+                        "peer_id": "*",
                         "created_at": "*",
                         "states": [],
                         "type": "incoming",
