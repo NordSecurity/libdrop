@@ -11,37 +11,49 @@ version. The format is `v{semver}`. An API call to `norddrop_version()` should b
 
 # Tests
 ## Whole testsuite
-```
+```sh
 make -C test
 ```
 
 ## Individual tests
 Testsuite takes a long time to complete so running specific tests might be preferential and much faster while developing. To run a specific testsuite:
-```
+```sh
 SCENARIO=scenario_name make -C test
 ```
 
-## Code coverage single test
+## Code Coverage
+Before running the coverage you need to install the `rustfilt` demangler and `grcov` tool.
+```sh
+cargo install rustfilt grcov
 ```
+
+You also need to include the `llvm-tools-preview` component
+```sh
+rustup component add llvm-tools-preview
+```
+
+### Single test
+```sh
 SCENARIO=scenario_name make -C test coverage
 ```
 
-## Code coverage all testcases
-```
+### All testcases
+```sh
 make -C test coverage
 ```
+
 ## udrop
 
 udrop is an example client-server to test basic functionality of the library.
 
 ## Build and run (server)
 A container image can be built with the example binary ready for running:
-```
+```sh
 run.py server run
 ```
 
 ## Run (client)
-```
+```sh
 export DROP_SERVER=172.17.0.2
 cargo run --example udrop -- -l 0.0.0.0 transfer $DROP_SERVER <path>
 ```
@@ -51,7 +63,7 @@ cargo run --example udrop -- -l 0.0.0.0 transfer $DROP_SERVER <path>
 You can verify the transfer by checking the file system in the server container under `/root/<path>`
 
 ## Generating file ids from shell
-```bash
+```sh
 echo -n "<absolute file path>" | sha256sum  | cut -d " " -f1 | xxd -ps -r | basenc --base64url | tr -d '='
 ```
 
