@@ -4,27 +4,6 @@ import socket
 import time
 
 
-class Peer:
-    def __init__(self, name: str, scenario: str):
-        self._name = name
-        self._scenario = scenario
-
-    @classmethod
-    def from_hostname(cls, hostname: str) -> "Peer":
-        print(f"Creating peer from hostname {hostname}", flush=True)
-        (name, scenario) = hostname.split("-", maxsplit=1)
-        return cls(name, scenario)
-
-    def get_hostname(self) -> str:
-        return f"{self._name}-{self._scenario}"
-
-    def get_name(self) -> str:
-        return self._name
-
-    def get_scenario(self) -> str:
-        return self._scenario
-
-
 class PEERResolver:
     def __init__(self):
         self._peer_mappings = {}
