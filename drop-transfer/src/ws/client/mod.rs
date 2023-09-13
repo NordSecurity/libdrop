@@ -42,6 +42,7 @@ use crate::{
     service::State,
     tasks::AliveGuard,
     transfer::Transfer,
+    utils,
     ws::{client::handler::MsgToSend, Pinger},
     Event, OutgoingTransfer,
 };
@@ -174,7 +175,7 @@ async fn establish_ws_conn(
 ) -> WsConnection {
     let break_check = || async { !state.transfer_manager.is_outgoing_alive(xfer.id()).await };
 
-    let mut socket = match tcp_connect(xfer.peer(), break_check, logger).await {
+    let mut socket = match tcp_connect(state.addr, xfer.peer(), break_check, logger).await {
         Some(socket) => socket,
         None => return WsConnection::Stopped,
     };
@@ -269,10 +270,14 @@ async fn make_request(
 }
 
 async fn tcp_connect<Fut: Future<Output = bool>>(
-    ip: IpAddr,
+    local_ip: IpAddr,
+    remote_ip: IpAddr,
     break_check: impl Fn() -> Fut,
     logger: &Logger,
 ) -> Option<TcpStream> {
+    let remote = SocketAddr::new(remote_ip, drop_config::PORT);
+    let local = SocketAddr::new(local_ip, 0);
+
     let mut sleep_time = Duration::from_millis(200);
 
     loop {
@@ -280,7 +285,7 @@ async fn tcp_connect<Fut: Future<Output = bool>>(
             break;
         }
 
-        match TcpStream::connect((ip, drop_config::PORT)).await {
+        match utils::connect(local, remote).await {
             Ok(sock) => return Some(sock),
             Err(err) => {
                 debug!(
