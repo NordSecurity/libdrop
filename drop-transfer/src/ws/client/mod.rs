@@ -17,7 +17,7 @@ use anyhow::Context;
 use hyper::StatusCode;
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
-    net::{TcpSocket, TcpStream},
+    net::TcpStream,
     sync::{
         mpsc::{self, UnboundedReceiver},
         Semaphore, SemaphorePermit, TryAcquireError,
@@ -42,6 +42,7 @@ use crate::{
     service::State,
     tasks::AliveGuard,
     transfer::Transfer,
+    utils,
     ws::{client::handler::MsgToSend, Pinger},
     Event, OutgoingTransfer,
 };
@@ -274,28 +275,17 @@ async fn tcp_connect<Fut: Future<Output = bool>>(
     break_check: impl Fn() -> Fut,
     logger: &Logger,
 ) -> Option<TcpStream> {
-    let mut sleep_time = Duration::from_millis(200);
     let remote = SocketAddr::new(remote_ip, drop_config::PORT);
     let local = SocketAddr::new(local_ip, 0);
 
-    let try_connect = || async {
-        let sock = if local_ip.is_ipv4() {
-            TcpSocket::new_v4()
-        } else {
-            TcpSocket::new_v6()
-        }?;
-
-        sock.bind(local)?;
-
-        sock.connect(remote).await
-    };
+    let mut sleep_time = Duration::from_millis(200);
 
     loop {
         if break_check().await {
             break;
         }
 
-        match try_connect().await {
+        match utils::connect(local, remote).await {
             Ok(sock) => return Some(sock),
             Err(err) => {
                 debug!(

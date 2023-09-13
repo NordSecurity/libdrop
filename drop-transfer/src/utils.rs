@@ -1,10 +1,13 @@
 use std::{
     borrow::Borrow,
-    fmt, io, iter, ops,
+    fmt, io, iter,
+    net::SocketAddr,
+    ops,
     path::{Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
+use tokio::net::{TcpSocket, TcpStream};
 
 #[derive(Deserialize, Serialize, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(transparent)]
@@ -144,6 +147,19 @@ pub fn make_path_absolute(path: impl AsRef<Path>) -> io::Result<PathBuf> {
     };
 
     Ok(abs)
+}
+
+/// Makes the TCP connection with a given local IP address
+pub async fn connect(local: SocketAddr, remote: SocketAddr) -> io::Result<TcpStream> {
+    let sock = if local.is_ipv4() {
+        TcpSocket::new_v4()
+    } else {
+        TcpSocket::new_v6()
+    }?;
+
+    sock.bind(local)?;
+
+    sock.connect(remote).await
 }
 
 #[cfg(test)]

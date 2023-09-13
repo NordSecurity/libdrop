@@ -4,7 +4,7 @@ use hyper::StatusCode;
 use slog::{debug, info, warn, Logger};
 use tokio_util::sync::CancellationToken;
 
-use crate::{auth, protocol, service::State, tasks::AliveGuard, IncomingTransfer, Transfer};
+use crate::{protocol, service::State, tasks::AliveGuard, IncomingTransfer, Transfer};
 
 pub(crate) fn spawn(
     state: Arc<State>,
@@ -38,7 +38,7 @@ async fn run(state: Arc<State>, xfer: Arc<IncomingTransfer>, logger: Logger) {
             break;
         }
 
-        if make_request(&state.auth, &xfer, &logger).await.is_break() {
+        if make_request(&state, &xfer, &logger).await.is_break() {
             break;
         }
     }
@@ -60,17 +60,18 @@ async fn run(state: Arc<State>, xfer: Arc<IncomingTransfer>, logger: Logger) {
     }
 }
 
-async fn make_request(
-    auth: &auth::Context,
-    xfer: &IncomingTransfer,
-    logger: &Logger,
-) -> ControlFlow<()> {
-    let addr = SocketAddr::new(xfer.peer(), drop_config::PORT);
-    let client = hyper::Client::new();
+async fn make_request(state: &State, xfer: &IncomingTransfer, logger: &Logger) -> ControlFlow<()> {
+    let remote = SocketAddr::new(xfer.peer(), drop_config::PORT);
+
+    let mut connector = hyper::client::HttpConnector::new();
+    connector.set_local_address(Some(state.addr));
+
+    let client = hyper::Client::builder().build::<_, hyper::Body>(connector);
+
     let versions_to_try = [protocol::Version::V5];
 
     for version in versions_to_try {
-        let url: hyper::Uri = format!("http://{addr}/drop/{version}/check/{}", xfer.id())
+        let url: hyper::Uri = format!("http://{remote}/drop/{version}/check/{}", xfer.id())
             .parse()
             .expect("URL should be valid");
 
@@ -82,7 +83,7 @@ async fn make_request(
             Ok(resp) if resp.status() == StatusCode::UNAUTHORIZED => {
                 debug!(logger, "Creating 'authorization' header");
 
-                match auth.create_authorization_header(resp, xfer.peer()) {
+                match state.auth.create_authorization_header(resp, xfer.peer()) {
                     Ok((key, value)) => {
                         debug!(logger, "Building 'authorization' request");
 
