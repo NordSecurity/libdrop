@@ -23,19 +23,21 @@ build-coverage:
 build-image:
 	docker build -t libdroptestimage .
 
-# Test the project
-test: build build-image
-	docker kill $(docker ps -q) || true
+docker-prepare:
+	-docker kill $(docker ps -q)
 	docker network prune -f
 	docker container prune -f
+
+# Test the project
+test: docker-prepare build build-image 	
 	LIB_PATH=$(LIB_DOCKER) ./runner.py --testcase-timeout=$(TESTCASE_TIMEOUT) --scenarios-at-once=$(SCENARIOS_AT_ONCE)
 
 # Generate and view coverage report
-coverage: build-coverage
+coverage: docker-prepare build-coverage
 	mkdir -p ${COVERAGE_PATH}
 
 	# allow coverage of failed test cases
-	LIB_PATH=${LIB_DOCKER} ./runner.py || true
+	-LIB_PATH=${LIB_DOCKER} ./runner.py
 
 	llvm-profdata merge -sparse $(COVERAGE_PATH)/*.profraw -o full.profdata
 	llvm-cov report -instr-profile=full.profdata --ignore-filename-regex='/.cargo/registry' --Xdemangler=rustfilt $(LIB)
