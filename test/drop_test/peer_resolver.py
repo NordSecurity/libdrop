@@ -52,10 +52,10 @@ class PEERResolver:
                 else:
                     ip = socket.getaddrinfo(hostname, 49111, socket.AF_INET)
 
-                host = ip[0][4][0]
+                host_ip = ip[0][4][0]
 
-                print(f"hostname {hostname} resolved to {host}", flush=True)
-                return host
+                print(f"hostname {hostname} resolved to {host_ip}", flush=True)
+                return host_ip
 
             except:
                 print(f"Unable to resolve hostname({hostname}), retrying in 1s")
