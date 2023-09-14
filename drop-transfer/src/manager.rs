@@ -38,7 +38,7 @@ pub struct FinishResult<T: Transfer> {
     pub events: Arc<FileEventTx<T>>,
 }
 
-#[derive(Debug, Clone, Copy, strum::FromRepr, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, strum::FromRepr)]
 pub enum FileTerminalState {
     Rejected,
     Completed,
@@ -911,7 +911,7 @@ impl DirMapping {
         Ok(mapped)
     }
 
-    pub fn register_preexisting_final_path(
+    fn register_preexisting_final_path(
         &mut self,
         file_subpath: &FileSubPath,
         full_path: impl AsRef<Path>,

@@ -12,7 +12,7 @@ pub struct WWWAuthenticate {
 }
 
 impl WWWAuthenticate {
-    pub const KEY: &str = "www-authenticate";
+    pub const KEY: &'static str = "www-authenticate";
 
     pub fn new(nonce: super::Nonce) -> Self {
         Self {
@@ -53,7 +53,7 @@ impl Display for WWWAuthenticate {
 }
 
 impl Authorization {
-    pub const KEY: &str = "authorization";
+    pub const KEY: &'static str = "authorization";
 
     pub fn parse(value: &str) -> Option<Self> {
         let (scheme, value) = value

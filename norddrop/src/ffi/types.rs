@@ -69,7 +69,6 @@ pub type norddrop_event_fn = unsafe extern "C" fn(*mut c_void, *const c_char);
 
 #[allow(non_camel_case_types)]
 #[repr(C)]
-#[derive(Copy, Clone)]
 /// Event callback
 pub struct norddrop_event_cb {
     /// Context to pass to callback.
@@ -94,7 +93,6 @@ pub type norddrop_logger_fn = unsafe extern "C" fn(*mut c_void, norddrop_log_lev
 
 #[allow(non_camel_case_types)]
 #[repr(C)]
-#[derive(Copy, Clone)]
 /// Logging callback
 pub struct norddrop_logger_cb {
     /// Context to pass to callback.
@@ -115,7 +113,6 @@ unsafe impl Send for norddrop_pubkey_cb {}
 
 #[allow(non_camel_case_types)]
 #[repr(C)]
-#[derive(Copy, Clone)]
 /// Fetch peer public key callback
 pub struct norddrop_pubkey_cb {
     /// Context to pass to callback.
@@ -137,7 +134,6 @@ unsafe impl Send for norddrop_fd_cb {}
 #[cfg(unix)]
 #[allow(non_camel_case_types)]
 #[repr(C)]
-#[derive(Copy, Clone)]
 /// Fetch file descriptor by the content uri
 pub struct norddrop_fd_cb {
     /// Context to pass to callback.

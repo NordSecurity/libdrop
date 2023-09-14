@@ -15,7 +15,7 @@ where
     serializer.serialize_i64(timestamp.timestamp_millis())
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize)]
 #[serde(tag = "state")]
 pub enum OutgoingPathStateEventData {
     #[serde(rename = "started")]
@@ -30,7 +30,7 @@ pub enum OutgoingPathStateEventData {
     Paused { bytes_sent: i64 },
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize)]
 #[serde(tag = "state")]
 pub enum IncomingPathStateEventData {
     #[serde(rename = "pending")]
@@ -50,7 +50,7 @@ pub enum IncomingPathStateEventData {
     Paused { bytes_received: i64 },
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize)]
 pub struct OutgoingPathStateEvent {
     #[serde(skip_serializing)]
     pub path_id: i64,
@@ -60,7 +60,7 @@ pub struct OutgoingPathStateEvent {
     pub data: OutgoingPathStateEventData,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize)]
 pub struct IncomingPathStateEvent {
     #[serde(skip_serializing)]
     pub path_id: i64,
@@ -70,7 +70,7 @@ pub struct IncomingPathStateEvent {
     pub data: IncomingPathStateEventData,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize)]
 #[serde(tag = "state")]
 pub enum TransferStateEventData {
     #[serde(rename = "cancel")]
@@ -79,7 +79,7 @@ pub enum TransferStateEventData {
     Failed { status_code: i64 },
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize)]
 pub struct TransferStateEvent {
     #[serde(skip_serializing)]
     pub transfer_id: TransferId,
@@ -89,21 +89,19 @@ pub struct TransferStateEvent {
     pub data: TransferStateEventData,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 #[repr(u32)]
 pub enum TransferType {
     Incoming = 0,
     Outgoing = 1,
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Ord, Eq)]
 pub struct TransferIncomingPath {
     pub file_id: FileId,
     pub relative_path: String,
     pub size: i64,
 }
 
-#[derive(Debug)]
 pub struct TransferOutgoingPath {
     pub file_id: FileId,
     pub relative_path: String,
@@ -111,20 +109,17 @@ pub struct TransferOutgoingPath {
     pub size: i64,
 }
 
-#[derive(Debug)]
 pub enum TransferFiles {
     Incoming(Vec<TransferIncomingPath>),
     Outgoing(Vec<TransferOutgoingPath>),
 }
 
-#[derive(Debug)]
 pub struct TransferInfo {
     pub id: TransferId,
     pub peer: String,
     pub files: TransferFiles,
 }
 
-#[derive(Debug)]
 pub struct FileChecksum {
     pub file_id: FileId,
     pub checksum: Option<Vec<u8>>,
@@ -172,7 +167,7 @@ pub struct FileSyncState {
     pub is_failed: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize)]
 #[serde(tag = "type", content = "paths")]
 pub enum DbTransferType {
     #[serde(rename = "incoming")]
@@ -181,7 +176,7 @@ pub enum DbTransferType {
     Outgoing(Vec<OutgoingPath>),
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize)]
 pub struct Transfer {
     pub id: TransferId,
     #[serde(serialize_with = "serialize_datetime")]
@@ -192,7 +187,7 @@ pub struct Transfer {
     pub transfer_type: DbTransferType,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize)]
 pub struct OutgoingPath {
     #[serde(skip_serializing)]
     pub id: i64,
@@ -210,7 +205,7 @@ pub struct OutgoingPath {
     pub states: Vec<OutgoingPathStateEvent>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize)]
 pub struct IncomingPath {
     #[serde(skip_serializing)]
     pub id: i64,

@@ -34,6 +34,7 @@ test: docker-prepare build build-image
 
 # Generate and view coverage report
 coverage: docker-prepare build-coverage
+	rm -rf ${COVERAGE_PATH}
 	mkdir -p ${COVERAGE_PATH}
 
 	# allow coverage of failed test cases

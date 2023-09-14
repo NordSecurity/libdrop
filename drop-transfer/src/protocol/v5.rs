@@ -33,27 +33,27 @@ use crate::{
     FileId, OutgoingTransfer,
 };
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct File {
     pub path: FileSubPath,
     pub id: FileId,
     pub size: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct TransferRequest {
     pub files: Vec<File>,
     pub id: uuid::Uuid,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct ReqChsum {
     pub file: FileId,
     // Up to which point calculate checksum
     pub limit: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct ReportChsum {
     pub file: FileId,
     pub limit: u64,
@@ -62,41 +62,41 @@ pub struct ReportChsum {
     pub checksum: [u8; 32],
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct Progress<T = FileId> {
     pub file: T,
     pub bytes_transfered: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct Done {
     pub file: FileId,
     pub bytes_transfered: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct Error<T = FileId> {
     pub file: Option<T>,
     pub msg: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct Start {
     pub file: FileId,
     pub offset: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct Cancel {
     pub file: FileId,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct Reject {
     pub file: FileId,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 #[serde(tag = "type")]
 pub enum ServerMsg {
     Progress(Progress<FileId>),
@@ -108,7 +108,7 @@ pub enum ServerMsg {
     Reject(Reject),
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 #[serde(tag = "type")]
 pub enum ClientMsg {
     ReportChsum(ReportChsum),
@@ -117,7 +117,6 @@ pub enum ClientMsg {
     Reject(Reject),
 }
 
-#[derive(Clone)]
 pub struct Chunk<T = FileId> {
     pub file: T,
     pub data: Vec<u8>,

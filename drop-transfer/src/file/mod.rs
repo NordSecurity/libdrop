@@ -42,7 +42,7 @@ pub trait File {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct FileToSend {
     file_id: FileId,
     subpath: FileSubPath,
@@ -51,14 +51,13 @@ pub struct FileToSend {
     mime_type: OnceCell<Hidden<String>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 pub struct FileToRecv {
     file_id: FileId,
     subpath: FileSubPath,
     size: u64,
 }
 
-#[derive(Clone)]
 pub enum FileSource {
     Path(Hidden<PathBuf>),
     #[cfg(unix)]
