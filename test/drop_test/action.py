@@ -707,3 +707,33 @@ class MakeHttpGetRequest(Action):
 
     def __str__(self):
         return f"MakeHttpGetRequest({self._url}, {self._status})"
+
+
+class CheckFilePermissions(Action):
+    def __init__(self, path: str, mode: int):
+        self._path = path
+        self._mode = mode
+
+    async def run(self, drop: ffi.Drop):
+        stat = os.stat(self._path)
+        st_mode = stat.st_mode & 0o777
+
+        if st_mode != self._mode:
+            raise Exception(
+                f"Mismatched mode {oct(st_mode)} for file {self._path}, expected {oct(self._mode)}"
+            )
+
+    def __str__(self):
+        return f"CheckFilePermissions({self._path}, {oct(self._mode)})"
+
+
+class SetFilePermissions(Action):
+    def __init__(self, path: str, mode: int):
+        self._path = path
+        self._mode = mode
+
+    async def run(self, drop: ffi.Drop):
+        os.chmod(self._path, self._mode)
+
+    def __str__(self):
+        return f"SetFilePermissions({self._path}, {oct(self._mode)})"
