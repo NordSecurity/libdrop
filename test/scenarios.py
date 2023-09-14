@@ -6581,6 +6581,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
+                    action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/31-1-ren.sqlite"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -6635,6 +6636,7 @@ scenarios = [
                     }"""
                         ]
                     ),
+                    action.SleepMs(500),
                     action.CancelTransferRequest(0),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
