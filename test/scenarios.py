@@ -6540,16 +6540,6 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.SleepMs(500),
-                    # There is a hardocded limit of 50 connections per second.
-                    action.Repeated(
-                        [
-                            action.MakeHttpGetRequest(
-                                "DROP_PEER_STIMPY", "/non-existing-path", 404
-                            )
-                        ],
-                        50,
-                    ),
-                    # Let's issue 10 more than the limit to ensure we triggered the protection
                     action.ExpectAnyError(
                         action.Repeated(
                             [
@@ -6557,12 +6547,17 @@ scenarios = [
                                     "DROP_PEER_STIMPY", "/non-existing-path", 404
                                 )
                             ],
-                            10,
+                            150,
                         ),
                     ),
-                    # Check if we get an appropriate HTTP error code
+                    # check if we get unauthorized(ddos protection)
                     action.MakeHttpGetRequest(
                         "DROP_PEER_STIMPY", "/non-existing-path", 429
+                    ),
+                    action.Sleep(10),
+                    # check if it's all good again
+                    action.MakeHttpGetRequest(
+                        "DROP_PEER_STIMPY", "/non-existing-path", 404
                     ),
                 ]
             ),
