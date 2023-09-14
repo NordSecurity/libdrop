@@ -13,14 +13,12 @@ use types::{
     DbTransferType, FileSyncState, IncomingFileToRetry, IncomingPath, IncomingPathStateEvent,
     IncomingPathStateEventData, IncomingTransferToRetry, OutgoingFileToRetry, OutgoingPath,
     OutgoingPathStateEvent, OutgoingPathStateEventData, TempFileLocation, Transfer, TransferFiles,
-    TransferIncomingPath, TransferOutgoingPath, TransferStateEvent,
+    TransferIncomingPath, TransferOutgoingPath, TransferStateEvent, TransferType,
 };
 use uuid::Uuid;
 
 use crate::error::Error;
-pub use crate::types::{
-    FileChecksum, FinishedIncomingFile, OutgoingTransferToRetry, TransferInfo, TransferType,
-};
+pub use crate::types::{FileChecksum, FinishedIncomingFile, OutgoingTransferToRetry, TransferInfo};
 
 type Result<T> = std::result::Result<T, Error>;
 type QueryResult<T> = std::result::Result<T, rusqlite::Error>;
