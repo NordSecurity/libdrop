@@ -24,7 +24,7 @@ pub use super::v5::{
 };
 use crate::FileId;
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 #[serde(tag = "type")]
 pub enum ServerMsg {
     Progress(Progress<FileId>),
@@ -35,7 +35,7 @@ pub enum ServerMsg {
     Cancel(Cancel),
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 #[serde(tag = "type")]
 pub enum ClientMsg {
     ReportChsum(ReportChsum),

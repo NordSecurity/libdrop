@@ -20,7 +20,7 @@ use crate::{
     OutgoingTransfer, Transfer,
 };
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct File {
     pub name: String,
     pub size: Option<u64>,
@@ -31,17 +31,17 @@ pub type Chunk = v4::Chunk<FileSubPath>;
 pub type Progress = v4::Progress<FileSubPath>;
 pub type Error = v4::Error<FileSubPath>;
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct TransferRequest {
     pub files: Vec<File>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct Download {
     pub file: FileSubPath,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 #[serde(tag = "type")]
 pub enum ServerMsg {
     Progress(Progress),
@@ -51,7 +51,7 @@ pub enum ServerMsg {
     Cancel(Download),
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 #[serde(tag = "type")]
 pub enum ClientMsg {
     Error(Error),

@@ -61,7 +61,6 @@ pub trait Request {
     fn parse(self) -> anyhow::Result<IncomingTransfer>;
 }
 
-#[derive(Debug, Clone)]
 pub enum DownloadInit {
     Stream {
         offset: u64,

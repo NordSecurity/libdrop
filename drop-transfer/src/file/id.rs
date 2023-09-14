@@ -1,9 +1,4 @@
-use std::{
-    borrow::Borrow,
-    fmt,
-    hash::Hash,
-    path::{Path, PathBuf},
-};
+use std::{borrow::Borrow, fmt, hash::Hash, path::Path};
 
 use base64::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -86,10 +81,6 @@ impl FileSubPath {
         self.0.iter()
     }
 
-    pub fn append(&mut self, name: String) {
-        self.0.push(name);
-    }
-
     pub fn append_file_name(mut self, path: impl AsRef<Path>) -> crate::Result<Self> {
         let name = path
             .as_ref()
@@ -137,30 +128,6 @@ where
             .map(ToString::to_string)
             .collect();
         Self(vec)
-    }
-}
-
-impl From<FileSubPath> for PathBuf {
-    fn from(FileSubPath(value): FileSubPath) -> Self {
-        value.into_iter().collect()
-    }
-}
-
-impl From<&FileSubPath> for PathBuf {
-    fn from(value: &FileSubPath) -> Self {
-        value.0.iter().collect()
-    }
-}
-
-impl From<FileSubPath> for Box<Path> {
-    fn from(value: FileSubPath) -> Self {
-        PathBuf::from(value).into_boxed_path()
-    }
-}
-
-impl From<&FileSubPath> for Box<Path> {
-    fn from(value: &FileSubPath) -> Self {
-        PathBuf::from(value).into_boxed_path()
     }
 }
 
