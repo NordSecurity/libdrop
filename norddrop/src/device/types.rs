@@ -22,11 +22,6 @@ pub struct EventRequestQueued {
 }
 
 #[derive(Serialize)]
-pub struct EventTransfer {
-    transfer: String,
-}
-
-#[derive(Serialize)]
 struct File {
     id: String,
     path: String,
@@ -237,14 +232,6 @@ impl From<drop_transfer::Event> for Event {
                 transfer: transfer_id.to_string(),
                 file: file_id.to_string(),
             },
-        }
-    }
-}
-
-impl<T: drop_transfer::Transfer> From<&T> for EventTransfer {
-    fn from(t: &T) -> EventTransfer {
-        EventTransfer {
-            transfer: t.id().to_string(),
         }
     }
 }
