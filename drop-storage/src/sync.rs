@@ -28,7 +28,7 @@ impl FromSql for TransferState {
     }
 }
 
-#[derive(Debug, Clone, Copy, strum::FromRepr, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, strum::FromRepr)]
 #[repr(u8)]
 pub enum FileState {
     Alive = 0,
@@ -52,13 +52,11 @@ impl FromSql for FileState {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
 pub struct Transfer {
     pub local_state: TransferState,
     pub is_outgoing: bool,
 }
 
-#[derive(Debug, Clone)]
 pub struct FileInFlight {
     pub base_dir: String,
     pub file_id: String,

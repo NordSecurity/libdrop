@@ -22,10 +22,6 @@ pub trait Transfer {
 
     fn direction() -> TransferDirection;
 
-    fn contains(&self, file_id: &FileId) -> bool {
-        self.files().contains_key(file_id)
-    }
-
     fn file_by_subpath(&self, file_subpath: &FileSubPath) -> Option<&Self::File> {
         self.files()
             .values()

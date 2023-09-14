@@ -1,5 +1,4 @@
 use std::{
-    borrow::Borrow,
     fmt, io, iter,
     net::SocketAddr,
     ops,
@@ -48,12 +47,6 @@ impl<T> ops::DerefMut for Hidden<T> {
     }
 }
 
-impl<T> Borrow<T> for Hidden<T> {
-    fn borrow(&self) -> &T {
-        &self.0
-    }
-}
-
 /// Returns an iterator yielding first the original path and then appends (i) i
 /// = 1,2,3 ... to the file name
 pub fn filepath_variants(location: &'_ Path) -> crate::Result<impl Iterator<Item = PathBuf> + '_> {
@@ -72,18 +65,6 @@ pub fn filepath_variants(location: &'_ Path) -> crate::Result<impl Iterator<Item
     }));
 
     Ok(iter)
-}
-
-pub fn map_path_if_exists(location: &Path) -> crate::Result<PathBuf> {
-    let dst_loc = filepath_variants(location)?.find(|dst_location| {
-        // Skip if there is already a file with the same name.
-        // Additionaly there could be a dangling symlink with the same name,
-        // the `symlink_metadata()` ensures we can catch that.
-        matches!(dst_location.symlink_metadata() , Err(err) if err.kind() == io::ErrorKind::NotFound)
-    })
-    .expect("The filepath variants iterator should never end");
-
-    Ok(dst_loc)
 }
 
 /// Replace invalid characters or invalid file names
