@@ -12,6 +12,7 @@ import time
 import glob
 import socket
 import requests
+import shutil
 
 from . import event, ffi
 from .logger import logger
@@ -737,3 +738,15 @@ class SetFilePermissions(Action):
 
     def __str__(self):
         return f"SetFilePermissions({self._path}, {oct(self._mode)})"
+
+
+class CopyFile(Action):
+    def __init__(self, src: str, dst: str):
+        self._src = src
+        self._dst = dst
+
+    async def run(self, drop: ffi.Drop):
+        shutil.copy2(self._src, self._dst)
+
+    def __str__(self):
+        return f"CopyFile({self._src}, {self._dst})"

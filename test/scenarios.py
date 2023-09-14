@@ -7437,6 +7437,104 @@ scenarios = [
         },
     ),
     Scenario(
+        "scenario31-8",
+        "Send two nested files. Check if after the reconnection the newly created directory is used instead of creating a new one",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.SleepMs(400),
+                    action.Start("DROP_PEER_REN"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/deep/path"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["deep/path/file1.ext1"].id,
+                                    "path/file1.ext1",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["deep/path/file2.ext2"].id,
+                                    "path/file2.ext2",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(0, FILES["deep/path/file1.ext1"].id),
+                            event.Start(0, FILES["deep/path/file2.ext2"].id),
+                            event.FinishFileUploaded(
+                                0, FILES["deep/path/file1.ext1"].id
+                            ),
+                            event.FinishFileUploaded(
+                                0, FILES["deep/path/file2.ext2"].id
+                            ),
+                        ]
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start(
+                        "DROP_PEER_STIMPY", dbpath="/tmp/db/31-8-stimpy.sqlite"
+                    ),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["deep/path/file1.ext1"].id,
+                                    "path/file1.ext1",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["deep/path/file2.ext2"].id,
+                                    "path/file2.ext2",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0, FILES["deep/path/file1.ext1"].id, "/tmp/received/31-8/"
+                    ),
+                    action.Wait(event.Start(0, FILES["deep/path/file1.ext1"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["deep/path/file1.ext1"].id,
+                            "/tmp/received/31-8/path/file1.ext1",
+                        )
+                    ),
+                    action.Stop(),
+                    action.Start(
+                        "DROP_PEER_STIMPY", dbpath="/tmp/db/31-8-stimpy.sqlite"
+                    ),
+                    action.Download(
+                        0, FILES["deep/path/file2.ext2"].id, "/tmp/received/31-8/"
+                    ),
+                    action.Wait(event.Start(0, FILES["deep/path/file2.ext2"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["deep/path/file2.ext2"].id,
+                            "/tmp/received/31-8/path/file2.ext2",
+                        )
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
         "scenario32",
         "Send the same file with two different transfer into the same directory. Expect no errors",
         {
@@ -8086,6 +8184,176 @@ scenarios = [
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/40-2-ren.sqlite"),
                     action.Stop(),
                     action.CheckFilePermissions("/tmp/db/40-2-ren.sqlite", 0o600),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario41",
+        "Send transfer request with known same UUID as the previously cancelled transfer. Expect the receiver canceling the new one right away",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/41-ren.sqlite"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Stop(),
+                    # Make a copy of database
+                    action.CopyFile(
+                        "/tmp/db/41-ren.sqlite", "/tmp/db/41-ren-copy.sqlite"
+                    ),
+                    action.Sleep(2),
+                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/41-ren.sqlite"),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.Stop(),
+                    # Start again but this time with a copy of the database. The transfer should be again retried
+                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/41-ren-copy.sqlite"),
+                    action.ExpectCancel([0], True),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY", dbpath="/tmp/db/41-ren.sqlite"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.Sleep(2),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario42-1",
+        "Cancel the transfer while on the receiver while the sender is offline",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Sleep(1),
+                    action.Start("DROP_PEER_REN", "/tmp/db/42-1-ren.sqlite"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.SleepMs(500),
+                    action.Stop(),
+                    action.Sleep(1),
+                    action.Start("DROP_PEER_REN", "/tmp/db/42-1-ren.sqlite"),
+                    action.ExpectCancel([0], True),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Sleep(1),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.Sleep(2),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario42-2",
+        "Cancel the transfer while on the sender while the receiver is offline",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Sleep(1),
+                    action.Start("DROP_PEER_REN"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.SleepMs(500),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.Sleep(2),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start(
+                        "DROP_PEER_STIMPY", dbpath="/tmp/db/42-2-stimpy.sqlite"
+                    ),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Stop(),
+                    action.Sleep(1),
+                    action.Start(
+                        "DROP_PEER_STIMPY", dbpath="/tmp/db/42-2-stimpy.sqlite"
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.Stop(),
                 ]
             ),
         },
