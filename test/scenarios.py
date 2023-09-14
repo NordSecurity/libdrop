@@ -8060,4 +8060,34 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario40-1",
+        "Check if the newly created database has 0600 permissions",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/40-1-ren.sqlite"),
+                    action.Stop(),
+                    action.CheckFilePermissions("/tmp/db/40-1-ren.sqlite", 0o600),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario40-2",
+        "Check if the existing database permissions are changed to 0600",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/40-2-ren.sqlite"),
+                    action.Stop(),
+                    action.SetFilePermissions("/tmp/db/40-2-ren.sqlite", 0o644),
+                    action.CheckFilePermissions("/tmp/db/40-2-ren.sqlite", 0o644),
+                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/40-2-ren.sqlite"),
+                    action.Stop(),
+                    action.CheckFilePermissions("/tmp/db/40-2-ren.sqlite", 0o600),
+                ]
+            ),
+        },
+    ),
 ]

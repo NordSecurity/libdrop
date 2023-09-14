@@ -8,4 +8,6 @@ pub enum Error {
     UriParsing(#[from] url::ParseError),
     #[error("Invalid URI scheme: {0}")]
     InvalidUri(String),
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
 }

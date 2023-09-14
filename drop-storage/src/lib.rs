@@ -2,10 +2,10 @@ pub mod error;
 pub mod sync;
 pub mod types;
 
-use std::{path::Path, vec};
+use std::{io, path::Path, vec};
 
 use include_dir::{include_dir, Dir};
-use rusqlite::{params, Connection, Transaction};
+use rusqlite::{params, Connection, OpenFlags, Transaction};
 use rusqlite_migration::Migrations;
 use slog::{debug, error, trace, warn, Logger};
 use tokio::sync::Mutex;
@@ -32,9 +32,50 @@ pub struct Storage {
 
 const MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
+#[cfg(unix)]
+fn prepare_sqlite_file(path: &str) -> io::Result<OpenFlags> {
+    use std::os::unix::prelude::{OpenOptionsExt, PermissionsExt};
+
+    const MODE: u32 = 0o600;
+    let mut flags = OpenFlags::default();
+
+    if path == ":memory:" {
+        return Ok(flags);
+    }
+    // disalbe file creation since we are going to do it ourselves
+    flags &= !OpenFlags::SQLITE_OPEN_CREATE;
+
+    match std::fs::metadata(path) {
+        Ok(meta) => {
+            let mut perm = meta.permissions();
+            if perm.mode() != MODE {
+                perm.set_mode(MODE);
+                std::fs::set_permissions(path, perm)?;
+            }
+        }
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            // create new one
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(MODE)
+                .open(path)?;
+        }
+        Err(err) => return Err(err),
+    }
+
+    Ok(flags)
+}
+
+#[cfg(not(unix))]
+fn prepare_sqlite_file(path: &str) -> io::Result<OpenFlags> {
+    Ok(OpenFlags::default())
+}
+
 impl Storage {
     pub fn new(logger: Logger, path: &str) -> Result<Self> {
-        let mut conn = Connection::open(path)?;
+        let flags = prepare_sqlite_file(path)?;
+        let mut conn = Connection::open_with_flags(path, flags)?;
 
         Migrations::from_directory(&MIGRATIONS_DIR)
             .map_err(|e| {
