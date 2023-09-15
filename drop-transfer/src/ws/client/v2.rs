@@ -19,7 +19,6 @@ use super::{
 };
 use crate::{
     file::FileSubPath,
-    manager::FileTerminalState,
     protocol::v2,
     service::State,
     tasks::AliveGuard,
@@ -130,18 +129,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
 
     async fn on_done(&mut self, file: FileSubPath) {
         if let Some(file) = self.xfer.file_by_subpath(&file) {
-            match self
-                .state
-                .transfer_manager
-                .outgoing_terminal_recv(self.xfer.id(), file.id(), FileTerminalState::Completed)
-                .await
-            {
-                Err(err) => {
-                    warn!(self.logger, "Failed to accept file as done: {err}");
-                }
-                Ok(Some(res)) => res.events.success().await,
-                Ok(None) => (),
-            }
+            super::on_upload_finished(self.state, &self.xfer, file.id(), self.logger).await;
         }
 
         self.stop_task(&file, Status::FileFinished).await;
@@ -216,24 +204,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
 
         if let Some(file) = file {
             if let Some(file) = self.xfer.file_by_subpath(&file) {
-                match self
-                    .state
-                    .transfer_manager
-                    .outgoing_terminal_recv(self.xfer.id(), file.id(), FileTerminalState::Failed)
-                    .await
-                {
-                    Err(err) => {
-                        warn!(self.logger, "Failed to accept failure: {err}");
-                    }
-                    Ok(Some(res)) => {
-                        res.events
-                            .failed(crate::Error::BadTransferState(format!(
-                                "Sender reported an error: {msg}"
-                            )))
-                            .await;
-                    }
-                    Ok(None) => (),
-                }
+                super::on_upload_failure(self.state, &self.xfer, file.id(), msg, self.logger).await;
             }
 
             self.stop_task(&file, Status::BadTransferState).await;
