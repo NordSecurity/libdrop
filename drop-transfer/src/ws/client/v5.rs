@@ -151,28 +151,20 @@ impl HandlerLoop<'_> {
     }
 
     async fn on_done(&mut self, file_id: FileId) {
-        if let Err(err) = self
+        match self
             .state
             .transfer_manager
             .outgoing_terminal_recv(self.xfer.id(), &file_id, FileTerminalState::Completed)
             .await
         {
-            warn!(self.logger, "Failed to accept file as done: {err}");
+            Err(err) => {
+                warn!(self.logger, "Failed to accept file as done: {err}");
+            }
+            Ok(Some(res)) => res.events.success().await,
+            Ok(None) => (),
         }
 
-        if let Some(task) = self.tasks.remove(&file_id) {
-            task.events.success().await;
-        } else if !self.done.contains(&file_id) {
-            let event = crate::Event::FileUploadSuccess(self.xfer.clone(), file_id.clone());
-
-            self.state
-                .event_tx
-                .send(event)
-                .await
-                .expect("Failed to emit event");
-        }
-
-        self.done.insert(file_id);
+        self.stop_task(&file_id, Status::FileFinished).await;
     }
 
     async fn on_checksum(&self, jobs: &mut JoinSet<()>, file_id: FileId, limit: u64) {
