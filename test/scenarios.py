@@ -8353,4 +8353,73 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario43",
+        "Sucesfully transfer the file. Then restart the receiver. Expect no events on receiver reconnection",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-small"].id,
+                        )
+                    ),
+                    action.NoEvent(6),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY", dbpath="/tmp/db/43-stimpy.sqlite"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-small"].id,
+                        "/tmp/received",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-small"].id,
+                            "/tmp/received/testfile-small",
+                        )
+                    ),
+                    action.SleepMs(500),
+                    action.Stop(),
+                    action.Start("DROP_PEER_STIMPY", dbpath="/tmp/db/43-stimpy.sqlite"),
+                    action.NoEvent(4),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]
