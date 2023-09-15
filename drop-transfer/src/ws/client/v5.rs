@@ -117,9 +117,7 @@ impl HandlerLoop<'_> {
             .outgoing_terminal_recv(self.xfer.id(), &file_id, FileTerminalState::Rejected)
             .await
         {
-            Err(err) => {
-                error!(self.logger, "Failed to handler file rejection: {err}");
-            }
+            Err(err) => error!(self.logger, "Failed to handler file rejection: {err}"),
             Ok(Some(res)) => res.events.rejected(true).await,
             Ok(None) => (),
         }
@@ -149,19 +147,7 @@ impl HandlerLoop<'_> {
     }
 
     async fn on_done(&mut self, file_id: FileId) {
-        match self
-            .state
-            .transfer_manager
-            .outgoing_terminal_recv(self.xfer.id(), &file_id, FileTerminalState::Completed)
-            .await
-        {
-            Err(err) => {
-                warn!(self.logger, "Failed to accept file as done: {err}");
-            }
-            Ok(Some(res)) => res.events.success().await,
-            Ok(None) => (),
-        }
-
+        super::on_upload_finished(self.state, &self.xfer, &file_id, self.logger).await;
         self.stop_task(&file_id, Status::FileFinished).await;
     }
 
@@ -304,25 +290,7 @@ impl HandlerLoop<'_> {
         );
 
         if let Some(file_id) = file_id {
-            match self
-                .state
-                .transfer_manager
-                .outgoing_terminal_recv(self.xfer.id(), &file_id, FileTerminalState::Failed)
-                .await
-            {
-                Err(err) => {
-                    warn!(self.logger, "Failed to accept failure: {err}");
-                }
-                Ok(Some(res)) => {
-                    res.events
-                        .failed(crate::Error::BadTransferState(format!(
-                            "Receiver reported an error: {msg}"
-                        )))
-                        .await;
-                }
-                Ok(None) => (),
-            }
-
+            super::on_upload_failure(self.state, &self.xfer, &file_id, msg, self.logger).await;
             self.stop_task(&file_id, Status::BadTransferState).await;
         }
     }
