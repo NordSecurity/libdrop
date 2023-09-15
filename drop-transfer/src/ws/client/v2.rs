@@ -130,19 +130,21 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
 
     async fn on_done(&mut self, file: FileSubPath) {
         if let Some(file) = self.xfer.file_by_subpath(&file) {
-            if let Err(err) = self
+            match self
                 .state
                 .transfer_manager
                 .outgoing_terminal_recv(self.xfer.id(), file.id(), FileTerminalState::Completed)
                 .await
             {
-                warn!(self.logger, "Failed to accept file as done: {err}");
+                Err(err) => {
+                    warn!(self.logger, "Failed to accept file as done: {err}");
+                }
+                Ok(Some(res)) => res.events.success().await,
+                Ok(None) => (),
             }
         }
 
-        if let Some(task) = self.tasks.remove(&file) {
-            task.events.success().await;
-        }
+        self.stop_task(&file, Status::FileFinished).await;
     }
 
     async fn on_download(&mut self, jobs: &mut JoinSet<()>, file_id: FileSubPath) {
