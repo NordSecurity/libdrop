@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap},
     sync::Arc,
 };
 
@@ -33,7 +33,6 @@ pub struct HandlerLoop<'a> {
     alive: &'a AliveGuard,
     upload_tx: Sender<MsgToSend>,
     tasks: HashMap<FileId, FileTask>,
-    done: HashSet<FileId>,
     xfer: Arc<OutgoingTransfer>,
 }
 
@@ -91,7 +90,6 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             upload_tx,
             xfer,
             tasks: HashMap::new(),
-            done: HashSet::new(),
         }
     }
 
@@ -247,7 +245,6 @@ impl HandlerLoop<'_> {
                 }
             };
 
-            self.done.remove(&file_id);
             anyhow::Ok(())
         };
 
