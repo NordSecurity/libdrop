@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap},
     sync::Arc,
 };
 
@@ -17,8 +17,8 @@ use super::{
     WebSocket,
 };
 use crate::{
-    manager::FileTerminalState, protocol::v4, service::State, tasks::AliveGuard,
-    transfer::Transfer, ws::events::FileEventTx, FileId, OutgoingTransfer,
+    protocol::v4, service::State, tasks::AliveGuard, transfer::Transfer, ws::events::FileEventTx,
+    FileId, OutgoingTransfer,
 };
 
 pub struct HandlerInit<'a> {
@@ -33,7 +33,6 @@ pub struct HandlerLoop<'a> {
     alive: &'a AliveGuard,
     upload_tx: Sender<MsgToSend>,
     tasks: HashMap<FileId, FileTask>,
-    done: HashSet<FileId>,
     xfer: Arc<OutgoingTransfer>,
 }
 
@@ -91,7 +90,6 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             upload_tx,
             xfer,
             tasks: HashMap::new(),
-            done: HashSet::new(),
         }
     }
 
@@ -117,27 +115,8 @@ impl HandlerLoop<'_> {
     }
 
     async fn on_done(&mut self, file_id: FileId) {
-        if let Err(err) = self
-            .state
-            .transfer_manager
-            .outgoing_terminal_recv(self.xfer.id(), &file_id, FileTerminalState::Completed)
-            .await
-        {
-            warn!(self.logger, "Failed to accept file as done: {err}");
-        }
-
-        if let Some(task) = self.tasks.remove(&file_id) {
-            task.events.success().await;
-        } else if !self.done.contains(&file_id) {
-            let event = crate::Event::FileUploadSuccess(self.xfer.clone(), file_id.clone());
-            self.state
-                .event_tx
-                .send(event)
-                .await
-                .expect("Failed to emit event");
-        }
-
-        self.done.insert(file_id);
+        super::on_upload_finished(self.state, &self.xfer, &file_id, self.logger).await;
+        self.stop_task(&file_id, Status::FileFinished).await;
     }
 
     async fn on_checksum(&mut self, jobs: &mut JoinSet<()>, file_id: FileId, limit: u64) {
@@ -254,7 +233,6 @@ impl HandlerLoop<'_> {
                 }
             };
 
-            self.done.remove(&file_id);
             anyhow::Ok(())
         };
 
@@ -296,25 +274,7 @@ impl HandlerLoop<'_> {
         );
 
         if let Some(file_id) = file_id {
-            match self
-                .state
-                .transfer_manager
-                .outgoing_terminal_recv(self.xfer.id(), &file_id, FileTerminalState::Failed)
-                .await
-            {
-                Err(err) => {
-                    warn!(self.logger, "Failed to accept failure: {err}");
-                }
-                Ok(Some(res)) => {
-                    res.events
-                        .failed(crate::Error::BadTransferState(format!(
-                            "Receiver reported an error: {msg}"
-                        )))
-                        .await;
-                }
-                Ok(None) => (),
-            }
-
+            super::on_upload_failure(self.state, &self.xfer, &file_id, msg, self.logger).await;
             self.stop_task(&file_id, Status::BadTransferState).await;
         }
     }

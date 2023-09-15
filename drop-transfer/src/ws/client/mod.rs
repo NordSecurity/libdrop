@@ -38,6 +38,7 @@ use super::OutgoingFileEventTx;
 use crate::{
     auth,
     file::FileId,
+    manager::FileTerminalState,
     protocol,
     service::State,
     tasks::AliveGuard,
@@ -584,4 +585,45 @@ async fn on_recv(
     }
 
     Ok(ControlFlow::Continue(()))
+}
+
+async fn on_upload_finished(
+    state: &State,
+    xfer: &OutgoingTransfer,
+    file_id: &FileId,
+    logger: &slog::Logger,
+) {
+    match state
+        .transfer_manager
+        .outgoing_terminal_recv(xfer.id(), file_id, FileTerminalState::Completed)
+        .await
+    {
+        Err(err) => warn!(logger, "Failed to accept file as done: {err}"),
+        Ok(Some(res)) => res.events.success().await,
+        Ok(None) => (),
+    }
+}
+
+async fn on_upload_failure(
+    state: &State,
+    xfer: &OutgoingTransfer,
+    file_id: &FileId,
+    msg: String,
+    logger: &slog::Logger,
+) {
+    match state
+        .transfer_manager
+        .outgoing_terminal_recv(xfer.id(), file_id, FileTerminalState::Failed)
+        .await
+    {
+        Err(err) => warn!(logger, "Failed to accept failure: {err}"),
+        Ok(Some(res)) => {
+            res.events
+                .failed(crate::Error::BadTransferState(format!(
+                    "Receiver reported an error: {msg}"
+                )))
+                .await;
+        }
+        Ok(None) => (),
+    }
 }

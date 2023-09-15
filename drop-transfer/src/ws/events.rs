@@ -235,7 +235,7 @@ impl FileEventTx<OutgoingTransfer> {
     }
 
     pub async fn success(&self) {
-        self.stop(
+        self.force_stop(
             crate::Event::FileUploadSuccess(self.xfer.clone(), self.file_id.clone()),
             Ok(()),
         )
