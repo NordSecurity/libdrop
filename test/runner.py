@@ -214,29 +214,32 @@ def run():
         flush=True,
     )
     total_scenarios_count = len(scenarios)
-    failed_scenarios_count = 0
+    failed_scenarios = []
+
     for scenario in scenarios:
         for container in scenario_results[scenario.id()]:
             success, reason = container.success()
             if not success:
-                failed_scenarios_count += 1
+                failed_scenarios.append(scenario)
                 break
 
     print(
-        f"*** Test suite results: {total_scenarios_count} scenarios, {failed_scenarios_count} failed. Succeeded ({round((1.0-(failed_scenarios_count/total_scenarios_count)) * 100, 2)}%), on average one scenario took {math.ceil(total_time/total_scenarios_count)} seconds",
+        f"*** Test suite results: {total_scenarios_count} scenarios, {len(failed_scenarios)} failed. Succeeded ({round((1.0-(len(failed_scenarios)/total_scenarios_count)) * 100, 2)}%), on average one scenario took {math.ceil(total_time/total_scenarios_count)} seconds",
         flush=True,
     )
 
-    if failed_scenarios_count > 0:
-        for scenario in scenarios:
+    if len(failed_scenarios) == 0:
+        print("Success! All tests passed!", flush=True)
+        exit(0)
+    else:
+        for scenario in failed_scenarios:
+            print(
+                f"*** Scenario {scenario.id()} failed",
+                flush=True,
+            )
+            print(f"*** Scenario {scenario.id()} logs:", flush=True)
             for container in scenario_results[scenario.id()]:
-                success, reason = container.success()
-                if not success:
-                    print(
-                        f"*** Container {container.name()} exited with failure: {reason}",
-                        flush=True,
-                    )
-                print(f"*** {container.name()} logs:")
+                print(f"*** Container {container.name()} logs:", flush=True)
                 print(container.logs(), flush=True)
 
         print("Failure summary:", flush=True)
@@ -253,9 +256,6 @@ def run():
                     flush=True,
                 )
         exit(1)
-    else:
-        print("Success! All tests passed!", flush=True)
-        exit(0)
 
 
 if __name__ == "__main__":
