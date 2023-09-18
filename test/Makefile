@@ -12,7 +12,7 @@ TESTCASE_TIMEOUT ?= 100
 .DEFAULT_GOAL := test
 .PHONY: build build-coverage test coverage clean docker-prepare build-image
 
-$(LIB): $(shell find ../ -type f -name '*.rs')
+$(LIB): $(shell find ../ -type f \( -name '*.rs' -o -name '*.toml' -o -name '*.sql' -o -name '*.lock' \))
 	cargo build $(FEATURES)
 	
 # Build the project with coverage instrumentation
