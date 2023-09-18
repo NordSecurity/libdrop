@@ -27,15 +27,6 @@ def prepare_docker() -> docker.DockerClient:
     client = docker.DockerClient(base_url="unix://var/run/docker.sock")
 
     # Network creation
-    ipv4_net = client.networks.create(
-        name="net4",
-        driver="bridge",
-        attachable=True,
-        ipam=docker.types.IPAMConfig(
-            pool_configs=[docker.types.IPAMPool(subnet="172.30.0.0/16")]
-        ),
-    )
-
     ipv6_net = client.networks.create(
         name="net6",
         driver="bridge",
