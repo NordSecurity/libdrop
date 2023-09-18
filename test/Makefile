@@ -10,12 +10,11 @@ SCENARIOS_AT_ONCE ?= 10
 TESTCASE_TIMEOUT ?= 100
 
 .DEFAULT_GOAL := test
-.PHONY: build build-coverage test coverage clean
+.PHONY: build build-coverage test coverage clean docker-prepare build-image
 
-# Build the project
-build:
+$(LIB): $(shell find ../ -type f -name '*.rs')
 	cargo build $(FEATURES)
-
+	
 # Build the project with coverage instrumentation
 build-coverage:
 	CARGO_INCREMENTAL=0 RUSTFLAGS="$(RUSTFLAGS_COVERAGE)" cargo +nightly build $(FEATURES)
@@ -29,7 +28,7 @@ docker-prepare:
 	docker container prune -f
 
 # Test the project
-test: docker-prepare build build-image 	
+test: $(LIB) build-image docker-prepare
 	LIB_PATH=$(LIB_DOCKER) ./runner.py --testcase-timeout=$(TESTCASE_TIMEOUT) --scenarios-at-once=$(SCENARIOS_AT_ONCE)
 
 # Generate and view coverage report
@@ -42,7 +41,7 @@ coverage: docker-prepare build-coverage
 
 	llvm-profdata merge -sparse $(COVERAGE_PATH)/*.profraw -o full.profdata
 	llvm-cov report -instr-profile=full.profdata --ignore-filename-regex='/.cargo/registry' --Xdemangler=rustfilt $(LIB)
-	grcov $(COVERAGE_PATH) --binary-path $(LIB) -s .. -t ${HTML_PATH}
+	grcov $(COVERAGE_PATH) --binary-path $(LIB_DOCKER) -s .. -t ${HTML_PATH}
 	python -m http.server 8080 --directory ./html
 
 # Clean up the project
