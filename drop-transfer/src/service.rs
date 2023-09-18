@@ -166,7 +166,7 @@ impl Service {
             validate_dest_path(parent_dir)?;
 
             state
-                .start_download(&self.state.storage, file_id, parent_dir)
+                .start_download(&self.state.storage, file_id, parent_dir, &self.logger)
                 .await?;
         }
 
