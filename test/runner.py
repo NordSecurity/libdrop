@@ -236,8 +236,8 @@ def run():
                         f"*** Container {container.name()} exited with failure: {reason}",
                         flush=True,
                     )
-                    print(f"*** Logs:", flush=True)
-                    print(container.logs(), flush=True)
+                print(f"*** {container.name()} logs:")
+                print(container.logs(), flush=True)
 
         print("Failure summary:", flush=True)
         for scenario in scenarios:
