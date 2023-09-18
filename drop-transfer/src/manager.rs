@@ -298,6 +298,11 @@ impl TransferManager {
             .await;
 
         if let Some(conn) = &state.conn {
+            debug!(
+                self.logger,
+                "Pushing outgoing rejection request: file_id {file_id}"
+            );
+
             let _ = conn.send(ClientReq::Reject {
                 file: file_id.clone(),
             });
@@ -372,6 +377,11 @@ impl TransferManager {
             .await;
 
         if let Some(conn) = &state.conn {
+            debug!(
+                self.logger,
+                "Pushing incoming rejection request: file_id {file_id}"
+            );
+
             let _ = conn.send(ServerReq::Reject {
                 file: file_id.clone(),
             });
@@ -555,6 +565,7 @@ impl TransferManager {
         state.xfer_sync = sync::TransferState::Canceled;
 
         if let Some(conn) = state.conn.take() {
+            debug!(self.logger, "Pushing outgoing close request");
             let _ = conn.send(ServerReq::Close);
         }
 
@@ -606,6 +617,7 @@ impl TransferManager {
                 state.xfer_sync = sync::TransferState::Canceled;
 
                 if let Some(conn) = state.conn.take() {
+                    debug!(self.logger, "Pushing incoming  close request");
                     let _ = conn.send(ClientReq::Close);
                 }
 
@@ -743,6 +755,7 @@ impl IncomingState {
         storage: &Storage,
         file_id: &FileId,
         parent_dir: &Path,
+        logger: &Logger,
     ) -> crate::Result<()> {
         let state = self.file_sync_mut(file_id)?;
 
@@ -763,6 +776,8 @@ impl IncomingState {
 
         if let Some(conn) = &self.conn {
             let task = FileXferTask::new(file.clone(), self.xfer.clone(), parent_dir.into());
+
+            debug!(logger, "Pushing download request: file_id {file_id}");
 
             let _ = conn.send(ServerReq::Download {
                 task: Box::new(task),
