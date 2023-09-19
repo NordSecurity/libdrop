@@ -37,9 +37,8 @@ pub trait File {
 
     fn info(&self) -> FileInfo {
         FileInfo {
-            mime_type: self.mime_type().to_string(),
-            extension: self.subpath().extension().unwrap_or("none").to_string(),
-            size_kb: (self.size() as f64 / 1024.0).ceil() as i32,
+            path_id: self.id().to_string(),
+            direction: Self::direction(),
         }
     }
 }
