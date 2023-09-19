@@ -7789,6 +7789,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
+                    action.WaitForAnotherPeer(),
                     action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
