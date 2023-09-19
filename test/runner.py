@@ -36,11 +36,16 @@ def prepare_docker() -> docker.DockerClient:
                 docker.types.IPAMPool(
                     subnet="fd3e:0e6d:45fe:b0c2::/64", gateway="fd3e:0e6d:45fe:b0c2::1"
                 )
-            ]
+            ],
+            options={"strictAffinity": "true"},
         ),
     )
 
     return client
+
+
+def int_to_mac(macint: int):
+    return ":".join(re.findall("..", "%012x" % macint))
 
 
 class ContainerHolder:
@@ -70,9 +75,6 @@ class ContainerHolder:
 
     def name(self) -> str:
         return self._container.name
-
-    def run(self):
-        self._container.run()
 
     def logs(self):
         logs = self._container.logs().decode("utf-8")
@@ -108,6 +110,7 @@ def run():
     scenario_results: dict[str, list[ContainerHolder]] = {}
 
     already_done = []
+    container_id: int = 1
 
     # a semaphore is not actually needed as there's no multithreading
     sem = Semaphore(SCENARIOS_AT_ONCE)
@@ -177,7 +180,9 @@ def run():
                         hostname=f"{hostname}",
                         detach=True,
                         network="net6",
+                        mac_address=int_to_mac(container_id),
                     )
+                    container_id += 1
 
                     info = ContainerHolder(container, scenario.id(), TESTCASE_TIMEOUT)
                     scenario_results[scenario.id()].append(info)
