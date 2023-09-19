@@ -12,8 +12,7 @@ use slog::Logger;
 
 static INSTANCE: Mutex<Option<Weak<dyn Moose>>> = Mutex::new(None);
 
-#[allow(dead_code)]
-const MOOSE_STATUS_SUCCESS: i32 = 0;
+pub const MOOSE_STATUS_SUCCESS: i32 = 0;
 
 #[allow(dead_code)]
 const MOOSE_VALUE_NONE: i32 = -1;
@@ -34,8 +33,15 @@ pub enum TransferFilePhase {
     Finished,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct TransferInfo {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct InitEventData {
+    pub init_duration: i32,
+    pub result: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TransferIntentEventData {
+    pub transfer_id: String,
     pub file_count: i32,
     pub transfer_size: i32,
     pub path_ids: String,
@@ -45,25 +51,52 @@ pub struct TransferInfo {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct FileInfo {
+pub struct TransferStartEventData {
+    pub protocol_version: i32,
+    pub transfer_id: String,
+    pub retry_count: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TransferEndEventData {
+    pub transfer_id: String,
+    pub result: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TransferFileEventData {
+    pub phase: TransferFilePhase,
+    pub transfer_id: String,
+    pub transfer_time: i32,
     pub path_id: String,
     pub direction: TransferDirection,
+    pub transferred: i32,
+    pub result: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DeveloperExceptionEventData {
+    pub code: i32,
+    pub note: String,
+    pub message: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DeveloperExceptionWithValueEventData {
+    pub arbitrary_value: i32,
+    pub code: i32,
+    pub note: String,
+    pub message: String,
+    pub name: String,
 }
 
 pub trait Moose: Send + Sync {
-    fn event_init(&self, init_duration: i32, res: Result<(), i32>);
-    fn event_transfer(&self, transfer_id: String, transfer_info: TransferInfo);
-    fn event_transfer_start(&self, protocol_version: i32, transfer_id: String, retry_count: i32);
-    fn event_transfer_end(&self, transfer_id: String, res: Result<(), i32>);
-    fn event_transfer_file(
-        &self,
-        phase: TransferFilePhase,
-        transfer_id: String,
-        transfer_time: i32,
-        file_info: FileInfo,
-        transferred: i32,
-        res: Result<(), i32>,
-    );
+    fn event_init(&self, data: InitEventData);
+    fn event_transfer_intent(&self, data: TransferIntentEventData);
+    fn event_transfer_start(&self, data: TransferStartEventData);
+    fn event_transfer_end(&self, data: TransferEndEventData);
+    fn event_transfer_file(&self, data: TransferFileEventData);
 
     /// Generic function for logging exceptions not related to specific
     /// transfers
@@ -72,7 +105,7 @@ pub trait Moose: Send + Sync {
     /// note - custom additional information
     /// message - error message
     /// name - name of the error
-    fn developer_exception(&self, code: i32, note: String, message: String, name: String);
+    fn developer_exception(&self, data: DeveloperExceptionEventData);
 
     /// Generic function for logging exceptions not related to specific
     /// transfers, with an arbitrary value
@@ -82,14 +115,7 @@ pub trait Moose: Send + Sync {
     /// note - custom additional information
     /// message - error message
     /// name - name of the error
-    fn developer_exception_with_value(
-        &self,
-        arbitrary_value: i32,
-        code: i32,
-        note: String,
-        message: String,
-        name: String,
-    );
+    fn developer_exception_with_value(&self, data: DeveloperExceptionWithValueEventData);
 }
 
 #[allow(unused_variables)]
