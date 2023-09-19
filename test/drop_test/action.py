@@ -1,8 +1,7 @@
 import asyncio
 from collections import Counter
-from collections.abc import Iterable
-from functools import reduce
-import os, pwd
+import os
+import pwd
 from pathlib import Path
 import platform
 import subprocess
@@ -22,6 +21,30 @@ from .peer_resolver import peer_resolver
 from .ffi import PeerState
 import sys
 
+def to_num(s: str):
+    if s.isnumeric():
+        try:
+            return int(s)
+        except ValueError:
+            return float(s)
+    else:
+        return s
+
+
+compare_funcs = [
+    ("*", lambda input, value: value is not None),
+    ("<=", lambda input, value: value <= to_num(input)),
+    (">=", lambda input, value: value >= to_num(input)),
+    ("!=", lambda input, value: value != to_num(input)),
+    (">", lambda input, value: value > to_num(input)),
+    ("<", lambda input, value: value < to_num(input)),
+    (
+        "[~]",
+        lambda input, value: Counter(str(input).split(','))
+        == Counter(str(value).split(",")),
+    ),
+]
+
 
 def compare_json_struct(expected: dict, actual: dict):
     for key in expected:
@@ -38,14 +61,17 @@ def compare_json_struct(expected: dict, actual: dict):
             for i in range(len(expected_value)):
                 compare_json_struct(expected_value[i], actual_value[i])
         else:
-            # '*' is a special value that means that we don't care about the actual value of the output, just that it exists
-            if expected_value == "*" and actual_value is not None:
-                continue
+            valid = False
+            for func in compare_funcs:
+                if str(expected_value).startswith(func[0]):
+                    valid = func[1](expected_value[len(func[0]) :], actual_value)
+                    break
 
-            if expected_value != actual_value:
-                raise Exception(
-                    f"Value mismatch for key: '{key}'. Expected '{expected_value}', got '{actual_value}'"
-                )
+            if not valid:
+                if expected_value != actual_value:
+                    raise Exception(
+                        f"Value mismatch for key: '{key}'. Expected '{expected_value}', got '{actual_value}'"
+                    )
 
 
 class File:
@@ -739,6 +765,8 @@ class AssertMooseEvents(Action):
             )
 
         events = json.loads(open(self._events_file).read())
+
+        # raise Exception(json.dumps(events, indent=4))
 
         if len(events) != len(self._expected_outputs):
             raise Exception(
