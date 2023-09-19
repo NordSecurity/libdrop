@@ -6539,7 +6539,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.SleepMs(500),
+                    action.WaitForAnotherPeer(),
                     action.ExpectAnyError(
                         action.Repeated(
                             [
