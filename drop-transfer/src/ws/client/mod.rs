@@ -14,6 +14,7 @@ use std::{
 };
 
 use anyhow::Context;
+use drop_analytics::{TransferEndEventData, TransferStartEventData};
 use hyper::StatusCode;
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
@@ -123,9 +124,10 @@ async fn connect_to_peer(
         WsConnection::Unrecoverable(err) => {
             error!(logger, "Could not connect to peer {}: {}", xfer.id(), err);
 
-            state
-                .moose
-                .event_transfer_end(xfer.id().to_string(), Err(i32::from(&err)));
+            state.moose.event_transfer_end(TransferEndEventData {
+                transfer_id: xfer.id().to_string(),
+                result: i32::from(&err),
+            });
 
             state
                 .event_tx
@@ -136,9 +138,11 @@ async fn connect_to_peer(
         }
     };
 
-    state
-        .moose
-        .event_transfer_start(ver.into(), xfer.id().to_string(), retry_count);
+    state.moose.event_transfer_start(TransferStartEventData {
+        protocol_version: ver.into(),
+        transfer_id: xfer.id().to_string(),
+        retry_count,
+    });
 
     info!(logger, "Client connected, using version: {ver}");
 

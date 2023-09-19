@@ -6,7 +6,7 @@ use std::{
     time::Instant,
 };
 
-use drop_analytics::Moose;
+use drop_analytics::{InitEventData, Moose, TransferEndEventData};
 use drop_config::DropConfig;
 use drop_core::Status;
 use drop_storage::Storage;
@@ -98,10 +98,11 @@ impl Service {
         };
 
         let res = task.await;
-        moose.event_init(
-            init_time.unwrap_or(Instant::now()).elapsed().as_millis() as i32,
-            res.to_status(),
-        );
+
+        moose.event_init(InitEventData {
+            init_duration: init_time.unwrap_or_else(Instant::now).elapsed().as_millis() as i32,
+            result: res.to_moose_status(),
+        });
 
         res
     }
@@ -118,9 +119,7 @@ impl Service {
     pub async fn send_request(&mut self, xfer: crate::OutgoingTransfer) {
         let xfer = Arc::new(xfer);
 
-        self.state
-            .moose
-            .event_transfer(xfer.id().to_string(), xfer.info());
+        self.state.moose.event_transfer_intent(xfer.info());
 
         if let Err(err) = self
             .state
@@ -128,9 +127,10 @@ impl Service {
             .insert_outgoing(xfer.clone())
             .await
         {
-            self.state
-                .moose
-                .event_transfer_end(xfer.id().to_string(), Err(i32::from(&err)));
+            self.state.moose.event_transfer_end(TransferEndEventData {
+                transfer_id: xfer.id().to_string(),
+                result: i32::from(&err),
+            });
 
             self.state
                 .event_tx

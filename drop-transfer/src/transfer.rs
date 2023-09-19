@@ -1,6 +1,6 @@
 use std::{collections::HashMap, net::IpAddr};
 
-use drop_analytics::{TransferDirection, TransferInfo};
+use drop_analytics::{TransferDirection, TransferIntentEventData};
 use drop_config::DropConfig;
 use drop_storage::TransferInfo as StorageInfo;
 use uuid::Uuid;
@@ -28,14 +28,15 @@ pub trait Transfer {
             .find(|file| file.subpath() == file_subpath)
     }
 
-    fn info(&self) -> TransferInfo {
+    fn info(&self) -> TransferIntentEventData {
         let size_list = self
             .files()
             .values()
             .map(|f| utils::to_kb(f.size()))
             .collect::<Vec<i32>>();
 
-        TransferInfo {
+        TransferIntentEventData {
+            transfer_id: self.id().to_string(),
             path_ids: self
                 .files()
                 .values()

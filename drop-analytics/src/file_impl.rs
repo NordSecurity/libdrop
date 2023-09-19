@@ -3,71 +3,31 @@ use std::{fs::File, io::Write, path::Path};
 use serde::{Deserialize, Serialize};
 use slog::Logger;
 
-use crate::{FileInfo, TransferFilePhase, TransferInfo, MOOSE_STATUS_SUCCESS, MOOSE_VALUE_NONE};
-
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
 enum MooseEventType {
     #[serde(rename = "init")]
     Init(InitEvent),
-    #[serde(rename = "transfer")]
-    Transfer(TransferEvent),
+    #[serde(rename = "transfer_intent")]
+    TransferIntent(crate::TransferIntentEventData),
     #[serde(rename = "transfer_start")]
-    TransferStart(TransferStartEvent),
+    TransferStart(crate::TransferStartEventData),
     #[serde(rename = "transfer_end")]
-    TransferEnd(TransferEndEvent),
+    TransferEnd(crate::TransferEndEventData),
     #[serde(rename = "file")]
-    File(FileEvent),
+    File(crate::TransferFileEventData),
     #[serde(rename = "exception")]
-    Exception(ExceptionEvent),
+    Exception(crate::DeveloperExceptionEventData),
+    #[serde(rename = "exception_with_value")]
+    ExceptionWithValue(crate::DeveloperExceptionWithValueEventData),
 }
 
 #[derive(Serialize, Deserialize)]
 struct InitEvent {
-    init_duration: i32,
-    result: i32,
+    #[serde(flatten)]
+    event: crate::InitEventData,
     app_version: String,
     prod: bool,
-}
-
-#[derive(Serialize, Deserialize)]
-struct TransferEvent {
-    transfer_id: String,
-    #[serde(flatten)]
-    info: TransferInfo,
-}
-
-#[derive(Serialize, Deserialize)]
-struct TransferStartEvent {
-    protocol_version: i32,
-    transfer_id: String,
-    retry_count: i32,
-}
-
-#[derive(Serialize, Deserialize)]
-struct TransferEndEvent {
-    transfer_id: String,
-    result: i32,
-}
-
-#[derive(Serialize, Deserialize)]
-struct FileEvent {
-    phase: TransferFilePhase,
-    transfer_id: String,
-    transfer_time: i32,
-    #[serde(flatten)]
-    info: FileInfo,
-    transferred: i32,
-    result: i32,
-}
-
-#[derive(Serialize, Deserialize)]
-struct ExceptionEvent {
-    arbitrary_value: i32,
-    code: i32,
-    note: String,
-    message: String,
-    name: String,
 }
 
 pub struct FileImpl {
@@ -105,15 +65,9 @@ impl FileImpl {
 }
 
 impl super::Moose for FileImpl {
-    fn event_init(&self, init_duration: i32, res: Result<(), i32>) {
-        let result = match res {
-            Ok(_) => MOOSE_STATUS_SUCCESS,
-            Err(e) => e,
-        };
-
+    fn event_init(&self, data: crate::InitEventData) {
         let event = self.write_event(MooseEventType::Init(InitEvent {
-            init_duration,
-            result,
+            event: data,
             app_version: self.app_version.clone(),
             prod: self.prod,
         }));
@@ -127,11 +81,8 @@ impl super::Moose for FileImpl {
         };
     }
 
-    fn event_transfer(&self, transfer_id: String, transfer_info: TransferInfo) {
-        let event = self.write_event(MooseEventType::Transfer(TransferEvent {
-            transfer_id,
-            info: transfer_info,
-        }));
+    fn event_transfer_intent(&self, data: crate::TransferIntentEventData) {
+        let event = self.write_event(MooseEventType::TransferIntent(data));
 
         if event.is_err() {
             slog::error!(
@@ -142,12 +93,8 @@ impl super::Moose for FileImpl {
         };
     }
 
-    fn event_transfer_start(&self, protocol_version: i32, transfer_id: String, retry_count: i32) {
-        let event = self.write_event(MooseEventType::TransferStart(TransferStartEvent {
-            protocol_version,
-            transfer_id,
-            retry_count,
-        }));
+    fn event_transfer_start(&self, data: crate::TransferStartEventData) {
+        let event = self.write_event(MooseEventType::TransferStart(data));
 
         if event.is_err() {
             slog::error!(
@@ -158,16 +105,8 @@ impl super::Moose for FileImpl {
         };
     }
 
-    fn event_transfer_end(&self, transfer_id: String, res: Result<(), i32>) {
-        let result = match res {
-            Ok(_) => MOOSE_STATUS_SUCCESS,
-            Err(e) => e,
-        };
-
-        let event = self.write_event(MooseEventType::TransferEnd(TransferEndEvent {
-            transfer_id,
-            result,
-        }));
+    fn event_transfer_end(&self, data: crate::TransferEndEventData) {
+        let event = self.write_event(MooseEventType::TransferEnd(data));
 
         if event.is_err() {
             slog::error!(
@@ -178,28 +117,8 @@ impl super::Moose for FileImpl {
         };
     }
 
-    fn event_transfer_file(
-        &self,
-        phase: TransferFilePhase,
-        transfer_id: String,
-        transfer_time: i32,
-        file_info: FileInfo,
-        transferred: i32,
-        res: Result<(), i32>,
-    ) {
-        let result = match res {
-            Ok(_) => MOOSE_STATUS_SUCCESS,
-            Err(e) => e,
-        };
-
-        let event = self.write_event(MooseEventType::File(FileEvent {
-            phase,
-            transfer_id,
-            transfer_time,
-            info: file_info,
-            transferred,
-            result,
-        }));
+    fn event_transfer_file(&self, data: crate::TransferFileEventData) {
+        let event = self.write_event(MooseEventType::File(data));
 
         if event.is_err() {
             slog::error!(
@@ -210,14 +129,8 @@ impl super::Moose for FileImpl {
         };
     }
 
-    fn developer_exception(&self, code: i32, note: String, message: String, name: String) {
-        let event = self.write_event(MooseEventType::Exception(ExceptionEvent {
-            arbitrary_value: MOOSE_VALUE_NONE,
-            code,
-            note,
-            message,
-            name,
-        }));
+    fn developer_exception(&self, data: crate::DeveloperExceptionEventData) {
+        let event = self.write_event(MooseEventType::Exception(data));
 
         if event.is_err() {
             slog::error!(
@@ -228,21 +141,8 @@ impl super::Moose for FileImpl {
         };
     }
 
-    fn developer_exception_with_value(
-        &self,
-        arbitrary_value: i32,
-        code: i32,
-        note: String,
-        message: String,
-        name: String,
-    ) {
-        let event = self.write_event(MooseEventType::Exception(ExceptionEvent {
-            arbitrary_value,
-            code,
-            note,
-            message,
-            name,
-        }));
+    fn developer_exception_with_value(&self, data: crate::DeveloperExceptionWithValueEventData) {
+        let event = self.write_event(MooseEventType::ExceptionWithValue(data));
 
         if event.is_err() {
             slog::error!(

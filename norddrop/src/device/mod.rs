@@ -5,6 +5,7 @@ use std::{
     sync::Arc,
 };
 
+use drop_analytics::DeveloperExceptionEventData;
 use drop_auth::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH};
 use drop_config::{Config, DropConfig, MooseConfig};
 use drop_transfer::{auth, utils::Hidden, FileToSend, OutgoingTransfer, Service, Transfer};
@@ -571,30 +572,30 @@ fn open_database(
             // throw an error
             if dbpath == ":memory:" {
                 let error = ffi::types::NORDDROP_RES_DB_ERROR;
-                moose.developer_exception(
-                    error as i32,
-                    err.to_string(),
-                    "Failed to open in-memory DB".to_string(),
-                    "DB Error".to_string(),
-                );
+                moose.developer_exception(DeveloperExceptionEventData {
+                    code: error as i32,
+                    note: err.to_string(),
+                    message: "Failed to open in-memory DB".to_string(),
+                    name: "DB Error".to_string(),
+                });
 
                 Err(error)
             } else {
-                moose.developer_exception(
-                    ffi::types::NORDDROP_RES_DB_ERROR as i32,
-                    "Initial DB open failed, recreating".to_string(),
-                    "Failed to open DB file".to_string(),
-                    "DB Error".to_string(),
-                );
+                moose.developer_exception(DeveloperExceptionEventData {
+                    code: ffi::types::NORDDROP_RES_DB_ERROR as i32,
+                    note: "Initial DB open failed, recreating".to_string(),
+                    message: "Failed to open DB file".to_string(),
+                    name: "DB Error".to_string(),
+                });
                 // Still problems? Let's try to delete the file, provided it's not in memory
                 warn!(logger, "Removing old DB file");
                 if let Err(err) = std::fs::remove_file(dbpath) {
-                    moose.developer_exception(
-                        ffi::types::NORDDROP_RES_DB_ERROR as i32,
-                        err.to_string(),
-                        "Failed to remove old DB file".to_string(),
-                        "DB Error".to_string(),
-                    );
+                    moose.developer_exception(DeveloperExceptionEventData {
+                        code: ffi::types::NORDDROP_RES_DB_ERROR as i32,
+                        note: err.to_string(),
+                        message: "Failed to remove old DB file".to_string(),
+                        name: "DB Error".to_string(),
+                    });
                     error!(
                         logger,
                         "Failed to open DB and failed to remove it's file: {err}"
@@ -613,12 +614,12 @@ fn open_database(
                     Ok(storage) => Ok(storage),
                     Err(err) => {
                         let error = ffi::types::NORDDROP_RES_DB_ERROR;
-                        moose.developer_exception(
-                            error as i32,
-                            err.to_string(),
-                            "Failed to open DB after cleanup".to_string(),
-                            "DB Error".to_string(),
-                        );
+                        moose.developer_exception(DeveloperExceptionEventData {
+                            code: error as i32,
+                            note: err.to_string(),
+                            message: "Failed to open DB after cleanup".to_string(),
+                            name: "DB Error".to_string(),
+                        });
                         error!(
                             logger,
                             "Failed to open DB after cleaning up old file: {err}"

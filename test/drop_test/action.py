@@ -39,7 +39,7 @@ compare_funcs = [
     ("<", lambda input, value: value < to_num(input)),
     (
         "[~]",
-        lambda input, value: Counter(str(input).split(','))
+        lambda input, value: Counter(str(input).split(","))
         == Counter(str(value).split(",")),
     ),
 ]
@@ -62,8 +62,10 @@ def compare_json_struct(expected: dict, actual: dict):
         else:
             valid = False
             for func in compare_funcs:
-                if str(expected_value).startswith(func[0]):
-                    valid = func[1](expected_value[len(func[0]) :], actual_value)
+                signature = func[0]
+                op = func[1]
+                if str(expected_value).startswith(signature):
+                    valid = op(expected_value[len(signature) :], actual_value)
                     break
 
             if not valid:
@@ -684,8 +686,6 @@ class AssertMooseEvents(Action):
             )
 
         events = json.loads(open(self._events_file).read())
-
-        # raise Exception(json.dumps(events, indent=4))
 
         if len(events) != len(self._expected_outputs):
             raise Exception(
