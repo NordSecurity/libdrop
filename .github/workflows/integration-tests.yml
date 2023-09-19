@@ -16,6 +16,8 @@ jobs:
       - name: docker sdk
         run: |
           pip3 install docker 
+      - name: Print docker version
+        run: docker version
       - name: Build Docker image
         run: docker build -t libdroptestimage test
       - name: Print images
