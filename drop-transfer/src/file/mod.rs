@@ -10,7 +10,7 @@ use std::{
 #[cfg(unix)]
 use std::{os::unix::prelude::*, sync::Arc};
 
-use drop_analytics::{FileInfo, TransferDirection};
+use drop_analytics::TransferDirection;
 use drop_config::DropConfig;
 pub use gather::*;
 pub use id::{FileId, FileSubPath};
@@ -20,6 +20,11 @@ use sha2::Digest;
 use walkdir::WalkDir;
 
 use crate::{utils::Hidden, Error};
+
+pub struct FileInfo {
+    pub path_id: String,
+    pub direction: TransferDirection,
+}
 
 #[cfg(unix)]
 pub type FdResolver = dyn Fn(&str) -> Option<RawFd> + Send + Sync;
