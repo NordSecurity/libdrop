@@ -32,6 +32,7 @@ def prepare_docker() -> docker.DockerClient:
         driver="bridge",
         enable_ipv6="true",
         ipam=docker.types.IPAMConfig(
+            driver="calico",
             pool_configs=[
                 docker.types.IPAMPool(
                     subnet="fd3e:0e6d:45fe:b0c2::/64", gateway="fd3e:0e6d:45fe:b0c2::1"
