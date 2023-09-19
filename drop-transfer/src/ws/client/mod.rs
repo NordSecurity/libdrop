@@ -218,6 +218,10 @@ async fn establish_ws_conn(
         }
     };
 
+    if let Err(err) = socket.set_linger(Some(drop_config::WS_SEND_TIMEOUT)) {
+        warn!(logger, "Failed to set TCP SO_LINGER timeout: {err}");
+    }
+
     let client = WebSocketStream::from_raw_socket(socket, Role::Client, None).await;
     WsConnection::Connected(client, ver)
 }
