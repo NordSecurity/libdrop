@@ -123,6 +123,14 @@ FILES = {
     "different/name/file-02": TestFile(
         size=1 * 1024, id="I_kCIoGtH-r0iHxtMQDgSLU84lNSHeGbemic7YGH_dU"
     ),
+    "tiny-jpeg.jpg": TestFile(
+        size=134,
+        id="ndOo-9Xlech9nVM5wbHmc1Hq-N7SFstQAmPSIm1jnF0",
+    ),
+    "tiny-gif.gif": TestFile(
+        size=26,
+        id="QP4qGg8W2oWG8c9fBZOla0czYwfHfScKXXG0lVf57Jc",
+    ),
 }
 
 DBFILES = {"26-1-corrupted.sqlite": b"this is a corrupted sqlite file"}

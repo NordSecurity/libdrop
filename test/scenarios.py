@@ -78,40 +78,6 @@ scenarios = [
                     action.AssertTransfers([]),
                     action.NoEvent(),
                     action.Stop(),
-                    action.AssertMooseEvents(
-                        [
-                            """{
-                            "type": "init",
-                            "result": 0,
-                            "app_version": "*",
-                            "prod": false
-                        }""",
-                            """{
-                            "type": "batch",
-                            "transfer_id": "*",
-                            "info": {
-                                "mime_type_list": "unknown",
-                                "extension_list": "none",
-                                "file_size_list": "10240",
-                                "transfer_size_kb": 10240,
-                                "file_count": 1
-                            },
-                            "protocol_version": 5
-                        }""",
-                            """{
-                            "type": "file",
-                            "result": 0,
-                            "transfer_id": "*",
-                            "transfer_time": "*",
-                            "direction": "upload",
-                            "info": {
-                                "mime_type": "unknown",
-                                "extension": "none",
-                                "size_kb": 10240
-                            }
-                        }""",
-                        ]
-                    ),
                 ]
             ),
             "DROP_PEER_STIMPY": ActionList(
@@ -191,28 +157,6 @@ scenarios = [
                     action.AssertTransfers([]),
                     action.NoEvent(),
                     action.Stop(),
-                    action.AssertMooseEvents(
-                        [
-                            """{
-                            "type": "init",
-                            "result": 0,
-                            "app_version": "*",
-                            "prod": false
-                        }""",
-                            """{
-                            "type": "file",
-                            "result": 0,
-                            "transfer_id": "*",
-                            "transfer_time": "*",
-                            "direction": "download",
-                            "info": {
-                                "mime_type": "unknown",
-                                "extension": "none",
-                                "size_kb": 10240
-                            }
-                        }""",
-                        ]
-                    ),
                 ]
             ),
         },
@@ -3220,40 +3164,6 @@ scenarios = [
                     ),
                     action.NoEvent(),
                     action.Stop(),
-                    action.AssertMooseEvents(
-                        [
-                            """{
-                            "type": "init",
-                            "result": 0,
-                            "app_version": "*",
-                            "prod": false
-                        }""",
-                            """{
-                            "type": "batch",
-                            "transfer_id": "*",
-                            "info": {
-                                "mime_type_list": "unknown",
-                                "extension_list": "none",
-                                "file_size_list": "10240",
-                                "transfer_size_kb": 10240,
-                                "file_count": 1
-                            },
-                            "protocol_version": 5
-                        }""",
-                            """{
-                            "type": "file",
-                            "result": 28,
-                            "transfer_id": "*",
-                            "transfer_time": "*",
-                            "direction": "upload",
-                            "info": {
-                                "mime_type": "unknown",
-                                "extension": "none",
-                                "size_kb": 10240
-                            }
-                        }""",
-                        ]
-                    ),
                 ]
             ),
             "DROP_PEER_STIMPY": ActionList(
@@ -3327,28 +3237,6 @@ scenarios = [
                     ),
                     action.NoEvent(),
                     action.Stop(),
-                    action.AssertMooseEvents(
-                        [
-                            """{
-                            "type": "init",
-                            "result": 0,
-                            "app_version": "*",
-                            "prod": false
-                        }""",
-                            """{
-                            "type": "file",
-                            "result": 8,
-                            "transfer_id": "*",
-                            "transfer_time": "*",
-                            "direction": "download",
-                            "info": {
-                                "mime_type": "unknown",
-                                "extension": "none",
-                                "size_kb": 10240
-                            }
-                        }""",
-                        ]
-                    ),
                 ]
             ),
         },
@@ -7832,16 +7720,6 @@ scenarios = [
                         ]
                     ),
                     action.Stop(),
-                    action.AssertMooseEvents(
-                        [
-                            """{
-                            "type": "init",
-                            "result": 0,
-                            "app_version": "*",
-                            "prod": false
-                        }"""
-                        ]
-                    ),
                 ]
             ),
             "DROP_PEER_STIMPY": ActionList([action.Sleep(10)]),
@@ -8896,6 +8774,804 @@ scenarios = [
                     ),
                     action.CompareTrees(Path("/tmp/received/45-1"), []),
                     action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario-analytics-1",
+        "Send a file to a peer, verify moose events",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.Start("DROP_PEER_REN"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-big"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "init",
+                            "result": 0,
+                            "lib_version": "*",
+                            "app_version": "test-framework",
+                            "prod": false,
+                            "init_duration": ">0"
+                        }""",
+                            """{
+                            "type": "transfer_intent",
+                            "transfer_id": "*",
+                            "path_ids": \""""
+                            + FILES["testfile-big"].id
+                            + """\",
+                            "extensions": "none",
+                            "mime_types": "unknown",
+                            "file_count": 1,
+                            "file_sizes": "10240",
+                            "transfer_size": 10240
+                        }""",
+                            """{
+                            "type": "transfer_state",
+                            "protocol_version": ">=5",
+                            "result": 0
+                        }""",
+                            """{
+                            "type": "file",
+                            "result": 0,
+                            "phase": "finished",
+                            "transfer_id": "*",
+                            "transfer_time": ">0",
+                            "transferred": 10240,
+                            "path_id": \""""
+                            + FILES["testfile-big"].id
+                            + """\",
+                            "direction": "upload"
+                        }""",
+                        ]
+                    ),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-big"].id,
+                            "/tmp/received/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "init",
+                            "result": 0,
+                            "lib_version": "*",
+                            "app_version": "test-framework",
+                            "prod": false,
+                            "init_duration": ">0"
+                        }""",
+                            """{
+                            "type": "file",
+                            "result": 0,
+                            "phase": "finished",
+                            "transfer_id": "*",
+                            "transfer_time": ">0",
+                            "transferred": 10240,
+                            "path_id": \""""
+                            + FILES["testfile-big"].id
+                            + """\",
+                            "direction": "download"
+                        }""",
+                        ]
+                    ),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario-analytics-2",
+        "Send two files to a peer, verify moose events",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.Start("DROP_PEER_REN"),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY", ["/tmp/tiny-jpeg.jpg", "/tmp/tiny-gif.gif"]
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["tiny-jpeg.jpg"].id, "tiny-jpeg.jpg", 134
+                                ),
+                                event.File(
+                                    FILES["tiny-gif.gif"].id,
+                                    "tiny-gif.gif",
+                                    26,
+                                ),
+                            },
+                        )
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(0, FILES["tiny-jpeg.jpg"].id),
+                            event.Start(0, FILES["tiny-gif.gif"].id),
+                            event.FinishFileUploaded(
+                                0,
+                                FILES["tiny-jpeg.jpg"].id,
+                            ),
+                            event.FinishFileUploaded(
+                                0,
+                                FILES["tiny-gif.gif"].id,
+                            ),
+                        ],
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "init",
+                            "result": 0,
+                            "lib_version": "*",
+                            "app_version": "test-framework",
+                            "prod": false,
+                            "init_duration": ">0"
+                        }""",
+                            """{
+                            "type": "transfer_intent",
+                            "transfer_id": "*",
+                            "path_ids": \"[~]"""
+                            + FILES["tiny-jpeg.jpg"].id
+                            + ","
+                            + FILES["tiny-gif.gif"].id
+                            + """\",
+                            "extensions": "[~]jpg,gif",
+                            "mime_types": "[~]image/jpeg,image/gif",
+                            "file_count": 2,
+                            "file_sizes": "1,1",
+                            "transfer_size": 2
+                        }""",
+                            """{
+                            "type": "transfer_state",
+                            "protocol_version": ">=5",
+                            "result": 0
+                        }""",
+                            """{
+                            "type": "file",
+                            "result": 0,
+                            "phase": "finished",
+                            "transfer_id": "*",
+                            "transfer_time": ">0",
+                            "transferred": 0,
+                            "path_id": \""""
+                            + FILES["tiny-jpeg.jpg"].id
+                            + """\",
+                            "direction": "upload"
+                        }""",
+                            """{
+                            "type": "file",
+                            "result": 0,
+                            "phase": "finished",
+                            "transfer_id": "*",
+                            "transfer_time": ">0",
+                            "transferred": 0,
+                            "path_id": \""""
+                            + FILES["tiny-gif.gif"].id
+                            + """\",
+                            "direction": "upload"
+                        }""",
+                        ]
+                    ),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["tiny-jpeg.jpg"].id, "tiny-jpeg.jpg", 134
+                                ),
+                                event.File(
+                                    FILES["tiny-gif.gif"].id,
+                                    "tiny-gif.gif",
+                                    26,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["tiny-jpeg.jpg"].id,
+                        "/tmp/received",
+                    ),
+                    action.Download(
+                        0,
+                        FILES["tiny-gif.gif"].id,
+                        "/tmp/received",
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(0, FILES["tiny-jpeg.jpg"].id),
+                            event.Start(0, FILES["tiny-gif.gif"].id),
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["tiny-jpeg.jpg"].id,
+                                "/tmp/received/tiny-jpeg.jpg",
+                            ),
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["tiny-gif.gif"].id,
+                                "/tmp/received/tiny-gif.gif",
+                            ),
+                        ],
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/tiny-jpeg.jpg", 134),
+                            action.File("/tmp/received/tiny-gif.gif", 26),
+                        ],
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "init",
+                            "result": 0,
+                            "lib_version": "*",
+                            "app_version": "test-framework",
+                            "prod": false,
+                            "init_duration": ">0"
+                        }""",
+                            """{
+                            "type": "file",
+                            "result": 0,
+                            "phase": "finished",
+                            "transfer_id": "*",
+                            "transfer_time": ">0",
+                            "transferred": 0,
+                            "path_id": \""""
+                            + FILES["tiny-jpeg.jpg"].id
+                            + """\",
+                            "direction": "download"
+                        }""",
+                            """{
+                            "type": "file",
+                            "result": 0,
+                            "phase": "finished",
+                            "transfer_id": "*",
+                            "transfer_time": ">0",
+                            "transferred": 0,
+                            "path_id": \""""
+                            + FILES["tiny-gif.gif"].id
+                            + """\",
+                            "direction": "download"
+                        }""",
+                        ]
+                    ),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario-analytics-3",
+        "Try to send a file to an offline peer, wait for retries to happen, verify moose events",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.Start("DROP_PEER_REN"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(0, FILES["testfile-big"].id),
+                            event.FinishFileUploaded(
+                                0,
+                                FILES["testfile-big"].id,
+                            ),
+                        ],
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "init",
+                            "result": 0,
+                            "lib_version": "*",
+                            "app_version": "test-framework",
+                            "prod": false,
+                            "init_duration": ">0"
+                        }""",
+                            """{
+                            "type": "transfer_intent",
+                            "transfer_id": "*",
+                            "path_ids": \""""
+                            + FILES["testfile-big"].id
+                            + """\",
+                            "extensions": "none",
+                            "mime_types": "unknown",
+                            "file_count": 1,
+                            "file_sizes": "10240",
+                            "transfer_size": 10240
+                        }""",
+                            """{
+                            "type": "transfer_state",
+                            "protocol_version": ">=5",
+                            "result": 0
+                        }""",
+                            """{
+                            "type": "file",
+                            "result": 0,
+                            "phase": "finished",
+                            "transfer_id": "*",
+                            "transfer_time": ">0",
+                            "transferred": 10240,
+                            "path_id": \""""
+                            + FILES["testfile-big"].id
+                            + """\",
+                            "direction": "upload"
+                        }""",
+                        ]
+                    ),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Sleep(4),
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received",
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(0, FILES["testfile-big"].id),
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["testfile-big"].id,
+                                "/tmp/received/testfile-big",
+                            ),
+                        ],
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "init",
+                            "result": 0,
+                            "lib_version": "*",
+                            "app_version": "test-framework",
+                            "prod": false,
+                            "init_duration": ">0"
+                        }""",
+                            """{
+                            "type": "file",
+                            "result": 0,
+                            "phase": "finished",
+                            "transfer_id": "*",
+                            "transfer_time": ">=0",
+                            "transferred": 10240,
+                            "path_id": \""""
+                            + FILES["testfile-big"].id
+                            + """\",
+                            "direction": "download"
+                        }""",
+                        ]
+                    ),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario-analytics-4",
+        "Send a file to a peer, break and continue the transfer, verify moose events",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.Start("DROP_PEER_REN"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
+                    action.SleepMs(300),
+                    action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
+                    action.Wait(
+                        event.Start(0, FILES["testfile-big"].id, transferred=None)
+                    ),
+                    action.Wait(event.FinishFileUploaded(0, FILES["testfile-big"].id)),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "init",
+                            "result": 0,
+                            "lib_version": "*",
+                            "app_version": "test-framework",
+                            "prod": false,
+                            "init_duration": ">0"
+                        }""",
+                            """{
+                            "type": "transfer_intent",
+                            "transfer_id": "*",
+                            "path_ids": \""""
+                            + FILES["testfile-big"].id
+                            + """\",
+                            "extensions": "none",
+                            "mime_types": "unknown",
+                            "file_count": 1,
+                            "file_sizes": "10240",
+                            "transfer_size": 10240
+                        }""",
+                            """{
+                            "type": "transfer_state",
+                            "protocol_version": ">=5",
+                            "result": 0
+                        }""",
+                            """{
+                            "type": "file",
+                            "result": 0,
+                            "phase": "paused",
+                            "transfer_id": "*",
+                            "transfer_time": ">0",
+                            "transferred": ">=0",
+                            "path_id": \""""
+                            + FILES["testfile-big"].id
+                            + """\",
+                            "direction": "upload"
+                        }""",
+                            """{
+                            "type": "transfer_state",
+                            "protocol_version": ">=5",
+                            "result": 0
+                        }""",
+                            """{
+                            "type": "file",
+                            "result": 0,
+                            "phase": "finished",
+                            "transfer_id": "*",
+                            "transfer_time": ">0",
+                            "transferred": 10240,
+                            "path_id": \""""
+                            + FILES["testfile-big"].id
+                            + """\",
+                            "direction": "upload"
+                        }""",
+                        ]
+                    ),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start(
+                        "DROP_PEER_STIMPY", dbpath="/tmp/db/stimpy-analytics-4.sqlite"
+                    ),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/21-1",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Stop(),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
+                    action.Start(
+                        "DROP_PEER_STIMPY", dbpath="/tmp/db/stimpy-analytics-4.sqlite"
+                    ),
+                    action.WaitForResume(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/21-1/*.dropdl-part",
+                    ),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-big"].id,
+                            "/tmp/received/21-1/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/21-1/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "init",
+                            "result": 0,
+                            "lib_version": "*",
+                            "app_version": "test-framework",
+                            "prod": false,
+                            "init_duration": ">0"
+                        }""",
+                            """{
+                            "type": "file",
+                            "result": 0,
+                            "phase": "paused",
+                            "transfer_id": "*",
+                            "transfer_time": ">=0",
+                            "transferred": ">=0",
+                            "path_id": \""""
+                            + FILES["testfile-big"].id
+                            + """\",
+                            "direction": "download"
+                        }""",
+                            """{
+                            "type": "init",
+                            "result": 0,
+                            "lib_version": "*",
+                            "app_version": "test-framework",
+                            "prod": false,
+                            "init_duration": ">0"
+                        }""",
+                            """{
+                            "type": "file",
+                            "result": 0,
+                            "phase": "finished",
+                            "transfer_id": "*",
+                            "transfer_time": ">=0",
+                            "transferred": 10240,
+                            "path_id": \""""
+                            + FILES["testfile-big"].id
+                            + """\",
+                            "direction": "download"
+                        }""",
+                        ]
+                    ),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario-analytics-5",
+        "Cause a transfer failure mid-transfer, verify moose events",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.Start("DROP_PEER_REN"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.ModifyFile("/tmp/testfile-big"),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0,
+                            FILES["testfile-big"].id,
+                            Error.FILE_MODIFIED,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "init",
+                            "result": 0,
+                            "lib_version": "*",
+                            "app_version": "test-framework",
+                            "prod": false,
+                            "init_duration": ">0"
+                        }""",
+                            """{
+                            "type": "transfer_intent",
+                            "transfer_id": "*",
+                            "path_ids": \""""
+                            + FILES["testfile-big"].id
+                            + """\",
+                            "extensions": "none",
+                            "mime_types": "unknown",
+                            "file_count": 1,
+                            "file_sizes": "10240",
+                            "transfer_size": 10240
+                        }""",
+                            """{
+                            "type": "transfer_state",
+                            "protocol_version": ">=5",
+                            "result": 0
+                        }""",
+                            """{
+                            "type": "file",
+                            "result": 28,
+                            "phase": "finished",
+                            "transfer_id": "*",
+                            "transfer_time": ">0",
+                            "transferred": ">=0",
+                            "path_id": \""""
+                            + FILES["testfile-big"].id
+                            + """\",
+                            "direction": "upload"
+                        }""",
+                        ]
+                    ),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.ConfigureNetwork(),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0,
+                            FILES["testfile-big"].id,
+                            Error.BAD_TRANSFER_STATE,
+                        )
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "init",
+                            "result": 0,
+                            "lib_version": "*",
+                            "app_version": "test-framework",
+                            "prod": false,
+                            "init_duration": ">0"
+                        }""",
+                            """{
+                            "type": "file",
+                            "result": 8,
+                            "phase": "finished",
+                            "transfer_id": "*",
+                            "transfer_time": ">=0",
+                            "transferred": ">=0",
+                            "path_id": \""""
+                            + FILES["testfile-big"].id
+                            + """\",
+                            "direction": "download"
+                        }""",
+                        ]
+                    ),
                 ]
             ),
         },
