@@ -8,12 +8,13 @@ use drop_analytics::{FileInfo, Moose};
 use drop_core::Status;
 use tokio::sync::{mpsc::UnboundedSender, RwLock};
 
-use crate::{Event, File, FileId, IncomingTransfer, OutgoingTransfer, Transfer};
+use crate::{utils, Event, File, FileId, IncomingTransfer, OutgoingTransfer, Transfer};
 
 struct FileEventTxInner {
     tx: UnboundedSender<Event>,
     moose: Arc<dyn Moose>,
     started: Option<Instant>,
+    transferred: u64,
 }
 
 pub type IncomingFileEventTx = FileEventTx<IncomingTransfer>;
@@ -41,6 +42,7 @@ impl FileEventTxFactory {
                 tx: self.events.clone(),
                 moose: self.moose.clone(),
                 started: None,
+                transferred: 0,
             }),
             xfer,
             file_id,
@@ -49,8 +51,8 @@ impl FileEventTxFactory {
 }
 
 impl<T: Transfer> FileEventTx<T> {
-    fn file_info(&self) -> Option<FileInfo> {
-        Some(self.xfer.files()[&self.file_id].info())
+    fn file_info(&self) -> FileInfo {
+        self.xfer.files()[&self.file_id].info()
     }
 
     async fn emit(&self, event: Event) {
@@ -83,12 +85,20 @@ impl<T: Transfer> FileEventTx<T> {
             return;
         };
 
-        lock.moose.service_quality_transfer_file(
-            status,
+        let phase = match event {
+            Event::FileUploadPaused { .. } | Event::FileDownloadPaused { .. } => {
+                drop_analytics::TransferFilePhase::Paused
+            }
+            _ => drop_analytics::TransferFilePhase::Finished,
+        };
+
+        lock.moose.event_transfer_file(
+            phase,
             self.xfer.id().to_string(),
             elapsed.as_millis() as i32,
-            T::direction(),
             self.file_info(),
+            utils::to_kb(lock.transferred),
+            status,
         );
 
         lock.tx
@@ -105,12 +115,20 @@ impl<T: Transfer> FileEventTx<T> {
             Duration::default()
         };
 
-        lock.moose.service_quality_transfer_file(
-            status,
+        let phase = match event {
+            Event::FileUploadPaused { .. } | Event::FileDownloadPaused { .. } => {
+                drop_analytics::TransferFilePhase::Paused
+            }
+            _ => drop_analytics::TransferFilePhase::Finished,
+        };
+
+        lock.moose.event_transfer_file(
+            phase,
             self.xfer.id().to_string(),
             elapsed.as_millis() as i32,
-            T::direction(),
             self.file_info(),
+            utils::to_kb(lock.transferred),
+            status,
         );
 
         lock.tx
@@ -124,12 +142,13 @@ impl<T: Transfer> FileEventTx<T> {
         if let Some(started) = lock.started.take() {
             let info = self.file_info();
 
-            lock.moose.service_quality_transfer_file(
-                Err(status as _),
+            lock.moose.event_transfer_file(
+                drop_analytics::TransferFilePhase::Finished,
                 self.xfer.id().to_string(),
                 started.elapsed().as_millis() as _,
-                T::direction(),
                 info,
+                utils::to_kb(lock.transferred),
+                Err(status as _),
             );
         }
     }
@@ -137,6 +156,7 @@ impl<T: Transfer> FileEventTx<T> {
 
 impl FileEventTx<IncomingTransfer> {
     pub async fn progress(&self, transfered: u64) {
+        self.inner.write().await.transferred = transfered;
         self.emit(crate::Event::FileDownloadProgress(
             self.xfer.clone(),
             self.file_id.clone(),
@@ -213,6 +233,7 @@ impl FileEventTx<OutgoingTransfer> {
     }
 
     pub async fn progress(&self, transfered: u64) {
+        self.inner.write().await.transferred = transfered;
         self.emit(crate::Event::FileUploadProgress(
             self.xfer.clone(),
             self.file_id.clone(),
@@ -267,12 +288,15 @@ impl<T: Transfer> Drop for FileEventTx<T> {
         if let Some(started) = self.inner.get_mut().started {
             let info = self.file_info();
 
-            self.inner.get_mut().moose.service_quality_transfer_file(
-                Err(Status::Canceled as _),
+            let transferred = self.inner.get_mut().transferred;
+
+            self.inner.get_mut().moose.event_transfer_file(
+                drop_analytics::TransferFilePhase::Finished,
                 self.xfer.id().to_string(),
                 started.elapsed().as_millis() as _,
-                T::direction(),
                 info,
+                utils::to_kb(transferred),
+                Err(Status::Canceled as _),
             );
         }
     }

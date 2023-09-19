@@ -26,37 +26,43 @@ pub enum TransferDirection {
     Download,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct TransferInfo {
-    pub mime_type_list: String,
-    pub extension_list: String,
-    pub file_size_list: String,
-    pub transfer_size_kb: i32,
-    pub file_count: i32,
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum TransferFilePhase {
+    #[serde(rename = "paused")]
+    Paused,
+    #[serde(rename = "finished")]
+    Finished,
 }
 
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+pub struct TransferInfo {
+    pub file_count: i32,
+    pub transfer_size: i32,
+    pub path_ids: String,
+    pub file_sizes: String,
+    pub extensions: String,
+    pub mime_types: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FileInfo {
-    pub mime_type: String,
-    pub extension: String,
-    pub size_kb: i32,
+    pub path_id: String,
+    pub direction: TransferDirection,
 }
 
 pub trait Moose: Send + Sync {
-    fn service_quality_initialization_init(&self, res: Result<(), i32>);
-    fn service_quality_transfer_batch(
+    fn event_init(&self, init_duration: i32, res: Result<(), i32>);
+    fn event_transfer(&self, transfer_id: String, transfer_info: TransferInfo);
+    fn event_transfer_start(&self, protocol_version: i32, transfer_id: String, retry_count: i32);
+    fn event_transfer_end(&self, transfer_id: String, res: Result<(), i32>);
+    fn event_transfer_file(
         &self,
-        transfer_id: String,
-        info: TransferInfo,
-        protocol_version: i32,
-    );
-    fn service_quality_transfer_file(
-        &self,
-        res: Result<(), i32>,
+        phase: TransferFilePhase,
         transfer_id: String,
         transfer_time: i32,
-        direction: TransferDirection,
-        info: Option<FileInfo>,
+        file_info: FileInfo,
+        transferred: i32,
+        res: Result<(), i32>,
     );
 
     /// Generic function for logging exceptions not related to specific

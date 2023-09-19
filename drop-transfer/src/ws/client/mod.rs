@@ -108,11 +108,15 @@ async fn connect_to_peer(
     logger: &Logger,
     alive: &AliveGuard,
 ) -> ControlFlow<()> {
-    let (socket, ver) = match establish_ws_conn(state, xfer, logger).await {
-        WsConnection::Connected(sock, ver) => (sock, ver),
+    let (socket, ver, retry_count) = match establish_ws_conn(state, xfer, logger).await {
+        WsConnection::Connected(sock, ver, retry_count) => (sock, ver, retry_count),
         WsConnection::Recoverable => return ControlFlow::Continue(()),
         WsConnection::Unrecoverable(err) => {
             error!(logger, "Could not connect to peer {}: {}", xfer.id(), err);
+
+            state
+                .moose
+                .event_transfer_end(xfer.id().to_string(), Err(i32::from(&err)));
 
             state
                 .event_tx
@@ -125,7 +129,7 @@ async fn connect_to_peer(
 
     state
         .moose
-        .service_quality_transfer_batch(xfer.id().to_string(), xfer.info(), ver.into());
+        .event_transfer_start(ver.into(), xfer.id().to_string(), retry_count);
 
     info!(logger, "Client connected, using version: {ver}");
 
@@ -217,7 +221,7 @@ async fn establish_ws_conn(
     };
 
     let client = WebSocketStream::from_raw_socket(socket, Role::Client, None).await;
-    WsConnection::Connected(client, ver)
+    WsConnection::Connected(client, ver, retry_count)
 }
 
 async fn make_request(

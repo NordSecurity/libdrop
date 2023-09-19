@@ -4,6 +4,7 @@ use std::{
     net::IpAddr,
     path::{Component, Path},
     sync::Arc,
+    time::Instant,
 };
 
 use drop_analytics::Moose;
@@ -58,6 +59,7 @@ impl Service {
         config: Arc<DropConfig>,
         moose: Arc<dyn Moose>,
         auth: Arc<auth::Context>,
+        init_time: Option<Instant>,
         #[cfg(unix)] fdresolv: Option<Arc<crate::FdResolver>>,
     ) -> Result<Self, Error> {
         let task = async {
@@ -99,14 +101,16 @@ impl Service {
         };
 
         let res = task.await;
-        moose.service_quality_initialization_init(res.to_status());
+        moose.event_init(
+            init_time.unwrap_or(Instant::now()).elapsed().as_millis() as i32,
+            res.to_status(),
+        );
 
         res
     }
 
     pub async fn stop(self) {
         self.stop.cancel();
-
         self.waiter.wait_for_all().await;
     }
 
@@ -199,12 +203,21 @@ impl Service {
 
     pub async fn send_request(&mut self, xfer: crate::OutgoingTransfer) {
         let xfer = Arc::new(xfer);
+
+        self.state
+            .moose
+            .event_transfer(xfer.id().to_string(), xfer.info());
+
         if let Err(err) = self
             .state
             .transfer_manager
             .insert_outgoing(xfer.clone())
             .await
         {
+            self.state
+                .moose
+                .event_transfer_end(xfer.id().to_string(), Err(i32::from(&err)));
+
             self.state
                 .event_tx
                 .send(Event::OutgoingTransferFailed(xfer.clone(), err, true))
