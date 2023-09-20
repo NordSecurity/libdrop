@@ -3034,6 +3034,126 @@ scenarios = [
         },
     ),
     Scenario(
+        "scenario15-3",
+        "Send two different directories with the same name, their content should not being merged",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.WaitForAnotherPeer(),
+                    action.Start("DROP_PEER_REN"),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY", ["/tmp/name", "/tmp/different/name"]
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["name/file-01"].id,
+                                    "name/file-01",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["different/name/file-02"].id,
+                                    "name(1)/file-02",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(
+                                0,
+                                FILES["name/file-01"].id,
+                            ),
+                            event.Start(
+                                0,
+                                FILES["different/name/file-02"].id,
+                            ),
+                            event.FinishFileUploaded(
+                                0,
+                                FILES["name/file-01"].id,
+                            ),
+                            event.FinishFileUploaded(
+                                0,
+                                FILES["different/name/file-02"].id,
+                            ),
+                        ]
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["name/file-01"].id,
+                                    "name/file-01",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["different/name/file-02"].id,
+                                    "name(1)/file-02",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["name/file-01"].id,
+                        "/tmp/received/15-3",
+                    ),
+                    action.Download(
+                        0,
+                        FILES["different/name/file-02"].id,
+                        "/tmp/received/15-3",
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(
+                                0,
+                                FILES["name/file-01"].id,
+                            ),
+                            event.Start(
+                                0,
+                                FILES["different/name/file-02"].id,
+                            ),
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["name/file-01"].id,
+                                "/tmp/received/15-3/name/file-01",
+                            ),
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["different/name/file-02"].id,
+                                "/tmp/received/15-3/name(1)/file-02",
+                            ),
+                        ]
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/15-3/name/file-01", 1048576),
+                            action.File("/tmp/received/15-3/name(1)/file-02", 1048576),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
         "scenario17",
         "Modify the file during the transfer, expect error",
         {
