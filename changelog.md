@@ -1,3 +1,11 @@
+### v5.2.0
+### **Golden Bullet**
+---
+* Use unbounded events queue in order to disable back pressure on the connection handlers in case the event callback blocks.
+
+---
+<br>
+
 ### v5.1.0
 ### **Silver Bullet**
 ---
