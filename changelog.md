@@ -3,6 +3,7 @@
 ---
 * Use unbounded events queue in order to disable back pressure on the connection handlers in case the event callback blocks.
 * Improve the suppression of the `TransferRequest` and `TransferCancelled` event pair for cancelled transfers.
+* Fix same named directories being merged on the sender side
 
 ---
 <br>
