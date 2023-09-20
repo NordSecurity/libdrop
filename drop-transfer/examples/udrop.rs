@@ -13,7 +13,7 @@ use clap::{arg, command, value_parser, ArgAction, Command};
 use drop_auth::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
 use drop_config::DropConfig;
 use drop_storage::Storage;
-use drop_transfer::{auth, Event, File, FileToSend, OutgoingTransfer, Service, Transfer};
+use drop_transfer::{auth, file, Event, File, OutgoingTransfer, Service, Transfer};
 use slog::{o, Drain, Logger};
 use slog_scope::info;
 use tokio::sync::mpsc;
@@ -315,18 +315,17 @@ async fn main() -> anyhow::Result<()> {
 
         info!("Sending transfer request to {}", addr);
 
-        let mut files = Vec::new();
+        let mut files = file::GatherCtx::new(&config);
         for path in matches
             .get_many::<String>("FILE")
             .context("Missing path list")?
         {
-            files.extend(
-                FileToSend::from_path(path, &config)
-                    .context("Cannot build transfer from the files provided")?,
-            );
+            files
+                .gather_from_path(path)
+                .context("Cannot build transfer from the files provided")?;
         }
 
-        Some(OutgoingTransfer::new(*addr, files, &config)?)
+        Some(OutgoingTransfer::new(*addr, files.take(), &config)?)
     } else {
         None
     };
