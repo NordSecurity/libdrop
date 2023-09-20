@@ -130,7 +130,7 @@ impl NordDropFFI {
             }
         };
 
-        let (tx, mut rx) = mpsc::channel::<drop_transfer::Event>(16);
+        let (tx, mut rx) = mpsc::unbounded_channel();
 
         let storage = Arc::new(open_database(
             &self.config.drop.storage_path,
