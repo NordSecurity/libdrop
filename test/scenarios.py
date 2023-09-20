@@ -6541,13 +6541,13 @@ scenarios = [
                 [
                     action.WaitForAnotherPeer(),
                     action.ExpectAnyError(
-                        action.Repeated(
+                        action.Parallel(
                             [
                                 action.MakeHttpGetRequest(
                                     "DROP_PEER_STIMPY", "/non-existing-path", 404
                                 )
-                            ],
-                            150,
+                            ]
+                            * 150,
                         ),
                     ),
                     # check if we get unauthorized(ddos protection)
