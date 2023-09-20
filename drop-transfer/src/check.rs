@@ -53,7 +53,6 @@ async fn run(state: Arc<State>, xfer: Arc<IncomingTransfer>, logger: Logger) {
             state
                 .event_tx
                 .send(crate::Event::IncomingTransferCanceled(xfer.clone(), true))
-                .await
                 .expect("Could not send a file cancelled event, channel closed");
         }
         _ => (),

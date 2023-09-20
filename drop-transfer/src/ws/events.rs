@@ -6,12 +6,12 @@ use std::{
 
 use drop_analytics::{FileInfo, Moose};
 use drop_core::Status;
-use tokio::sync::{mpsc::Sender, RwLock};
+use tokio::sync::{mpsc::UnboundedSender, RwLock};
 
 use crate::{Event, File, FileId, IncomingTransfer, OutgoingTransfer, Transfer};
 
 struct FileEventTxInner {
-    tx: Sender<Event>,
+    tx: UnboundedSender<Event>,
     moose: Arc<dyn Moose>,
     started: Option<Instant>,
 }
@@ -26,12 +26,12 @@ pub struct FileEventTx<T: Transfer> {
 }
 
 pub struct FileEventTxFactory {
-    events: Sender<Event>,
+    events: UnboundedSender<Event>,
     moose: Arc<dyn Moose>,
 }
 
 impl FileEventTxFactory {
-    pub fn new(events: Sender<Event>, moose: Arc<dyn Moose>) -> Self {
+    pub fn new(events: UnboundedSender<Event>, moose: Arc<dyn Moose>) -> Self {
         Self { events, moose }
     }
 
@@ -62,7 +62,6 @@ impl<T: Transfer> FileEventTx<T> {
 
         lock.tx
             .send(event)
-            .await
             .expect("Event channel shouldn't be closed");
     }
 
@@ -72,7 +71,6 @@ impl<T: Transfer> FileEventTx<T> {
 
         lock.tx
             .send(event)
-            .await
             .expect("Event channel shouldn't be closed");
     }
 
@@ -95,7 +93,6 @@ impl<T: Transfer> FileEventTx<T> {
 
         lock.tx
             .send(event)
-            .await
             .expect("Event channel shouldn't be closed");
     }
 
@@ -118,7 +115,6 @@ impl<T: Transfer> FileEventTx<T> {
 
         lock.tx
             .send(event)
-            .await
             .expect("Event channel shouldn't be closed");
     }
 
