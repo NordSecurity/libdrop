@@ -7961,6 +7961,7 @@ scenarios = [
             ),
             "DROP_PEER_STIMPY": ActionList(
                 [
+                    action.WaitForAnotherPeer(),
                     action.ConfigureNetwork(latency="300ms"),
                     action.Start("DROP_PEER_STIMPY"),
                     action.Wait(
@@ -7995,6 +7996,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
+                    action.WaitForAnotherPeer(),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
