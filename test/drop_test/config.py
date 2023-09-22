@@ -117,6 +117,12 @@ FILES = {
     "duplicate/testfile-big": TestFile(
         size=20 * 1024, id="Jr2sHMHPjPP5Y19bGJMf17GeT3B4Jrs1ozB1UnFcRzo"
     ),
+    "name/file-01": TestFile(
+        size=1 * 1024, id="weFjoDnlpN1C-pig-4GDPt1l38vuoStZpmUWedbSpYw"
+    ),
+    "different/name/file-02": TestFile(
+        size=1 * 1024, id="I_kCIoGtH-r0iHxtMQDgSLU84lNSHeGbemic7YGH_dU"
+    ),
 }
 
 DBFILES = {"26-1-corrupted.sqlite": b"this is a corrupted sqlite file"}
