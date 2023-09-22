@@ -2,6 +2,7 @@
 ### **Golden Bullet**
 ---
 * Use unbounded events queue in order to disable back pressure on the connection handlers in case the event callback blocks.
+* Improve the suppression of the `TransferRequest` and `TransferCancelled` event pair for cancelled transfers.
 
 ---
 <br>

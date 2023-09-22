@@ -8426,4 +8426,41 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario44",
+        "Check if the transfer request and cancelation are suppressed within a huge latency network",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.WaitForAnotherPeer(),
+                    action.ConfigureNetwork(latency="1000ms"),
+                    action.Start("DROP_PEER_REN"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.Sleep(6),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.NoEvent(duration=8),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]
