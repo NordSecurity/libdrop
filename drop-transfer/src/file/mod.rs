@@ -148,24 +148,17 @@ impl FileToRecv {
 }
 
 impl FileToSend {
-    fn from_path(
-        path: impl Into<PathBuf>,
-        name: &Path,
-        config: &DropConfig,
-    ) -> Result<Vec<Self>, Error> {
-        let path = path.into();
-        let meta = fs::symlink_metadata(&path)?;
-        let abspath = crate::utils::make_path_absolute(&path)?;
+    fn from_path(path: impl AsRef<Path>, size: u64) -> crate::Result<Self> {
+        let path = path.as_ref();
+        let abspath = crate::utils::make_path_absolute(path)?;
         let file_id = file_id_from_path(&abspath)?;
 
-        let files = if meta.is_dir() {
-            Self::walk(&path, name, config)?
-        } else {
-            let file = Self::new(FileSubPath::from_path(name)?, abspath, meta.len(), file_id);
-            vec![file]
-        };
-
-        Ok(files)
+        Ok(Self::new(
+            FileSubPath::from_file_name(path)?,
+            abspath,
+            size,
+            file_id,
+        ))
     }
 
     pub(crate) fn new(subpath: FileSubPath, abspath: PathBuf, size: u64, file_id: FileId) -> Self {
@@ -342,7 +335,6 @@ fn infer_mime(mut reader: impl io::Read) -> io::Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
 
     const TEST: &[u8] = b"abc";
     const EXPECTED: &[u8] = b"\xba\x78\x16\xbf\x8f\x01\xcf\xea\x41\x41\x40\xde\x5d\xae\x22\x23\xb0\x03\x61\xa3\x96\x17\x7a\x9c\xb4\x10\xff\x61\xf2\x00\x15\xad";
@@ -357,22 +349,12 @@ mod tests {
     async fn file_checksum() {
         use std::io::Write;
 
-        use drop_config::DropConfig;
-
         let csum = {
             let mut tmp = tempfile::NamedTempFile::new().expect("Failed to create tmp file");
             tmp.write_all(TEST).unwrap();
 
-            let file = &super::FileToSend::from_path(
-                tmp.path(),
-                Path::new(tmp.path().file_name().unwrap()),
-                &DropConfig::default(),
-            )
-            .unwrap()[0];
-            let size = file.size;
-
-            assert_eq!(size, TEST.len() as u64);
-
+            let size = TEST.len() as _;
+            let file = super::FileToSend::from_path(tmp.path(), size).unwrap();
             file.checksum(size).await.unwrap()
         };
 
