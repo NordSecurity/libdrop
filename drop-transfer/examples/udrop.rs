@@ -148,7 +148,7 @@ fn print_event(ev: &Event) {
 async fn listen(
     service: &mut Service,
     storage: &Storage,
-    rx: &mut mpsc::Receiver<Event>,
+    rx: &mut mpsc::UnboundedReceiver<Event>,
     out_dir: &Path,
 ) -> anyhow::Result<()> {
     info!("Awaiting events…");
@@ -331,7 +331,7 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
-    let (tx, mut rx) = mpsc::channel(256);
+    let (tx, mut rx) = mpsc::unbounded_channel();
     let addr = *matches
         .get_one::<IpAddr>("listen")
         .expect("Missing `listen` flag");
@@ -382,7 +382,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn on_stop(service: Service, rx: &mut mpsc::Receiver<Event>, storage: &Storage) {
+async fn on_stop(service: Service, rx: &mut mpsc::UnboundedReceiver<Event>, storage: &Storage) {
     info!("Stopping the service");
 
     service.stop().await;

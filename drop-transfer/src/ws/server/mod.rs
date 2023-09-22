@@ -508,7 +508,6 @@ impl RunContext<'_> {
             self.state
                 .event_tx
                 .send(Event::RequestReceived(xfer.clone()))
-                .await
                 .expect("Failed to notify receiving peer!");
 
             check::spawn(
@@ -552,7 +551,6 @@ impl RunContext<'_> {
                     self.state
                         .event_tx
                         .send(crate::Event::IncomingTransferCanceled(xfer.clone(), true))
-                        .await
                         .expect("Could not send a file cancelled event, channel closed");
                 }
                 _ => (),
