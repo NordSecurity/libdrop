@@ -2,6 +2,7 @@
 use std::os::unix::prelude::*;
 use std::{
     collections::HashSet,
+    fs,
     path::{Path, PathBuf},
 };
 
@@ -47,7 +48,7 @@ impl<'a> GatherCtx<'a> {
         std::mem::take(&mut self.files)
     }
 
-    fn fetch_free_name(&mut self, path: &Path) -> crate::Result<PathBuf> {
+    fn fetch_free_dir_name(&mut self, path: &Path) -> crate::Result<PathBuf> {
         let file_name = path
             .file_name()
             .ok_or_else(|| crate::Error::BadPath("Missing file name".into()))?;
@@ -62,10 +63,19 @@ impl<'a> GatherCtx<'a> {
 
     pub fn gather_from_path(&mut self, path: impl AsRef<Path>) -> crate::Result<&mut Self> {
         let path = path.as_ref();
-        let name = self.fetch_free_name(path)?;
 
-        let batch = super::FileToSend::from_path(path, &name, self.config)?;
-        self.files.extend(batch);
+        let meta = fs::symlink_metadata(path)?;
+
+        if meta.is_dir() {
+            let name = self.fetch_free_dir_name(path)?;
+
+            let batch = super::FileToSend::walk(path, &name, self.config)?;
+            self.files.extend(batch);
+        } else {
+            let file = super::FileToSend::from_path(path, meta.len())?;
+            self.files.push(file);
+        }
+
         Ok(self)
     }
 
@@ -100,15 +110,9 @@ impl<'a> GatherCtx<'a> {
             }
         };
 
-        let name = self.fetch_free_name(path)?;
-
-        let file = FileToSend::from_fd(
-            path,
-            FileSubPath::from_path(name)?,
-            uri,
-            fd,
-            self.files.len(),
-        )?;
+        // In case of FD, its allways a file
+        let subpath = FileSubPath::from_file_name(path)?;
+        let file = FileToSend::from_fd(path, subpath, uri, fd, self.files.len())?;
 
         self.files.push(file);
         Ok(self)
