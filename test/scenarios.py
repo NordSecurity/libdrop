@@ -6541,13 +6541,13 @@ scenarios = [
                 [
                     action.WaitForAnotherPeer(),
                     action.ExpectAnyError(
-                        action.Repeated(
+                        action.Parallel(
                             [
                                 action.MakeHttpGetRequest(
                                     "DROP_PEER_STIMPY", "/non-existing-path", 404
                                 )
-                            ],
-                            150,
+                            ]
+                            * 150,
                         ),
                     ),
                     # check if we get unauthorized(ddos protection)
@@ -7936,7 +7936,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.ConfigureNetwork(latency="300ms"),
+                    action.ConfigureNetwork(latency="1000ms"),
                     action.Start("DROP_PEER_REN", "/tmp/db/38.sqlite"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
@@ -7952,7 +7952,7 @@ scenarios = [
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Stop(),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.SleepMs(100),
+                    action.SleepMs(400),
                     action.Start("DROP_PEER_REN", "/tmp/db/38.sqlite"),
                     action.Wait(event.FinishTransferCanceled(0, True)),
                     action.NoEvent(),
@@ -7962,7 +7962,7 @@ scenarios = [
             "DROP_PEER_STIMPY": ActionList(
                 [
                     action.WaitForAnotherPeer(),
-                    action.ConfigureNetwork(latency="300ms"),
+                    action.ConfigureNetwork(latency="1000ms"),
                     action.Start("DROP_PEER_STIMPY"),
                     action.Wait(
                         event.Receive(
@@ -7981,10 +7981,10 @@ scenarios = [
                         "/tmp/received/38",
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
-                    action.SleepMs(100),
+                    action.SleepMs(400),
                     action.CancelTransferRequest(0),
                     action.Wait(event.FinishTransferCanceled(0, False)),
-                    action.NoEvent(duration=5),
+                    action.NoEvent(duration=10),
                     action.Stop(),
                 ]
             ),
