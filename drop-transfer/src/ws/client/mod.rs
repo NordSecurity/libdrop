@@ -312,8 +312,6 @@ impl RunContext<'_> {
         socket: &mut WebSocket,
         handler: &mut impl HandlerInit,
     ) -> crate::Result<Option<UnboundedReceiver<ClientReq>>> {
-        handler.start(socket, self.xfer).await?;
-
         let (tx, rx) = mpsc::unbounded_channel();
         match self
             .state
@@ -321,7 +319,7 @@ impl RunContext<'_> {
             .outgoing_connected(self.xfer.id(), tx)
             .await
         {
-            Ok(()) => (),
+            Ok(()) => handler.start(socket, self.xfer).await?,
             Err(crate::Error::BadTransfer) => return Ok(None),
             Err(err) => return Err(err),
         }
