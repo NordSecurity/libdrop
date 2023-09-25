@@ -9,6 +9,9 @@ mkdir -p /tmp/nested/big
 mkdir -p /tmp/duplicate
 mkdir -p /tmp/name
 mkdir -p /tmp/different/name
+mkdir -p /tmp/empty-dir
+mkdir -p /tmp/empty-dir/one
+mkdir -p /tmp/empty-dir/one/two
 
 # FILES dictionary
 dd bs=1024K count=1 if=/dev/urandom of="/tmp/thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
