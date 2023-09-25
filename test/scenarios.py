@@ -3354,6 +3354,28 @@ scenarios = [
         },
     ),
     Scenario(
+        "scenario17-1",
+        "Try to send an empty directory, expect error",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN"),
+                    action.ConfigureNetwork(),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransferFails("DROP_PEER_STIMPY", "/tmp/empty-dir"),
+                    action.NoEvent(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.ConfigureNetwork(),
+                    action.NoEvent(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
         "scenario18",
         "Check if temporary file gets deleted after successful transfer",
         {

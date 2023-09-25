@@ -48,6 +48,8 @@ pub enum Error {
     ChecksumMismatch,
     #[error("File in mismatched state: {0:?}")]
     FileStateMismatch(FileTerminalState),
+    #[error("Empty transfer")]
+    EmptyTransfer,
 }
 
 impl Error {
@@ -100,6 +102,7 @@ impl From<&Error> for u32 {
             Error::FileStateMismatch(FileTerminalState::Rejected) => Status::FileRejected as _,
             Error::FileStateMismatch(FileTerminalState::Completed) => Status::FileFinished as _,
             Error::FileStateMismatch(FileTerminalState::Failed) => Status::FileFailed as _,
+            Error::EmptyTransfer => Status::EmptyTransfer as _,
         }
     }
 }

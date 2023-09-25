@@ -78,6 +78,10 @@ impl<F: File> TransferData<F> {
         uuid: Uuid,
         config: &DropConfig,
     ) -> crate::Result<Self> {
+        if files.is_empty() {
+            return Err(Error::EmptyTransfer);
+        }
+
         if files.len() > config.transfer_file_limit {
             return Err(Error::TransferLimitsExceeded);
         }
