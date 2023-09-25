@@ -21,6 +21,7 @@ pub enum Status {
     FileRejected = 34,
     FileFailed = 35,
     FileFinished = 36,
+    EmptyTransfer = 37,
 }
 
 impl serde::Serialize for Status {
