@@ -130,7 +130,7 @@ impl NordDropFFI {
             }
         };
 
-        let (tx, mut rx) = mpsc::channel::<drop_transfer::Event>(16);
+        let (tx, mut rx) = mpsc::unbounded_channel();
 
         let storage = Arc::new(open_database(
             &self.config.drop.storage_path,
@@ -515,10 +515,14 @@ impl NordDropFFI {
         &self,
         descriptors: &[TransferDescriptor],
     ) -> Result<Vec<FileToSend>> {
-        let mut files = Vec::new();
+        let mut gather = drop_transfer::file::GatherCtx::new(&self.config.drop);
 
-        #[allow(unused_variables)]
-        for (i, desc) in descriptors.iter().enumerate() {
+        #[cfg(unix)]
+        if let Some(fdresolv) = self.fdresolv.as_ref() {
+            gather.with_fd_resover(fdresolv.as_ref());
+        }
+
+        for desc in descriptors {
             if let Some(content_uri) = &desc.content_uri {
                 #[cfg(target_os = "windows")]
                 {
@@ -531,53 +535,29 @@ impl NordDropFFI {
 
                 #[cfg(not(target_os = "windows"))]
                 {
-                    let fd = if let Some(fd) = desc.fd {
-                        fd
-                    } else {
-                        let fdresolv = if let Some(fdresolv) = self.fdresolv.as_ref() {
-                            fdresolv
-                        } else {
+                    gather
+                        .gather_from_content_uri(&desc.path.0, content_uri.clone(), desc.fd)
+                        .map_err(|err| {
                             error!(
                                 self.logger,
-                                "Content URI provided but RD resolver callback is not set up"
-                            );
-                            return Err(ffi::types::NORDDROP_RES_TRANSFER_CREATE);
-                        };
-
-                        if let Some(fd) = fdresolv(content_uri.as_str()) {
-                            fd
-                        } else {
-                            error!(self.logger, "Failed to fetch FD for file: {content_uri}");
-                            return Err(ffi::types::NORDDROP_RES_TRANSFER_CREATE);
-                        }
-                    };
-
-                    let file = FileToSend::from_fd(&desc.path.0, content_uri.clone(), fd, i)
-                        .map_err(|e| {
-                            error!(
-                                self.logger,
-                                "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
+                                "Could not open file {desc:?} for transfer ({descriptors:?}): \
+                                 {err}",
                             );
                             ffi::types::NORDDROP_RES_TRANSFER_CREATE
                         })?;
-
-                    files.push(file);
                 }
             } else {
-                let batch =
-                    FileToSend::from_path(&desc.path.0, &self.config.drop).map_err(|e| {
-                        error!(
-                            self.logger,
-                            "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
-                        );
-                        ffi::types::NORDDROP_RES_TRANSFER_CREATE
-                    })?;
-
-                files.extend(batch);
+                gather.gather_from_path(&desc.path.0).map_err(|e| {
+                    error!(
+                        self.logger,
+                        "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
+                    );
+                    ffi::types::NORDDROP_RES_TRANSFER_CREATE
+                })?;
             }
         }
 
-        Ok(files)
+        Ok(gather.take())
     }
 }
 

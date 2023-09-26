@@ -25,31 +25,29 @@ STDERR_ERR_PATTERNS = [
 def prepare_docker() -> docker.DockerClient:
     # Initialize docker client
     client = docker.DockerClient(base_url="unix://var/run/docker.sock")
+    return client
 
-    # Network creation
-    ipv4_net = client.networks.create(
-        name="net4",
-        driver="bridge",
-        attachable=True,
-        ipam=docker.types.IPAMConfig(
-            pool_configs=[docker.types.IPAMPool(subnet="172.30.0.0/16")]
-        ),
-    )
 
-    ipv6_net = client.networks.create(
-        name="net6",
+def create_network(client: docker.DockerClient, name: str, num: int):
+    subnetv6 = f"fd3e:0e6d:45fe:b0c2:{num:x}::/80"
+    gatev6 = f"fd3e:0e6d:45fe:b0c2:{num:x}::1"
+
+    subnetv4 = f"192.168.{num}.0/24"
+    gatev4 = f"192.168.{num}.1"
+
+    network = client.networks.create(
+        name=name,
         driver="bridge",
         enable_ipv6="true",
         ipam=docker.types.IPAMConfig(
             pool_configs=[
-                docker.types.IPAMPool(
-                    subnet="fd3e:0e6d:45fe:b0c2::/64", gateway="fd3e:0e6d:45fe:b0c2::1"
-                )
-            ]
+                docker.types.IPAMPool(subnet=subnetv6, gateway=gatev6),
+                docker.types.IPAMPool(subnet=subnetv4, gateway=gatev4),
+            ],
         ),
     )
 
-    return client
+    return network
 
 
 class ContainerHolder:
@@ -79,9 +77,6 @@ class ContainerHolder:
 
     def name(self) -> str:
         return self._container.name
-
-    def run(self):
-        self._container.run()
 
     def logs(self):
         logs = self._container.logs().decode("utf-8")
@@ -116,6 +111,7 @@ def run():
 
     scenario_results: dict[str, list[ContainerHolder]] = {}
 
+    networks = []
     already_done = []
 
     # a semaphore is not actually needed as there's no multithreading
@@ -149,6 +145,9 @@ def run():
                     f"Executing scenario {i+1}/{len(scenarios)}({scenario.id()}): {scenario.desc()}. Runners: {scenario.runners()}",
                     flush=True,
                 )
+
+                netname = f"net-{scenario.id()}"
+                networks.append(create_network(client, netname, i + 1))
 
                 scenario_results[scenario.id()] = []
                 for runner in scenario.runners():
@@ -185,7 +184,7 @@ def run():
                         environment=env,
                         hostname=f"{hostname}",
                         detach=True,
-                        network="net6",
+                        network=netname,
                     )
 
                     info = ContainerHolder(container, scenario.id(), TESTCASE_TIMEOUT)
@@ -214,30 +213,36 @@ def run():
         flush=True,
     )
     total_scenarios_count = len(scenarios)
-    failed_scenarios_count = 0
+    failed_scenarios = []
+
+    for network in networks:
+        network.remove()
+
     for scenario in scenarios:
         for container in scenario_results[scenario.id()]:
             success, reason = container.success()
             if not success:
-                failed_scenarios_count += 1
+                failed_scenarios.append(scenario)
                 break
 
     print(
-        f"*** Test suite results: {total_scenarios_count} scenarios, {failed_scenarios_count} failed. Succeeded ({round((1.0-(failed_scenarios_count/total_scenarios_count)) * 100, 2)}%), on average one scenario took {math.ceil(total_time/total_scenarios_count)} seconds",
+        f"*** Test suite results: {total_scenarios_count} scenarios, {len(failed_scenarios)} failed. Succeeded ({round((1.0-(len(failed_scenarios)/total_scenarios_count)) * 100, 2)}%), on average one scenario took {math.ceil(total_time/total_scenarios_count)} seconds",
         flush=True,
     )
 
-    if failed_scenarios_count > 0:
-        for scenario in scenarios:
+    if len(failed_scenarios) == 0:
+        print("Success! All tests passed!", flush=True)
+        exit(0)
+    else:
+        for scenario in failed_scenarios:
+            print(
+                f"*** Scenario {scenario.id()} failed",
+                flush=True,
+            )
+            print(f"*** Scenario {scenario.id()} logs:", flush=True)
             for container in scenario_results[scenario.id()]:
-                success, reason = container.success()
-                if not success:
-                    print(
-                        f"*** Container {container.name()} exited with failure: {reason}",
-                        flush=True,
-                    )
-                    print(f"*** Logs:", flush=True)
-                    print(container.logs(), flush=True)
+                print(f"*** Container {container.name()} logs:", flush=True)
+                print(container.logs(), flush=True)
 
         print("Failure summary:", flush=True)
         for scenario in scenarios:
@@ -253,9 +258,6 @@ def run():
                     flush=True,
                 )
         exit(1)
-    else:
-        print("Success! All tests passed!", flush=True)
-        exit(0)
 
 
 if __name__ == "__main__":

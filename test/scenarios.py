@@ -3034,6 +3034,126 @@ scenarios = [
         },
     ),
     Scenario(
+        "scenario15-3",
+        "Send two different directories with the same name, their content should not being merged",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.WaitForAnotherPeer(),
+                    action.Start("DROP_PEER_REN"),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY", ["/tmp/name", "/tmp/different/name"]
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["name/file-01"].id,
+                                    "name/file-01",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["different/name/file-02"].id,
+                                    "name(1)/file-02",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(
+                                0,
+                                FILES["name/file-01"].id,
+                            ),
+                            event.Start(
+                                0,
+                                FILES["different/name/file-02"].id,
+                            ),
+                            event.FinishFileUploaded(
+                                0,
+                                FILES["name/file-01"].id,
+                            ),
+                            event.FinishFileUploaded(
+                                0,
+                                FILES["different/name/file-02"].id,
+                            ),
+                        ]
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["name/file-01"].id,
+                                    "name/file-01",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["different/name/file-02"].id,
+                                    "name(1)/file-02",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["name/file-01"].id,
+                        "/tmp/received/15-3",
+                    ),
+                    action.Download(
+                        0,
+                        FILES["different/name/file-02"].id,
+                        "/tmp/received/15-3",
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(
+                                0,
+                                FILES["name/file-01"].id,
+                            ),
+                            event.Start(
+                                0,
+                                FILES["different/name/file-02"].id,
+                            ),
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["name/file-01"].id,
+                                "/tmp/received/15-3/name/file-01",
+                            ),
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["different/name/file-02"].id,
+                                "/tmp/received/15-3/name(1)/file-02",
+                            ),
+                        ]
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/15-3/name/file-01", 1048576),
+                            action.File("/tmp/received/15-3/name(1)/file-02", 1048576),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
         "scenario17",
         "Modify the file during the transfer, expect error",
         {
@@ -3229,6 +3349,28 @@ scenarios = [
                         }""",
                         ]
                     ),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario17-1",
+        "Try to send an empty directory, expect error",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN"),
+                    action.ConfigureNetwork(),
+                    action.WaitForAnotherPeer(),
+                    action.NewTransferFails("DROP_PEER_STIMPY", "/tmp/empty-dir"),
+                    action.NoEvent(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.ConfigureNetwork(),
+                    action.NoEvent(),
                 ]
             ),
         },
@@ -6539,15 +6681,15 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.SleepMs(500),
+                    action.WaitForAnotherPeer(),
                     action.ExpectAnyError(
-                        action.Repeated(
+                        action.Parallel(
                             [
                                 action.MakeHttpGetRequest(
                                     "DROP_PEER_STIMPY", "/non-existing-path", 404
                                 )
-                            ],
-                            150,
+                            ]
+                            * 150,
                         ),
                     ),
                     # check if we get unauthorized(ddos protection)
@@ -6576,6 +6718,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
+                    action.WaitForAnotherPeer(),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/31-1-ren.sqlite"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -7788,6 +7931,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
+                    action.WaitForAnotherPeer(),
                     action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
@@ -7934,7 +8078,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.ConfigureNetwork(latency="300ms"),
+                    action.ConfigureNetwork(latency="1000ms"),
                     action.Start("DROP_PEER_REN", "/tmp/db/38.sqlite"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
@@ -7950,7 +8094,7 @@ scenarios = [
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Stop(),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.SleepMs(100),
+                    action.SleepMs(400),
                     action.Start("DROP_PEER_REN", "/tmp/db/38.sqlite"),
                     action.Wait(event.FinishTransferCanceled(0, True)),
                     action.NoEvent(),
@@ -7959,7 +8103,8 @@ scenarios = [
             ),
             "DROP_PEER_STIMPY": ActionList(
                 [
-                    action.ConfigureNetwork(latency="300ms"),
+                    action.WaitForAnotherPeer(),
+                    action.ConfigureNetwork(latency="1000ms"),
                     action.Start("DROP_PEER_STIMPY"),
                     action.Wait(
                         event.Receive(
@@ -7978,10 +8123,10 @@ scenarios = [
                         "/tmp/received/38",
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
-                    action.SleepMs(100),
+                    action.SleepMs(400),
                     action.CancelTransferRequest(0),
                     action.Wait(event.FinishTransferCanceled(0, False)),
-                    action.NoEvent(duration=5),
+                    action.NoEvent(duration=10),
                     action.Stop(),
                 ]
             ),
@@ -7993,6 +8138,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
+                    action.WaitForAnotherPeer(),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -8417,6 +8563,43 @@ scenarios = [
                     action.Stop(),
                     action.Start("DROP_PEER_STIMPY", dbpath="/tmp/db/43-stimpy.sqlite"),
                     action.NoEvent(4),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario44",
+        "Check if the transfer request and cancelation are suppressed within a huge latency network",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.WaitForAnotherPeer(),
+                    action.ConfigureNetwork(latency="1000ms"),
+                    action.Start("DROP_PEER_REN"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
+                    action.Sleep(6),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.NoEvent(duration=8),
                     action.Stop(),
                 ]
             ),
