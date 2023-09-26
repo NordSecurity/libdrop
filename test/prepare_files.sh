@@ -7,6 +7,11 @@ mkdir -p /tmp/deep/path
 mkdir -p /tmp/deep/another-path
 mkdir -p /tmp/nested/big
 mkdir -p /tmp/duplicate
+mkdir -p /tmp/name
+mkdir -p /tmp/different/name
+mkdir -p /tmp/empty-dir
+mkdir -p /tmp/empty-dir/one
+mkdir -p /tmp/empty-dir/one/two
 
 # FILES dictionary
 dd bs=1024K count=1 if=/dev/urandom of="/tmp/thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
@@ -29,10 +34,13 @@ dd bs=10240K count=1 if=/dev/urandom of="/tmp/testfile-bulk-10"
 dd bs=10240K count=1 if=/dev/urandom of="/tmp/nested/big/testfile-01"
 dd bs=10240K count=1 if=/dev/urandom of="/tmp/nested/big/testfile-02"
 dd bs=1024K count=1 if=/dev/urandom of="/tmp/testfile.small.with.complicated.extension"
-dd bs=1024K count=1 if=/dev/urandom of="/tmp/with-illegal-char-\x0A-"
+dd bs=1024K count=1 if=/dev/urandom of="/tmp/with-illegal-char-
+-"
 dd bs=1024K count=1 if=/dev/urandom of="/tmp/duplicate/testfile-small"
 dd bs=1024K count=1 if=/dev/urandom of="/tmp/duplicate/testfile.small.with.complicated.extension"
 dd bs=10240K count=2 if=/dev/urandom of="/tmp/duplicate/testfile-big"
+dd bs=1024K count=1 if=/dev/urandom of="/tmp/name/file-01"
+dd bs=1024K count=1 if=/dev/urandom of="/tmp/different/name/file-02"
 
 touch "/tmp/zero-sized-file"
 

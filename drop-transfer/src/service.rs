@@ -24,7 +24,7 @@ use crate::{
 };
 
 pub(super) struct State {
-    pub(super) event_tx: mpsc::Sender<Event>,
+    pub(super) event_tx: mpsc::UnboundedSender<Event>,
     pub(super) transfer_manager: TransferManager,
     pub(crate) moose: Arc<dyn Moose>,
     pub(crate) auth: Arc<auth::Context>,
@@ -49,7 +49,7 @@ impl Service {
     pub async fn start(
         addr: IpAddr,
         storage: Arc<Storage>,
-        event_tx: mpsc::Sender<Event>,
+        event_tx: mpsc::UnboundedSender<Event>,
         logger: Logger,
         config: Arc<DropConfig>,
         moose: Arc<dyn Moose>,
@@ -122,7 +122,6 @@ impl Service {
             self.state
                 .event_tx
                 .send(Event::OutgoingTransferFailed(xfer.clone(), err, true))
-                .await
                 .expect("Event channel should be open");
 
             return;
@@ -131,7 +130,6 @@ impl Service {
         self.state
             .event_tx
             .send(Event::RequestQueued(xfer.clone()))
-            .await
             .expect("Could not send a RequestQueued event, channel closed");
 
         ws::client::spawn(
@@ -166,7 +164,7 @@ impl Service {
             validate_dest_path(parent_dir)?;
 
             state
-                .start_download(&self.state.storage, file_id, parent_dir)
+                .start_download(&self.state.storage, file_id, parent_dir, &self.logger)
                 .await?;
         }
 
@@ -228,7 +226,6 @@ impl Service {
                     self.state
                         .event_tx
                         .send(crate::Event::OutgoingTransferCanceled(res.xfer, false))
-                        .await
                         .expect("Event channel should be open");
 
                     return Ok(());
@@ -253,7 +250,6 @@ impl Service {
                     self.state
                         .event_tx
                         .send(crate::Event::IncomingTransferCanceled(res.xfer, false))
-                        .await
                         .expect("Event channel should be open");
 
                     return Ok(());

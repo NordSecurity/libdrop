@@ -284,7 +284,6 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
                     self.xfer.clone(),
                     by_peer,
                 ))
-                .await
                 .expect("Could not send a transfer cancelled event, channel closed");
         }
     }

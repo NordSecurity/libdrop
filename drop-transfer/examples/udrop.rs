@@ -13,7 +13,7 @@ use clap::{arg, command, value_parser, ArgAction, Command};
 use drop_auth::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
 use drop_config::DropConfig;
 use drop_storage::Storage;
-use drop_transfer::{auth, Event, File, FileToSend, OutgoingTransfer, Service, Transfer};
+use drop_transfer::{auth, file, Event, File, OutgoingTransfer, Service, Transfer};
 use slog::{o, Drain, Logger};
 use slog_scope::info;
 use tokio::sync::mpsc;
@@ -148,7 +148,7 @@ fn print_event(ev: &Event) {
 async fn listen(
     service: &mut Service,
     storage: &Storage,
-    rx: &mut mpsc::Receiver<Event>,
+    rx: &mut mpsc::UnboundedReceiver<Event>,
     out_dir: &Path,
 ) -> anyhow::Result<()> {
     info!("Awaiting events…");
@@ -315,23 +315,22 @@ async fn main() -> anyhow::Result<()> {
 
         info!("Sending transfer request to {}", addr);
 
-        let mut files = Vec::new();
+        let mut files = file::GatherCtx::new(&config);
         for path in matches
             .get_many::<String>("FILE")
             .context("Missing path list")?
         {
-            files.extend(
-                FileToSend::from_path(path, &config)
-                    .context("Cannot build transfer from the files provided")?,
-            );
+            files
+                .gather_from_path(path)
+                .context("Cannot build transfer from the files provided")?;
         }
 
-        Some(OutgoingTransfer::new(*addr, files, &config)?)
+        Some(OutgoingTransfer::new(*addr, files.take(), &config)?)
     } else {
         None
     };
 
-    let (tx, mut rx) = mpsc::channel(256);
+    let (tx, mut rx) = mpsc::unbounded_channel();
     let addr = *matches
         .get_one::<IpAddr>("listen")
         .expect("Missing `listen` flag");
@@ -382,7 +381,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn on_stop(service: Service, rx: &mut mpsc::Receiver<Event>, storage: &Storage) {
+async fn on_stop(service: Service, rx: &mut mpsc::UnboundedReceiver<Event>, storage: &Storage) {
     info!("Stopping the service");
 
     service.stop().await;

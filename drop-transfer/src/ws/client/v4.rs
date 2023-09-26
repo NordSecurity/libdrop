@@ -323,7 +323,6 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
                     self.xfer.clone(),
                     by_peer,
                 ))
-                .await
                 .expect("Could not send a transfer cancelled event, channel closed");
         }
     }
