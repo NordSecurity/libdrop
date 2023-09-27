@@ -102,6 +102,7 @@ pub enum Event {
 pub struct Config {
     pub dir_depth_limit: usize,
     pub transfer_file_limit: usize,
+    pub moose_app_version: String,
     pub moose_event_path: String,
     pub moose_prod: bool,
     pub storage_path: String,
@@ -274,6 +275,7 @@ impl From<Config> for drop_config::Config {
             moose_event_path,
             moose_prod,
             storage_path,
+            moose_app_version,
         } = val;
 
         drop_config::Config {
@@ -283,6 +285,7 @@ impl From<Config> for drop_config::Config {
                 storage_path,
             },
             moose: drop_config::MooseConfig {
+                app_version: moose_app_version,
                 event_path: moose_event_path,
                 prod: moose_prod,
             },
@@ -304,6 +307,7 @@ mod tests {
           "connection_max_retry_interval_ms": 500,
           "moose_event_path": "test/path",
           "moose_prod": true,
+          "moose_app_version": "1.2.5",
           "storage_path": ":memory:",
           "max_uploads_in_flight": 16,
           "max_requests_per_sec": 15
@@ -319,13 +323,19 @@ mod tests {
                     transfer_file_limit,
                     storage_path,
                 },
-            moose: drop_config::MooseConfig { event_path, prod },
+            moose:
+                drop_config::MooseConfig {
+                    event_path,
+                    prod,
+                    app_version,
+                },
         } = cfg.into();
 
         assert_eq!(dir_depth_limit, 10);
         assert_eq!(transfer_file_limit, 100);
         assert_eq!(event_path, "test/path");
         assert_eq!(storage_path, ":memory:");
+        assert_eq!(app_version, "1.2.5");
         assert!(prod);
     }
 }
