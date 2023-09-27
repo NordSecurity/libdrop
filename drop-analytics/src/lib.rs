@@ -115,12 +115,13 @@ pub trait Moose: Send + Sync {
 fn create(
     logger: Logger,
     event_path: String,
+    lib_version: String,
     app_version: String,
     prod: bool,
 ) -> anyhow::Result<Arc<dyn Moose>> {
     #[cfg(feature = "moose")]
     {
-        let moose = moose_impl::MooseImpl::new(logger, event_path, app_version, prod)?;
+        let moose = moose_impl::MooseImpl::new(logger, event_path, lib_version, app_version, prod)?;
         Ok(Arc::new(moose))
     }
     #[cfg(feature = "moose_file")]
@@ -128,6 +129,7 @@ fn create(
         Ok(Arc::new(file_impl::FileImpl::new(
             logger,
             event_path,
+            lib_version,
             app_version,
             prod,
         )))
@@ -142,6 +144,7 @@ fn create(
 pub fn init_moose(
     logger: Logger,
     event_path: String,
+    lib_version: String,
     app_version: String,
     prod: bool,
 ) -> anyhow::Result<Arc<dyn Moose>> {
@@ -150,7 +153,7 @@ pub fn init_moose(
     if let Some(arc) = lock.as_ref().and_then(Weak::upgrade) {
         Ok(arc)
     } else {
-        let arc = create(logger, event_path, app_version, prod)?;
+        let arc = create(logger, event_path, lib_version, app_version, prod)?;
 
         *lock = Some(Arc::downgrade(&arc));
 

@@ -82,6 +82,7 @@ impl NordDropFFI {
     }
 
     pub(super) fn start(&mut self, listen_addr: &str, config_json: &str) -> Result<()> {
+        let init_time = std::time::Instant::now();
         trace!(
             self.logger,
             "norddrop_start() listen address: {:?}",
@@ -713,12 +714,17 @@ fn parse_and_validate_config(logger: &slog::Logger, config_json: &str) -> Result
 
 fn initialize_moose(
     logger: &slog::Logger,
-    MooseConfig { event_path, prod }: MooseConfig,
+    MooseConfig {
+        event_path,
+        prod,
+        app_version,
+    }: MooseConfig,
 ) -> Result<Arc<dyn drop_analytics::Moose>> {
     let moose = match drop_analytics::init_moose(
         logger.clone(),
         event_path,
         env!("DROP_VERSION").to_string(),
+        app_version,
         prod,
     ) {
         Ok(moose) => moose,

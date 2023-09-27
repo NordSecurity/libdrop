@@ -4598,7 +4598,6 @@ scenarios = [
                         [
                             """{
                             "type": "exception",
-                            "arbitrary_value": -1,
                             "code": 11,
                             "note": "Initial DB open failed, recreating",
                             "message": "Failed to open DB file",
@@ -4607,8 +4606,10 @@ scenarios = [
                             """{
                             "type": "init",
                             "result": 0,
-                            "app_version": "*",
-                            "prod": false
+                            "lib_version": "*",
+                            "app_version": "test-framework",
+                            "prod": false,
+                            "init_duration": ">0"
                         }""",
                         ]
                     ),
@@ -4690,7 +4691,6 @@ scenarios = [
                         [
                             """{
                             "type": "exception",
-                            "arbitrary_value": -1,
                             "code": 11,
                             "note": "Initial DB open failed, recreating",
                             "message": "Failed to open DB file",
@@ -4698,7 +4698,6 @@ scenarios = [
                         }""",
                             """{
                             "type": "exception",
-                            "arbitrary_value": -1,
                             "code": 11,
                             "note": "Permission denied (os error 13)",
                             "message": "Failed to remove old DB file",
@@ -4707,32 +4706,39 @@ scenarios = [
                             """{
                             "type": "init",
                             "result": 0,
-                            "app_version": "*",
-                            "prod": false
+                            "lib_version": "*",
+                            "app_version": "test-framework",
+                            "prod": false,
+                            "init_duration": ">0"
                         }""",
                             """{
-                            "type": "batch",
+                            "type": "transfer_intent",
                             "transfer_id": "*",
-                            "info": {
-                                "mime_type_list": "unknown",
-                                "extension_list": "none",
-                                "file_size_list": "1024",
-                                "transfer_size_kb": 1024,
-                                "file_count": 1
-                            },
-                            "protocol_version": 5
+                            "path_ids": \""""
+                            + FILES["testfile-small"].id
+                            + """\",
+                            "extensions": "none",
+                            "mime_types": "unknown",
+                            "file_count": 1,
+                            "file_sizes": "1024",
+                            "transfer_size": 1024
+                        }""",
+                            """{
+                            "type": "transfer_state",
+                            "protocol_version": ">=5",
+                            "result": 0
                         }""",
                             """{
                             "type": "file",
                             "result": 0,
+                            "phase": "finished",
                             "transfer_id": "*",
-                            "transfer_time": "*",
-                            "direction": "upload",
-                            "info": {
-                                "mime_type": "unknown",
-                                "extension": "none",
-                                "size_kb": 1024
-                            }
+                            "transfer_time": ">0",
+                            "transferred": ">=0",
+                            "path_id": \""""
+                            + FILES["testfile-small"].id
+                            + """\",
+                            "direction": "upload"
                         }""",
                         ]
                     ),
