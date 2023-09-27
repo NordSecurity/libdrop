@@ -14,7 +14,7 @@ use std::{
 };
 
 use anyhow::Context;
-use drop_analytics::{TransferEndEventData, TransferStartEventData};
+use drop_analytics::{TransferStateEventData, MOOSE_STATUS_SUCCESS};
 use hyper::StatusCode;
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
@@ -117,16 +117,17 @@ async fn connect_to_peer(
     logger: &Logger,
     alive: &AliveGuard,
 ) -> ControlFlow<()> {
-    let (socket, ver, retry_count) = match establish_ws_conn(state, xfer, logger).await {
-        WsConnection::Connected(sock, ver, retry_count) => (sock, ver, retry_count),
+    let (socket, ver) = match establish_ws_conn(state, xfer, logger).await {
+        WsConnection::Connected(sock, ver) => (sock, ver),
         WsConnection::Recoverable => return ControlFlow::Continue(()),
         WsConnection::Stopped => return ControlFlow::Break(()),
         WsConnection::Unrecoverable(err) => {
             error!(logger, "Could not connect to peer {}: {}", xfer.id(), err);
 
-            state.moose.event_transfer_end(TransferEndEventData {
+            state.moose.event_transfer_state(TransferStateEventData {
                 transfer_id: xfer.id().to_string(),
                 result: i32::from(&err),
+                protocol_version: 0,
             });
 
             state
@@ -138,10 +139,10 @@ async fn connect_to_peer(
         }
     };
 
-    state.moose.event_transfer_start(TransferStartEventData {
+    state.moose.event_transfer_state(TransferStateEventData {
         protocol_version: ver.into(),
         transfer_id: xfer.id().to_string(),
-        retry_count,
+        result: MOOSE_STATUS_SUCCESS,
     });
 
     info!(logger, "Client connected, using version: {ver}");
@@ -228,7 +229,7 @@ async fn establish_ws_conn(
     };
 
     let client = WebSocketStream::from_raw_socket(socket, Role::Client, None).await;
-    WsConnection::Connected(client, ver, retry_count)
+    WsConnection::Connected(client, ver)
 }
 
 async fn make_request(

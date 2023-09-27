@@ -10,10 +10,8 @@ enum MooseEventType {
     Init(InitEvent),
     #[serde(rename = "transfer_intent")]
     TransferIntent(crate::TransferIntentEventData),
-    #[serde(rename = "transfer_start")]
-    TransferStart(crate::TransferStartEventData),
-    #[serde(rename = "transfer_end")]
-    TransferEnd(crate::TransferEndEventData),
+    #[serde(rename = "transfer_state")]
+    TransferState(crate::TransferStateEventData),
     #[serde(rename = "file")]
     File(crate::TransferFileEventData),
     #[serde(rename = "exception")]
@@ -87,31 +85,19 @@ impl super::Moose for FileImpl {
         if event.is_err() {
             slog::error!(
                 self.logger,
-                "[Moose] Failed to write transfer event: {:?}",
+                "[Moose] Failed to write transfer intent event: {:?}",
                 event.err()
             );
         };
     }
 
-    fn event_transfer_start(&self, data: crate::TransferStartEventData) {
-        let event = self.write_event(MooseEventType::TransferStart(data));
+    fn event_transfer_state(&self, data: crate::TransferStateEventData) {
+        let event = self.write_event(MooseEventType::TransferState(data));
 
         if event.is_err() {
             slog::error!(
                 self.logger,
-                "[Moose] Failed to write transfer start event: {:?}",
-                event.err()
-            );
-        };
-    }
-
-    fn event_transfer_end(&self, data: crate::TransferEndEventData) {
-        let event = self.write_event(MooseEventType::TransferEnd(data));
-
-        if event.is_err() {
-            slog::error!(
-                self.logger,
-                "[Moose] Failed to write transfer end event: {:?}",
+                "[Moose] Failed to write transfer state event: {:?}",
                 event.err()
             );
         };
