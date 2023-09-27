@@ -51,14 +51,8 @@ pub struct TransferIntentEventData {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TransferStartEventData {
+pub struct TransferStateEventData {
     pub protocol_version: i32,
-    pub transfer_id: String,
-    pub retry_count: i32,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TransferEndEventData {
     pub transfer_id: String,
     pub result: i32,
 }
@@ -94,8 +88,7 @@ pub struct DeveloperExceptionWithValueEventData {
 pub trait Moose: Send + Sync {
     fn event_init(&self, data: InitEventData);
     fn event_transfer_intent(&self, data: TransferIntentEventData);
-    fn event_transfer_start(&self, data: TransferStartEventData);
-    fn event_transfer_end(&self, data: TransferEndEventData);
+    fn event_transfer_state(&self, data: TransferStateEventData);
     fn event_transfer_file(&self, data: TransferFileEventData);
 
     /// Generic function for logging exceptions not related to specific
