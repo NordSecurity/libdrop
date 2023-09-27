@@ -39,7 +39,7 @@ slog = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-tokio-tungstenite = "0.20.0"
+tokio-tungstenite = "0.20.1"
 tokio-util = "0.7.8"
 uuid = { workspace = true }
 warp = { version = "0.3.5", default-features = false, features = ["websocket"] }
