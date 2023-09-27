@@ -12,8 +12,8 @@ use crate::{FileInfo, TransferDirection, TransferInfo, MOOSE_STATUS_SUCCESS, MOO
 
 const DROP_MOOSE_APP_NAME: &str = "norddrop";
 
-/// Version of the tracker used, should be updated everytime the tracker library
-/// is updated
+/// Version of the tracker used, should be updated every time the tracker
+/// library is updated
 const DROP_MOOSE_TRACKER_VERSION: &str = "0.5.1";
 
 pub struct MooseImpl {

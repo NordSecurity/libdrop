@@ -7,7 +7,7 @@ use std::{
     time::Instant,
 };
 
-use drop_analytics::{InitEventData, Moose, TransferEndEventData};
+use drop_analytics::{InitEventData, Moose, TransferStateEventData};
 use drop_config::DropConfig;
 use drop_core::Status;
 use drop_storage::Storage;
@@ -213,10 +213,13 @@ impl Service {
             .insert_outgoing(xfer.clone())
             .await
         {
-            self.state.moose.event_transfer_end(TransferEndEventData {
-                transfer_id: xfer.id().to_string(),
-                result: i32::from(&err),
-            });
+            self.state
+                .moose
+                .event_transfer_state(TransferStateEventData {
+                    transfer_id: xfer.id().to_string(),
+                    result: i32::from(&err),
+                    protocol_version: 0,
+                });
 
             self.state
                 .event_tx
@@ -265,7 +268,7 @@ impl Service {
     }
 
     /// Reject a single file in a transfer. After rejection the file can no
-    /// logner be transfered
+    /// longer be transferred
     pub async fn reject(&self, transfer_id: Uuid, file: FileId) -> crate::Result<()> {
         {
             match self
