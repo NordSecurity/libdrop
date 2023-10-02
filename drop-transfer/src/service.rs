@@ -202,38 +202,42 @@ impl Service {
 
     pub async fn set_peer_state(&mut self, addr: IpAddr, is_online: bool) {
         {
-            let outgoing_transfers_to_trigger = {
-                let xfers = self.state.transfer_manager.outgoing.lock().await;
+            if is_online {
+                let outgoing_transfers_to_trigger = {
+                    let xfers = self.state.transfer_manager.outgoing.lock().await;
 
-                xfers
-                    .values()
-                    .filter(|state| {
-                        let peer = state.xfer.peer();
-                        peer == addr && is_online
-                    })
-                    .map(|state| state.xfer.clone())
-                    .collect::<Vec<_>>()
-            };
+                    xfers
+                        .values()
+                        .filter(|state| {
+                            let peer = state.xfer.peer();
+                            peer == addr
+                        })
+                        .map(|state| state.xfer.clone())
+                        .collect::<Vec<_>>()
+                };
 
-            for xfer in outgoing_transfers_to_trigger {
-                self.trigger_peer_outgoing(xfer);
+                for xfer in outgoing_transfers_to_trigger {
+                    self.trigger_peer_outgoing(xfer);
+                }
             }
 
-            let incoming_transfers_to_trigger = {
-                let xfers = self.state.transfer_manager.incoming.lock().await;
+            if is_online {
+                let incoming_transfers_to_trigger = {
+                    let xfers = self.state.transfer_manager.incoming.lock().await;
 
-                xfers
-                    .values()
-                    .filter(|state| {
-                        let peer = state.xfer.peer();
-                        peer == addr && is_online
-                    })
-                    .map(|state| state.xfer.clone())
-                    .collect::<Vec<_>>()
-            };
+                    xfers
+                        .values()
+                        .filter(|state| {
+                            let peer = state.xfer.peer();
+                            peer == addr && is_online
+                        })
+                        .map(|state| state.xfer.clone())
+                        .collect::<Vec<_>>()
+                };
 
-            for xfer in incoming_transfers_to_trigger {
-                self.trigger_peer_incoming(xfer);
+                for xfer in incoming_transfers_to_trigger {
+                    self.trigger_peer_incoming(xfer);
+                }
             }
         }
     }
