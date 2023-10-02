@@ -39,6 +39,7 @@ public class libnorddropJNI {
   public final static native int NordDrop_purgeTransfers(long jarg1, NordDrop jarg1_, String jarg2);
   public final static native int NordDrop_purgeTransfersUntil(long jarg1, NordDrop jarg1_, long jarg2);
   public final static native int NordDrop_removeTransferFile(long jarg1, NordDrop jarg1_, String jarg2, String jarg3);
+  public final static native int NordDrop_setPeerState(long jarg1, NordDrop jarg1_, String jarg2, int jarg3);
   public final static native String NordDrop_getTransfersSince(long jarg1, NordDrop jarg1_, long jarg2);
   public final static native String NordDrop_version();
 }

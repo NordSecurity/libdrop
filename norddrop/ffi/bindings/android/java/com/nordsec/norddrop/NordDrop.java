@@ -80,6 +80,10 @@ public class NordDrop {
     return NorddropResult.swigToEnum(libnorddropJNI.NordDrop_removeTransferFile(swigCPtr, this, txid, fid));
   }
 
+  public NorddropResult setPeerState(String peer, int isOnline) {
+    return NorddropResult.swigToEnum(libnorddropJNI.NordDrop_setPeerState(swigCPtr, this, peer, isOnline));
+  }
+
   public String getTransfersSince(long sinceTimestamp) {
     return libnorddropJNI.NordDrop_getTransfersSince(swigCPtr, this, sinceTimestamp);
   }
