@@ -270,11 +270,7 @@ impl Service {
         Ok(())
     }
 
-    /// Reject a single file in a transfer. After rejection the file can no
     /// longer be transferred
-    pub async fn reject(&self, transfer_id: Uuid, file: FileId) -> crate::Result<()> {
-        {
-            match self
                 .state
                 .transfer_manager
                 .outgoing_rejection_post(transfer_id, &file)
