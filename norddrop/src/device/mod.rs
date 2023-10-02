@@ -359,7 +359,7 @@ impl NordDropFFI {
             .as_mut()
             .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?;
 
-        self.rt.block_on(instance.set_peer_state(&peer, is_online));
+        self.rt.block_on(instance.set_peer_state(peer, is_online));
 
         Ok(())
     }
