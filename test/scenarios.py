@@ -1025,6 +1025,7 @@ scenarios = [
                 ]
             ),
         },
+        tags=["offline", "cancel"],
     ),
     Scenario(
         "scenario5",
