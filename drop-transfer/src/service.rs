@@ -89,39 +89,13 @@ impl Service {
 
             ws::server::spawn(state.clone(), logger.clone(), stop.clone(), guard.clone())?;
 
-            let mut service = Self {
+            Ok(Self {
                 state,
                 stop,
                 waiter,
                 logger,
                 tasks: Default::default(),
-            };
-
-            let outgoing_transfers = {
-                let xfers = service.state.transfer_manager.outgoing.lock().await;
-                xfers
-                    .values()
-                    .map(|xstate| xstate.xfer.clone())
-                    .collect::<Vec<_>>()
-            };
-
-            for xfer in outgoing_transfers {
-                service.trigger_peer_outgoing(xfer);
-            }
-
-            let incoming_transfers = {
-                let xfers = service.state.transfer_manager.incoming.lock().await;
-                xfers
-                    .values()
-                    .map(|xstate| xstate.xfer.clone())
-                    .collect::<Vec<_>>()
-            };
-
-            for xfer in incoming_transfers {
-                service.trigger_peer_incoming(xfer);
-            }
-
-            Ok(service)
+            })
         };
 
         let res = task.await;
