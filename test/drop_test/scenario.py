@@ -4,6 +4,7 @@ from . import action, ffi
 from .logger import logger
 
 from . import action
+from .ffi import bcolors
 
 
 class ActionList:
@@ -13,14 +14,16 @@ class ActionList:
     async def run(self, drop: ffi.Drop):
         logger.info("Processing action list...")
         for k, v in enumerate(self._actions):
-            logger.info(f"Running action {k+1}/{len(self._actions)}: {v}")
+            logger.info(
+                f"{bcolors.HEADER}Running action {k+1}/{len(self._actions)}: {v}{bcolors.ENDC}"
+            )
             start = time.time()
 
             await v.run(drop)
 
             elapsed = (time.time() - start) * 1000.0
             logger.info(
-                f"Action {k+1}/{len(self._actions)} completed in {elapsed} ms: {v}"
+                f"{bcolors.HEADER}Action {k+1}/{len(self._actions)} completed in {elapsed} ms: {v}{bcolors.ENDC}"
             )
 
         logger.info("Done processing actions")

@@ -7,7 +7,7 @@ import time
 class PEERResolver:
     def __init__(self):
         self._peer_mappings = {}
-
+        self._cache = {}
         # peers do not know initially how their peers are named, and because
         # everyone lives in the same network we need to dynamically allocate
         # hostnames. This mapping maps those peers to their hostnames based on
@@ -44,6 +44,9 @@ class PEERResolver:
         hostname = self._peer_mappings[peer]
         ipv6 = "6" in peer
 
+        if peer in self._cache:
+            return self._cache[peer]
+
         for _ in range(5):
             print(f"Resolving hostname {hostname} ...", flush=True)
             try:
@@ -53,6 +56,7 @@ class PEERResolver:
                     ip = socket.getaddrinfo(hostname, 49111, socket.AF_INET)
 
                 host_ip = ip[0][4][0]
+                self._cache[peer] = host_ip
 
                 print(f"hostname {hostname} resolved to {host_ip}", flush=True)
                 return host_ip
