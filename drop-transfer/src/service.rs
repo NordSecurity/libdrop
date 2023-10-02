@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fs,
     net::IpAddr,
     path::{Component, Path},
@@ -16,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    auth,
+    auth, check,
     error::ResultExt,
     manager,
     tasks::AliveWaiter,
@@ -45,14 +46,17 @@ impl State {
     }
 }
 
+type TaskRegistry = HashMap<uuid::Uuid, tokio::task::JoinHandle<()>>;
+
 pub struct Service {
     pub(super) state: Arc<State>,
     stop: CancellationToken,
     waiter: AliveWaiter,
     pub(super) logger: Logger,
+
+    tasks: TaskRegistry,
 }
 
-// todo: better name to reduce confusion
 impl Service {
     #[allow(clippy::too_many_arguments)]
     pub async fn start(
@@ -68,7 +72,7 @@ impl Service {
     ) -> Result<Self, Error> {
         let task = async {
             let state = Arc::new(State {
-                throttle: Semaphore::new(drop_config::MAX_UPLOADS_IN_FLIGHT),
+                throttle: Semaphore::new(drop_config::MAX_UPLOADS_IN_FLIGHT), /* TODO: max uploads of 4 files per all libdrop is too restrictive, workout a better plan, like configurable through config */
                 transfer_manager: TransferManager::new(
                     storage.clone(),
                     FileEventTxFactory::new(event_tx.clone(), moose.clone()),
@@ -95,14 +99,39 @@ impl Service {
 
             ws::server::spawn(state.clone(), logger.clone(), stop.clone(), guard.clone())?;
 
-            manager::resume(&state, &logger, &guard, &stop).await;
-
-            Ok(Self {
+            let mut service = Self {
                 state,
                 stop,
                 waiter,
                 logger,
-            })
+                tasks: Default::default(),
+            };
+
+            let outgoing_transfers = {
+                let xfers = service.state.transfer_manager.outgoing.lock().await;
+                xfers
+                    .values()
+                    .map(|xstate| xstate.xfer.clone())
+                    .collect::<Vec<_>>()
+            };
+
+            for xfer in outgoing_transfers {
+                service.trigger_peer_outgoing(xfer).await;
+            }
+
+            let incoming_transfers = {
+                let xfers = service.state.transfer_manager.incoming.lock().await;
+                xfers
+                    .values()
+                    .map(|xstate| xstate.xfer.clone())
+                    .collect::<Vec<_>>()
+            };
+
+            for xfer in incoming_transfers {
+                service.trigger_peer_incoming(xfer).await;
+            }
+
+            Ok(service)
         };
 
         let res = task.await;
@@ -122,6 +151,93 @@ impl Service {
 
     pub fn storage(&self) -> &Storage {
         &self.state.storage
+    }
+
+    async fn trigger_peer_incoming(&mut self, xfer: Arc<crate::IncomingTransfer>) {
+        debug!(self.logger, "trigger_peer_incoming() called: {:?}", xfer);
+
+        let _peer = xfer.peer();
+        let id = xfer.id();
+
+        if let Some(handle) = self.tasks.get(&id) {
+            if !handle.is_finished() {
+                return;
+            } else {
+                self.tasks.remove(&id);
+            }
+        }
+
+        let handle = check::spawn(
+            self.state.clone(),
+            xfer,
+            self.logger.clone(),
+            self.waiter.guard(),
+            self.stop.clone(),
+        );
+
+        self.tasks.insert(id, handle);
+    }
+
+    async fn trigger_peer_outgoing(&mut self, xfer: Arc<crate::OutgoingTransfer>) {
+        debug!(self.logger, "trigger_peer_outgoing() called: {:?}", xfer);
+
+        let id = xfer.id();
+        let _peer = xfer.peer();
+        if let Some(handle) = self.tasks.get(&id) {
+            if !handle.is_finished() {
+                return;
+            } else {
+                self.tasks.remove(&id);
+            }
+        }
+
+        let handle = ws::client::spawn(
+            self.state.clone(),
+            xfer,
+            self.logger.clone(),
+            self.waiter.guard(),
+            self.stop.clone(),
+        );
+
+        self.tasks.insert(id, handle);
+    }
+
+    pub async fn set_peer_state(&mut self, addr: &IpAddr, is_online: bool) {
+        {
+            let outgoing_transfers_to_trigger = {
+                let xfers = self.state.transfer_manager.outgoing.lock().await;
+
+                xfers
+                    .values()
+                    .filter(|state| {
+                        let peer = state.xfer.peer();
+                        peer == *addr && is_online
+                    })
+                    .map(|state| state.xfer.clone())
+                    .collect::<Vec<_>>()
+            };
+
+            for xfer in outgoing_transfers_to_trigger {
+                self.trigger_peer_outgoing(xfer).await;
+            }
+
+            let incoming_transfers_to_trigger = {
+                let xfers = self.state.transfer_manager.incoming.lock().await;
+
+                xfers
+                    .values()
+                    .filter(|state| {
+                        let peer = state.xfer.peer();
+                        peer == *addr && is_online
+                    })
+                    .map(|state| state.xfer.clone())
+                    .collect::<Vec<_>>()
+            };
+
+            for xfer in incoming_transfers_to_trigger {
+                self.trigger_peer_incoming(xfer).await;
+            }
+        }
     }
 
     pub async fn send_request(&mut self, xfer: crate::OutgoingTransfer) {
@@ -151,13 +267,7 @@ impl Service {
 
         self.state.emit_event(Event::RequestQueued(xfer.clone()));
 
-        ws::client::spawn(
-            self.state.clone(),
-            xfer,
-            self.logger.clone(),
-            self.waiter.guard(),
-            self.stop.clone(),
-        );
+        self.trigger_peer_outgoing(xfer).await;
     }
 
     pub async fn download(

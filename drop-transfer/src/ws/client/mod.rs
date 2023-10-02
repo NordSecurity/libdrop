@@ -5,12 +5,10 @@ mod v4;
 mod v5;
 
 use std::{
-    future::Future,
     io,
     net::{IpAddr, SocketAddr},
     ops::ControlFlow,
     sync::Arc,
-    time::Duration,
 };
 
 use anyhow::Context;
@@ -62,9 +60,8 @@ struct RunContext<'a> {
 }
 
 enum WsConnection {
-    Stopped,
-    Unrecoverable(crate::Error),
     Recoverable,
+    Unrecoverable(crate::Error),
     Connected(WsStream, protocol::Version),
 }
 
@@ -74,7 +71,7 @@ pub(crate) fn spawn(
     logger: Logger,
     guard: AliveGuard,
     stop: CancellationToken,
-) {
+) -> tokio::task::JoinHandle<()> {
     let id = xfer.id();
     let job = run(state, xfer, logger.clone(), guard.clone());
 
@@ -89,25 +86,20 @@ pub(crate) fn spawn(
             },
             _ = job => (),
         }
-    });
+    })
 }
 
 async fn run(state: Arc<State>, xfer: Arc<OutgoingTransfer>, logger: Logger, alive: AliveGuard) {
-    loop {
-        if connect_to_peer(&state, &xfer, &logger, &alive)
-            .await
-            .is_break()
-        {
-            break;
-        }
-    }
+    let status = connect_to_peer(&state, &xfer, &logger, &alive).await;
 
-    if let Err(err) = state.transfer_manager.outgoing_remove(xfer.id()).await {
-        warn!(
-            logger,
-            "Failed to clear sync state for {}: {err}",
-            xfer.id()
-        );
+    if status.is_break() {
+        if let Err(err) = state.transfer_manager.outgoing_remove(xfer.id()).await {
+            warn!(
+                logger,
+                "Failed to clear sync state for {}: {err}",
+                xfer.id()
+            );
+        }
     }
 }
 
@@ -120,7 +112,6 @@ async fn connect_to_peer(
     let (socket, ver) = match establish_ws_conn(state, xfer, logger).await {
         WsConnection::Connected(sock, ver) => (sock, ver),
         WsConnection::Recoverable => return ControlFlow::Continue(()),
-        WsConnection::Stopped => return ControlFlow::Break(()),
         WsConnection::Unrecoverable(err) => {
             error!(logger, "Could not connect to peer {}: {}", xfer.id(), err);
 
@@ -181,11 +172,15 @@ async fn establish_ws_conn(
     xfer: &OutgoingTransfer,
     logger: &Logger,
 ) -> WsConnection {
-    let break_check = || async { !state.transfer_manager.is_outgoing_alive(xfer.id()).await };
+    let remote = SocketAddr::new(xfer.peer(), drop_config::PORT);
+    let local = SocketAddr::new(state.addr, 0);
 
-    let mut socket = match tcp_connect(state.addr, xfer.peer(), break_check, logger).await {
-        Some(socket) => socket,
-        None => return WsConnection::Stopped,
+    let mut socket = match utils::connect(local, remote).await {
+        Ok(sock) => sock,
+        Err(err) => {
+            debug!(logger, "Failed to connect: {:?}", err,);
+            return WsConnection::Recoverable;
+        }
     };
 
     let mut versions_to_try = [
@@ -209,7 +204,9 @@ async fn establish_ws_conn(
         match make_request(&mut socket, xfer.peer(), ver, state.auth.as_ref(), logger).await {
             Ok(_) => break ver,
             Err(tungstenite::Error::Http(resp)) if resp.status().is_client_error() => {
-                if resp.status() == StatusCode::UNAUTHORIZED {
+                if resp.status() == StatusCode::TOO_MANY_REQUESTS {
+                    return WsConnection::Recoverable;
+                } else if resp.status() == StatusCode::UNAUTHORIZED {
                     return WsConnection::Unrecoverable(crate::Error::AuthenticationFailed);
                 } else {
                     debug!(
@@ -277,43 +274,6 @@ async fn make_request(
     Err(err)
 }
 
-async fn tcp_connect<Fut: Future<Output = bool>>(
-    local_ip: IpAddr,
-    remote_ip: IpAddr,
-    break_check: impl Fn() -> Fut,
-    logger: &Logger,
-) -> Option<TcpStream> {
-    let remote = SocketAddr::new(remote_ip, drop_config::PORT);
-    let local = SocketAddr::new(local_ip, 0);
-
-    let mut sleep_time = Duration::from_millis(200);
-
-    loop {
-        if break_check().await {
-            break;
-        }
-
-        match utils::connect(local, remote).await {
-            Ok(sock) => return Some(sock),
-            Err(err) => {
-                debug!(
-                    logger,
-                    "Failed to connect: {:?}, sleeping for {} ms",
-                    err,
-                    sleep_time.as_millis(),
-                );
-
-                tokio::time::sleep(sleep_time).await;
-
-                // Exponential backoff but with upper limit
-                sleep_time = drop_config::CONNECTION_MAX_RETRY_INTERVAL.min(sleep_time * 2);
-            }
-        }
-    }
-
-    None
-}
-
 impl RunContext<'_> {
     async fn start(
         &mut self,
@@ -348,6 +308,9 @@ impl RunContext<'_> {
                     anyhow::Ok(())
                 };
                 if let Err(err) = task.await {
+                    // It means that the close() call returned an IO error for some reason. It
+                    // shouldn't happen probably, and even if it does, it's probably best to just
+                    // ignore it
                     error!(self.logger, "Failed to close socket on start: {err:?}");
                 } else {
                     info!(self.logger, "Socket closed on start");
