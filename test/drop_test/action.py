@@ -227,13 +227,12 @@ class CancelTransferRequest(Action):
 
     async def run(self, drop: ffi.Drop):
         with UUIDS_LOCK:
-            for slot in self._uuid_slots:                
+            for slot in self._uuid_slots:
                 drop.cancel_transfer_request(UUIDS[slot])
 
     def __str__(self):
-        uuid_strings = ', '.join(map(print_uuid, self._uuid_slots))
+        uuid_strings = ", ".join(map(print_uuid, self._uuid_slots))
         return f"CancelTransferRequest({uuid_strings})"
-
 
 
 class CancelTransferFile(Action):
