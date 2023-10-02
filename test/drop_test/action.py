@@ -251,15 +251,18 @@ class Download(Action):
 
 
 class CancelTransferRequest(Action):
-    def __init__(self, uuid_slot: int):
-        self._uuid_slot = uuid_slot
+    def __init__(self, uuid_slots: typing.List[int]):
+        self._uuid_slots = uuid_slots
 
     async def run(self, drop: ffi.Drop):
         with UUIDS_LOCK:
-            drop.cancel_transfer_request(UUIDS[self._uuid_slot])
+            for slot in self._uuid_slots:                
+                drop.cancel_transfer_request(UUIDS[slot])
 
     def __str__(self):
-        return f"CancelTransferRequest({print_uuid(self._uuid_slot)})"
+        uuid_strings = ', '.join(map(print_uuid, self._uuid_slots))
+        return f"CancelTransferRequest({uuid_strings})"
+
 
 
 class CancelTransferFile(Action):
