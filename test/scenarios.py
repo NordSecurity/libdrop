@@ -5553,6 +5553,7 @@ scenarios = [
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     # start the sender again
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-1-ren.sqlite"),
+                    action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.Wait(
                         event.Start(0, FILES["testfile-big"].id, transferred=None)
                     ),
@@ -5862,6 +5863,7 @@ scenarios = [
                     action.WaitForAnotherPeer(),
                     # start the sender again
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-3-ren.sqlite"),
+                    action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.Wait(
                         event.Start(0, FILES["testfile-big"].id, transferred=None)
                     ),
@@ -6117,6 +6119,7 @@ scenarios = [
                     action.WaitForAnotherPeer(),
                     # start the sender again
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-5-ren.sqlite"),
+                    action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.Wait(
                         event.Start(
                             0,
@@ -6214,6 +6217,7 @@ scenarios = [
                     ),
                     action.Stop(),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-6-ren.sqlite"),
+                    action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.Sleep(6),
                     action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.NoEvent(),
@@ -6317,6 +6321,7 @@ scenarios = [
                     action.Stop(),
                     action.Sleep(2),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-8-ren.sqlite"),
+                    action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                 ]
             ),
             "DROP_PEER_STIMPY": ActionList(
@@ -6363,6 +6368,7 @@ scenarios = [
                     action.ExpectCancel([0], True),
                     action.Stop(),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-9-ren.sqlite"),
+                    action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.NoEvent(),
                 ]
             ),
@@ -6438,6 +6444,7 @@ scenarios = [
                     action.Stop(),
                     action.Sleep(3),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-10-ren.sqlite"),
+                    action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileUploaded(
@@ -6517,6 +6524,7 @@ scenarios = [
                     action.Stop(),
                     action.Sleep(3),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-11-ren.sqlite"),
+                    action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-small"].id, True)
                     ),
@@ -6575,6 +6583,7 @@ scenarios = [
                     action.Stop(),
                     action.Sleep(3),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-12-ren.sqlite"),
+                    action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
                 ]
@@ -6637,6 +6646,7 @@ scenarios = [
                     action.DeleteFileFromFS("/tmp/testfile-big"),
                     # restart
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-13-ren.sqlite"),
+                    action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.Wait(
                         event.FinishFileFailed(
                             0, FILES["testfile-big"].id, Error.IO, os_err=2
@@ -7797,7 +7807,7 @@ scenarios = [
                             action.File("/tmp/received/32/testfile-small(1)", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0, 1]),                
+                    action.CancelTransferRequest([0, 1]),
                     action.ExpectCancel([0, 1], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -8067,7 +8077,7 @@ scenarios = [
                         [
                             action.Sleep(0.01),
                             action.SetPeerState("DROP_PEER_STIMPY", PeerState.Offline),
-                            action.SetPeerState("DROP_PEER_GEORGE", PeerState.Online),
+                            action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                         ],
                         500,
                     ),
@@ -8324,6 +8334,7 @@ scenarios = [
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     action.SleepMs(400),
                     action.Start("DROP_PEER_REN", "/tmp/db/38.sqlite"),
+                    action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.Wait(event.FinishTransferCanceled(0, True)),
                     action.NoEvent(),
                     action.Stop(),
@@ -8585,11 +8596,9 @@ scenarios = [
                     ),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/41-ren.sqlite"),
                     action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
-                    
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.Stop(),
-                    
                     # Start again but this time with a copy of the database. The transfer should be again retried but the other peer should respond with already cancelled
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/41-ren-copy.sqlite"),
                     action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
@@ -8648,6 +8657,7 @@ scenarios = [
                     action.Stop(),
                     action.Sleep(1),
                     action.Start("DROP_PEER_REN", "/tmp/db/42-1-ren.sqlite"),
+                    action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.ExpectCancel([0], True),
                     action.Stop(),
                 ]
