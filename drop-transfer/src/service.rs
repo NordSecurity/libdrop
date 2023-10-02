@@ -106,7 +106,7 @@ impl Service {
             };
 
             for xfer in outgoing_transfers {
-                service.trigger_peer_outgoing(xfer).await;
+                service.trigger_peer_outgoing(xfer);
             }
 
             let incoming_transfers = {
@@ -118,7 +118,7 @@ impl Service {
             };
 
             for xfer in incoming_transfers {
-                service.trigger_peer_incoming(xfer).await;
+                service.trigger_peer_incoming(xfer);
             }
 
             Ok(service)
@@ -140,10 +140,9 @@ impl Service {
         &self.state.storage
     }
 
-    async fn trigger_peer_incoming(&mut self, xfer: Arc<crate::IncomingTransfer>) {
+    fn trigger_peer_incoming(&mut self, xfer: Arc<crate::IncomingTransfer>) {
         debug!(self.logger, "trigger_peer_incoming() called: {:?}", xfer);
 
-        let _peer = xfer.peer();
         let id = xfer.id();
 
         if let Some(handle) = self.tasks.get(&id) {
@@ -165,11 +164,10 @@ impl Service {
         self.tasks.insert(id, handle);
     }
 
-    async fn trigger_peer_outgoing(&mut self, xfer: Arc<crate::OutgoingTransfer>) {
+    fn trigger_peer_outgoing(&mut self, xfer: Arc<crate::OutgoingTransfer>) {
         debug!(self.logger, "trigger_peer_outgoing() called: {:?}", xfer);
 
         let id = xfer.id();
-        let _peer = xfer.peer();
         if let Some(handle) = self.tasks.get(&id) {
             if !handle.is_finished() {
                 return;
@@ -189,7 +187,7 @@ impl Service {
         self.tasks.insert(id, handle);
     }
 
-    pub async fn set_peer_state(&mut self, addr: &IpAddr, is_online: bool) {
+    pub async fn set_peer_state(&mut self, addr: IpAddr, is_online: bool) {
         {
             let outgoing_transfers_to_trigger = {
                 let xfers = self.state.transfer_manager.outgoing.lock().await;
@@ -198,14 +196,14 @@ impl Service {
                     .values()
                     .filter(|state| {
                         let peer = state.xfer.peer();
-                        peer == *addr && is_online
+                        peer == addr && is_online
                     })
                     .map(|state| state.xfer.clone())
                     .collect::<Vec<_>>()
             };
 
             for xfer in outgoing_transfers_to_trigger {
-                self.trigger_peer_outgoing(xfer).await;
+                self.trigger_peer_outgoing(xfer);
             }
 
             let incoming_transfers_to_trigger = {
@@ -215,14 +213,14 @@ impl Service {
                     .values()
                     .filter(|state| {
                         let peer = state.xfer.peer();
-                        peer == *addr && is_online
+                        peer == addr && is_online
                     })
                     .map(|state| state.xfer.clone())
                     .collect::<Vec<_>>()
             };
 
             for xfer in incoming_transfers_to_trigger {
-                self.trigger_peer_incoming(xfer).await;
+                self.trigger_peer_incoming(xfer);
             }
         }
     }
@@ -248,7 +246,7 @@ impl Service {
             .send(Event::RequestQueued(xfer.clone()))
             .expect("Could not send a RequestQueued event, channel closed");
 
-        self.trigger_peer_outgoing(xfer).await;
+        self.trigger_peer_outgoing(xfer);
     }
 
     pub async fn download(
