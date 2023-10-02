@@ -35,10 +35,15 @@ class Scenario:
         id: str,
         desc: str,
         action_list: typing.Dict[str, ActionList],
+        tags: typing.List[str] = [],
     ):
         self._id = id
         self._desc = desc
         self._action_list = action_list
+        self._tags = tags
+
+    def tags(self):
+        return self._tags
 
     def desc(self):
         return self._desc
