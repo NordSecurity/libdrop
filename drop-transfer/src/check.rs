@@ -12,7 +12,7 @@ pub(crate) fn spawn(
     logger: Logger,
     guard: AliveGuard,
     stop: CancellationToken,
-) {
+) -> tokio::task::JoinHandle<()> {
     let id = xfer.id();
     let job = run(state, xfer, logger.clone());
 
@@ -27,7 +27,7 @@ pub(crate) fn spawn(
             },
             _ = job => (),
         }
-    });
+    })
 }
 
 async fn run(state: Arc<State>, xfer: Arc<IncomingTransfer>, logger: Logger) {
