@@ -1,10 +1,16 @@
 import logging
+from .colors import bcolors
 
-logger = logging.getLogger("global")
+logger = logging.getLogger("drop")
 
 handler = logging.StreamHandler()
 handler.setFormatter(
-    logging.Formatter("%(asctime)s:%(name)s:%(levelname)s:%(message)s")
+    logging.Formatter(
+        bcolors.BOLD
+        + "%(asctime)s:"
+        + bcolors.ENDC
+        + "%(name)s:%(levelname)s:%(message)s"
+    )
 )
 logger.setLevel(logging.DEBUG)
 logger.addHandler(handler)
