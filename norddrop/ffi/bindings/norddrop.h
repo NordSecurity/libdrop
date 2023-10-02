@@ -487,6 +487,22 @@ enum norddrop_result norddrop_new(struct norddrop **dev,
                                   struct norddrop_pubkey_cb pubkey_cb,
                                   const char *privkey);
 
+/**
+ * Set connectivity state of a peer
+ *
+ * # Arguments
+ *
+ * * `dev` - A pointer to the instance.
+ * * `peer` - peer address
+ * * `is_online` - 0 if offline, 1 if online
+ *
+ * # Safety
+ * The pointers provided should be valid
+ */
+enum norddrop_result norddrop_set_peer_state(const struct norddrop *dev,
+                                             const char *peer,
+                                             int64_t is_online);
+
 void __norddrop_force_export(enum norddrop_result,
                              struct norddrop_event_cb,
                              struct norddrop_logger_cb,
