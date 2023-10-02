@@ -3,7 +3,9 @@ import ctypes
 import json
 import typing
 import logging
-from enum import IntEnum
+from enum import IntEnum  # todo why two enums
+from enum import Enum
+
 from threading import Lock
 
 from . import event
@@ -11,8 +13,20 @@ from .logger import logger
 from .config import RUNNERS
 from .peer_resolver import peer_resolver
 
+import datetime
 
 DEBUG_PRINT_EVENT = True
+from .colors import bcolors
+
+
+class PeerState(Enum):
+    Offline = 0
+    Online = 1
+
+
+def tprint(*args, **kwargs):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{timestamp}]", *args, **kwargs)
 
 
 class DropException(Exception):
@@ -102,7 +116,7 @@ class EventQueue:
 
     def callback(self, ctx, s: str):
         if DEBUG_PRINT_EVENT:
-            print("--- event: ", s, flush=True)
+            tprint(bcolors.HEADER + "--- event: ", s, bcolors.ENDC, flush=True)
 
         with self._lock:
             self._events.append(new_event(s))
@@ -180,8 +194,12 @@ class EventQueue:
                     found = False
                     for te in target_events:
                         if te == e:
-                            found = True
                             success.append(te)
+                            found = True
+                            tprint(
+                                f"*racy event({len(success)}/{len(target_events)}), found {e}",
+                                flush=True,
+                            )
                             break
 
                     if not found:
@@ -205,10 +223,8 @@ class KeysCtx:
         self.this = RUNNERS[hostname]
 
     def callback(self, ctx, ip, pubkey):
-        print(f"KeysCtx.callback({ctx}, {ip}, {pubkey})")
         ip = ip.decode("utf-8")
         peer = peer_resolver.reverse_lookup(ip)
-        print(f"KeysCtx.callback({ctx}, {ip}, {pubkey}) -> {peer}")
         if peer is None:
             return 1
 
@@ -301,6 +317,11 @@ class Drop:
         norddrop_lib.norddrop_new_transfer.restype = ctypes.c_char_p
         norddrop_lib.norddrop_get_transfers_since.restype = ctypes.c_char_p
 
+        norddrop_lib.norddrop_set_peer_state.argtypes = (
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+            ctypes.c_int,
+        )
         norddrop_lib.norddrop_start.argtypes = (
             ctypes.c_void_p,
             ctypes.c_char_p,
@@ -469,6 +490,20 @@ class Drop:
             raise DropException(f"get_transfers_since has failed)")
 
         return transfers.decode("utf-8")
+
+    def set_peer_state(self, peer: str, state: PeerState):
+        addr = peer_resolver.resolve(peer)
+        err = self._lib.norddrop_set_peer_state(
+            self._instance,
+            ctypes.create_string_buffer(bytes(addr, "utf-8")),
+            state.value,
+        )
+
+        if err != 0:
+            err_type = LibResult(err).name
+            raise DropException(
+                f"set_peer_state has failed with code: {err}({err_type})", err
+            )
 
     def purge_transfers_until(self, until_timestamp: int):
         err = self._lib.norddrop_purge_transfers_until(
@@ -678,4 +713,4 @@ def new_event(event_str: str) -> event.Event:
 
 def log_callback(ctx, level, msg):
     msg = msg.decode("utf-8")
-    logger.log(LOG_LEVEL_MAP.get(level), f"callback: {level}: {msg}")
+    logger.log(LOG_LEVEL_MAP.get(level), f"{msg}")
