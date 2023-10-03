@@ -169,6 +169,7 @@ def run():
                 networks.append(create_network(client, netname, i + 1))
 
                 scenario_results[scenario.id()] = []
+                                
                 for runner in scenario.runners():
                     COMMON_VOLUMES = {}
                     parent_dir = os.path.dirname(os.getcwd())
@@ -180,7 +181,8 @@ def run():
                     hostname = f"{runner}-{scenario.id()}"
                     print(f"Starting {hostname}...")
                     LIB_PATH = os.environ["LIB_PATH"]
-                    cmd = f"sh -c './run.py --runner={runner} --scenario={scenario.id()} --lib={LIB_PATH}'"
+                    # TODO: would be great to notify each container that all of their peers are online and DNS resolving now works instead of sleeping
+                    cmd = f"sh -c 'sleep 5 && ./run.py --runner={runner} --scenario={scenario.id()} --lib={LIB_PATH}'"
 
                     env = [
                         "RUST_BACKTRACE=1",
