@@ -155,7 +155,9 @@ async fn connect_to_peer(
         }
     };
 
-    let _ = state.transfer_manager.outgoing_disconnect(xfer.id()).await;
+    if let Err(e) = state.transfer_manager.outgoing_disconnect(xfer.id()).await {
+        error!(logger, "Failed to disconnect from transfer: {e:?}");
+    }
     control
 }
 

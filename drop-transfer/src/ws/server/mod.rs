@@ -402,11 +402,14 @@ impl RunContext<'_> {
         let job = async {
             self.client_loop(socket, handler, xfer).await;
 
-            let _ = self
+            if let Err(e) = self
                 .state
                 .transfer_manager
                 .incoming_disconnect(xfer_id)
-                .await;
+                .await
+            {
+                warn!(self.logger, "Failed to disconnect transfer: {e}");
+            }
         };
 
         tokio::select! {
@@ -429,7 +432,12 @@ impl RunContext<'_> {
 
         if let Err(err) = self.init_manager(req_send.clone(), &xfer).await {
             error!(self.logger, "Failed to init trasfer: {err:?}");
-            let _ = handler.on_error(&mut socket, err).await;
+            if let Err(e) = handler.on_error(&mut socket, err).await {
+                error!(
+                    self.logger,
+                    "Failed to close connection on invalid request: {:?}", e
+                );
+            }
             return;
         }
 
@@ -817,9 +825,11 @@ impl FileXferTask {
                             warn!(logger, "Failed to post finish: {err}");
                         }
 
-                        let _ = req_send.send(ServerReq::Done {
+                        if let Err(e) = req_send.send(ServerReq::Done {
                             file: self.file.id().clone(),
-                        });
+                        }) {
+                            error!(logger, "Failed to send DONE message: {e}");
+                        }
 
                         events.success(dst_location).await;
                     }
@@ -832,10 +842,12 @@ impl FileXferTask {
                             warn!(logger, "Failed to post finish: {err}");
                         }
 
-                        let _ = req_send.send(ServerReq::Fail {
+                        if let Err(e) = req_send.send(ServerReq::Fail {
                             file: self.file.id().clone(),
                             msg: err.to_string(),
-                        });
+                        }) {
+                            error!(logger, "Failed to send FAIL message: {e}");
+                        }
 
                         events.failed(err).await;
                     }
