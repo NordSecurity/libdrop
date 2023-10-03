@@ -135,8 +135,6 @@ impl Service {
         if let Some(handle) = self.tasks.get(&id) {
             if !handle.is_finished() {
                 return;
-            } else {
-                self.tasks.remove(&id);
             }
         }
 
@@ -158,8 +156,6 @@ impl Service {
         if let Some(handle) = self.tasks.get(&id) {
             if !handle.is_finished() {
                 return;
-            } else {
-                self.tasks.remove(&id);
             }
         }
 
@@ -193,9 +189,7 @@ impl Service {
                 for xfer in outgoing_transfers_to_trigger {
                     self.trigger_peer_outgoing(xfer);
                 }
-            }
 
-            if is_online {
                 let incoming_transfers_to_trigger = {
                     let xfers = self.state.transfer_manager.incoming.lock().await;
 
@@ -203,7 +197,7 @@ impl Service {
                         .values()
                         .filter(|state| {
                             let peer = state.xfer.peer();
-                            peer == addr && is_online
+                            peer == addr
                         })
                         .map(|state| state.xfer.clone())
                         .collect::<Vec<_>>()
