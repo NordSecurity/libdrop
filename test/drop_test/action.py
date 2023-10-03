@@ -315,10 +315,13 @@ class WaitForAnotherPeer(Action):
     async def run(self, drop: ffi.Drop):
         ip = peer_resolver.resolve(self._peer)
 
+        is_ipv6 = ":" in ip
+
+        net_type = socket.AF_INET6 if is_ipv6 else socket.AF_INET
         if self._state == PeerState.Online:
             while True:
                 try:
-                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    s = socket.socket(net_type, socket.SOCK_STREAM)
                     s.connect((ip, 49111))
                     s.close()
                     break
@@ -327,7 +330,7 @@ class WaitForAnotherPeer(Action):
         else:
             while True:
                 try:
-                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    s = socket.socket(net_type, socket.SOCK_STREAM)
                     s.connect((ip, 49111))
                     s.close()
                     await asyncio.sleep(0.1)
