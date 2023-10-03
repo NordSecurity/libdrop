@@ -84,7 +84,7 @@ impl FileImpl {
         // create unique temp path
         let temp_path = format!("{}.tmp.{}", self.event_path, uuid::Uuid::new_v4());
 
-        File::create(&temp_path)?.write_all(payload.as_bytes())?;
+        std::fs::write(&temp_path, payload.as_bytes())?;
         std::fs::rename(temp_path, &self.event_path)?;
 
         Ok(())
