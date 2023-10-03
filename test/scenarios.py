@@ -22,7 +22,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -172,7 +172,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -432,7 +432,7 @@ scenarios = [
                 [
                     action.ConfigureNetwork(latency="100ms"),
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -571,7 +571,7 @@ scenarios = [
                     action.Start("DROP_PEER_REN"),
                     action.ConfigureNetwork(),
                     # Wait for another peer to appear
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -628,7 +628,7 @@ scenarios = [
                     action.Start("DROP_PEER_REN"),
                     action.ConfigureNetwork(),
                     # Wait for another peer to appear
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -681,7 +681,7 @@ scenarios = [
                     action.Start("DROP_PEER_REN"),
                     action.ConfigureNetwork(),
                     # Wait for another peer to appear
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -742,7 +742,7 @@ scenarios = [
                     action.Start("DROP_PEER_REN"),
                     action.ConfigureNetwork(),
                     # Wait for another peer to appear
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -793,7 +793,7 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     action.ConfigureNetwork(),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/nested/big"]),
                     action.Wait(
                         event.Queued(
@@ -897,7 +897,7 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     # Wait for another peer to appear
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -1071,7 +1071,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/deep"]),
                     action.Wait(
                         event.Queued(
@@ -1284,7 +1284,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransferWithFD(
                         "DROP_PEER_STIMPY",
                         "/tmp/testfile-small",
@@ -1366,7 +1366,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -1487,7 +1487,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer(
                         "DROP_PEER_STIMPY",
                         ["/tmp/testfile.small.with.complicated.extension"],
@@ -1657,7 +1657,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     # fmt: off
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
                     action.Wait(event.Queued(0, { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
@@ -1782,7 +1782,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.Repeated(
                         [
@@ -1948,7 +1948,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.Repeated(
                         [
@@ -2131,7 +2131,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransferWithFD(
                         "DROP_PEER_STIMPY",
                         "/tmp/testfile-big",
@@ -2277,7 +2277,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransferWithFD(
                         "DROP_PEER_STIMPY", "/tmp/testfile-small", cached=True
                     ),
@@ -2430,7 +2430,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -2510,7 +2510,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -2577,7 +2577,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -2669,7 +2669,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransferFails(
                         "DROP_PEER_STIMPY", "/tmp/testfile-small-xd"
                     ),
@@ -2753,7 +2753,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -2838,7 +2838,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/deep/path"]),
                     action.Wait(
                         event.Queued(
@@ -3045,7 +3045,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer(
                         "DROP_PEER_STIMPY", ["/tmp/name", "/tmp/different/name"]
@@ -3167,7 +3167,7 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     action.ConfigureNetwork(),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -3311,7 +3311,7 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     action.ConfigureNetwork(),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransferFails("DROP_PEER_STIMPY", "/tmp/empty-dir"),
                     action.NoEvent(),
                 ]
@@ -3332,7 +3332,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -3405,7 +3405,7 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     # Wait for another peer to appear
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer(
                         "DROP_PEER_STIMPY",
                         [
@@ -3645,7 +3645,7 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     # Wait for another peer to appear
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer(
                         "DROP_PEER_STIMPY", ["/tmp/with-illegal-char-\x0A-"]
                     ),
@@ -3722,7 +3722,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer(
                         "DROP_PEER_STIMPY",
                         [
@@ -3922,7 +3922,7 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     action.ConfigureNetwork(latency="0.5s"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -4012,7 +4012,7 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     action.ConfigureNetwork(latency="0.5s"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -4026,7 +4026,7 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
@@ -4105,7 +4105,7 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     action.ConfigureNetwork(latency="0.5s"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/nested"]),
                     action.Wait(
                         event.Queued(
@@ -4136,7 +4136,7 @@ scenarios = [
                             event.Paused(0, FILES["nested/big/testfile-02"].id),
                         ]
                     ),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.WaitRacy(
                         [
@@ -4265,7 +4265,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/zero-sized-file"]),
                     action.Wait(
                         event.Queued(
@@ -4336,7 +4336,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer(
                         "DROP_PEER_STIMPY",
                         ["/tmp/testfile-small", "/tmp/duplicate/testfile-small"],
@@ -4447,7 +4447,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -4519,7 +4519,7 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     action.ConfigureNetwork(),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -4623,7 +4623,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.DropPrivileges(),
                     action.Start(
                         "DROP_PEER_REN",
@@ -4791,7 +4791,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -4849,7 +4849,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -4908,7 +4908,7 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     action.ConfigureNetwork(),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -4967,7 +4967,7 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     action.ConfigureNetwork(),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -5025,7 +5025,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -5091,7 +5091,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -5157,7 +5157,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -5229,7 +5229,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -5299,7 +5299,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -5377,7 +5377,7 @@ scenarios = [
             "DROP_PEER_REN6": ActionList(
                 [
                     action.Start("DROP_PEER_REN6"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY6", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -5530,7 +5530,7 @@ scenarios = [
                 [
                     action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-1-ren.sqlite"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -5717,7 +5717,7 @@ scenarios = [
                 [
                     action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -5733,7 +5733,7 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     # TODO: could be nice to actually signal the peer via docker that peer is online, this would reduce flakyness
                     action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.Wait(
@@ -5819,7 +5819,7 @@ scenarios = [
                 [
                     action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-3-ren.sqlite"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer(
                         "DROP_PEER_STIMPY",
                         [
@@ -5860,7 +5860,7 @@ scenarios = [
                     action.Wait(event.Progress(0, FILES["testfile-big"].id)),
                     action.Stop(),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     # start the sender again
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-3-ren.sqlite"),
                     action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
@@ -5947,10 +5947,10 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer(
                         "DROP_PEER_STIMPY",
                         [
@@ -5986,7 +5986,7 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.Sleep(4),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.Wait(
                         event.Start(0, FILES["testfile-big"].id, transferred=None)
@@ -6085,7 +6085,7 @@ scenarios = [
                 [
                     action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-5-ren.sqlite"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransferWithFD("DROP_PEER_STIMPY", "/tmp/testfile-big"),
                     action.Wait(
                         event.Queued(
@@ -6116,7 +6116,7 @@ scenarios = [
                     action.Wait(
                         event.Paused(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
                     ),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     # start the sender again
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-5-ren.sqlite"),
                     action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
@@ -6218,7 +6218,7 @@ scenarios = [
                     action.Stop(),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-6-ren.sqlite"),
                     action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
-                    action.Sleep(6),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.NoEvent(),
                 ]
@@ -6266,7 +6266,7 @@ scenarios = [
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-big"].id, False)
                     ),
-                    action.Sleep(4),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.NoEvent(),
                     action.Stop(),
@@ -6344,7 +6344,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-9-ren.sqlite"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -6427,7 +6427,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-10-ren.sqlite"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -6507,7 +6507,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-11-ren.sqlite"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -6566,7 +6566,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-12-ren.sqlite"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -6620,7 +6620,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-13-ren.sqlite"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
@@ -6697,7 +6697,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ExpectAnyError(
                         action.Parallel(
                             [
@@ -6737,7 +6737,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/31-1-ren.sqlite"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -6855,7 +6855,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/31-2-ren.sqlite"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -6973,7 +6973,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/31-1-ren.sqlite"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -7084,7 +7084,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/31-1-ren.sqlite"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -7195,7 +7195,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -7333,7 +7333,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -7471,7 +7471,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -7605,7 +7605,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/deep/path"]),
@@ -7712,7 +7712,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.WaitRacy(
@@ -7821,7 +7821,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer(
                         "DROP_PEER_STIMPY", ["../../tmp/testfile-small"]
@@ -7876,7 +7876,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.Repeated(
                         [
@@ -7908,7 +7908,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
@@ -7956,7 +7956,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(latency="10ms"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
@@ -8055,7 +8055,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(latency="100ms"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
@@ -8144,7 +8144,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
@@ -8195,7 +8195,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     # create a transfer so there would be transfer to be re-sent
                     action.Start("DROP_PEER_REN", "/tmp/data.base"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
@@ -8241,7 +8241,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN", "/tmp/data.base"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
@@ -8315,7 +8315,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(latency="1000ms"),
                     action.Start("DROP_PEER_REN", "/tmp/db/38.sqlite"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
@@ -8375,7 +8375,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -8453,7 +8453,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -8573,7 +8573,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/41-ren.sqlite"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -8638,7 +8638,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN", "/tmp/db/42-1-ren.sqlite"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
@@ -8694,7 +8694,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
@@ -8755,7 +8755,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -8826,7 +8826,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(latency="10ms"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
@@ -9078,7 +9078,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(latency="1ms"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
@@ -9248,7 +9248,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(latency="1ms"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
@@ -9418,7 +9418,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(latency="1000ms"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
@@ -9455,7 +9455,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.ExpectError(
                         action.Start("DROP_PEER_REN"), ReturnCodes.INSTANCE_START
