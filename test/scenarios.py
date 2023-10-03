@@ -3420,6 +3420,7 @@ scenarios = [
                             "/tmp/thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
                         ],
                     ),
+                    action.WaitForAnotherPeer("DROP_PEER_GEORGE"),
                     action.NewTransfer(
                         "DROP_PEER_GEORGE",
                         [
@@ -8207,7 +8208,6 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     # create a transfer so there would be transfer to be re-sent
                     action.Start("DROP_PEER_REN", "/tmp/data.base"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
@@ -8237,8 +8237,7 @@ scenarios = [
             ),
             "DROP_PEER_STIMPY": ActionList(
                 [
-                    # sleep some and enable libdrop instance
-                    action.Sleep(2),
+                    action.Sleep(4),
                     action.Start("DROP_PEER_STIMPY"),
                     action.NoEvent(),
                     action.Stop(),
@@ -8327,8 +8326,8 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(latency="1000ms"),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN", "/tmp/db/38.sqlite"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
@@ -8838,10 +8837,11 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(latency="10ms"),
                     action.Start("DROP_PEER_REN"),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.WaitForAnotherPeer("DROP_PEER_GEORGE"),
                     action.NewTransfer("DROP_PEER_GEORGE", ["/tmp/testfile-big"]),
                     action.WaitRacy(
                         [
@@ -9256,13 +9256,13 @@ scenarios = [
     ),
     Scenario(
         "scenario44-4",
-        "Initiate transfer to multiple peers that are online quickly and they will come and go online/offline multiple times",
+        "Initiate transfer to multiple peers that are online and they will come and go online/offline multiple times",
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(latency="1ms"),
                     action.Start("DROP_PEER_REN"),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
                         event.Queued(
@@ -9276,6 +9276,8 @@ scenarios = [
                             },
                         ),
                     ),
+                    # TODO: for such cases it would make sense to introduce "signals" for all of the peers to synchronize on
+                    action.WaitForAnotherPeer("DROP_PEER_GEORGE"),
                     action.NewTransfer("DROP_PEER_GEORGE", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
