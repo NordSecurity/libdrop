@@ -32,12 +32,14 @@ impl<'a> GatherCtx<'a> {
     pub fn new(config: &'a DropConfig) -> Self {
         Self {
             config,
+            #[cfg(unix)]
             fdresolv: None,
             files: Vec::new(),
             used_names: HashSet::new(),
         }
     }
 
+    #[cfg(unix)]
     pub fn with_fd_resover(&mut self, fdresolv: &'a super::FdResolver) -> &mut Self {
         self.fdresolv = Some(fdresolv);
         self
