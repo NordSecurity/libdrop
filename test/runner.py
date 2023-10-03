@@ -169,7 +169,7 @@ def run():
                 networks.append(create_network(client, netname, i + 1))
 
                 scenario_results[scenario.id()] = []
-                                
+
                 for runner in scenario.runners():
                     COMMON_VOLUMES = {}
                     parent_dir = os.path.dirname(os.getcwd())
