@@ -337,23 +337,31 @@ class CheckFileDoesNotExist(Action):
 # as it is the most common setup, a sleep on the sender side is usually added.
 # This function is just a nicer sleep for those cases to increase readability
 class WaitForAnotherPeer(Action):
-    def __init__(self, peer: str):
+    def __init__(self, peer: str, state: PeerState = PeerState.Online):
         self._peer = peer
-        
+        self._state = state
+
     async def run(self, drop: ffi.Drop):
         ip = peer_resolver.resolve(self._peer)
-        
-        # try to open cnnection to port 49111 on peer until we succeed
-        while True:
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.connect((ip, 49111))
-                s.close()
-                break
-            except:
-                await asyncio.sleep(0.1)
-                pass
-        # await asyncio.sleep(2)
+
+        if self._state == PeerState.Online:
+            while True:
+                try:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    s.connect((ip, 49111))
+                    s.close()
+                    break
+                except:
+                    await asyncio.sleep(0.1)
+        else:
+            while True:
+                try:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    s.connect((ip, 49111))
+                    s.close()
+                    await asyncio.sleep(0.1)
+                except:
+                    break
 
     def __str__(self):
         return f"WaitForAnotherPeer"

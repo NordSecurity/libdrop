@@ -6441,6 +6441,10 @@ scenarios = [
                             },
                         )
                     ),
+                    # give it some time to arrive
+                    # TODO: it would be better if we would have an explicit event for this
+                    # or slightly worse - coordinate testrunners from two peers via central container about stuff which happened
+                    action.Sleep(3),
                     action.Stop(),
                     action.Sleep(3),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-10-ren.sqlite"),
@@ -6474,7 +6478,7 @@ scenarios = [
                             },
                         )
                     ),
-                    action.Sleep(1),
+                    action.WaitForAnotherPeer("DROP_PEER_REN", PeerState.Offline),
                     action.Download(
                         0,
                         FILES["testfile-small"].id,
@@ -6521,6 +6525,10 @@ scenarios = [
                             },
                         )
                     ),
+                    # give it some time to arrive
+                    # TODO: it would be better if we would have an explicit event for this
+                    # or slightly worse - coordinate testrunners from two peers via central container about stuff which happened
+                    action.Sleep(3),
                     action.Stop(),
                     action.Sleep(3),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-11-ren.sqlite"),
@@ -6549,7 +6557,7 @@ scenarios = [
                             },
                         )
                     ),
-                    action.Sleep(1),
+                    action.WaitForAnotherPeer("DROP_PEER_REN", PeerState.Offline),
                     action.RejectTransferFile(0, FILES["testfile-small"].id),
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-small"].id, False)
@@ -6580,6 +6588,10 @@ scenarios = [
                             },
                         )
                     ),
+                    # give it some time to arrive
+                    # TODO: it would be better if we would have an explicit event for this
+                    # or slightly worse - coordinate testrunners from two peers via central container about stuff which happened
+                    action.Sleep(3),
                     action.Stop(),
                     action.Sleep(3),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-12-ren.sqlite"),
@@ -6606,7 +6618,7 @@ scenarios = [
                             },
                         )
                     ),
-                    action.Sleep(1),
+                    action.WaitForAnotherPeer("DROP_PEER_REN", PeerState.Offline),
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
