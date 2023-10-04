@@ -183,7 +183,7 @@ impl HandlerLoop<'_> {
                         .send(MsgToSend::from(&prot::ClientMsg::ReportChsum(report)))
                         .await
                     {
-                        error!(logger, "Failed to send checksum report: {:?}", e);
+                        warn!(logger, "Failed to send checksum report: {:?}", e);
                     };
                 }
                 Err(err) => {
@@ -212,7 +212,7 @@ impl HandlerLoop<'_> {
                         })
                         .await
                     {
-                        error!(logger, "Failed to send error message: {:?}", e);
+                        warn!(logger, "Failed to send error message: {:?}", e);
                     };
                 }
             }
@@ -438,7 +438,7 @@ impl handler::Uploader for Uploader {
             })
             .await
         {
-            error!(self.logger, "Failed to send error message: {:?}", e);
+            warn!(self.logger, "Failed to send error message: {:?}", e);
         };
     }
 

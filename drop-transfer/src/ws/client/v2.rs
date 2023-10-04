@@ -374,7 +374,7 @@ impl handler::Uploader for Uploader {
             })
             .await
         {
-            error!(self.logger, "Failed to send error message: {:?}", e);
+            warn!(self.logger, "Failed to send error message: {:?}", e);
         };
     }
 

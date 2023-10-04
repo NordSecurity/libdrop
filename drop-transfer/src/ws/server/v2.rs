@@ -411,7 +411,7 @@ impl Drop for Downloader {
     fn drop(&mut self) {
         if let Some(path) = self.tmp_loc.as_ref() {
             if let Err(e) = fs::remove_file(&path.0) {
-                error!(self.logger, "Failed to remove tmp file: {e}");
+                warn!(self.logger, "Failed to remove tmp file: {e}");
             }
         }
     }

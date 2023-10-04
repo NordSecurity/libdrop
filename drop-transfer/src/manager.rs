@@ -123,7 +123,7 @@ impl TransferManager {
                     sync::TransferState::Canceled => {
                         debug!(self.logger, "Incoming transfer is locally cancelled");
                         if let Err(e) = conn.send(ServerReq::Close) {
-                            error!(self.logger, "Failed to send close request: {}", e);
+                            warn!(self.logger, "Failed to send close request: {}", e);
                         }
                         drop(conn)
                     }
@@ -144,7 +144,7 @@ impl TransferManager {
                 {
                     warn!(self.logger, "Transfer was closed already");
                     if let Err(e) = conn.send(ServerReq::Close) {
-                        error!(self.logger, "Failed to send close request: {}", e);
+                        warn!(self.logger, "Failed to send close request: {}", e);
                     }
                     return Ok(false);
                 }
@@ -198,7 +198,7 @@ impl TransferManager {
             sync::TransferState::Canceled => {
                 debug!(self.logger, "Outgoing transfer is locally cancelled");
                 if let Err(e) = conn.send(ClientReq::Close) {
-                    error!(self.logger, "Failed to send close request: {}", e);
+                    warn!(self.logger, "Failed to send close request: {}", e);
                 }
                 drop(conn);
             }
@@ -312,7 +312,7 @@ impl TransferManager {
             if let Err(e) = conn.send(ClientReq::Reject {
                 file: file_id.clone(),
             }) {
-                error!(self.logger, "Failed to send reject request: {}", e);
+                warn!(self.logger, "Failed to send reject request: {}", e);
             };
         }
 
@@ -393,7 +393,7 @@ impl TransferManager {
             if let Err(e) = conn.send(ServerReq::Reject {
                 file: file_id.clone(),
             }) {
-                error!(self.logger, "Failed to send reject request: {}", e);
+                warn!(self.logger, "Failed to send reject request: {}", e);
             };
         }
 
@@ -577,7 +577,7 @@ impl TransferManager {
         if let Some(conn) = state.conn.take() {
             debug!(self.logger, "Pushing outgoing close request");
             if let Err(e) = conn.send(ServerReq::Close) {
-                error!(self.logger, "Failed to send close request: {}", e);
+                warn!(self.logger, "Failed to send close request: {}", e);
             }
         }
 
@@ -631,7 +631,7 @@ impl TransferManager {
                 if let Some(conn) = state.conn.take() {
                     debug!(self.logger, "Pushing incoming  close request");
                     if let Err(e) = conn.send(ClientReq::Close) {
-                        error!(self.logger, "Failed to send close request: {}", e);
+                        warn!(self.logger, "Failed to send close request: {}", e);
                     }
                 }
 
@@ -716,7 +716,7 @@ impl OutgoingState {
 
         for req in iter {
             if let Err(e) = conn.send(req) {
-                error!(logger, "Failed to send request: {}", e);
+                warn!(logger, "Failed to send request: {}", e);
             }
         }
     }
@@ -798,7 +798,7 @@ impl IncomingState {
             if let Err(e) = conn.send(ServerReq::Download {
                 task: Box::new(task),
             }) {
-                error!(logger, "Failed to send download request: {}", e);
+                warn!(logger, "Failed to send download request: {}", e);
             };
         }
 
@@ -868,7 +868,7 @@ impl IncomingState {
 
         for req in iter {
             if let Err(e) = conn.send(req) {
-                error!(logger, "Failed to send request: {}", e);
+                warn!(logger, "Failed to send request: {}", e);
             }
         }
     }

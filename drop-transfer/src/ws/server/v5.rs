@@ -148,7 +148,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
                 error!(self.logger, "Failed to prepare checksum info: {err}");
 
                 if let Err(e) = self.on_error(ws, err).await {
-                    error!(self.logger, "Failed to send error message: {e}");
+                    warn!(self.logger, "Failed to send error message: {e}");
                 }
                 return None;
             }
