@@ -488,11 +488,15 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             let loc = Hidden(loc);
 
             debug!(self.logger, "Removing temporary file: {loc:?}");
-            if let Err(err) = std::fs::remove_file(&*loc) {
-                debug!(
-                    self.logger,
-                    "Failed to delete temporary file: {loc:?}, {err}"
-                );
+            match std::fs::remove_file(&*loc) {
+                Ok(()) => (),
+                Err(err) if err.kind() == io::ErrorKind::NotFound => (),
+                Err(err) => {
+                    error!(
+                        self.logger,
+                        "Failed to delete temporary file, id: {file_id}, path {loc:?}, {err:?}",
+                    );
+                }
             }
         }
     }
