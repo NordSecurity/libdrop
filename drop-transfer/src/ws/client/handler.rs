@@ -6,6 +6,7 @@ use tokio_tungstenite::tungstenite::Message;
 use super::WebSocket;
 use crate::{ws, FileId, OutgoingTransfer};
 
+#[derive(Debug)]
 pub struct MsgToSend {
     pub msg: Message,
 }
