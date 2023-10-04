@@ -702,7 +702,16 @@ impl FileXferTask {
         };
 
         let dst = match self.place_file_into_dest(state, logger, tmp_loc).await {
-            Ok(dst) => dst,
+            Ok(dst) => {
+                info!(
+                    logger,
+                    "Sucesfully placed file for id {} into destination: {tmp_loc:?} -> {:?}",
+                    self.file.id(),
+                    Hidden(&dst)
+                );
+
+                dst
+            }
             Err(err) => {
                 error!(
                     logger,
