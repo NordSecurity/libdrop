@@ -6,7 +6,7 @@ use std::{
 };
 
 use drop_auth::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH};
-use drop_config::Config;
+use drop_config::{Config, DropConfig, MooseConfig};
 use drop_transfer::{auth, utils::Hidden, FileToSend, OutgoingTransfer, Service, Transfer};
 use slog::{debug, error, trace, warn, Logger};
 use tokio::sync::{mpsc, Mutex};
@@ -25,7 +25,7 @@ pub(super) struct NordDropFFI {
     instance: Arc<Mutex<Option<drop_transfer::Service>>>,
     event_dispatcher: Arc<EventDispatcher>,
     keys: Arc<auth::Context>,
-    config: Config,
+    config: DropConfig,
     #[cfg(unix)]
     fdresolv: Option<Arc<drop_transfer::file::FdResolver>>,
 }
@@ -73,7 +73,7 @@ impl NordDropFFI {
                 cb: event_cb,
                 logger: logger.clone(),
             }),
-            config: Config::default(),
+            config: DropConfig::default(),
             keys: Arc::new(crate_key_context(logger, privkey, pubkey_cb)),
             #[cfg(unix)]
             fdresolv: None,
@@ -81,59 +81,33 @@ impl NordDropFFI {
     }
 
     pub(super) fn start(&mut self, listen_addr: &str, config_json: &str) -> Result<()> {
-        let logger = self.logger.clone();
+        trace!(
+            self.logger,
+            "norddrop_start() listen address: {:?}",
+            listen_addr,
+        );
 
-        trace!(logger, "norddrop_start() listen address: {:?}", listen_addr,);
-
-        let config: types::Config = match serde_json::from_str(config_json) {
-            Ok(cfg) => {
-                debug!(logger, "start() called with config:\n{:#?}", cfg,);
-                cfg
-            }
-            Err(err) => {
-                error!(logger, "Failed to parse config: {}", err);
-                return Err(ffi::types::NORDDROP_RES_JSON_PARSE);
-            }
-        };
-
-        self.config = config.into();
-
-        if self.config.moose.event_path.is_empty() {
-            error!(logger, "Moose path cannot be empty");
-            return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
-        }
-
-        let moose = match drop_analytics::init_moose(
-            logger.clone(),
-            self.config.moose.event_path.clone(),
-            env!("DROP_VERSION").to_string(),
-            self.config.moose.prod,
-        ) {
-            Ok(moose) => moose,
-            Err(err) => {
-                error!(logger, "Failed to init moose: {:?}", err);
-
-                if !self.config.moose.prod {
-                    return Err(ffi::types::NORDDROP_RES_ERROR);
-                }
-
-                warn!(logger, "Falling back to mock moose implementation");
-                drop_analytics::moose_mock()
-            }
-        };
-
+        // Check preconditions first
+        let config = parse_and_validate_config(&self.logger, config_json)?;
         let addr: IpAddr = match listen_addr.parse() {
             Ok(addr) => addr,
             Err(err) => {
-                error!(logger, "Failed to parse IP address: {err}");
+                error!(self.logger, "Failed to parse IP address: {err}");
                 return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
             }
         };
 
-        let (tx, mut rx) = mpsc::unbounded_channel();
+        let mut instance = self.instance.blocking_lock();
+        if instance.is_some() {
+            return Err(ffi::types::NORDDROP_RES_INSTANCE_START);
+        };
+
+        // All good, let's proceed
+
+        let moose = initialize_moose(&self.logger, config.moose)?;
 
         let storage = Arc::new(open_database(
-            &self.config.drop.storage_path,
+            &config.drop.storage_path,
             &self.event_dispatcher,
             &self.logger,
             &moose,
@@ -144,6 +118,7 @@ impl NordDropFFI {
         let ed = self.event_dispatcher.clone();
         let event_logger = self.logger.clone();
         let event_storage = storage.clone();
+        let (tx, mut rx) = mpsc::unbounded_channel();
 
         self.rt.spawn(async move {
             let mut dispatch = drop_transfer::StorageDispatch::new(&event_storage);
@@ -160,41 +135,31 @@ impl NordDropFFI {
             }
         });
 
-        let mut instance = self.instance.clone().blocking_lock_owned();
-        if instance.is_some() {
-            return Err(ffi::types::NORDDROP_RES_INSTANCE_START);
-        }
+        match self.rt.block_on(Service::start(
+            addr,
+            storage,
+            tx,
+            self.logger.clone(),
+            Arc::new(config.drop.clone()),
+            moose,
+            self.keys.clone(),
+            #[cfg(unix)]
+            self.fdresolv.clone(),
+        )) {
+            Ok(srv) => instance.replace(srv),
+            Err(err) => {
+                error!(self.logger, "Failed to start the service: {}", err);
 
-        self.rt.block_on(async {
-            let service = match Service::start(
-                addr,
-                storage,
-                tx,
-                self.logger.clone(),
-                Arc::new(self.config.drop.clone()),
-                moose,
-                self.keys.clone(),
-                #[cfg(unix)]
-                self.fdresolv.clone(),
-            )
-            .await
-            {
-                Ok(srv) => srv,
-                Err(err) => {
-                    error!(self.logger, "Failed to start the service: {}", err);
+                let err = match err {
+                    drop_transfer::Error::AddrInUse => ffi::types::NORDDROP_RES_ADDR_IN_USE,
+                    _ => ffi::types::NORDDROP_RES_INSTANCE_START,
+                };
 
-                    let err = match err {
-                        drop_transfer::Error::AddrInUse => ffi::types::NORDDROP_RES_ADDR_IN_USE,
-                        _ => ffi::types::NORDDROP_RES_INSTANCE_START,
-                    };
+                return Err(err);
+            }
+        };
 
-                    return Err(err);
-                }
-            };
-
-            instance.replace(service);
-            Ok(())
-        })?;
+        self.config = config.drop;
 
         Ok(())
     }
@@ -343,7 +308,7 @@ impl NordDropFFI {
 
         let xfer = {
             let files = self.prepare_transfer_files(&descriptors)?;
-            OutgoingTransfer::new(peer.ip(), files, &self.config.drop).map_err(|e| {
+            OutgoingTransfer::new(peer.ip(), files, &self.config).map_err(|e| {
                 error!(
                     self.logger,
                     "Could not create transfer ({:?}): {}", descriptors, e
@@ -515,7 +480,7 @@ impl NordDropFFI {
         &self,
         descriptors: &[TransferDescriptor],
     ) -> Result<Vec<FileToSend>> {
-        let mut gather = drop_transfer::file::GatherCtx::new(&self.config.drop);
+        let mut gather = drop_transfer::file::GatherCtx::new(&self.config);
 
         #[cfg(unix)]
         if let Some(fdresolv) = self.fdresolv.as_ref() {
@@ -699,4 +664,50 @@ fn crate_fd_callback(
     let func = move |uri: &str| tokio::task::block_in_place(|| func(uri));
 
     Arc::new(func)
+}
+
+fn parse_and_validate_config(logger: &slog::Logger, config_json: &str) -> Result<Config> {
+    let config: Config = match serde_json::from_str::<types::Config>(config_json) {
+        Ok(cfg) => {
+            debug!(logger, "start() called with config:\n{cfg:#?}");
+            cfg.into()
+        }
+        Err(err) => {
+            error!(logger, "Failed to parse config: {err}");
+            return Err(ffi::types::NORDDROP_RES_JSON_PARSE);
+        }
+    };
+
+    if config.moose.event_path.is_empty() {
+        error!(logger, "Moose path cannot be empty");
+        return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
+    }
+
+    Ok(config)
+}
+
+fn initialize_moose(
+    logger: &slog::Logger,
+    MooseConfig { event_path, prod }: MooseConfig,
+) -> Result<Arc<dyn drop_analytics::Moose>> {
+    let moose = match drop_analytics::init_moose(
+        logger.clone(),
+        event_path,
+        env!("DROP_VERSION").to_string(),
+        prod,
+    ) {
+        Ok(moose) => moose,
+        Err(err) => {
+            error!(logger, "Failed to init moose: {err:?}");
+
+            if !prod {
+                return Err(ffi::types::NORDDROP_RES_ERROR);
+            }
+
+            warn!(logger, "Falling back to mock moose implementation");
+            drop_analytics::moose_mock()
+        }
+    };
+
+    Ok(moose)
 }

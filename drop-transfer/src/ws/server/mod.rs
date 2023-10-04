@@ -745,6 +745,7 @@ impl FileXferTask {
         Ok(dst)
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn run(
         mut self,
         state: Arc<State>,
@@ -753,6 +754,7 @@ impl FileXferTask {
         mut stream: UnboundedReceiver<Vec<u8>>,
         req_send: mpsc::UnboundedSender<ServerReq>,
         logger: Logger,
+        guard: AliveGuard,
     ) {
         let init_res = match downloader.init(&self).await {
             Ok(init) => init,
@@ -798,48 +800,66 @@ impl FileXferTask {
                     )
                     .await;
 
-                match result {
-                    Err(crate::Error::Canceled) => {
-                        if let Err(err) = state
-                            .transfer_manager
-                            .incoming_download_cancel(self.xfer.id(), self.file.id())
-                            .await
-                        {
-                            warn!(logger, "Failed to store download finish: {err}");
+                // This is a critical part that we need to execute atomically.
+                // Since the outter task can be aborted, let's move it to a separate task
+                // so that it's never interrupted.
+                let _ = tokio::spawn(async move {
+                    let _guard = guard;
+
+                    match result {
+                        Err(crate::Error::Canceled) => {
+                            info!(logger, "File {} cancelled", self.file.id());
+
+                            if let Err(err) = state
+                                .transfer_manager
+                                .incoming_download_cancel(self.xfer.id(), self.file.id())
+                                .await
+                            {
+                                warn!(logger, "Failed to store download finish: {err}");
+                            }
+                        }
+                        Ok(dst_location) => {
+                            info!(logger, "File {} downloaded succesfully", self.file.id());
+
+                            if let Err(err) = state
+                                .transfer_manager
+                                .incoming_finish_post(self.xfer.id(), self.file.id(), true)
+                                .await
+                            {
+                                warn!(logger, "Failed to post finish: {err}");
+                            }
+
+                            let _ = req_send.send(ServerReq::Done {
+                                file: self.file.id().clone(),
+                            });
+
+                            events.success(dst_location).await;
+                        }
+                        Err(err) => {
+                            info!(
+                                logger,
+                                "File {} finished with error: {err:?}",
+                                self.file.id()
+                            );
+
+                            if let Err(err) = state
+                                .transfer_manager
+                                .incoming_finish_post(self.xfer.id(), self.file.id(), false)
+                                .await
+                            {
+                                warn!(logger, "Failed to post finish: {err}");
+                            }
+
+                            let _ = req_send.send(ServerReq::Fail {
+                                file: self.file.id().clone(),
+                                msg: err.to_string(),
+                            });
+
+                            events.failed(err).await;
                         }
                     }
-                    Ok(dst_location) => {
-                        if let Err(err) = state
-                            .transfer_manager
-                            .incoming_finish_post(self.xfer.id(), self.file.id(), true)
-                            .await
-                        {
-                            warn!(logger, "Failed to post finish: {err}");
-                        }
-
-                        let _ = req_send.send(ServerReq::Done {
-                            file: self.file.id().clone(),
-                        });
-
-                        events.success(dst_location).await;
-                    }
-                    Err(err) => {
-                        if let Err(err) = state
-                            .transfer_manager
-                            .incoming_finish_post(self.xfer.id(), self.file.id(), false)
-                            .await
-                        {
-                            warn!(logger, "Failed to post finish: {err}");
-                        }
-
-                        let _ = req_send.send(ServerReq::Fail {
-                            file: self.file.id().clone(),
-                            msg: err.to_string(),
-                        });
-
-                        events.failed(err).await;
-                    }
-                }
+                })
+                .await;
             }
         }
     }
@@ -938,9 +958,9 @@ impl<'a> FileStreamCtx<'a> {
             } = self;
 
             jobs.spawn(async move {
-                let _guard = guard;
+                let _guard = guard.clone();
 
-                task.run(state, events, downloader, stream, req_send, logger)
+                task.run(state, events, downloader, stream, req_send, logger, guard)
                     .await;
             })
         };
