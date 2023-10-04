@@ -621,12 +621,11 @@ scenarios = [
     ),
     Scenario(
         "scenario4-2",
-        "Send a request with one file, cancel the transfer from the sender side before downloading",
+        "Send a request with one file, cancel the transfer from the sender side, expect cancel message be synced",
         {
             "DROP_PEER_REN": ActionList(
                 [
                     action.Start("DROP_PEER_REN"),
-                    action.ConfigureNetwork(),
                     # Wait for another peer to appear
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
@@ -640,7 +639,7 @@ scenarios = [
                             },
                         )
                     ),
-                    action.Sleep(1),
+                    action.Sleep(2),
                     action.CancelTransferRequest([0]),
                     action.Wait(event.FinishTransferCanceled(0, False)),
                     action.NoEvent(),
@@ -650,7 +649,6 @@ scenarios = [
             "DROP_PEER_STIMPY": ActionList(
                 [
                     action.Start("DROP_PEER_STIMPY"),
-                    action.ConfigureNetwork(),
                     action.Wait(
                         event.Receive(
                             0,
