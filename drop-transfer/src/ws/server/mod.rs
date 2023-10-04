@@ -408,7 +408,7 @@ impl RunContext<'_> {
                 .incoming_disconnect(xfer_id)
                 .await
             {
-                error!(
+                warn!(
                     self.logger,
                     "transfer manager incoming_disconnect() failed: {:?}", e
                 );
@@ -436,7 +436,7 @@ impl RunContext<'_> {
         if let Err(err) = self.init_manager(req_send.clone(), &xfer).await {
             error!(self.logger, "Failed to init trasfer: {err:?}");
             if let Err(e) = handler.on_error(&mut socket, err).await {
-                error!(
+                warn!(
                     self.logger,
                     "Failed to close connection on invalid request: {:?}", e
                 );
@@ -844,7 +844,7 @@ impl FileXferTask {
                             if let Err(e) = req_send.send(ServerReq::Done {
                                 file: self.file.id().clone(),
                             }) {
-                                error!(logger, "Failed to send DONE message: {}", e);
+                                warn!(logger, "Failed to send DONE message: {}", e);
                             };
 
                             events.success(dst_location).await;
@@ -868,7 +868,7 @@ impl FileXferTask {
                                 file: self.file.id().clone(),
                                 msg: err.to_string(),
                             }) {
-                                error!(logger, "Failed to send FAIL message: {}", e);
+                                warn!(logger, "Failed to send FAIL message: {}", e);
                             };
 
                             events.failed(err).await;
