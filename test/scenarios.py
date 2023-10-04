@@ -5392,6 +5392,8 @@ scenarios = [
                             0, FILES["testfile-small"].id, Error.FILE_REJECTED
                         ),
                     ),
+                    # Canceling the transfer is actually emiting CLOSE frame which is not enqueued, meaning we need to give some time in order for the reject message to go back to the sender
+                    action.Sleep(4),
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
