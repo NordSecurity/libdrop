@@ -1340,6 +1340,42 @@ impl Storage {
         }
     }
 
+    pub async fn fetch_base_dirs_for_file(&self, transfer_id: Uuid, file_id: &str) -> Vec<String> {
+        let tid = transfer_id.to_string();
+
+        trace!(
+            self.logger,
+            "Fetching temporary file locations";
+            "transfer_id" => &tid
+        );
+
+        let task = async {
+            let conn = self.conn.lock().await;
+
+            let out = conn
+                .prepare(
+                    r#"
+                SELECT DISTINCT base_dir
+                FROM incoming_paths ip
+                INNER JOIN incoming_path_pending_states ipss ON ip.id = ipss.path_id 
+                WHERE transfer_id = ?1 AND path_hash = ?2
+                "#,
+                )?
+                .query_map(params![tid, file_id], |row| row.get("base_dir"))?
+                .collect::<QueryResult<_>>()?;
+
+            Ok::<Vec<_>, Error>(out)
+        };
+
+        match task.await {
+            Ok(res) => res,
+            Err(e) => {
+                error!(self.logger, "Failed to fetch temporary file locations for {file_id}"; "error" => %e);
+                vec![]
+            }
+        }
+    }
+
     pub async fn cleanup_garbage_transfers(&self) -> usize {
         trace!(self.logger, "Removing garbage transfers");
 
