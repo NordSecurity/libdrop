@@ -40,7 +40,6 @@ jobs:
             --color always --lib --release
             --
             --allow unknown-lints
-            --deny clippy::let_underscore_must_use
             --deny clippy::unused_async
             --deny clippy::wildcard_imports
             --deny clippy::unwrap_used
