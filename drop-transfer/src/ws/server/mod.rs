@@ -479,18 +479,21 @@ impl RunContext<'_> {
             anyhow::Ok(())
         };
 
-        if let Err(err) = task.await {
+        let result = task.await;
+        info!(self.logger, "Connection loop finished");
+
+        jobs.shutdown().await;
+
+        if let Err(err) = result {
             info!(
                 self.logger,
                 "WS connection broke for {}: {err:?}",
                 xfer.id()
             );
         } else {
-            debug!(self.logger, "Sucesfully finalizing transfer loop");
+            info!(self.logger, "Sucesfully finalizing transfer loop");
             handler.finalize_success().await;
         }
-
-        jobs.shutdown().await;
     }
 
     async fn init_manager(
