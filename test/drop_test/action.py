@@ -20,6 +20,7 @@ from .peer_resolver import peer_resolver
 
 import sys
 
+
 def to_num(s: str):
     if s.isnumeric():
         try:
