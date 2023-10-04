@@ -3,7 +3,7 @@ mod id;
 mod reader;
 
 use std::{
-    fmt, fs,
+    fmt,
     io::{self, Read, Write},
     path::{Path, PathBuf},
 };
@@ -186,7 +186,7 @@ impl FileToSend {
         hash.update(unique_id.to_ne_bytes());
         let file_id = FileId::from(hash);
 
-        let f = unsafe { fs::File::from_raw_fd(fd) };
+        let f = unsafe { std::fs::File::from_raw_fd(fd) };
 
         let create_file = || {
             let meta = f.metadata()?;

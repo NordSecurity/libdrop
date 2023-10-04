@@ -66,7 +66,7 @@ fn prepare_sqlite_file(path: &str) -> io::Result<OpenFlags> {
 }
 
 #[cfg(not(unix))]
-fn prepare_sqlite_file(path: &str) -> io::Result<OpenFlags> {
+fn prepare_sqlite_file(_: &str) -> io::Result<OpenFlags> {
     Ok(OpenFlags::default())
 }
 
