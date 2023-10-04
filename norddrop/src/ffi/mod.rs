@@ -502,7 +502,7 @@ pub extern "C" fn norddrop_purge_transfers_until(
 ///      ]
 ///  }
 /// ```
-///
+/// 
 /// # JSON example from the receiver side
 /// ```json
 /// {
