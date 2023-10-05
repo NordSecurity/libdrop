@@ -462,20 +462,14 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             .storage
             .fetch_temp_locations(self.xfer.id())
             .await;
-        for file in files {
-            let file_id = FileId::from(file.file_id);
 
-            let loc = PathBuf::from(file.base_path).join(temp_file_name(self.xfer.id(), &file_id));
-            let loc = Hidden(loc);
-
-            debug!(self.logger, "Removing temporary file: {loc:?}");
-            if let Err(err) = std::fs::remove_file(&*loc) {
-                debug!(
-                    self.logger,
-                    "Failed to delete temporary file: {loc:?}, {err}"
-                );
-            }
-        }
+        super::remove_temp_files(
+            self.logger,
+            self.xfer.id(),
+            files
+                .into_iter()
+                .map(|tmp| (tmp.base_path, FileId::from(tmp.file_id))),
+        );
     }
 }
 
@@ -526,7 +520,7 @@ impl handler::Downloader for Downloader {
 
         let tmp_location: Hidden<PathBuf> = Hidden(
             task.base_dir
-                .join(temp_file_name(task.xfer.id(), task.file.id())),
+                .join(super::temp_file_name(task.xfer.id(), task.file.id())),
         );
 
         // Check if we can resume the temporary file
@@ -618,8 +612,4 @@ impl handler::Downloader for Downloader {
 
         Ok(())
     }
-}
-
-fn temp_file_name(transfer_id: uuid::Uuid, file_id: &FileId) -> String {
-    format!("{}-{file_id}.dropdl-part", transfer_id.as_simple(),)
 }

@@ -240,20 +240,37 @@ impl HandlerLoop<'_> {
     async fn on_reject(&mut self, file_id: FileId) {
         info!(self.logger, "On reject file {file_id}");
 
-        match self
+        let result = self
             .state
             .transfer_manager
             .incoming_terminal_recv(self.xfer.id(), &file_id, FileTerminalState::Rejected)
-            .await
-        {
+            .await;
+
+        // Stop the task right now regardless of the result
+        self.stop_task(&file_id, Status::FileRejected).await;
+
+        match result {
             Err(err) => {
                 error!(self.logger, "Failed to handler file rejection: {err}");
             }
-            Ok(Some(res)) => res.events.rejected(true).await,
+            Ok(Some(res)) => {
+                // Try to delete temporary files
+                let tmp_bases = self
+                    .state
+                    .storage
+                    .fetch_base_dirs_for_file(self.xfer.id(), file_id.as_ref())
+                    .await;
+
+                super::remove_temp_files(
+                    self.logger,
+                    self.xfer.id(),
+                    tmp_bases.into_iter().map(|base| (base, &file_id)),
+                );
+
+                res.events.rejected(true).await;
+            }
             Ok(None) => (),
         }
-
-        self.stop_task(&file_id, Status::FileRejected).await;
     }
 
     async fn stop_task(&mut self, file_id: &FileId, status: Status) {
@@ -398,6 +415,20 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         socket.send(Message::from(&msg)).await?;
 
         self.stop_task(&file_id, Status::FileRejected).await;
+
+        // Try to delete temporary file
+        let tmp_bases = self
+            .state
+            .storage
+            .fetch_base_dirs_for_file(self.xfer.id(), file_id.as_ref())
+            .await;
+
+        super::remove_temp_files(
+            self.logger,
+            self.xfer.id(),
+            tmp_bases.into_iter().map(|base| (base, &file_id)),
+        );
+
         Ok(())
     }
 
@@ -481,20 +512,14 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             .storage
             .fetch_temp_locations(self.xfer.id())
             .await;
-        for file in files {
-            let file_id = FileId::from(file.file_id);
 
-            let loc = PathBuf::from(file.base_path).join(temp_file_name(self.xfer.id(), &file_id));
-            let loc = Hidden(loc);
-
-            debug!(self.logger, "Removing temporary file: {loc:?}");
-            if let Err(err) = std::fs::remove_file(&*loc) {
-                debug!(
-                    self.logger,
-                    "Failed to delete temporary file: {loc:?}, {err}"
-                );
-            }
-        }
+        super::remove_temp_files(
+            self.logger,
+            self.xfer.id(),
+            files
+                .into_iter()
+                .map(|tmp| (tmp.base_path, FileId::from(tmp.file_id))),
+        );
     }
 }
 
@@ -545,7 +570,7 @@ impl handler::Downloader for Downloader {
 
         let tmp_location: Hidden<PathBuf> = Hidden(
             task.base_dir
-                .join(temp_file_name(task.xfer.id(), task.file.id())),
+                .join(super::temp_file_name(task.xfer.id(), task.file.id())),
         );
 
         // Check if we can resume the temporary file
@@ -651,8 +676,4 @@ impl handler::Request for (prot::TransferRequest, IpAddr, Arc<DropConfig>) {
         IncomingTransfer::new_with_uuid(peer, files, id, &config)
             .context("Failed to crate transfer")
     }
-}
-
-fn temp_file_name(transfer_id: uuid::Uuid, file_id: &FileId) -> String {
-    format!("{}-{file_id}.dropdl-part", transfer_id.as_simple(),)
 }

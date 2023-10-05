@@ -5,6 +5,7 @@ mod v4;
 mod v5;
 
 use std::{
+    borrow::Borrow,
     collections::HashMap,
     fs,
     io::{self, Write},
@@ -479,18 +480,21 @@ impl RunContext<'_> {
             anyhow::Ok(())
         };
 
-        if let Err(err) = task.await {
+        let result = task.await;
+        info!(self.logger, "Connection loop finished");
+
+        jobs.shutdown().await;
+
+        if let Err(err) = result {
             info!(
                 self.logger,
                 "WS connection broke for {}: {err:?}",
                 xfer.id()
             );
         } else {
-            debug!(self.logger, "Sucesfully finalizing transfer loop");
+            info!(self.logger, "Sucesfully finalizing transfer loop");
             handler.finalize_success().await;
         }
-
-        jobs.shutdown().await;
     }
 
     async fn init_manager(
@@ -679,6 +683,9 @@ impl FileXferTask {
                 }
             }
 
+            // Close the file handle
+            drop(out_file);
+
             if bytes_received > self.file.size() {
                 return Err(crate::Error::UnexpectedData);
             }
@@ -687,19 +694,35 @@ impl FileXferTask {
             Ok(())
         };
 
-        if let Err(err) = consume_file_chunks.await {
-            if let Err(ioerr) = fs::remove_file(&tmp_loc.0) {
-                error!(
-                    logger,
-                    "Could not remove temporary file {tmp_loc:?} after failed download: {}", ioerr
-                );
-            }
+        match consume_file_chunks.await {
+            Err(err @ crate::Error::Canceled) => return Err(err), // Do not remove temp file
+            // when cancelled. We might
+            // resume
+            Err(err) => {
+                if let Err(ioerr) = fs::remove_file(&tmp_loc.0) {
+                    error!(
+                        logger,
+                        "Could not remove temporary file {tmp_loc:?} after failed download: {}",
+                        ioerr
+                    );
+                }
 
-            return Err(err);
+                return Err(err);
+            }
+            _ => (),
         };
 
         let dst = match self.place_file_into_dest(state, logger, tmp_loc).await {
-            Ok(dst) => dst,
+            Ok(dst) => {
+                info!(
+                    logger,
+                    "Sucesfully placed file for id {} into destination: {tmp_loc:?} -> {:?}",
+                    self.file.id(),
+                    Hidden(&dst)
+                );
+
+                dst
+            }
             Err(err) => {
                 error!(
                     logger,
@@ -967,4 +990,35 @@ impl<'a> FileStreamCtx<'a> {
 
         Ok((job, events))
     }
+}
+
+pub fn remove_temp_files<P, I>(
+    logger: &Logger,
+    transfer_id: uuid::Uuid,
+    iter: impl IntoIterator<Item = (P, I)>,
+) where
+    P: Into<PathBuf>,
+    I: Borrow<FileId>,
+{
+    for (base, file_id) in iter.into_iter() {
+        let file_id = file_id.borrow();
+        let location = base.into().join(temp_file_name(transfer_id, file_id));
+        let location = Hidden(location);
+
+        debug!(logger, "Removing temporary file: {location:?}");
+        match std::fs::remove_file(&*location) {
+            Ok(()) => (),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => (),
+            Err(err) => {
+                error!(
+                    logger,
+                    "Failed to delete temporary file, id: {file_id}, path {location:?}, {err:?}",
+                );
+            }
+        }
+    }
+}
+
+fn temp_file_name(transfer_id: uuid::Uuid, file_id: &FileId) -> String {
+    format!("{}-{file_id}.dropdl-part", transfer_id.as_simple(),)
 }
