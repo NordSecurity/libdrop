@@ -9543,7 +9543,7 @@ scenarios = [
         tags=["offline", "multiple-peers"],
     ),
     Scenario(
-        "scenario44",
+        "scenario45",
         "Check if the transfer request and cancelation are suppressed within a huge latency network",
         {
             "DROP_PEER_REN": ActionList(
@@ -9580,7 +9580,7 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario45",
+        "scenario46",
         "Start instace twice on sender and receiver. Then expect transfer to work properly",
         {
             "DROP_PEER_REN": ActionList(
@@ -9637,19 +9637,19 @@ scenarios = [
                     action.Download(
                         0,
                         FILES["testfile-small"].id,
-                        "/tmp/received",
+                        "/tmp/received/46",
                     ),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
                             FILES["testfile-small"].id,
-                            "/tmp/received/testfile-small",
+                            "/tmp/received/46/testfile-small",
                         )
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            action.File("/tmp/received/testfile-small", 1048576),
+                            action.File("/tmp/received/46/testfile-small", 1048576),
                         ],
                     ),
                     action.CancelTransferRequest([0]),
@@ -9661,12 +9661,12 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario46-1",
+        "scenario47-1",
         "Assert the temporary files are removed right after the rejection from the receiver",
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
@@ -9710,7 +9710,7 @@ scenarios = [
                     action.Download(
                         0,
                         FILES["testfile-big"].id,
-                        "/tmp/received/45-1",
+                        "/tmp/received/47-1",
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     # wait for the initial progress indicating that we start from the beginning
@@ -9725,8 +9725,8 @@ scenarios = [
                             False,
                         )
                     ),
-                    action.CompareTrees(Path("/tmp/received/45-1"), []),
-                    action.CancelTransferRequest(0),
+                    action.CompareTrees(Path("/tmp/received/47-1"), []),
+                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.Stop(),
                 ]
@@ -9734,12 +9734,12 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario46-2",
+        "scenario47-2",
         "Assert the temporary files are removed right after the rejection from the sender",
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
@@ -9788,7 +9788,7 @@ scenarios = [
                     action.Download(
                         0,
                         FILES["testfile-big"].id,
-                        "/tmp/received/45-1",
+                        "/tmp/received/47-2",
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
@@ -9798,8 +9798,8 @@ scenarios = [
                             True,
                         )
                     ),
-                    action.CompareTrees(Path("/tmp/received/45-2"), []),
-                    action.CancelTransferRequest(0),
+                    action.CompareTrees(Path("/tmp/received/47-2"), []),
+                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.Stop(),
                 ]
@@ -9807,12 +9807,12 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario46-3",
+        "scenario47-3",
         "Assert the temporary files are removed right after the rejection from the receiver and the sender is offline",
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
@@ -9856,7 +9856,7 @@ scenarios = [
                     action.Download(
                         0,
                         FILES["testfile-big"].id,
-                        "/tmp/received/45-1",
+                        "/tmp/received/47-3",
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
@@ -9868,7 +9868,7 @@ scenarios = [
                             False,
                         )
                     ),
-                    action.CompareTrees(Path("/tmp/received/45-1"), []),
+                    action.CompareTrees(Path("/tmp/received/47-3"), []),
                     action.Stop(),
                 ]
             ),
