@@ -277,6 +277,19 @@ impl Service {
                 .await
             {
                 Ok(res) => {
+                    // Try to delete temporary files
+                    let tmp_bases = self
+                        .state
+                        .storage
+                        .fetch_base_dirs_for_file(transfer_id, file.as_ref())
+                        .await;
+
+                    super::ws::server::remove_temp_files(
+                        &self.logger,
+                        transfer_id,
+                        tmp_bases.into_iter().map(|base| (base, &file)),
+                    );
+
                     res.events.rejected(false).await;
                     return Ok(());
                 }

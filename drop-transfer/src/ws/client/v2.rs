@@ -45,6 +45,7 @@ pub struct HandlerLoop<'a, const PING: bool> {
 struct Uploader {
     sink: Sender<MsgToSend>,
     file_subpath: FileSubPath,
+    logger: slog::Logger,
 }
 
 struct FileTask {
@@ -158,6 +159,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                             Uploader {
                                 sink: self.upload_tx.clone(),
                                 file_subpath: file_id.clone(),
+                                logger: self.logger.clone(),
                             },
                             self.xfer.clone(),
                             file_id,
@@ -176,6 +178,7 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
                         Uploader {
                             sink: self.upload_tx.clone(),
                             file_subpath: file_id.clone(),
+                            logger: self.logger.clone(),
                         },
                         self.xfer.clone(),
                         file_id,
@@ -364,12 +367,15 @@ impl handler::Uploader for Uploader {
             msg,
         });
 
-        let _ = self
+        if let Err(e) = self
             .sink
             .send(MsgToSend {
                 msg: Message::from(&msg),
             })
-            .await;
+            .await
+        {
+            warn!(self.logger, "Failed to send error message: {:?}", e);
+        };
     }
 
     fn offset(&self) -> u64 {
