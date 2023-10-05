@@ -52,6 +52,7 @@ struct Downloader {
     file_subpath: FileSubPath,
     msg_tx: Sender<MsgToSend>,
     tmp_loc: Option<Hidden<PathBuf>>,
+    logger: slog::Logger,
 }
 
 struct FileTask {
@@ -246,6 +247,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
             file_subpath: ctx.task.file.subpath().clone(),
             msg_tx: self.msg_tx.clone(),
             tmp_loc: None,
+            logger: self.logger.clone(),
         };
         let (job, events) = ctx.start(downloader, chunks_rx).await?;
 
@@ -408,7 +410,9 @@ impl Downloader {
 impl Drop for Downloader {
     fn drop(&mut self) {
         if let Some(path) = self.tmp_loc.as_ref() {
-            let _ = fs::remove_file(&path.0);
+            if let Err(e) = fs::remove_file(&path.0) {
+                warn!(self.logger, "Failed to remove tmp file: {e}");
+            }
         }
     }
 }
