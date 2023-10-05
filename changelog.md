@@ -1,3 +1,14 @@
+### v5.3.0
+### **Tungsten Bullet**
+---
+* Fix the problem where sometimes the `FileDownloaded` event was not emitted when the peers were disconnecting rapidly
+* Ensure outstanding file streaming tasks are finished before removing temporary files. Add more logging around temporary files handling
+* Try to remove temporary files right away in the case of rejection 
+* Update the rustc to 1.72.1
+
+---
+<br>
+
 ### v5.2.0
 ### **Golden Bullet**
 ---
