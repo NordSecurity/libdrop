@@ -45,6 +45,7 @@ struct Uploader {
     sink: Sender<MsgToSend>,
     file_id: FileId,
     offset: u64,
+    logger: slog::Logger,
 }
 
 impl<'a> HandlerInit<'a> {
@@ -151,7 +152,7 @@ impl HandlerLoop<'_> {
         self.stop_task(&file_id, Status::FileFinished).await;
     }
 
-    async fn on_checksum(&self, jobs: &mut JoinSet<()>, file_id: FileId, limit: u64) {
+    fn on_checksum(&self, jobs: &mut JoinSet<()>, file_id: FileId, limit: u64) {
         let state = self.state.clone();
         let msg_tx = self.upload_tx.clone();
         let xfer = self.xfer.clone();
@@ -178,9 +179,12 @@ impl HandlerLoop<'_> {
 
             match make_report.await {
                 Ok(report) => {
-                    let _ = msg_tx
+                    if let Err(e) = msg_tx
                         .send(MsgToSend::from(&prot::ClientMsg::ReportChsum(report)))
-                        .await;
+                        .await
+                    {
+                        warn!(logger, "Failed to send checksum report: {:?}", e);
+                    };
                 }
                 Err(err) => {
                     error!(logger, "Failed to report checksum: {:?}", err);
@@ -202,11 +206,14 @@ impl HandlerLoop<'_> {
                         file: Some(file_id.clone()),
                         msg,
                     };
-                    let _ = msg_tx
+                    if let Err(e) = msg_tx
                         .send(MsgToSend {
                             msg: Message::from(&prot::ClientMsg::Error(msg)),
                         })
-                        .await;
+                        .await
+                    {
+                        warn!(logger, "Failed to send error message: {:?}", e);
+                    };
                 }
             }
         };
@@ -232,6 +239,7 @@ impl HandlerLoop<'_> {
                     sink: self.upload_tx.clone(),
                     file_id: file_id.clone(),
                     offset,
+                    logger: self.logger.clone(),
                 };
                 let state = self.state.clone();
                 let alive = self.alive.clone();
@@ -363,7 +371,7 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
             }) => self.on_done(file).await,
             prot::ServerMsg::Error(prot::Error { file, msg }) => self.on_error(file, msg).await,
             prot::ServerMsg::ReqChsum(prot::ReqChsum { file, limit }) => {
-                self.on_checksum(jobs, file, limit).await
+                self.on_checksum(jobs, file, limit)
             }
             prot::ServerMsg::Start(prot::Start { file, offset }) => {
                 self.on_start(socket, jobs, file, offset).await?
@@ -423,12 +431,15 @@ impl handler::Uploader for Uploader {
             msg,
         });
 
-        let _ = self
+        if let Err(e) = self
             .sink
             .send(MsgToSend {
                 msg: Message::from(&msg),
             })
-            .await;
+            .await
+        {
+            warn!(self.logger, "Failed to send error message: {:?}", e);
+        };
     }
 
     fn offset(&self) -> u64 {

@@ -514,6 +514,8 @@ impl NordDropFFI {
             if let Some(content_uri) = &desc.content_uri {
                 #[cfg(target_os = "windows")]
                 {
+                    let _ = content_uri;
+
                     error!(
                         self.logger,
                         "Specifying file descriptors in transfers is not supported under Windows"

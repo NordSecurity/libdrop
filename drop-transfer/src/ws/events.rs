@@ -177,7 +177,7 @@ impl FileEventTx<IncomingTransfer> {
     }
 
     pub async fn success(&self, final_path: impl Into<PathBuf>) {
-        self.stop(
+        self.force_stop(
             crate::Event::FileDownloadSuccess(
                 self.xfer.clone(),
                 crate::event::DownloadSuccess {
