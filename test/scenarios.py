@@ -8919,6 +8919,7 @@ scenarios = [
                 ]
             ),
         },
+        tags=["moose"],
     ),
     Scenario(
         "scenario-analytics-2",
@@ -9114,6 +9115,7 @@ scenarios = [
                 ]
             ),
         },
+        tags=["moose"],
     ),
     Scenario(
         "scenario-analytics-3",
@@ -9255,6 +9257,7 @@ scenarios = [
                 ]
             ),
         },
+        tags=["moose"],
     ),
     Scenario(
         "scenario-analytics-4",
@@ -9446,6 +9449,7 @@ scenarios = [
                 ]
             ),
         },
+        tags=["moose"],
     ),
     Scenario(
         "scenario-analytics-5",
@@ -9581,5 +9585,6 @@ scenarios = [
                 ]
             ),
         },
+        tags=["moose"],
     ),
 ]
