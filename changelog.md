@@ -1,3 +1,8 @@
+### v6.0.0
+### **UNRELEASED**
+---
+* Update moose tracker to v2.0.0
+
 ### v5.3.0
 ### **Tungsten Bullet**
 ---

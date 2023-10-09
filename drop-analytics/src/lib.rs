@@ -12,8 +12,7 @@ use slog::Logger;
 
 static INSTANCE: Mutex<Option<Weak<dyn Moose>>> = Mutex::new(None);
 
-#[allow(dead_code)]
-const MOOSE_STATUS_SUCCESS: i32 = 0;
+pub const MOOSE_STATUS_SUCCESS: i32 = 0;
 
 #[allow(dead_code)]
 const MOOSE_VALUE_NONE: i32 = -1;
@@ -26,38 +25,71 @@ pub enum TransferDirection {
     Download,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct TransferInfo {
-    pub mime_type_list: String,
-    pub extension_list: String,
-    pub file_size_list: String,
-    pub transfer_size_kb: i32,
-    pub file_count: i32,
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum TransferFilePhase {
+    #[serde(rename = "paused")]
+    Paused,
+    #[serde(rename = "finished")]
+    Finished,
 }
 
-#[derive(Default, Clone, Serialize, Deserialize)]
-pub struct FileInfo {
-    pub mime_type: String,
-    pub extension: String,
-    pub size_kb: i32,
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct InitEventData {
+    pub init_duration: i32,
+    pub result: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TransferIntentEventData {
+    pub transfer_id: String,
+    pub file_count: i32,
+    pub transfer_size: i32,
+    pub path_ids: String,
+    pub file_sizes: String,
+    pub extensions: String,
+    pub mime_types: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TransferStateEventData {
+    pub protocol_version: i32,
+    pub transfer_id: String,
+    pub result: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TransferFileEventData {
+    pub phase: TransferFilePhase,
+    pub transfer_id: String,
+    pub transfer_time: i32,
+    pub path_id: String,
+    pub direction: TransferDirection,
+    pub transferred: i32,
+    pub result: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DeveloperExceptionEventData {
+    pub code: i32,
+    pub note: String,
+    pub message: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DeveloperExceptionWithValueEventData {
+    pub arbitrary_value: i32,
+    pub code: i32,
+    pub note: String,
+    pub message: String,
+    pub name: String,
 }
 
 pub trait Moose: Send + Sync {
-    fn service_quality_initialization_init(&self, res: Result<(), i32>);
-    fn service_quality_transfer_batch(
-        &self,
-        transfer_id: String,
-        info: TransferInfo,
-        protocol_version: i32,
-    );
-    fn service_quality_transfer_file(
-        &self,
-        res: Result<(), i32>,
-        transfer_id: String,
-        transfer_time: i32,
-        direction: TransferDirection,
-        info: Option<FileInfo>,
-    );
+    fn event_init(&self, data: InitEventData);
+    fn event_transfer_intent(&self, data: TransferIntentEventData);
+    fn event_transfer_state(&self, data: TransferStateEventData);
+    fn event_transfer_file(&self, data: TransferFileEventData);
 
     /// Generic function for logging exceptions not related to specific
     /// transfers
@@ -66,7 +98,7 @@ pub trait Moose: Send + Sync {
     /// note - custom additional information
     /// message - error message
     /// name - name of the error
-    fn developer_exception(&self, code: i32, note: String, message: String, name: String);
+    fn developer_exception(&self, data: DeveloperExceptionEventData);
 
     /// Generic function for logging exceptions not related to specific
     /// transfers, with an arbitrary value
@@ -76,26 +108,20 @@ pub trait Moose: Send + Sync {
     /// note - custom additional information
     /// message - error message
     /// name - name of the error
-    fn developer_exception_with_value(
-        &self,
-        arbitrary_value: i32,
-        code: i32,
-        note: String,
-        message: String,
-        name: String,
-    );
+    fn developer_exception_with_value(&self, data: DeveloperExceptionWithValueEventData);
 }
 
 #[allow(unused_variables)]
 fn create(
     logger: Logger,
     event_path: String,
+    lib_version: String,
     app_version: String,
     prod: bool,
 ) -> anyhow::Result<Arc<dyn Moose>> {
     #[cfg(feature = "moose")]
     {
-        let moose = moose_impl::MooseImpl::new(logger, event_path, app_version, prod)?;
+        let moose = moose_impl::MooseImpl::new(logger, event_path, lib_version, app_version, prod)?;
         Ok(Arc::new(moose))
     }
     #[cfg(feature = "moose_file")]
@@ -103,6 +129,7 @@ fn create(
         Ok(Arc::new(file_impl::FileImpl::new(
             logger,
             event_path,
+            lib_version,
             app_version,
             prod,
         )))
@@ -117,6 +144,7 @@ fn create(
 pub fn init_moose(
     logger: Logger,
     event_path: String,
+    lib_version: String,
     app_version: String,
     prod: bool,
 ) -> anyhow::Result<Arc<dyn Moose>> {
@@ -125,7 +153,7 @@ pub fn init_moose(
     if let Some(arc) = lock.as_ref().and_then(Weak::upgrade) {
         Ok(arc)
     } else {
-        let arc = create(logger, event_path, app_version, prod)?;
+        let arc = create(logger, event_path, lib_version, app_version, prod)?;
 
         *lock = Some(Arc::downgrade(&arc));
 

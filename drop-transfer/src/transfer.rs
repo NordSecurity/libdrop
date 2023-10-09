@@ -1,13 +1,13 @@
 use std::{collections::HashMap, net::IpAddr};
 
-use drop_analytics::{TransferDirection, TransferInfo};
+use drop_analytics::{TransferDirection, TransferIntentEventData};
 use drop_config::DropConfig;
 use drop_storage::TransferInfo as StorageInfo;
 use uuid::Uuid;
 
 use crate::{
     file::{File, FileId, FileSource, FileSubPath, FileToRecv, FileToSend},
-    Error,
+    utils, Error,
 };
 
 pub type IncomingTransfer = TransferData<FileToRecv>;
@@ -28,31 +28,39 @@ pub trait Transfer {
             .find(|file| file.subpath() == file_subpath)
     }
 
-    fn info(&self) -> TransferInfo {
-        let info_list = self.files().values().map(|f| f.info()).collect::<Vec<_>>();
-
-        let size_list = info_list
-            .iter()
-            .map(|info| info.size_kb)
+    fn info(&self) -> TransferIntentEventData {
+        let size_list = self
+            .files()
+            .values()
+            .map(|f| utils::to_kb(f.size()))
             .collect::<Vec<i32>>();
 
-        TransferInfo {
-            mime_type_list: info_list
-                .iter()
-                .map(|info| info.mime_type.as_str())
+        TransferIntentEventData {
+            transfer_id: self.id().to_string(),
+            path_ids: self
+                .files()
+                .values()
+                .map(|f| f.id().to_string())
                 .collect::<Vec<_>>()
                 .join(","),
-            extension_list: info_list
-                .iter()
-                .map(|info| info.extension.as_str())
+            mime_types: self
+                .files()
+                .values()
+                .map(|f| f.mime_type())
                 .collect::<Vec<_>>()
                 .join(","),
-            file_size_list: size_list
+            extensions: self
+                .files()
+                .values()
+                .map(|f| f.subpath().extension().unwrap_or("none"))
+                .collect::<Vec<_>>()
+                .join(","),
+            file_sizes: size_list
                 .iter()
                 .map(i32::to_string)
                 .collect::<Vec<String>>()
                 .join(","),
-            transfer_size_kb: size_list.iter().sum(),
+            transfer_size: size_list.iter().sum(),
             file_count: self.files().len() as i32,
         }
     }

@@ -3,9 +3,10 @@ use std::{
     net::IpAddr,
     path::{Component, Path},
     sync::Arc,
+    time::Instant,
 };
 
-use drop_analytics::Moose;
+use drop_analytics::{InitEventData, Moose, TransferStateEventData};
 use drop_config::DropConfig;
 use drop_core::Status;
 use drop_storage::Storage;
@@ -20,7 +21,7 @@ use crate::{
     manager,
     tasks::AliveWaiter,
     ws::{self, FileEventTxFactory},
-    Error, Event, FileId, TransferManager,
+    Error, Event, FileId, Transfer, TransferManager,
 };
 
 pub(super) struct State {
@@ -54,6 +55,7 @@ impl Service {
         config: Arc<DropConfig>,
         moose: Arc<dyn Moose>,
         auth: Arc<auth::Context>,
+        init_time: Instant,
         #[cfg(unix)] fdresolv: Option<Arc<crate::FdResolver>>,
     ) -> Result<Self, Error> {
         let task = async {
@@ -96,14 +98,17 @@ impl Service {
         };
 
         let res = task.await;
-        moose.service_quality_initialization_init(res.to_status());
+
+        moose.event_init(InitEventData {
+            init_duration: init_time.elapsed().as_millis() as i32,
+            result: res.to_moose_status(),
+        });
 
         res
     }
 
     pub async fn stop(self) {
         self.stop.cancel();
-
         self.waiter.wait_for_all().await;
     }
 
@@ -113,12 +118,23 @@ impl Service {
 
     pub async fn send_request(&mut self, xfer: crate::OutgoingTransfer) {
         let xfer = Arc::new(xfer);
+
+        self.state.moose.event_transfer_intent(xfer.info());
+
         if let Err(err) = self
             .state
             .transfer_manager
             .insert_outgoing(xfer.clone())
             .await
         {
+            self.state
+                .moose
+                .event_transfer_state(TransferStateEventData {
+                    transfer_id: xfer.id().to_string(),
+                    result: i32::from(&err),
+                    protocol_version: 0,
+                });
+
             self.state
                 .event_tx
                 .send(Event::OutgoingTransferFailed(xfer.clone(), err, true))
@@ -172,7 +188,7 @@ impl Service {
     }
 
     /// Reject a single file in a transfer. After rejection the file can no
-    /// logner be transfered
+    /// longer be transferred
     pub async fn reject(&self, transfer_id: Uuid, file: FileId) -> crate::Result<()> {
         {
             match self
