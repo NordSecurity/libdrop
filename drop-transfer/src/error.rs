@@ -1,5 +1,6 @@
 use std::io::Error as IoError;
 
+use drop_analytics::MOOSE_STATUS_SUCCESS;
 use tokio_tungstenite::tungstenite;
 
 use crate::manager::FileTerminalState;
@@ -114,14 +115,14 @@ impl From<&Error> for i32 {
 }
 
 pub trait ResultExt {
-    fn to_status(&self) -> Result<(), i32>;
+    fn to_moose_status(&self) -> i32;
 }
 
 impl<T> ResultExt for super::Result<T> {
-    fn to_status(&self) -> Result<(), i32> {
+    fn to_moose_status(&self) -> i32 {
         match self {
-            Ok(_) => Ok(()),
-            Err(err) => Err(u32::from(err) as _),
+            Ok(_) => MOOSE_STATUS_SUCCESS,
+            Err(err) => u32::from(err) as _,
         }
     }
 }

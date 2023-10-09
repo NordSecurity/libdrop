@@ -10,7 +10,7 @@ use std::{
 #[cfg(unix)]
 use std::{os::unix::prelude::*, sync::Arc};
 
-use drop_analytics::{FileInfo, TransferDirection};
+use drop_analytics::TransferDirection;
 use drop_config::DropConfig;
 pub use gather::*;
 pub use id::{FileId, FileSubPath};
@@ -20,6 +20,11 @@ use sha2::Digest;
 use walkdir::WalkDir;
 
 use crate::{utils::Hidden, Error};
+
+pub struct FileInfo {
+    pub path_id: String,
+    pub direction: TransferDirection,
+}
 
 #[cfg(unix)]
 pub type FdResolver = dyn Fn(&str) -> Option<RawFd> + Send + Sync;
@@ -37,9 +42,8 @@ pub trait File {
 
     fn info(&self) -> FileInfo {
         FileInfo {
-            mime_type: self.mime_type().to_string(),
-            extension: self.subpath().extension().unwrap_or("none").to_string(),
-            size_kb: (self.size() as f64 / 1024.0).ceil() as i32,
+            path_id: self.id().to_string(),
+            direction: Self::direction(),
         }
     }
 }

@@ -16,7 +16,7 @@ use self::types::{
 };
 use crate::device::{NordDropFFI, Result as DevResult};
 
-/// Cehck if res is ok, else return early by converting Error into
+/// Check if res is ok, else return early by converting Error into
 /// norddrop_result
 macro_rules! ffi_try {
     ($expr:expr $(,)?) => {
