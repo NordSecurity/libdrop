@@ -2,7 +2,7 @@ mod handler;
 mod socket;
 mod v2;
 mod v4;
-mod v5;
+mod v6;
 
 use std::{
     borrow::Borrow,
@@ -303,7 +303,14 @@ async fn websocket_start(
         protocol::Version::V5 => {
             ctx.run(
                 socket,
-                v5::HandlerInit::new(peer.ip(), state, &logger, &alive),
+                v6::HandlerInit::new(peer.ip(), state, &logger, &alive),
+            )
+            .await
+        }
+        protocol::Version::V6 => {
+            ctx.run(
+                socket,
+                v6::HandlerInit::new(peer.ip(), state, &logger, &alive),
             )
             .await
         }
