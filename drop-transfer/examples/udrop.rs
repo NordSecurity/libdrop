@@ -355,7 +355,7 @@ async fn main() -> anyhow::Result<()> {
         config,
         drop_analytics::moose_mock(),
         Arc::new(auth),
-        None,
+        Instant::now(),
         #[cfg(unix)]
         None,
     )

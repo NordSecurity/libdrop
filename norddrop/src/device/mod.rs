@@ -145,7 +145,7 @@ impl NordDropFFI {
             Arc::new(config.drop.clone()),
             moose,
             self.keys.clone(),
-            Some(init_time),
+            init_time,
             #[cfg(unix)]
             self.fdresolv.clone(),
         )) {

@@ -59,7 +59,7 @@ impl Service {
         config: Arc<DropConfig>,
         moose: Arc<dyn Moose>,
         auth: Arc<auth::Context>,
-        init_time: Option<Instant>,
+        init_time: Instant,
         #[cfg(unix)] fdresolv: Option<Arc<crate::FdResolver>>,
     ) -> Result<Self, Error> {
         let task = async {
@@ -103,7 +103,7 @@ impl Service {
         let res = task.await;
 
         moose.event_init(InitEventData {
-            init_duration: init_time.unwrap_or_else(Instant::now).elapsed().as_millis() as i32,
+            init_duration: init_time.elapsed().as_millis() as i32,
             result: res.to_moose_status(),
         });
 
