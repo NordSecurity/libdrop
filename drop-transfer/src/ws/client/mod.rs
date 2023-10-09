@@ -2,7 +2,7 @@ mod handler;
 mod socket;
 mod v2;
 mod v4;
-mod v5;
+mod v6;
 
 use std::{
     io,
@@ -183,7 +183,11 @@ async fn connect_to_peer(
                 .await
         }
         Version::V5 => {
-            ctx.run(socket, v5::HandlerInit::new(state, logger, alive))
+            ctx.run(socket, v6::HandlerInit::new(state, logger, alive))
+                .await
+        }
+        Version::V6 => {
+            ctx.run(socket, v6::HandlerInit::new(state, logger, alive))
                 .await
         }
     };
