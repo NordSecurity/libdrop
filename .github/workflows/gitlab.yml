@@ -10,7 +10,7 @@ on:
 permissions: {}
 jobs:
   trigger-gitlab-pipeline:
-    runs-on: [self-hosted, libdrop]
+    runs-on: [self-hosted, gitlab]
     if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'run tests')) }}
     steps:
       - uses: NordSecurity/trigger-gitlab-pipeline@v1
