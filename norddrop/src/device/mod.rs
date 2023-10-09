@@ -1,14 +1,16 @@
 pub mod types;
+pub mod utils;
 
 use std::{
     net::{IpAddr, ToSocketAddrs},
     sync::Arc,
+    time::SystemTime,
 };
 
 use drop_analytics::DeveloperExceptionEventData;
 use drop_auth::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH};
 use drop_config::{Config, DropConfig, MooseConfig};
-use drop_transfer::{auth, utils::Hidden, FileToSend, OutgoingTransfer, Service, Transfer};
+use drop_transfer::{auth, utils::Hidden, Event, FileToSend, OutgoingTransfer, Service, Transfer};
 use slog::{debug, error, trace, warn, Logger};
 use tokio::sync::{mpsc, Mutex};
 
@@ -120,7 +122,7 @@ impl NordDropFFI {
         let ed = self.event_dispatcher.clone();
         let event_logger = self.logger.clone();
         let event_storage = storage.clone();
-        let (tx, mut rx) = mpsc::unbounded_channel();
+        let (tx, mut rx) = mpsc::unbounded_channel::<(Event, SystemTime)>();
 
         self.rt.spawn(async move {
             let mut dispatch = drop_transfer::StorageDispatch::new(&event_storage);
@@ -128,7 +130,7 @@ impl NordDropFFI {
             while let Some(e) = rx.recv().await {
                 debug!(event_logger, "emitting event: {:#?}", e);
 
-                dispatch.handle_event(&e).await;
+                dispatch.handle_event(&e.0).await;
                 // Android team reported problems with the event ordering.
                 // The events where dispatched in different order than where emitted.
                 // To fix that we need to process the events sequentially.
@@ -383,6 +385,7 @@ impl NordDropFFI {
                         file: file_id,
                         status: From::from(&e),
                     },
+                    timestamp: utils::current_timestamp(),
                 });
             }
         });
@@ -415,6 +418,8 @@ impl NordDropFFI {
                     data: FinishEvent::TransferFailed {
                         status: From::from(&e),
                     },
+
+                    timestamp: utils::current_timestamp(),
                 })
             }
         });
@@ -451,6 +456,7 @@ impl NordDropFFI {
                         file,
                         status: From::from(&err),
                     },
+                    timestamp: utils::current_timestamp(),
                 });
             }
         });
@@ -607,6 +613,7 @@ fn open_database(
                     // Inform app that we wiped the old DB file
                     events.dispatch(types::Event::RuntimeError {
                         status: drop_core::Status::DbLost,
+                        timestamp: utils::current_timestamp(),
                     });
                 };
 

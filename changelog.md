@@ -1,7 +1,13 @@
-### v6.0.0
-### **UNRELEASED**
+### v5.4.0
+### **Unforeseen Moose**
 ---
 * Update moose tracker to v2.0.0
+* Add `moose_app_version` field to config
+* Add timestamps to emitted events
+* Add DLL signing to Windows builds
+
+---
+<br>
 
 ### v5.3.0
 ### **Tungsten Bullet**
