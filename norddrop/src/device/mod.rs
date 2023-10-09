@@ -99,13 +99,16 @@ impl NordDropFFI {
 
         let mut instance = self.instance.blocking_lock();
         if instance.is_some() {
+            debug!(self.logger, "Instance is already started");
             return Err(ffi::types::NORDDROP_RES_INSTANCE_START);
         };
 
+        debug!(self.logger, "Starting the moose");
         // All good, let's proceed
 
         let moose = initialize_moose(&self.logger, config.moose)?;
 
+        debug!(self.logger, "Starting the storage");
         let storage = Arc::new(open_database(
             &config.drop.storage_path,
             &self.event_dispatcher,
@@ -120,6 +123,7 @@ impl NordDropFFI {
         let event_storage = storage.clone();
         let (tx, mut rx) = mpsc::unbounded_channel();
 
+        debug!(self.logger, "Starting the dispatcher");
         self.rt.spawn(async move {
             let mut dispatch = drop_transfer::StorageDispatch::new(&event_storage);
 
@@ -135,6 +139,7 @@ impl NordDropFFI {
             }
         });
 
+        debug!(self.logger, "Starting the service");
         match self.rt.block_on(Service::start(
             addr,
             storage,
@@ -152,7 +157,10 @@ impl NordDropFFI {
 
                 let err = match err {
                     drop_transfer::Error::AddrInUse => ffi::types::NORDDROP_RES_ADDR_IN_USE,
-                    _ => ffi::types::NORDDROP_RES_INSTANCE_START,
+                    _ => {
+                        debug!(self.logger, "Service start failed");
+                        ffi::types::NORDDROP_RES_INSTANCE_START
+                    },
                 };
 
                 return Err(err);
@@ -161,6 +169,7 @@ impl NordDropFFI {
 
         self.config = config.drop;
 
+        debug!(self.logger, "Libdrop instance successfully started");
         Ok(())
     }
 
@@ -353,6 +362,7 @@ impl NordDropFFI {
             dst
         );
 
+        // TODO: this differs between API calls
         let mut inst = self.instance.clone().blocking_lock_owned();
         if inst.is_none() {
             return Err(ffi::types::NORDDROP_RES_NOT_STARTED);
