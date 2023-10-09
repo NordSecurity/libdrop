@@ -282,12 +282,10 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
 
         if by_peer {
             self.state
-                .event_tx
-                .send(crate::Event::OutgoingTransferCanceled(
+                .emit_event(crate::Event::OutgoingTransferCanceled(
                     self.xfer.clone(),
                     by_peer,
-                ))
-                .expect("Could not send a transfer cancelled event, channel closed");
+                ));
         }
     }
 

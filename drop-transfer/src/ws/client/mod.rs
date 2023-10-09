@@ -130,10 +130,7 @@ async fn connect_to_peer(
                 protocol_version: 0,
             });
 
-            state
-                .event_tx
-                .send(Event::OutgoingTransferFailed(xfer.clone(), err, false))
-                .expect("Failed to send TransferFailed event");
+            state.emit_event(Event::OutgoingTransferFailed(xfer.clone(), err, false));
 
             return ControlFlow::Break(());
         }
