@@ -3,11 +3,13 @@ pub mod http;
 use base64::{engine::general_purpose::STANDARD_NO_PAD as BASE64, Engine};
 use rand::RngCore;
 
-pub const AUTH_SCHEME: &str = "drop";
+const AUTH_SCHEME: &str = "drop";
+const CLIENT_NONCE_PREFIX: &[u8] = b"c_";
+const SERVER_NONCE_PREFIX: &[u8] = b"s_";
 
-pub const NONCE_LEN: usize = 24;
 pub const PUBLIC_KEY_LENGTH: usize = 32;
 pub const SECRET_KEY_LENGTH: usize = 32;
+const NONCE_LEN: usize = 24;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Nonce(pub [u8; NONCE_LEN]);
@@ -17,9 +19,18 @@ pub use x25519_dalek::{PublicKey, StaticSecret as SecretKey};
 const DOMAIN_STRING: &str = "libdrop-auth";
 
 impl Nonce {
-    pub fn generate() -> Self {
+    pub fn generate_as_client() -> Self {
+        Self::gen(CLIENT_NONCE_PREFIX)
+    }
+
+    pub fn generate_as_server() -> Self {
+        Self::gen(SERVER_NONCE_PREFIX)
+    }
+
+    fn gen(prefix: &[u8]) -> Self {
         let mut dst = [0u8; NONCE_LEN];
-        rand::thread_rng().fill_bytes(&mut dst);
+        dst[..prefix.len()].copy_from_slice(prefix);
+        rand::thread_rng().fill_bytes(&mut dst[prefix.len()..]);
         Self(dst)
     }
 }
@@ -36,19 +47,21 @@ impl From<&[u8]> for Nonce {
 }
 
 pub fn authorize(
-    server_nonce: &Nonce,
-    server_secret: &SecretKey,
-    client_pubkey: &PublicKey,
-    http::Authorization { ticket, nonce }: &http::Authorization,
+    nonce: &Nonce,
+    secret: &SecretKey,
+    peers_pubkey: &PublicKey,
+    http::Authorization {
+        ticket,
+        nonce: peers_nonce,
+    }: &http::Authorization,
 ) -> Option<()> {
-    let nonce = Nonce::from(BASE64.decode(nonce).ok()?.as_slice());
-    if nonce != *server_nonce {
+    let peers_nonce = Nonce::from(BASE64.decode(peers_nonce).ok()?.as_slice());
+    if peers_nonce != *nonce {
         return None;
     }
 
     let client_tag = BASE64.decode(ticket).ok()?;
-
-    let tag = create_tag(server_secret, client_pubkey, nonce)?;
+    let tag = create_tag(secret, peers_pubkey, *nonce)?;
 
     if tag == client_tag {
         Some(())
@@ -57,14 +70,35 @@ pub fn authorize(
     }
 }
 
-pub fn create_ticket(
+pub fn create_ticket_as_client(
     client_secret: &SecretKey,
     server_pubkey: &PublicKey,
     http::WWWAuthenticate { nonce }: http::WWWAuthenticate,
+    check_prefix: bool,
 ) -> Option<http::Authorization> {
     let nonce_bytes = Nonce::from(BASE64.decode(&nonce).ok()?.as_slice());
+    if check_prefix && !nonce_bytes.0.starts_with(SERVER_NONCE_PREFIX) {
+        return None;
+    }
 
     let tag = create_tag(client_secret, server_pubkey, nonce_bytes)?;
+    let ticket = BASE64.encode(tag);
+
+    Some(http::Authorization { ticket, nonce })
+}
+
+pub fn create_ticket_as_server(
+    secret: &SecretKey,
+    peer_pubkey: &PublicKey,
+    http::WWWAuthenticate { nonce }: http::WWWAuthenticate,
+) -> Option<http::Authorization> {
+    let nonce_bytes = Nonce::from(BASE64.decode(&nonce).ok()?.as_slice());
+    // The client's nonce is prefixed on all versions
+    if !nonce_bytes.0.starts_with(CLIENT_NONCE_PREFIX) {
+        return None;
+    }
+
+    let tag = create_tag(secret, peer_pubkey, nonce_bytes)?;
     let ticket = BASE64.encode(tag);
 
     Some(http::Authorization { ticket, nonce })
