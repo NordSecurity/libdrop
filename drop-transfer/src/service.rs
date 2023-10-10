@@ -3,7 +3,7 @@ use std::{
     net::IpAddr,
     path::{Component, Path},
     sync::Arc,
-    time::Instant,
+    time::{Instant, SystemTime},
 };
 
 use drop_analytics::{InitEventData, Moose, TransferStateEventData};
@@ -25,7 +25,7 @@ use crate::{
 };
 
 pub(super) struct State {
-    pub(super) event_tx: mpsc::UnboundedSender<Event>,
+    pub(super) event_tx: mpsc::UnboundedSender<(Event, SystemTime)>,
     pub(super) transfer_manager: TransferManager,
     pub(crate) moose: Arc<dyn Moose>,
     pub(crate) auth: Arc<auth::Context>,
@@ -35,6 +35,14 @@ pub(super) struct State {
     pub(crate) addr: IpAddr,
     #[cfg(unix)]
     pub fdresolv: Option<Arc<crate::file::FdResolver>>,
+}
+
+impl State {
+    pub fn emit_event(&self, event: crate::Event) {
+        self.event_tx
+            .send((event, SystemTime::now()))
+            .expect("Failed to emit Event");
+    }
 }
 
 pub struct Service {
@@ -50,7 +58,7 @@ impl Service {
     pub async fn start(
         addr: IpAddr,
         storage: Arc<Storage>,
-        event_tx: mpsc::UnboundedSender<Event>,
+        event_tx: mpsc::UnboundedSender<(Event, SystemTime)>,
         logger: Logger,
         config: Arc<DropConfig>,
         moose: Arc<dyn Moose>,
@@ -136,17 +144,12 @@ impl Service {
                 });
 
             self.state
-                .event_tx
-                .send(Event::OutgoingTransferFailed(xfer.clone(), err, true))
-                .expect("Event channel should be open");
+                .emit_event(Event::OutgoingTransferFailed(xfer.clone(), err, true));
 
             return;
         }
 
-        self.state
-            .event_tx
-            .send(Event::RequestQueued(xfer.clone()))
-            .expect("Could not send a RequestQueued event, channel closed");
+        self.state.emit_event(Event::RequestQueued(xfer.clone()));
 
         ws::client::spawn(
             self.state.clone(),
@@ -253,9 +256,7 @@ impl Service {
                     .await;
 
                     self.state
-                        .event_tx
-                        .send(crate::Event::OutgoingTransferCanceled(res.xfer, false))
-                        .expect("Event channel should be open");
+                        .emit_event(crate::Event::OutgoingTransferCanceled(res.xfer, false));
 
                     return Ok(());
                 }
@@ -277,9 +278,7 @@ impl Service {
                     .await;
 
                     self.state
-                        .event_tx
-                        .send(crate::Event::IncomingTransferCanceled(res.xfer, false))
-                        .expect("Event channel should be open");
+                        .emit_event(crate::Event::IncomingTransferCanceled(res.xfer, false));
 
                     return Ok(());
                 }

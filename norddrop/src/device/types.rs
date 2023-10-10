@@ -1,5 +1,9 @@
+use std::time::SystemTime;
+
 use drop_transfer::{utils::Hidden, File as _, Transfer};
 use serde::{Deserialize, Serialize};
+
+use super::utils;
 
 #[derive(Deserialize, Debug)]
 pub struct TransferDescriptor {
@@ -13,12 +17,14 @@ pub struct EventTransferRequest {
     peer: String,
     transfer: String,
     files: Vec<File>,
+    timestamp: u64,
 }
 
 #[derive(Serialize)]
 pub struct EventRequestQueued {
     transfer: String,
     files: Vec<File>,
+    timestamp: u64,
 }
 
 #[derive(Serialize)]
@@ -33,6 +39,7 @@ pub struct StartEvent {
     transfer: String,
     file: String,
     transfered: u64,
+    timestamp: u64,
 }
 
 #[derive(Serialize)]
@@ -40,6 +47,7 @@ pub struct ProgressEvent {
     transfer: String,
     file: String,
     transfered: u64,
+    timestamp: u64,
 }
 
 #[derive(Serialize)]
@@ -88,13 +96,16 @@ pub enum Event {
         transfer: String,
         #[serde(flatten)]
         data: FinishEvent,
+        timestamp: u64,
     },
     RuntimeError {
         status: drop_core::Status,
+        timestamp: u64,
     },
     TransferPaused {
         transfer: String,
         file: String,
+        timestamp: u64,
     },
 }
 
@@ -117,8 +128,13 @@ impl From<&drop_transfer::Error> for Status {
     }
 }
 
-impl From<drop_transfer::Event> for Event {
-    fn from(e: drop_transfer::Event) -> Self {
+impl From<(drop_transfer::Event, SystemTime)> for Event {
+    fn from(event: (drop_transfer::Event, SystemTime)) -> Self {
+        let (e, timestamp) = event;
+        let timestamp = timestamp
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
         match e {
             drop_transfer::Event::RequestReceived(tx) => Event::RequestReceived(tx.as_ref().into()),
             drop_transfer::Event::RequestQueued(tx) => Event::RequestQueued(tx.as_ref().into()),
@@ -127,6 +143,7 @@ impl From<drop_transfer::Event> for Event {
                     transfer: tx.id().to_string(),
                     file: fid.to_string(),
                     transfered,
+                    timestamp,
                 })
             }
             drop_transfer::Event::FileDownloadStarted(tx, fid, _, transfered) => {
@@ -134,6 +151,7 @@ impl From<drop_transfer::Event> for Event {
                     transfer: tx.id().to_string(),
                     file: fid.to_string(),
                     transfered,
+                    timestamp,
                 })
             }
             drop_transfer::Event::FileUploadProgress(tx, fid, progress) => {
@@ -141,6 +159,7 @@ impl From<drop_transfer::Event> for Event {
                     transfer: tx.id().to_string(),
                     file: fid.to_string(),
                     transfered: progress,
+                    timestamp,
                 })
             }
             drop_transfer::Event::FileDownloadProgress(tx, fid, progress) => {
@@ -148,6 +167,7 @@ impl From<drop_transfer::Event> for Event {
                     transfer: tx.id().to_string(),
                     file: fid.to_string(),
                     transfered: progress,
+                    timestamp,
                 })
             }
             drop_transfer::Event::FileUploadSuccess(tx, fid) => Event::TransferFinished {
@@ -155,6 +175,7 @@ impl From<drop_transfer::Event> for Event {
                 data: FinishEvent::FileUploaded {
                     file: fid.to_string(),
                 },
+                timestamp,
             },
             drop_transfer::Event::FileDownloadSuccess(tx, info) => Event::TransferFinished {
                 transfer: tx.id().to_string(),
@@ -162,6 +183,7 @@ impl From<drop_transfer::Event> for Event {
                     file: info.id.to_string(),
                     final_path: info.final_path.0.to_string_lossy().to_string(),
                 },
+                timestamp,
             },
             drop_transfer::Event::FileUploadFailed(tx, fid, status) => Event::TransferFinished {
                 transfer: tx.id().to_string(),
@@ -169,6 +191,7 @@ impl From<drop_transfer::Event> for Event {
                     file: fid.to_string(),
                     status: From::from(&status),
                 },
+                timestamp,
             },
             drop_transfer::Event::FileDownloadFailed(tx, fid, status) => Event::TransferFinished {
                 transfer: tx.id().to_string(),
@@ -176,17 +199,20 @@ impl From<drop_transfer::Event> for Event {
                     file: fid.to_string(),
                     status: From::from(&status),
                 },
+                timestamp,
             },
             drop_transfer::Event::IncomingTransferCanceled(tx, by_peer) => {
                 Event::TransferFinished {
                     transfer: tx.id().to_string(),
                     data: FinishEvent::TransferCanceled { by_peer },
+                    timestamp,
                 }
             }
             drop_transfer::Event::OutgoingTransferCanceled(tx, by_peer) => {
                 Event::TransferFinished {
                     transfer: tx.id().to_string(),
                     data: FinishEvent::TransferCanceled { by_peer },
+                    timestamp,
                 }
             }
             drop_transfer::Event::OutgoingTransferFailed(tx, status, _) => {
@@ -195,6 +221,7 @@ impl From<drop_transfer::Event> for Event {
                     data: FinishEvent::TransferFailed {
                         status: From::from(&status),
                     },
+                    timestamp,
                 }
             }
             drop_transfer::Event::FileDownloadRejected {
@@ -207,6 +234,7 @@ impl From<drop_transfer::Event> for Event {
                     file: file_id.to_string(),
                     by_peer,
                 },
+                timestamp,
             },
             drop_transfer::Event::FileUploadRejected {
                 transfer_id,
@@ -218,6 +246,7 @@ impl From<drop_transfer::Event> for Event {
                     file: file_id.to_string(),
                     by_peer,
                 },
+                timestamp,
             },
             drop_transfer::Event::FileUploadPaused {
                 transfer_id,
@@ -225,6 +254,7 @@ impl From<drop_transfer::Event> for Event {
             } => Self::TransferPaused {
                 transfer: transfer_id.to_string(),
                 file: file_id.to_string(),
+                timestamp,
             },
             drop_transfer::Event::FileDownloadPaused {
                 transfer_id,
@@ -232,6 +262,7 @@ impl From<drop_transfer::Event> for Event {
             } => Self::TransferPaused {
                 transfer: transfer_id.to_string(),
                 file: file_id.to_string(),
+                timestamp,
             },
         }
     }
@@ -243,6 +274,7 @@ impl<T: drop_transfer::Transfer> From<&T> for EventTransferRequest {
             peer: t.peer().to_string(),
             transfer: t.id().to_string(),
             files: extract_transfer_files(t),
+            timestamp: utils::current_timestamp(),
         }
     }
 }
@@ -252,6 +284,7 @@ impl<T: drop_transfer::Transfer> From<&T> for EventRequestQueued {
         EventRequestQueued {
             transfer: t.id().to_string(),
             files: extract_transfer_files(t),
+            timestamp: utils::current_timestamp(),
         }
     }
 }
