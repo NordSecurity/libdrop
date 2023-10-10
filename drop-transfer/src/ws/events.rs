@@ -1,7 +1,7 @@
 use std::{
     path::PathBuf,
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 use drop_analytics::{Moose, TransferFileEventData, MOOSE_STATUS_SUCCESS};
@@ -13,10 +13,18 @@ use crate::{
 };
 
 struct FileEventTxInner {
-    tx: UnboundedSender<Event>,
+    tx: UnboundedSender<(Event, SystemTime)>,
     moose: Arc<dyn Moose>,
     started: Option<Instant>,
     transferred: u64,
+}
+
+impl FileEventTxInner {
+    fn emit_event(&self, event: Event) {
+        self.tx
+            .send((event, SystemTime::now()))
+            .expect("Failed to emit File event");
+    }
 }
 
 pub type IncomingFileEventTx = FileEventTx<IncomingTransfer>;
@@ -29,12 +37,12 @@ pub struct FileEventTx<T: Transfer> {
 }
 
 pub struct FileEventTxFactory {
-    events: UnboundedSender<Event>,
+    events: UnboundedSender<(Event, SystemTime)>,
     moose: Arc<dyn Moose>,
 }
 
 impl FileEventTxFactory {
-    pub fn new(events: UnboundedSender<Event>, moose: Arc<dyn Moose>) -> Self {
+    pub fn new(events: UnboundedSender<(Event, SystemTime)>, moose: Arc<dyn Moose>) -> Self {
         Self { events, moose }
     }
 
@@ -72,18 +80,14 @@ impl<T: Transfer> FileEventTx<T> {
             _ => {}
         }
 
-        lock.tx
-            .send(event)
-            .expect("Event channel shouldn't be closed");
+        lock.emit_event(event);
     }
 
     async fn start_inner(&self, event: Event) {
         let mut lock = self.inner.lock().await;
         lock.started = Some(Instant::now());
 
-        lock.tx
-            .send(event)
-            .expect("Event channel shouldn't be closed");
+        lock.emit_event(event);
     }
 
     async fn stop(&self, event: Event, status: Result<(), i32>) {
@@ -119,9 +123,7 @@ impl<T: Transfer> FileEventTx<T> {
             result,
         });
 
-        lock.tx
-            .send(event)
-            .expect("Event channel shouldn't be closed");
+        lock.emit_event(event);
     }
 
     async fn force_stop(&self, event: Event, status: Result<(), i32>) {
@@ -157,9 +159,7 @@ impl<T: Transfer> FileEventTx<T> {
             result,
         });
 
-        lock.tx
-            .send(event)
-            .expect("Event channel shouldn't be closed");
+        lock.emit_event(event);
     }
 
     pub async fn stop_silent(&self, status: Status) {
