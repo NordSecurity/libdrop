@@ -96,7 +96,10 @@ async fn make_request(state: &State, xfer: &IncomingTransfer, logger: &Logger) -
             Ok(resp) if resp.status() == StatusCode::UNAUTHORIZED => {
                 debug!(logger, "Creating 'authorization' header");
 
-                match state.auth.create_authorization_header(resp, xfer.peer()) {
+                match state
+                    .auth
+                    .create_authorization_header(resp, xfer.peer(), false)
+                {
                     Ok((key, value)) => {
                         debug!(logger, "Building 'authorization' request");
 

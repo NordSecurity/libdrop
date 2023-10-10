@@ -348,15 +348,15 @@ async fn handle_rejection(
     err: warp::Rejection,
 ) -> Result<Box<dyn warp::Reply>, warp::Rejection> {
     if let Some(MissingAuth(peer)) = err.find() {
-        let nonce = Nonce::generate();
-        let value = drop_auth::http::WWWAuthenticate::new(nonce);
+        let nonce = Nonce::generate_as_server();
+        let (header_key, header_val) = auth::create_www_authentication_header(&nonce);
 
         nonces.lock().await.insert(*peer, nonce);
 
         Ok(Box::new(warp::reply::with_header(
             StatusCode::UNAUTHORIZED,
-            drop_auth::http::WWWAuthenticate::KEY,
-            value.to_string(),
+            header_key,
+            header_val,
         )))
     } else if let Some(Unauthorized) = err.find() {
         Ok(Box::new(StatusCode::UNAUTHORIZED))

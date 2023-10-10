@@ -14,7 +14,7 @@ use std::{
 
 use anyhow::Context;
 use drop_analytics::{TransferStateEventData, MOOSE_STATUS_SUCCESS};
-use hyper::StatusCode;
+use hyper::{Request, Response, StatusCode};
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
     net::TcpStream,
@@ -64,6 +64,14 @@ enum WsConnection {
     Recoverable,
     Unrecoverable(crate::Error),
     Connected(WsStream, protocol::Version),
+}
+
+#[derive(thiserror::Error, Debug)]
+enum RequestError {
+    #[error("{0}")]
+    General(#[from] anyhow::Error),
+    #[error("Unexpected HTTP response: {0}")]
+    UnexpectedResponse(StatusCode),
 }
 
 pub(crate) fn spawn(
@@ -215,6 +223,7 @@ async fn establish_ws_conn(
     };
 
     let mut versions_to_try = [
+        protocol::Version::V6,
         protocol::Version::V5,
         protocol::Version::V4,
         protocol::Version::V2,
@@ -234,21 +243,25 @@ async fn establish_ws_conn(
 
         match make_request(&mut socket, xfer.peer(), ver, state.auth.as_ref(), logger).await {
             Ok(_) => break ver,
-            Err(tungstenite::Error::Http(resp)) if resp.status().is_client_error() => {
-                if resp.status() == StatusCode::TOO_MANY_REQUESTS {
-                    return WsConnection::Recoverable;
-                } else if resp.status() == StatusCode::UNAUTHORIZED {
-                    return WsConnection::Unrecoverable(crate::Error::AuthenticationFailed);
-                } else {
-                    debug!(
-                        logger,
-                        "Failed to connect to version {}, response: {:?}", ver, resp
-                    );
-                }
-            }
-            Err(err) => {
+            Err(RequestError::General(err)) => {
                 info!(logger, "Error while making the HTTP request: {err:?}");
                 return WsConnection::Recoverable;
+            }
+            Err(RequestError::UnexpectedResponse(status)) => {
+                match status {
+                    StatusCode::UNAUTHORIZED => {
+                        return WsConnection::Unrecoverable(crate::Error::AuthenticationFailed)
+                    }
+                    StatusCode::TOO_MANY_REQUESTS => {
+                        warn!(logger, "The response triggered DoS protection mechanism");
+                        return WsConnection::Recoverable;
+                    }
+                    StatusCode::NOT_FOUND => (), // Server doesn't support
+                    status => debug!(
+                        logger,
+                        "Failed to connect to version {ver}, status: {status}"
+                    ),
+                }
             }
         }
     };
@@ -263,46 +276,82 @@ async fn make_request(
     version: protocol::Version,
     auth: &auth::Context,
     logger: &slog::Logger,
-) -> Result<(), tungstenite::Error> {
+) -> Result<(), RequestError> {
     let addr = SocketAddr::new(ip, drop_config::PORT);
 
     let url = format!("ws://{addr}/drop/{version}",);
 
     debug!(logger, "Making HTTP request: {url}");
 
-    let err = match tokio_tungstenite::client_async(&url, &mut *socket).await {
-        Ok(_) => {
-            debug!(logger, "Connected to {url} without authorization");
-            return Ok(());
+    let mut req = url.as_str().into_client_request().context("Invalid URL")?;
+
+    use protocol::Version as Ver;
+    let server_auth_scheme = match version {
+        Ver::V1 | Ver::V2 | Ver::V4 | Ver::V5 => None,
+        _ => {
+            let nonce = drop_auth::Nonce::generate_as_client();
+
+            let (key, value) = auth::create_www_authentication_header(&nonce);
+            req.headers_mut().insert(key, value);
+
+            Some(nonce)
         }
-        Err(err) => err,
     };
 
-    if let tungstenite::Error::Http(resp) = &err {
-        if resp.status() == StatusCode::UNAUTHORIZED {
+    let resp = send_request_and_wait_for_respnse(socket, req).await?;
+
+    let authorize = || {
+        if let Some(nonce) = &server_auth_scheme {
+            // Validate the server response
+            authorize_server(auth, &resp, ip, nonce)
+                .context("Failed to authorize server. Closing connection")?;
+        }
+        anyhow::Ok(())
+    };
+
+    match resp.status() {
+        status if status.is_success() || status.is_informational() => {
+            authorize()?;
+
+            debug!(logger, "Connected to {url} without authorization");
+            Ok(())
+        }
+        StatusCode::UNAUTHORIZED => {
+            authorize()?;
+
             debug!(logger, "Creating 'authorization' header");
 
             debug!(logger, "Extracting peers ({ip}) public key");
-            match auth.create_authorization_header(resp, ip) {
-                Ok((key, value)) => {
-                    debug!(logger, "Building 'authorization' request");
+            let (key, value) =
+                auth.create_authorization_header(&resp, ip, server_auth_scheme.is_some())?;
 
-                    let mut req = url.into_client_request()?;
-                    req.headers_mut().insert(key, value);
+            debug!(logger, "Building 'authorization' request");
+            let mut req = url.as_str().into_client_request().context("Invalid URL")?;
+            req.headers_mut().insert(key, value);
 
-                    debug!(logger, "Re-sending request with the 'authorization' header");
-                    tokio_tungstenite::client_async(req, &mut *socket).await?;
-                    return Ok(());
-                }
-                Err(err) => warn!(
-                    logger,
-                    "Failed to extract 'www-authenticate' header: {err:?}"
-                ),
+            debug!(logger, "Re-sending request with the 'authorization' header");
+            let resp = send_request_and_wait_for_respnse(socket, req).await?;
+
+            match resp.status() {
+                status if status.is_success() || status.is_informational() => Ok(()),
+                status => Err(RequestError::UnexpectedResponse(status)),
             }
         }
+        status => Err(RequestError::UnexpectedResponse(status)),
     }
+}
 
-    Err(err)
+async fn send_request_and_wait_for_respnse(
+    socket: &mut TcpStream,
+    req: Request<()>,
+) -> anyhow::Result<Response<Option<Vec<u8>>>> {
+    let resp = match tokio_tungstenite::client_async(req, &mut *socket).await {
+        Ok((_, resp)) => resp,
+        Err(tungstenite::Error::Http(resp)) => resp,
+        Err(err) => return Err(err.into()),
+    };
+
+    Ok(resp)
 }
 
 impl RunContext<'_> {
@@ -625,4 +674,24 @@ async fn on_upload_failure(
         }
         Ok(None) => (),
     }
+}
+
+fn authorize_server<T>(
+    auth: &auth::Context,
+    response: &hyper::Response<T>,
+    ip: IpAddr,
+    nonce: &drop_auth::Nonce,
+) -> anyhow::Result<()> {
+    let ticket = response
+        .headers()
+        .get(drop_auth::http::Authorization::KEY)
+        .context("Missing 'authorization' header")?
+        .to_str()
+        .context("Invalid 'authorization' header value")?;
+
+    anyhow::ensure!(
+        auth.authorize(ip, ticket, nonce),
+        "Cannot authrozie server with ticket provided"
+    );
+    Ok(())
 }
