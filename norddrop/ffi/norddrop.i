@@ -78,7 +78,7 @@ struct norddrop {};
 
     enum norddrop_result remove_transfer_file(const char* txid, const char* fid);
 
-    enum norddrop_result set_peer_state(const char* peer, int is_online);
+    enum norddrop_result network_refresh();
 
 
 

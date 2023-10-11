@@ -317,11 +317,6 @@ class Drop:
         norddrop_lib.norddrop_new_transfer.restype = ctypes.c_char_p
         norddrop_lib.norddrop_get_transfers_since.restype = ctypes.c_char_p
 
-        norddrop_lib.norddrop_set_peer_state.argtypes = (
-            ctypes.c_void_p,
-            ctypes.c_char_p,
-            ctypes.c_int,
-        )
         norddrop_lib.norddrop_start.argtypes = (
             ctypes.c_void_p,
             ctypes.c_char_p,
@@ -491,18 +486,15 @@ class Drop:
 
         return transfers.decode("utf-8")
 
-    def set_peer_state(self, peer: str, state: PeerState):
-        addr = peer_resolver.resolve(peer)
-        err = self._lib.norddrop_set_peer_state(
+    def network_refresh(self):
+        err = self._lib.norddrop_network_refresh(
             self._instance,
-            ctypes.create_string_buffer(bytes(addr, "utf-8")),
-            state.value,
         )
 
         if err != 0:
             err_type = LibResult(err).name
             raise DropException(
-                f"set_peer_state has failed with code: {err}({err_type})", err
+                f"network_refresh has failed with code: {err}({err_type})", err
             )
 
     def purge_transfers_until(self, until_timestamp: int):

@@ -9,6 +9,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     ops::ControlFlow,
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::Context;
@@ -66,41 +67,68 @@ enum WsConnection {
 }
 
 pub(crate) fn spawn(
+    mut refresh_trigger: tokio::sync::watch::Receiver<()>,
     state: Arc<State>,
     xfer: Arc<OutgoingTransfer>,
     logger: Logger,
     guard: AliveGuard,
     stop: CancellationToken,
-) -> tokio::task::JoinHandle<()> {
+) {
     let id = xfer.id();
-    let job = run(state, xfer, logger.clone(), guard.clone());
 
     tokio::spawn(async move {
-        let _guard = guard;
+        let task = async {
+            loop {
+                let cf = run(state.clone(), xfer.clone(), &logger, &guard).await;
+                if cf.is_break() {
+                    debug!(logger, "connection status is irrecoverable");
+                    if let Err(err) = state.transfer_manager.outgoing_remove(xfer.id()).await {
+                        warn!(
+                            logger,
+                            "Failed to clear sync state for {}: {err}",
+                            xfer.id()
+                        );
+                    }
+
+                    break;
+                }
+
+                #[allow(clippy::let_underscore_must_use)]
+                let _ = refresh_trigger.changed().await;
+            }
+        };
 
         tokio::select! {
             biased;
 
             _ = stop.cancelled() => {
-                debug!(logger, "Client job stop: {id}");
+                debug!(logger, "stop client job for: {}", id);
             },
-            _ = job => (),
+            _ = task => ()
         }
-    })
+    });
 }
 
-async fn run(state: Arc<State>, xfer: Arc<OutgoingTransfer>, logger: Logger, alive: AliveGuard) {
-    let status = connect_to_peer(&state, &xfer, &logger, &alive).await;
+async fn run(
+    state: Arc<State>,
+    xfer: Arc<OutgoingTransfer>,
+    logger: &Logger,
+    alive: &AliveGuard,
+) -> ControlFlow<()> {
+    for delay in std::iter::once(Duration::from_secs(0)).chain(drop_config::RETRY_INTERVALS) {
+        debug!(
+            logger,
+            "Outcoming transfer job started for {}, will sleep for {:?}",
+            xfer.id(),
+            delay
+        );
 
-    if status.is_break() {
-        if let Err(err) = state.transfer_manager.outgoing_remove(xfer.id()).await {
-            warn!(
-                logger,
-                "Failed to clear sync state for {}: {err}",
-                xfer.id()
-            );
-        }
+        tokio::time::sleep(delay).await;
+        connect_to_peer(&state, &xfer, logger, alive).await?;
     }
+
+    debug!(logger, "no more retries left, considering failure");
+    ControlFlow::Continue(())
 }
 
 async fn connect_to_peer(

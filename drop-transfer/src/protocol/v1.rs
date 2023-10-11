@@ -170,7 +170,7 @@ mod tests {
     fn test_json<T: Serialize + DeserializeOwned + Eq>(message: T, expected: &str) {
         let json_msg = serde_json::to_value(&message).expect("Failed to serialize");
         let json_exp: serde_json::Value =
-            serde_json::from_str(expected).expect("Failed to convert expected josn to value");
+            serde_json::from_str(expected).expect("Failed to convert expected json to value");
         assert_eq!(json_msg, json_exp);
 
         let deserialized: T = serde_json::from_str(expected).expect("Failed to serialize");
