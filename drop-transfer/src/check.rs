@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, ops::ControlFlow, sync::Arc};
+use std::{net::SocketAddr, ops::ControlFlow, sync::Arc, time::Duration};
 
 use hyper::StatusCode;
 use slog::{debug, info, warn, Logger};
@@ -7,51 +7,71 @@ use tokio_util::sync::CancellationToken;
 use crate::{protocol, service::State, tasks::AliveGuard, IncomingTransfer, Transfer};
 
 pub(crate) fn spawn(
+    mut refresh_trigger: tokio::sync::watch::Receiver<()>,
     state: Arc<State>,
     xfer: Arc<IncomingTransfer>,
     logger: Logger,
     guard: AliveGuard,
     stop: CancellationToken,
-) -> tokio::task::JoinHandle<()> {
+) {
     let id = xfer.id();
-    let job = run(state, xfer, logger.clone());
 
     tokio::spawn(async move {
         let _guard = guard;
+
+        let task = async {
+            loop {
+                let cf = run(&state, &xfer, &logger).await;
+
+                if cf.is_break() {
+                    info!(logger, "Transfer {} is gone. Clearing", xfer.id());
+
+                    match state.transfer_manager.incoming_remove(xfer.id()).await {
+                        Err(err) => {
+                            warn!(logger, "Failed to clear incoming transfer: {err:?}");
+                        }
+                        Ok(false) => state
+                            .emit_event(crate::Event::IncomingTransferCanceled(xfer.clone(), true)),
+                        _ => (),
+                    }
+
+                    break;
+                }
+
+                #[allow(clippy::let_underscore_must_use)]
+                let _ = refresh_trigger.changed().await;
+            }
+        };
 
         tokio::select! {
             biased;
 
             _ = stop.cancelled() => {
-                debug!(logger, "Check job stop for transfer: {id}");
+                debug!(&logger, "stop checking job for: {}", id);
             },
-            _ = job => (),
+            _ = task => ()
         }
-    })
+    });
 }
 
-async fn run(state: Arc<State>, xfer: Arc<IncomingTransfer>, logger: Logger) {
-    loop {
-        tokio::time::sleep(drop_config::ALIVE_CHECK_INTERVAL).await;
+async fn run(state: &State, xfer: &Arc<IncomingTransfer>, logger: &Logger) -> ControlFlow<()> {
+    for delay in std::iter::once(Duration::from_secs(0)).chain(drop_config::RETRY_INTERVALS) {
+        debug!(
+            logger,
+            "Incoming transfer job started for {}, will sleep for {:?}",
+            xfer.id(),
+            delay
+        );
+        tokio::time::sleep(delay).await;
 
         if !state.transfer_manager.is_incoming_alive(xfer.id()).await {
-            break;
+            return ControlFlow::Break(());
         }
 
-        if make_request(&state, &xfer, &logger).await.is_break() {
-            break;
-        }
+        make_request(state, xfer, logger).await?;
     }
 
-    info!(logger, "Transfer {} is gone. Clearing", xfer.id());
-
-    match state.transfer_manager.incoming_remove(xfer.id()).await {
-        Err(err) => {
-            warn!(logger, "Failed to clear incoming transfer: {err:?}");
-        }
-        Ok(false) => state.emit_event(crate::Event::IncomingTransferCanceled(xfer.clone(), true)),
-        _ => (),
-    }
+    ControlFlow::Continue(())
 }
 
 async fn make_request(state: &State, xfer: &IncomingTransfer, logger: &Logger) -> ControlFlow<()> {

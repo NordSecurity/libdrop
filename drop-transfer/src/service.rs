@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     fs,
     net::IpAddr,
     path::{Component, Path},
@@ -11,18 +10,19 @@ use drop_analytics::{InitEventData, Moose, TransferStateEventData};
 use drop_config::DropConfig;
 use drop_core::Status;
 use drop_storage::Storage;
-use slog::{debug, Logger};
+use slog::{debug, trace, Logger};
 use tokio::sync::{mpsc, Semaphore};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    auth, check,
+    auth,
     error::ResultExt,
     manager,
     tasks::AliveWaiter,
+    transfer::Transfer,
     ws::{self, FileEventTxFactory},
-    Error, Event, FileId, Transfer, TransferManager,
+    Error, Event, FileId, TransferManager,
 };
 
 pub(super) struct State {
@@ -38,8 +38,6 @@ pub(super) struct State {
     pub fdresolv: Option<Arc<crate::file::FdResolver>>,
 }
 
-type TaskRegistry = HashMap<uuid::Uuid, tokio::task::JoinHandle<()>>;
-
 impl State {
     pub fn emit_event(&self, event: crate::Event) {
         self.event_tx
@@ -54,7 +52,7 @@ pub struct Service {
     waiter: AliveWaiter,
     pub(super) logger: Logger,
 
-    tasks: TaskRegistry,
+    refresh_trigger: tokio::sync::watch::Sender<()>,
 }
 
 impl Service {
@@ -97,14 +95,23 @@ impl Service {
 
             manager::restore_transfers_state(&state, &logger).await;
 
-            ws::server::spawn(state.clone(), logger.clone(), stop.clone(), guard.clone())?;
+            let refresh_trigger = tokio::sync::watch::channel(()).0;
+            ws::server::spawn(
+                refresh_trigger.subscribe(),
+                state.clone(),
+                logger.clone(),
+                stop.clone(),
+                guard.clone(),
+            )?;
+
+            manager::resume(&refresh_trigger.subscribe(), &state, &logger, &guard, &stop).await;
 
             Ok(Self {
+                refresh_trigger,
                 state,
                 stop,
                 waiter,
-                logger,
-                tasks: Default::default(),
+                logger: logger.clone(),
             })
         };
 
@@ -127,86 +134,9 @@ impl Service {
         &self.state.storage
     }
 
-    fn trigger_peer_incoming(&mut self, xfer: Arc<crate::IncomingTransfer>) {
-        debug!(self.logger, "trigger_peer_incoming() called: {:?}", xfer);
-
-        let id = xfer.id();
-
-        if let Some(handle) = self.tasks.get(&id) {
-            if !handle.is_finished() {
-                return;
-            }
-        }
-
-        let handle = check::spawn(
-            self.state.clone(),
-            xfer,
-            self.logger.clone(),
-            self.waiter.guard(),
-            self.stop.clone(),
-        );
-
-        self.tasks.insert(id, handle);
-    }
-
-    fn trigger_peer_outgoing(&mut self, xfer: Arc<crate::OutgoingTransfer>) {
-        debug!(self.logger, "trigger_peer_outgoing() called: {:?}", xfer);
-
-        let id = xfer.id();
-        if let Some(handle) = self.tasks.get(&id) {
-            if !handle.is_finished() {
-                return;
-            }
-        }
-
-        let handle = ws::client::spawn(
-            self.state.clone(),
-            xfer,
-            self.logger.clone(),
-            self.waiter.guard(),
-            self.stop.clone(),
-        );
-
-        self.tasks.insert(id, handle);
-    }
-
-    pub async fn set_peer_state(&mut self, addr: IpAddr, is_online: bool) {
-        {
-            if is_online {
-                let outgoing_transfers_to_trigger = {
-                    let xfers = self.state.transfer_manager.outgoing.lock().await;
-
-                    xfers
-                        .values()
-                        .filter(|state| {
-                            let peer = state.xfer.peer();
-                            peer == addr
-                        })
-                        .map(|state| state.xfer.clone())
-                        .collect::<Vec<_>>()
-                };
-
-                for xfer in outgoing_transfers_to_trigger {
-                    self.trigger_peer_outgoing(xfer);
-                }
-
-                let incoming_transfers_to_trigger = {
-                    let xfers = self.state.transfer_manager.incoming.lock().await;
-
-                    xfers
-                        .values()
-                        .filter(|state| {
-                            let peer = state.xfer.peer();
-                            peer == addr
-                        })
-                        .map(|state| state.xfer.clone())
-                        .collect::<Vec<_>>()
-                };
-
-                for xfer in incoming_transfers_to_trigger {
-                    self.trigger_peer_incoming(xfer);
-                }
-            }
+    pub fn network_refresh(&mut self) {
+        if self.refresh_trigger.send(()).is_ok() {
+            trace!(self.logger, "Refresh trigger sent");
         }
     }
 
@@ -237,7 +167,16 @@ impl Service {
 
         self.state.emit_event(Event::RequestQueued(xfer.clone()));
 
-        self.trigger_peer_outgoing(xfer);
+        let subscriber = self.refresh_trigger.subscribe();
+
+        ws::client::spawn(
+            subscriber,
+            self.state.clone(),
+            xfer,
+            self.logger.clone(),
+            self.waiter.guard(),
+            self.stop.clone(),
+        );
     }
 
     pub async fn download(

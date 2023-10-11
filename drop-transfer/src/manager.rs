@@ -8,15 +8,19 @@ use std::{
 use anyhow::Context;
 use drop_config::DropConfig;
 use drop_storage::{sync, types::OutgoingFileToRetry, Storage};
-use slog::{debug, error, info, warn, Logger};
+use slog::{debug, error, info, trace, warn, Logger};
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
+    check,
     file::FileSubPath,
     service::State,
+    tasks::AliveGuard,
     transfer::{IncomingTransfer, OutgoingTransfer},
     ws::{
+        self,
         client::ClientReq,
         server::{FileXferTask, ServerReq},
         FileEventTx, FileEventTxFactory, IncomingFileEventTx, OutgoingFileEventTx,
@@ -656,6 +660,7 @@ impl TransferManager {
     }
 
     pub async fn outgoing_remove(&self, transfer_id: Uuid) -> crate::Result<()> {
+        debug!(self.logger, "Removing outgoing transfer: {}", transfer_id);
         let mut lock = self.outgoing.lock().await;
         if !lock.contains_key(&transfer_id) {
             return Err(crate::Error::BadTransfer);
@@ -677,6 +682,7 @@ impl TransferManager {
     }
 
     pub async fn outgoing_disconnect(&self, transfer_id: Uuid) -> crate::Result<()> {
+        trace!(self.logger, "outgoing_disconnect: {}", transfer_id);
         let mut lock = self.outgoing.lock().await;
         let _ = lock
             .get_mut(&transfer_id)
@@ -996,6 +1002,46 @@ pub(crate) async fn restore_transfers_state(state: &Arc<State>, logger: &Logger)
 
     let outgoing = restore_outgoing(state, logger).await;
     *state.transfer_manager.outgoing.lock().await = outgoing;
+}
+
+pub(crate) async fn resume(
+    refresh_trigger: &tokio::sync::watch::Receiver<()>,
+    state: &Arc<State>,
+    logger: &Logger,
+    guard: &AliveGuard,
+    stop: &CancellationToken,
+) {
+    {
+        let xfers = state.transfer_manager.outgoing.lock().await;
+
+        for xstate in xfers.values() {
+            let trig = refresh_trigger.clone();
+            ws::client::spawn(
+                trig,
+                state.clone(),
+                xstate.xfer.clone(),
+                logger.clone(),
+                guard.clone(),
+                stop.clone(),
+            );
+        }
+    }
+
+    {
+        let xfers = state.transfer_manager.incoming.lock().await;
+
+        for xstate in xfers.values() {
+            let trig = refresh_trigger.clone();
+            check::spawn(
+                trig,
+                state.clone(),
+                xstate.xfer.clone(),
+                logger.clone(),
+                guard.clone(),
+                stop.clone(),
+            );
+        }
+    }
 }
 
 async fn restore_incoming(

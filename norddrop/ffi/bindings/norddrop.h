@@ -488,20 +488,18 @@ enum norddrop_result norddrop_new(struct norddrop **dev,
                                   const char *privkey);
 
 /**
- * Set connectivity state of a peer
+ * Refresh connections. Should be called when anything about the network
+ * changes that might affect connections. Also when peer availability has changed.
+ * This will kick-start the automated retries for all transfers.
  *
  * # Arguments
  *
  * * `dev` - A pointer to the instance.
- * * `peer` - peer address
- * * `is_online` - 0 if offline, 1 if online
  *
  * # Safety
  * The pointers provided should be valid
  */
-enum norddrop_result norddrop_set_peer_state(const struct norddrop *dev,
-                                             const char *peer,
-                                             int64_t is_online);
+enum norddrop_result norddrop_network_refresh(const struct norddrop *dev);
 
 void __norddrop_force_export(enum norddrop_result,
                              struct norddrop_event_cb,
