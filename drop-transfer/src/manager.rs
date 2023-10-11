@@ -10,17 +10,13 @@ use drop_config::DropConfig;
 use drop_storage::{sync, types::OutgoingFileToRetry, Storage};
 use slog::{debug, error, info, warn, Logger};
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
-use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    check,
     file::FileSubPath,
     service::State,
-    tasks::AliveGuard,
     transfer::{IncomingTransfer, OutgoingTransfer},
     ws::{
-        self,
         client::ClientReq,
         server::{FileXferTask, ServerReq},
         FileEventTx, FileEventTxFactory, IncomingFileEventTx, OutgoingFileEventTx,
@@ -990,41 +986,6 @@ impl OutgoingLocalFileState {
                 Ok(())
             }
             OutgoingLocalFileState::Terminal(state) => Err(crate::Error::FileStateMismatch(*state)),
-        }
-    }
-}
-
-pub(crate) async fn resume(
-    state: &Arc<State>,
-    logger: &Logger,
-    guard: &AliveGuard,
-    stop: &CancellationToken,
-) {
-    {
-        let xfers = state.transfer_manager.outgoing.lock().await;
-
-        for xstate in xfers.values() {
-            ws::client::spawn(
-                state.clone(),
-                xstate.xfer.clone(),
-                logger.clone(),
-                guard.clone(),
-                stop.clone(),
-            );
-        }
-    }
-
-    {
-        let xfers = state.transfer_manager.incoming.lock().await;
-
-        for xstate in xfers.values() {
-            check::spawn(
-                state.clone(),
-                xstate.xfer.clone(),
-                logger.clone(),
-                guard.clone(),
-                stop.clone(),
-            );
         }
     }
 }

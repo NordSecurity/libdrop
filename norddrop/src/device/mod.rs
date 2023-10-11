@@ -341,6 +341,29 @@ impl NordDropFFI {
         Ok(xfid)
     }
 
+    pub(super) fn set_peer_state(&mut self, peer: &str, is_online: bool) -> Result<()> {
+        trace!(
+            self.logger,
+            "norddrop_set_peer_state() {:?} -> {:?}",
+            peer,
+            is_online
+        );
+
+        let peer: IpAddr = peer.parse().map_err(|err| {
+            error!(self.logger, "Failed to parse peer address: {err}");
+            ffi::types::NORDDROP_RES_BAD_INPUT
+        })?;
+
+        let mut instance = self.instance.blocking_lock();
+        let instance = instance
+            .as_mut()
+            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?;
+
+        self.rt.block_on(instance.set_peer_state(peer, is_online));
+
+        Ok(())
+    }
+
     pub(super) fn download(
         &mut self,
         xfid: uuid::Uuid,

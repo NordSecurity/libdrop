@@ -676,6 +676,49 @@ pub unsafe extern "C" fn norddrop_new(
     result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
 }
 
+/// Set connectivity state of a peer
+///
+/// # Arguments
+///
+/// * `dev` - A pointer to the instance.
+/// * `peer` - peer address
+/// * `is_online` - 0 if offline, 1 if online
+///
+/// # Safety
+/// The pointers provided should be valid
+#[no_mangle]
+pub unsafe extern "C" fn norddrop_set_peer_state(
+    dev: &norddrop,
+    peer: *const c_char,
+    is_online: i64,
+) -> norddrop_result {
+    let result = panic::catch_unwind(move || {
+        let mut dev = match dev.0.lock() {
+            Ok(inst) => inst,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        let peer = {
+            if peer.is_null() {
+                return norddrop_result::NORDDROP_RES_INVALID_STRING;
+            }
+
+            ffi_try!(CStr::from_ptr(peer).to_str())
+        };
+
+        let is_online = match is_online {
+            0 => false,
+            1 => true,
+            _ => return norddrop_result::NORDDROP_RES_BAD_INPUT,
+        };
+
+        dev.set_peer_state(peer, is_online)
+            .norddrop_log_result(&dev.logger, "norddrop_set_peer_state")
+    });
+
+    result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
+}
+
 struct KeyValueSerializer<'a> {
     rec: &'a slog::Record<'a>,
     kv: HashMap<slog::Key, String>,

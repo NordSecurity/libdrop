@@ -2,6 +2,7 @@ use std::{fs::File, io::Write, path::Path};
 
 use serde::{Deserialize, Serialize};
 use slog::Logger;
+use uuid;
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -65,7 +66,13 @@ impl FileImpl {
         };
         events.push(event);
 
-        File::create(&self.event_path)?.write_all(serde_json::to_string(&events)?.as_bytes())?;
+        let payload = serde_json::to_string(&events)?;
+
+        // create unique temp path
+        let temp_path = format!("{}.tmp.{}", self.event_path, uuid::Uuid::new_v4());
+
+        std::fs::write(&temp_path, payload.as_bytes())?;
+        std::fs::rename(temp_path, &self.event_path)?;
 
         Ok(())
     }

@@ -88,8 +88,27 @@ class ContainerHolder:
 def run():
     print("*** Test suite launched", flush=True)
 
+    all_tags = []
+    for scenario in all_scenarios:
+        all_tags += scenario.tags()
+
+    all_tags = list(set(all_tags))
+    print(f"* Available tags: {all_tags}")
+
     scenarios = []
-    if "SCENARIO" in os.environ:
+    if "SCENARIO" in os.environ and "TAGS" in os.environ:
+        print("TAGS and SCENARIO cannot appear at once")
+        exit(3)
+
+    if "TAGS" in os.environ:
+        tags = [x.strip() for x in os.environ["TAGS"].split(",")]
+
+        print(f"Will execute scenarios with tags: {tags}")
+        for s in all_scenarios:
+            if all([tag in s.tags() for tag in tags]):
+                scenarios.append(s)
+
+    elif "SCENARIO" in os.environ:
         name = os.environ["SCENARIO"]
         pattern = re.compile(name)
 
@@ -150,6 +169,7 @@ def run():
                 networks.append(create_network(client, netname, i + 1))
 
                 scenario_results[scenario.id()] = []
+
                 for runner in scenario.runners():
                     COMMON_VOLUMES = {}
                     parent_dir = os.path.dirname(os.getcwd())
@@ -161,7 +181,8 @@ def run():
                     hostname = f"{runner}-{scenario.id()}"
                     print(f"Starting {hostname}...")
                     LIB_PATH = os.environ["LIB_PATH"]
-                    cmd = f"sh -c './run.py --runner={runner} --scenario={scenario.id()} --lib={LIB_PATH}'"
+                    # TODO: would be great to notify each container that all of their peers are online and DNS resolving now works instead of sleeping
+                    cmd = f"sh -c 'sleep 5 && ./run.py --runner={runner} --scenario={scenario.id()} --lib={LIB_PATH}'"
 
                     env = [
                         "RUST_BACKTRACE=1",
@@ -193,14 +214,18 @@ def run():
         curr_time = time.strftime("%H:%M:%S", time.localtime())
 
         done_containers = 0
+        failed_container_count = 0
         for scenario in scenarios:
             if scenario.id() in scenario_results:
                 for container in scenario_results[scenario.id()]:
                     if container.done():
                         done_containers += 1
+                        success, reason = container.success()
+                        if not success:
+                            failed_container_count += 1
 
         print(
-            f"*** Test suite progress: {curr_time}: {done_containers}/{total_containers} containers finished",
+            f"*** Test suite progress: {curr_time}: {done_containers}/{total_containers} containers finished, {failed_container_count} failed",
             flush=True,
         )
 
@@ -224,11 +249,6 @@ def run():
             if not success:
                 failed_scenarios.append(scenario)
                 break
-
-    print(
-        f"*** Test suite results: {total_scenarios_count} scenarios, {len(failed_scenarios)} failed. Succeeded ({round((1.0-(len(failed_scenarios)/total_scenarios_count)) * 100, 2)}%), on average one scenario took {math.ceil(total_time/total_scenarios_count)} seconds",
-        flush=True,
-    )
 
     if len(failed_scenarios) == 0:
         print("Success! All tests passed!", flush=True)
@@ -257,6 +277,11 @@ def run():
                     f"*** Scenario {scenario.id()}, failed containers: {failed_container_names}",
                     flush=True,
                 )
+        print(
+            f"*** Test suite results: {total_scenarios_count} scenarios, {len(failed_scenarios)} failed. Succeeded ({round((1.0-(len(failed_scenarios)/total_scenarios_count)) * 100, 2)}%), on average one scenario took {math.ceil(total_time/total_scenarios_count)} seconds",
+            flush=True,
+        )
+
         exit(1)
 
 

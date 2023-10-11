@@ -387,6 +387,7 @@ dependencies = [
  "serde",
  "serde_json",
  "slog",
+ "uuid",
 ]
 
 [[package]]
