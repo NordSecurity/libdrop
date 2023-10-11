@@ -33,6 +33,28 @@ impl Context {
         .is_some()
     }
 
+    pub fn authorize_server<T>(
+        &self,
+        response: &hyper::Response<T>,
+        ip: IpAddr,
+        nonce: &drop_auth::Nonce,
+    ) -> anyhow::Result<()> {
+        use anyhow::Context;
+
+        let ticket = response
+            .headers()
+            .get(drop_auth::http::Authorization::KEY)
+            .context("Missing 'authorization' header")?
+            .to_str()
+            .context("Invalid 'authorization' header value")?;
+
+        anyhow::ensure!(
+            self.authorize(ip, ticket, nonce),
+            "Cannot authorize server with ticket provided"
+        );
+        Ok(())
+    }
+
     pub fn create_clients_auth_header<T>(
         &self,
         response: &Response<T>,
