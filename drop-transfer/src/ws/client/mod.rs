@@ -303,7 +303,7 @@ async fn make_request(
     let authorize = || {
         if let Some(nonce) = &server_auth_scheme {
             // Validate the server response
-            authorize_server(auth, &resp, ip, nonce)
+            auth.authorize_server(&resp, ip, nonce)
                 .context("Failed to authorize server. Closing connection")?;
         }
         anyhow::Ok(())
@@ -674,24 +674,4 @@ async fn on_upload_failure(
         }
         Ok(None) => (),
     }
-}
-
-fn authorize_server<T>(
-    auth: &auth::Context,
-    response: &hyper::Response<T>,
-    ip: IpAddr,
-    nonce: &drop_auth::Nonce,
-) -> anyhow::Result<()> {
-    let ticket = response
-        .headers()
-        .get(drop_auth::http::Authorization::KEY)
-        .context("Missing 'authorization' header")?
-        .to_str()
-        .context("Invalid 'authorization' header value")?;
-
-    anyhow::ensure!(
-        auth.authorize(ip, ticket, nonce),
-        "Cannot authrozie server with ticket provided"
-    );
-    Ok(())
 }
