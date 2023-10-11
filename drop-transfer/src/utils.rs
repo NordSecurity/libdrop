@@ -143,6 +143,12 @@ pub async fn connect(local: SocketAddr, remote: SocketAddr) -> io::Result<TcpStr
     sock.connect(remote).await
 }
 
+/// Returns the number of kilobytes rounded up, used for moose event size
+/// calculations
+pub fn to_kb(bytes: u64) -> i32 {
+    (bytes as f64 / 1024.0).ceil() as i32
+}
+
 #[cfg(test)]
 mod tests {
 
