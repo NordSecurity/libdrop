@@ -12,7 +12,7 @@ include_dir = "0.7.3"
 slog = { workspace = true }
 serde = { workspace = true }
 uuid = { workspace = true }
-chrono = { version = "0.4.23", default-features = false, features = ["std"] }
+chrono = { version = "0.4.31", default-features = false, features = ["std"] }
 url = { workspace = true }
 tokio = { workspace = true }
 strum = { workspace = true }

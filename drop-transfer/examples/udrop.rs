@@ -5,7 +5,7 @@ use std::{
     net::IpAddr,
     path::{Path, PathBuf},
     sync::Arc,
-    time::Instant,
+    time::{Instant, SystemTime},
 };
 
 use anyhow::Context;
@@ -148,14 +148,14 @@ fn print_event(ev: &Event) {
 async fn listen(
     service: &mut Service,
     storage: &Storage,
-    rx: &mut mpsc::UnboundedReceiver<Event>,
+    rx: &mut mpsc::UnboundedReceiver<(Event, SystemTime)>,
     out_dir: &Path,
 ) -> anyhow::Result<()> {
     info!("Awaiting events…");
 
     let mut active_file_downloads = BTreeMap::new();
     let mut storage = drop_transfer::StorageDispatch::new(storage);
-    while let Some(ev) = rx.recv().await {
+    while let Some((ev, _)) = rx.recv().await {
         storage.handle_event(&ev).await;
         print_event(&ev);
         match ev {
@@ -355,6 +355,7 @@ async fn main() -> anyhow::Result<()> {
         config,
         drop_analytics::moose_mock(),
         Arc::new(auth),
+        Instant::now(),
         #[cfg(unix)]
         None,
     )
@@ -381,14 +382,18 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn on_stop(service: Service, rx: &mut mpsc::UnboundedReceiver<Event>, storage: &Storage) {
+async fn on_stop(
+    service: Service,
+    rx: &mut mpsc::UnboundedReceiver<(Event, SystemTime)>,
+    storage: &Storage,
+) {
     info!("Stopping the service");
 
     service.stop().await;
     let mut storage = drop_transfer::StorageDispatch::new(storage);
 
     // Drain events
-    while let Some(ev) = rx.recv().await {
+    while let Some((ev, _)) = rx.recv().await {
         storage.handle_event(&ev).await;
         print_event(&ev);
     }

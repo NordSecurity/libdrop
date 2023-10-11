@@ -4,9 +4,10 @@ use std::{
     net::IpAddr,
     path::{Component, Path},
     sync::Arc,
+    time::{Instant, SystemTime},
 };
 
-use drop_analytics::Moose;
+use drop_analytics::{InitEventData, Moose, TransferStateEventData};
 use drop_config::DropConfig;
 use drop_core::Status;
 use drop_storage::Storage;
@@ -25,7 +26,7 @@ use crate::{
 };
 
 pub(super) struct State {
-    pub(super) event_tx: mpsc::UnboundedSender<Event>,
+    pub(super) event_tx: mpsc::UnboundedSender<(Event, SystemTime)>,
     pub(super) transfer_manager: TransferManager,
     pub(crate) moose: Arc<dyn Moose>,
     pub(crate) auth: Arc<auth::Context>,
@@ -38,6 +39,14 @@ pub(super) struct State {
 }
 
 type TaskRegistry = HashMap<uuid::Uuid, tokio::task::JoinHandle<()>>;
+
+impl State {
+    pub fn emit_event(&self, event: crate::Event) {
+        self.event_tx
+            .send((event, SystemTime::now()))
+            .expect("Failed to emit Event");
+    }
+}
 
 pub struct Service {
     pub(super) state: Arc<State>,
@@ -53,11 +62,12 @@ impl Service {
     pub async fn start(
         addr: IpAddr,
         storage: Arc<Storage>,
-        event_tx: mpsc::UnboundedSender<Event>,
+        event_tx: mpsc::UnboundedSender<(Event, SystemTime)>,
         logger: Logger,
         config: Arc<DropConfig>,
         moose: Arc<dyn Moose>,
         auth: Arc<auth::Context>,
+        init_time: Instant,
         #[cfg(unix)] fdresolv: Option<Arc<crate::FdResolver>>,
     ) -> Result<Self, Error> {
         let task = async {
@@ -99,14 +109,17 @@ impl Service {
         };
 
         let res = task.await;
-        moose.service_quality_initialization_init(res.to_status());
+
+        moose.event_init(InitEventData {
+            init_duration: init_time.elapsed().as_millis() as i32,
+            result: res.to_moose_status(),
+        });
 
         res
     }
 
     pub async fn stop(self) {
         self.stop.cancel();
-
         self.waiter.wait_for_all().await;
     }
 
@@ -199,6 +212,9 @@ impl Service {
 
     pub async fn send_request(&mut self, xfer: crate::OutgoingTransfer) {
         let xfer = Arc::new(xfer);
+
+        self.state.moose.event_transfer_intent(xfer.info());
+
         if let Err(err) = self
             .state
             .transfer_manager
@@ -206,17 +222,20 @@ impl Service {
             .await
         {
             self.state
-                .event_tx
-                .send(Event::OutgoingTransferFailed(xfer.clone(), err, true))
-                .expect("Event channel should be open");
+                .moose
+                .event_transfer_state(TransferStateEventData {
+                    transfer_id: xfer.id().to_string(),
+                    result: i32::from(&err),
+                    protocol_version: 0,
+                });
+
+            self.state
+                .emit_event(Event::OutgoingTransferFailed(xfer.clone(), err, true));
 
             return;
         }
 
-        self.state
-            .event_tx
-            .send(Event::RequestQueued(xfer.clone()))
-            .expect("Could not send a RequestQueued event, channel closed");
+        self.state.emit_event(Event::RequestQueued(xfer.clone()));
 
         self.trigger_peer_outgoing(xfer);
     }
@@ -252,7 +271,7 @@ impl Service {
     }
 
     /// Reject a single file in a transfer. After rejection the file can no
-    /// logner be transfered
+    /// longer be transferred
     pub async fn reject(&self, transfer_id: Uuid, file: FileId) -> crate::Result<()> {
         {
             match self
@@ -317,9 +336,7 @@ impl Service {
                     .await;
 
                     self.state
-                        .event_tx
-                        .send(crate::Event::OutgoingTransferCanceled(res.xfer, false))
-                        .expect("Event channel should be open");
+                        .emit_event(crate::Event::OutgoingTransferCanceled(res.xfer, false));
 
                     return Ok(());
                 }
@@ -341,9 +358,7 @@ impl Service {
                     .await;
 
                     self.state
-                        .event_tx
-                        .send(crate::Event::IncomingTransferCanceled(res.xfer, false))
-                        .expect("Event channel should be open");
+                        .emit_event(crate::Event::IncomingTransferCanceled(res.xfer, false));
 
                     return Ok(());
                 }

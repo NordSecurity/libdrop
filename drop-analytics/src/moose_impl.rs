@@ -8,13 +8,13 @@ use mooselibdropapp as moose;
 use serde_json::Value;
 use slog::{error, info, warn, Logger};
 
-use crate::{FileInfo, TransferDirection, TransferInfo, MOOSE_STATUS_SUCCESS, MOOSE_VALUE_NONE};
+use crate::{TransferDirection, TransferFilePhase, MOOSE_VALUE_NONE};
 
 const DROP_MOOSE_APP_NAME: &str = "norddrop";
 
-/// Version of the tracker used, should be updated everytime the tracker library
-/// is updated
-const DROP_MOOSE_TRACKER_VERSION: &str = "0.5.1";
+/// Version of the tracker used, should be updated every time the tracker
+/// library is updated
+const DROP_MOOSE_TRACKER_VERSION: &str = "2.0.0";
 
 pub struct MooseImpl {
     logger: slog::Logger,
@@ -81,6 +81,7 @@ impl MooseImpl {
     pub fn new(
         logger: Logger,
         event_path: String,
+        lib_version: String,
         app_version: String,
         prod: bool,
     ) -> anyhow::Result<Self> {
@@ -89,7 +90,7 @@ impl MooseImpl {
         let res = moose::init(
             event_path,
             DROP_MOOSE_APP_NAME.to_string(),
-            app_version,
+            lib_version,
             DROP_MOOSE_TRACKER_VERSION.to_string(),
             prod,
             Box::new(MooseInitCallback {
@@ -110,14 +111,16 @@ impl MooseImpl {
         moose_debug!(logger, res, "init");
 
         anyhow::ensure!(res.is_ok(), "Failed to initialize moose: {:?}", res.err());
-        populate_context(&logger);
+        populate_context(&logger, app_version.clone());
 
         let (tx, rx) = sync_channel(1);
         let task_logger = logger.clone();
         let context_update_task = std::thread::spawn(move || loop {
             match rx.recv_timeout(Duration::from_secs(60 * 10)) {
                 Ok(_) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => populate_context(&task_logger),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    populate_context(&task_logger, app_version.clone())
+                }
             }
         });
 
@@ -141,90 +144,73 @@ impl Drop for MooseImpl {
 }
 
 impl super::Moose for MooseImpl {
-    fn service_quality_initialization_init(&self, res: Result<(), i32>) {
-        let errno = match res {
-            Ok(()) => MOOSE_STATUS_SUCCESS,
-            Err(err) => err,
-        };
-
-        moose!(self.logger, send_serviceQuality_initialization_init, errno);
-    }
-
-    fn service_quality_transfer_batch(
-        &self,
-        transfer_id: String,
-        info: TransferInfo,
-        protocol_version: i32,
-    ) {
+    fn event_init(&self, data: crate::InitEventData) {
         moose!(
             self.logger,
-            send_serviceQuality_transfer_batch,
-            info.extension_list,
-            info.mime_type_list,
-            info.file_count,
-            protocol_version,
-            info.file_size_list,
-            transfer_id,
-            info.transfer_size_kb
+            send_serviceQuality_initialization_init,
+            data.result,
+            data.init_duration
         );
     }
 
-    fn service_quality_transfer_file(
-        &self,
-        res: Result<(), i32>,
-        transfer_id: String,
-        transfer_time: i32,
-        direction: TransferDirection,
-        info: Option<FileInfo>,
-    ) {
-        let errno = match res {
-            Ok(()) => MOOSE_STATUS_SUCCESS,
-            Err(err) => err,
-        };
+    fn event_transfer_intent(&self, data: crate::TransferIntentEventData) {
+        moose!(
+            self.logger,
+            send_serviceQuality_transfer_intent,
+            data.extensions,
+            data.mime_types,
+            data.file_count,
+            data.path_ids,
+            data.file_sizes,
+            data.transfer_id,
+            data.transfer_size
+        );
+    }
 
-        let info = info.unwrap_or_default();
+    fn event_transfer_state(&self, data: crate::TransferStateEventData) {
+        moose!(
+            self.logger,
+            send_serviceQuality_transfer_state,
+            data.result,
+            data.protocol_version,
+            data.transfer_id
+        );
+    }
 
+    fn event_transfer_file(&self, data: crate::TransferFileEventData) {
         moose!(
             self.logger,
             send_serviceQuality_transfer_file,
-            errno,
-            info.extension,
-            info.mime_type,
-            direction.into(),
-            transfer_id,
-            info.size_kb,
-            transfer_time
+            data.result,
+            data.phase.into(),
+            data.direction.into(),
+            data.transfer_id,
+            data.transfer_time,
+            data.transferred
         );
     }
 
-    fn developer_exception(&self, code: i32, note: String, message: String, name: String) {
+    fn developer_exception(&self, data: crate::DeveloperExceptionEventData) {
         moose!(
             self.logger,
             send_developer_exceptionHandling_catchException,
             MOOSE_VALUE_NONE,
-            code,
-            note,
-            message,
-            name
+            data.code,
+            data.note,
+            data.message,
+            data.name
         );
     }
 
-    fn developer_exception_with_value(
-        &self,
-        arbitrary_value: i32,
-        code: i32,
-        note: String,
-        message: String,
-        name: String,
-    ) {
+    fn developer_exception_with_value(&self, data: crate::DeveloperExceptionWithValueEventData) {
         moose!(
             self.logger,
             send_developer_exceptionHandling_catchException,
-            arbitrary_value,
-            code,
-            note,
-            message,
-            name
+            data.arbitrary_value,
+            data.code,
+            data.note,
+            data.message,
+            data.name
         );
     }
 }
@@ -242,7 +228,16 @@ impl From<TransferDirection> for moose::LibdropappTransferDirection {
     }
 }
 
-fn populate_context(logger: &Logger) {
+impl From<TransferFilePhase> for moose::LibdropappFilePhase {
+    fn from(phase: TransferFilePhase) -> Self {
+        match phase {
+            TransferFilePhase::Finished => moose::LibdropappFilePhase::LibdropappFilePhaseFinished,
+            TransferFilePhase::Paused => moose::LibdropappFilePhase::LibdropappFilePhasePaused,
+        }
+    }
+}
+
+fn populate_context(logger: &Logger, app_version: String) {
     macro_rules! set_context_fields {
         ( $( $func:ident, $field:expr );* ) => {
             $(
@@ -297,6 +292,11 @@ fn populate_context(logger: &Logger) {
             set_context_user_subscription_currentState_planType, user.subscription.current_state.plan_type;
             set_context_user_subscription_currentState_subscriptionStatus, user.subscription.current_state.subscription_status;
             set_context_user_subscription_history, user.subscription.history
+        );
+
+        set_context_fields!(
+            set_context_application_config_currentState_nordvpnappVersion,
+            Some(app_version)
         );
     } else {
         warn!(
