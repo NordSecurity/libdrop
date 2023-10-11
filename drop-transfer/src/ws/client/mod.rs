@@ -323,7 +323,7 @@ async fn make_request(
 
             debug!(logger, "Extracting peers ({ip}) public key");
             let (key, value) =
-                auth.create_authorization_header(&resp, ip, server_auth_scheme.is_some())?;
+                auth.create_clients_auth_header(&resp, ip, server_auth_scheme.is_some())?;
 
             debug!(logger, "Building 'authorization' request");
             let mut req = url.as_str().into_client_request().context("Invalid URL")?;

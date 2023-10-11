@@ -1,3 +1,4 @@
+mod auth;
 mod handler;
 mod socket;
 mod v2;
@@ -33,7 +34,7 @@ use warp::{ws::Message, Filter};
 use self::socket::{WebSocket, WsStream};
 use super::{events::FileEventTx, IncomingFileEventTx};
 use crate::{
-    auth, check,
+    check,
     file::{self, FileToRecv},
     protocol,
     quarantine::PathExt,
@@ -91,7 +92,10 @@ struct StreamCtx<'a> {
 }
 
 #[derive(Debug)]
-struct MissingAuth(SocketAddr);
+struct MissingAuth {
+    peer: SocketAddr,
+    authorization: auth::Authorization,
+}
 impl warp::reject::Reject for MissingAuth {}
 
 #[derive(Debug)]
@@ -146,9 +150,15 @@ pub(crate) fn spawn(
                     .map_err(|_| warp::reject::not_found())
             }));
 
-        let base = remote.and(route).and(warp::filters::header::optional(
-            drop_auth::http::Authorization::KEY,
-        ));
+        let base = remote
+            .and(route)
+            .and(warp::filters::header::optional(
+                drop_auth::http::Authorization::KEY,
+            ))
+            .and(
+                warp::filters::header::optional(drop_auth::http::WWWAuthenticate::KEY)
+                    .map(auth::WWWAuthenticate::new),
+            );
 
         let ws_route = {
             let logger = logger.clone();
@@ -161,6 +171,7 @@ pub(crate) fn spawn(
                 move |peer: SocketAddr,
                       version: protocol::Version,
                       auth_header: Option<String>,
+                      www_auth: auth::WWWAuthenticate,
                       ws: warp::ws::Ws| {
                     let state = Arc::clone(&state);
                     let alive = alive.clone();
@@ -170,7 +181,16 @@ pub(crate) fn spawn(
                     let refresh_trigger = refresh_trigger.clone();
 
                     async move {
-                        authorize(&state.auth, &nonces, peer, version, auth_header).await?;
+                        let authorization = process_authentication(
+                            &state.auth,
+                            &nonces,
+                            peer,
+                            version,
+                            auth_header,
+                            www_auth,
+                            &logger,
+                        )
+                        .await?;
 
                         let reply = ws.on_upgrade(move |socket| async move {
                             info!(logger, "Client requested protocol version: {}", version);
@@ -187,7 +207,7 @@ pub(crate) fn spawn(
                             .await;
                         });
 
-                        Ok::<_, warp::Rejection>(reply)
+                        Ok::<_, warp::Rejection>(authorization.insert(reply))
                     }
                 },
             )
@@ -195,15 +215,26 @@ pub(crate) fn spawn(
 
         let check_route = {
             let nonces = nonce_store.clone();
+            let logger = logger.clone();
 
             base.and(warp::path!("check" / String))
                 .and(warp::get())
-                .and_then(move |peer, version, auth_header, uuid: String| {
+                .and_then(move |peer, version, auth_header, www_auth, uuid: String| {
                     let state = Arc::clone(&state);
                     let nonces = nonces.clone();
+                    let logger = logger.clone();
 
                     async move {
-                        authorize(&state.auth, &nonces, peer, version, auth_header).await?;
+                        let authorization = process_authentication(
+                            &state.auth,
+                            &nonces,
+                            peer,
+                            version,
+                            auth_header,
+                            www_auth,
+                            &logger,
+                        )
+                        .await?;
 
                         let uuid = uuid.parse().map_err(|_| warp::reject::custom(BadRequest))?;
                         let status = if state.transfer_manager.is_outgoing_alive(uuid).await {
@@ -212,7 +243,7 @@ pub(crate) fn spawn(
                             StatusCode::GONE
                         };
 
-                        Ok::<_, warp::Rejection>(status)
+                        Ok::<_, warp::Rejection>(authorization.insert(status))
                     }
                 })
         };
@@ -317,20 +348,27 @@ async fn websocket_start(
     }
 }
 
-async fn authorize(
-    auth: &auth::Context,
+async fn process_authentication(
+    auth: &crate::auth::Context,
     nonces: &Mutex<HashMap<SocketAddr, Nonce>>,
     peer: SocketAddr,
     version: protocol::Version,
-    auth_header: Option<String>,
-) -> Result<(), warp::Rejection> {
+    clients_authorization_header: Option<String>,
+    www_auth: auth::WWWAuthenticate,
+    logger: &Logger,
+) -> Result<auth::Authorization, warp::Rejection> {
     // Uncache the peer nonce first
     let nonce = nonces.lock().await.remove(&peer);
 
     match version {
         protocol::Version::V1 | protocol::Version::V2 => (),
         _ => {
-            let auth_header = auth_header.ok_or_else(|| warp::reject::custom(MissingAuth(peer)))?;
+            let Some(auth_header) = clients_authorization_header else {
+                return Err(warp::reject::custom(MissingAuth {
+                    peer,
+                    authorization: www_auth.authorize(auth, peer, logger),
+                }));
+            };
 
             let nonce = nonce.ok_or_else(|| warp::reject::custom(Unauthorized))?;
 
@@ -340,24 +378,30 @@ async fn authorize(
         }
     };
 
-    Ok(())
+    Ok(www_auth.authorize(auth, peer, logger))
 }
 
 async fn handle_rejection(
     nonces: &Mutex<HashMap<SocketAddr, Nonce>>,
     err: warp::Rejection,
 ) -> Result<Box<dyn warp::Reply>, warp::Rejection> {
-    if let Some(MissingAuth(peer)) = err.find() {
+    if let Some(MissingAuth {
+        peer,
+        authorization,
+    }) = err.find()
+    {
         let nonce = Nonce::generate_as_server();
-        let (header_key, header_val) = auth::create_www_authentication_header(&nonce);
+        let (header_key, header_val) = crate::auth::create_www_authentication_header(&nonce);
 
         nonces.lock().await.insert(*peer, nonce);
 
-        Ok(Box::new(warp::reply::with_header(
+        let reply = authorization.insert(warp::reply::with_header(
             StatusCode::UNAUTHORIZED,
             header_key,
             header_val,
-        )))
+        ));
+
+        Ok(reply)
     } else if let Some(Unauthorized) = err.find() {
         Ok(Box::new(StatusCode::UNAUTHORIZED))
     } else if let Some(ToManyReqs) = err.find() {
