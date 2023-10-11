@@ -9764,7 +9764,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
@@ -9862,7 +9862,7 @@ scenarios = [
                             action.File("/tmp/received/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest(0),
+                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -9900,7 +9900,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer(
                         "DROP_PEER_STIMPY", ["/tmp/tiny-jpeg.jpg", "/tmp/tiny-gif.gif"]
@@ -10045,7 +10045,7 @@ scenarios = [
                             action.File("/tmp/received/tiny-gif.gif", 26),
                         ],
                     ),
-                    action.CancelTransferRequest(0),
+                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -10095,7 +10095,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
@@ -10198,7 +10198,7 @@ scenarios = [
                             action.File("/tmp/received/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest(0),
+                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -10237,7 +10237,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.ConfigureNetwork(),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
@@ -10253,6 +10253,7 @@ scenarios = [
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     action.SleepMs(300),
+                    action.SetPeerState("DROP_PEER_STIMPY", PeerState.Online),
                     action.Wait(
                         event.Start(0, FILES["testfile-big"].id, transferred=None)
                     ),
@@ -10368,7 +10369,7 @@ scenarios = [
                             action.File("/tmp/received/21-1/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest(0),
+                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -10427,7 +10428,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.ConfigureNetwork(),
-                    action.WaitForAnotherPeer(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
@@ -10523,7 +10524,7 @@ scenarios = [
                             Error.BAD_TRANSFER_STATE,
                         )
                     ),
-                    action.CancelTransferRequest(0),
+                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
