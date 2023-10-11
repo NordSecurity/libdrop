@@ -103,13 +103,12 @@ class Action:
         raise NotImplementedError("run() on base Action class")
 
 
-class SetPeerState(Action):
-    def __init__(self, peer: str, state: PeerState):
-        self._peer = peer
-        self._state = state
+class NetworkRefresh(Action):
+    def __init__(self):
+        pass
 
     async def run(self, drop: ffi.Drop):
-        drop.set_peer_state(self._peer, self._state)
+        drop.network_refresh()
 
 
 class ListenOnPort(Action):
@@ -445,7 +444,7 @@ class WaitAndIgnoreExcept(Action):
                 )
 
     def __str__(self):
-        return f"WaitAndIgnoreExcept({self._events})"
+        return f"WaitAndIgnoreExcept({', '.join(str(e) for e in self._events)})"
 
 
 class WaitForOneOf(Action):

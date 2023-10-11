@@ -107,6 +107,7 @@ struct BadRequest;
 impl warp::reject::Reject for BadRequest {}
 
 pub(crate) fn spawn(
+    refresh_trigger: tokio::sync::watch::Receiver<()>,
     state: Arc<State>,
     logger: Logger,
     stop: CancellationToken,
@@ -166,14 +167,24 @@ pub(crate) fn spawn(
                     let stop = stop.clone();
                     let logger = logger.clone();
                     let nonces = nonces.clone();
+                    let refresh_trigger = refresh_trigger.clone();
 
                     async move {
                         authorize(&state.auth, &nonces, peer, version, auth_header).await?;
 
                         let reply = ws.on_upgrade(move |socket| async move {
                             info!(logger, "Client requested protocol version: {}", version);
-                            websocket_start(socket, state, alive, stop, version, peer, logger)
-                                .await;
+                            websocket_start(
+                                socket,
+                                state,
+                                alive,
+                                stop,
+                                version,
+                                peer,
+                                logger,
+                                refresh_trigger,
+                            )
+                            .await;
                         });
 
                         Ok::<_, warp::Rejection>(reply)
@@ -248,6 +259,7 @@ pub(crate) fn spawn(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn websocket_start(
     socket: warp::ws::WebSocket,
     state: Arc<State>,
@@ -256,12 +268,14 @@ async fn websocket_start(
     version: protocol::Version,
     peer: SocketAddr,
     logger: Logger,
+    refresh_trigger: tokio::sync::watch::Receiver<()>,
 ) {
     let ctx = RunContext {
         logger: &logger,
         state: state.clone(),
         stop: &stop,
         alive: &alive,
+        refresh_trigger: &refresh_trigger,
     };
 
     match version {
@@ -351,6 +365,7 @@ async fn handle_rejection(
 struct RunContext<'a> {
     logger: &'a slog::Logger,
     state: Arc<State>,
+    refresh_trigger: &'a tokio::sync::watch::Receiver<()>,
     stop: &'a CancellationToken,
     alive: &'a AliveGuard,
 }
@@ -523,6 +538,7 @@ impl RunContext<'_> {
             self.state.emit_event(Event::RequestReceived(xfer.clone()));
 
             check::spawn(
+                self.refresh_trigger.clone(),
                 self.state.clone(),
                 xfer.clone(),
                 self.logger.clone(),
