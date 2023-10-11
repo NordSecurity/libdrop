@@ -98,7 +98,7 @@ async fn make_request(state: &State, xfer: &IncomingTransfer, logger: &Logger) -
 
                 match state
                     .auth
-                    .create_authorization_header(resp, xfer.peer(), false)
+                    .create_clients_auth_header(resp, xfer.peer(), false)
                 {
                     Ok((key, value)) => {
                         debug!(logger, "Building 'authorization' request");

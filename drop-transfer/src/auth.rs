@@ -33,7 +33,7 @@ impl Context {
         .is_some()
     }
 
-    pub fn create_authorization_header<T>(
+    pub fn create_clients_auth_header<T>(
         &self,
         response: &Response<T>,
         peer_ip: IpAddr,
@@ -56,6 +56,27 @@ impl Context {
             let ticket =
                 drop_auth::create_ticket_as_client(&self.secret, &public, resp, check_nonce_prefix)
                     .context("Failed to create auth ticket")?;
+
+            let value = HeaderValue::from_str(&ticket.to_string())?;
+            anyhow::Ok((drop_auth::http::Authorization::KEY, value))
+        })
+    }
+
+    pub fn create_servers_auth_header(
+        &self,
+        peer_ip: IpAddr,
+        www_auth_value: &str,
+    ) -> anyhow::Result<(&'static str, HeaderValue)> {
+        use anyhow::Context;
+
+        tokio::task::block_in_place(|| {
+            let resp = drop_auth::http::WWWAuthenticate::parse(www_auth_value)
+                .context("Failed to parse 'www-authenticate' header")?;
+
+            let public = (self.public)(peer_ip).context("Failed to fetch peer's public key")?;
+
+            let ticket = drop_auth::create_ticket_as_server(&self.secret, &public, resp)
+                .context("Failed to create auth ticket")?;
 
             let value = HeaderValue::from_str(&ticket.to_string())?;
             anyhow::Ok((drop_auth::http::Authorization::KEY, value))
