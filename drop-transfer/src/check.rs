@@ -38,7 +38,6 @@ pub(crate) fn spawn(
                     break;
                 }
 
-                #[allow(clippy::let_underscore_must_use)]
                 let _ = refresh_trigger.changed().await;
             }
         };

@@ -119,7 +119,6 @@ pub unsafe extern "C" fn norddrop_new_transfer(
 #[no_mangle]
 pub unsafe extern "C" fn norddrop_destroy(dev: *mut norddrop) {
     if !dev.is_null() {
-        #[allow(clippy::let_underscore_must_use)]
         let _ = Box::from_raw(dev);
     }
 }
@@ -757,7 +756,6 @@ impl slog::Drain for norddrop_logger_cb {
 
         let mut serializer = KeyValueSerializer::new(record);
 
-        #[allow(clippy::let_underscore_must_use)]
         let _ = kv.serialize(record, &mut serializer);
 
         if let Ok(cstr) = CString::new(serializer.msg()) {
