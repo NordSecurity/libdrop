@@ -484,10 +484,6 @@ pub extern "C" fn norddrop_purge_transfers_until(
 ///              "created_at": 1686651025988,
 ///              "states": [
 ///                  {
-///                      "created_at": 1686651025991,
-///                      "state": "pending"
-///                  },
-///                  {
 ///                      "created_at": 1686651025997,
 ///                      "state": "started",
 ///                      "bytes_sent": 0
@@ -515,7 +511,7 @@ pub extern "C" fn norddrop_purge_transfers_until(
 ///             "by_peer": false
 ///         }
 ///     ],
-///     "type": "outgoing",
+///     "type": "incoming",
 ///     "paths": [
 ///         {
 ///             "transfer_id": "b49fc2f8-ce2d-41ac-a081-96a4d760899e",
