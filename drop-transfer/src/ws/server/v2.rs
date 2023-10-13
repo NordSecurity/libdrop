@@ -23,7 +23,6 @@ use super::{
     socket::WebSocket,
 };
 use crate::{
-    file::FileSubPath,
     manager::FileTerminalState,
     protocol::v2,
     service::State,
@@ -44,12 +43,12 @@ pub struct HandlerLoop<'a, const PING: bool> {
     logger: &'a slog::Logger,
     msg_tx: Sender<MsgToSend>,
     xfer: Arc<IncomingTransfer>,
-    jobs: HashMap<FileSubPath, FileTask>,
+    jobs: HashMap<FileId, FileTask>,
 }
 
 struct Downloader {
     state: Arc<State>,
-    file_subpath: FileSubPath,
+    file_id: FileId,
     msg_tx: Sender<MsgToSend>,
     tmp_loc: Option<Hidden<PathBuf>>,
     logger: slog::Logger,
@@ -91,7 +90,7 @@ impl<'a, const PING: bool> handler::HandlerInit for HandlerInit<'a, PING> {
     }
 
     async fn on_error(&mut self, ws: &mut WebSocket, err: anyhow::Error) -> anyhow::Result<()> {
-        let msg = v2::ServerMsg::Error(v2::Error {
+        let msg = v2::ServerMsgOnServer::Error(v2::Error {
             file: None,
             msg: err.to_string(),
         });
@@ -141,18 +140,18 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
     async fn on_chunk(
         &mut self,
         socket: &mut WebSocket,
-        file: FileSubPath,
+        file_id: FileId,
         chunk: Vec<u8>,
     ) -> anyhow::Result<()> {
-        if let Some(task) = self.jobs.get(&file) {
+        if let Some(task) = self.jobs.get(&file_id) {
             if let Err(err) = task.chunks_tx.send(chunk) {
                 let msg = v2::Error {
-                    msg: format!("Failed to consue chunk for file: {file:?}, msg: {err}",),
-                    file: Some(file),
+                    msg: format!("Failed to consue chunk for file: {file_id:?}, msg: {err}",),
+                    file: Some(file_id),
                 };
 
                 socket
-                    .send(Message::from(&v2::ServerMsg::Error(msg)))
+                    .send(Message::from(&v2::ServerMsgOnServer::Error(msg)))
                     .await?;
             }
         }
@@ -160,12 +159,12 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         Ok(())
     }
 
-    async fn on_cancel(&mut self, file: FileSubPath) {
+    async fn on_cancel(&mut self, file_id: FileId) {
         if let Some(FileTask {
             job: task,
             events,
             chunks_tx: _,
-        }) = self.jobs.remove(&file)
+        }) = self.jobs.remove(&file_id)
         {
             if !task.is_finished() {
                 task.abort();
@@ -174,17 +173,17 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         }
     }
 
-    async fn stop_task(&mut self, file_subpath: &FileSubPath, status: Status) {
+    async fn stop_task(&mut self, file_id: &FileId, status: Status) {
         if let Some(FileTask {
             job: task,
             events,
             chunks_tx: _,
-        }) = self.jobs.remove(file_subpath)
+        }) = self.jobs.remove(file_id)
         {
             if !task.is_finished() {
                 debug!(
                     self.logger,
-                    "Aborting download job: {}:{file_subpath:?}",
+                    "Aborting download job: {}:{file_id:?}",
                     self.xfer.id()
                 );
 
@@ -194,35 +193,33 @@ impl<const PING: bool> HandlerLoop<'_, PING> {
         }
     }
 
-    async fn on_error(&mut self, file: Option<FileSubPath>, msg: String) {
+    async fn on_error(&mut self, file_id: Option<FileId>, msg: String) {
         error!(
             self.logger,
-            "Client reported and error: file: {:?}, message: {}", file, msg
+            "Client reported and error: file: {:?}, message: {}", file_id, msg
         );
 
-        if let Some(file) = file {
-            if let Some(file) = self.xfer.file_by_subpath(&file) {
-                match self
-                    .state
-                    .transfer_manager
-                    .incoming_terminal_recv(self.xfer.id(), file.id(), FileTerminalState::Failed)
-                    .await
-                {
-                    Err(err) => {
-                        warn!(self.logger, "Failed to accept failure: {err}");
-                    }
-                    Ok(Some(res)) => {
-                        res.events
-                            .failed(crate::Error::BadTransferState(format!(
-                                "Sender reported an error: {msg}"
-                            )))
-                            .await;
-                    }
-                    Ok(None) => (),
+        if let Some(file_id) = file_id {
+            match self
+                .state
+                .transfer_manager
+                .incoming_terminal_recv(self.xfer.id(), &file_id, FileTerminalState::Failed)
+                .await
+            {
+                Err(err) => {
+                    warn!(self.logger, "Failed to accept failure: {err}");
                 }
+                Ok(Some(res)) => {
+                    res.events
+                        .failed(crate::Error::BadTransferState(format!(
+                            "Sender reported an error: {msg}"
+                        )))
+                        .await;
+                }
+                Ok(None) => (),
             }
 
-            self.stop_task(&file, Status::FileRejected).await;
+            self.stop_task(&file_id, Status::FileRejected).await;
         }
     }
 }
@@ -232,27 +229,27 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     async fn start_download(&mut self, ctx: super::FileStreamCtx<'_>) -> anyhow::Result<()> {
         let is_running = self
             .jobs
-            .get(ctx.task.file.subpath())
+            .get(ctx.task.file.id())
             .map_or(false, |state| !state.job.is_finished());
 
         if is_running {
             return Ok(());
         }
 
-        let subpath = ctx.task.file.subpath().clone();
         let (chunks_tx, chunks_rx) = mpsc::unbounded_channel();
 
         let downloader = Downloader {
             state: self.state.clone(),
-            file_subpath: ctx.task.file.subpath().clone(),
+            file_id: ctx.task.file.id().clone(),
             msg_tx: self.msg_tx.clone(),
             tmp_loc: None,
             logger: self.logger.clone(),
         };
+        let file_id = ctx.task.file.id().clone();
         let (job, events) = ctx.start(downloader, chunks_rx).await?;
 
         self.jobs.insert(
-            subpath,
+            file_id,
             FileTask {
                 job,
                 chunks_tx,
@@ -270,19 +267,12 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     ) -> anyhow::Result<()> {
         debug!(self.logger, "ServerHandler::issue_cancel");
 
-        let file_subpath = if let Some(file) = self.xfer.files().get(&file_id) {
-            file.subpath().clone()
-        } else {
-            warn!(self.logger, "Missing file with ID: {file_id:?}");
-            return Ok(());
-        };
-
-        let msg = v2::ServerMsg::Cancel(v2::Download {
-            file: file_subpath.clone(),
+        let msg = v2::ServerMsgOnServer::Cancel(v2::Download {
+            file: file_id.clone(),
         });
         socket.send(Message::from(&msg)).await?;
 
-        self.stop_task(&file_subpath, Status::FileRejected).await;
+        self.stop_task(&file_id, Status::FileRejected).await;
 
         Ok(())
     }
@@ -293,15 +283,8 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         file_id: FileId,
         msg: String,
     ) -> anyhow::Result<()> {
-        let file_subpath = if let Some(file) = self.xfer.files().get(&file_id) {
-            file.subpath().clone()
-        } else {
-            warn!(self.logger, "Missing file with ID: {file_id:?}");
-            return Ok(());
-        };
-
-        let msg = v2::ServerMsg::Error(v2::Error {
-            file: Some(file_subpath),
+        let msg = v2::ServerMsgOnServer::Error(v2::Error {
+            file: Some(file_id),
             msg,
         });
         socket.send(Message::from(&msg)).await?;
@@ -317,9 +300,9 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
             return Ok(());
         };
 
-        let msg = v2::ServerMsg::Done(v2::Progress {
+        let msg = v2::ServerMsgOnServer::Done(v2::Progress {
             bytes_transfered: file.size(),
-            file: file.subpath().clone(),
+            file: file_id,
         });
         socket.send(Message::from(&msg)).await?;
         Ok(())
@@ -333,16 +316,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     ) -> anyhow::Result<()> {
         anyhow::ensure!(offset == 0, "V2 does not support non zero offset");
 
-        let file = if let Some(file) = self.xfer.files().get(&file_id) {
-            file
-        } else {
-            warn!(self.logger, "Missing file with ID: {file_id:?}");
-            return Ok(());
-        };
-
-        let msg = v2::ServerMsg::Start(v2::Download {
-            file: file.subpath().clone(),
-        });
+        let msg = v2::ServerMsgOnServer::Start(v2::Download { file: file_id });
         socket.send(Message::from(&msg)).await?;
         Ok(())
     }
@@ -358,20 +332,20 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
     }
 
     async fn on_text_msg(&mut self, _: &mut WebSocket, text: &str) -> anyhow::Result<()> {
-        let msg: v2::ClientMsg =
+        let msg: v2::ClientMsgOnServer =
             serde_json::from_str(text).context("Failed to deserialize json")?;
 
         match msg {
-            v2::ClientMsg::Error(v2::Error { file, msg }) => self.on_error(file, msg).await,
-            v2::ClientMsg::Cancel(v2::Download { file }) => self.on_cancel(file).await,
+            v2::ClientMsgOnServer::Error(v2::Error { file, msg }) => self.on_error(file, msg).await,
+            v2::ClientMsgOnServer::Cancel(v2::Download { file }) => self.on_cancel(file).await,
         }
 
         Ok(())
     }
 
     async fn on_bin_msg(&mut self, ws: &mut WebSocket, bytes: Vec<u8>) -> anyhow::Result<()> {
-        let v2::Chunk { file, data } =
-            v2::Chunk::decode(bytes).context("Failed to decode file chunk")?;
+        let v2::ChunkOnServer { file, data } =
+            v2::ChunkOnServer::decode(bytes).context("Failed to decode file chunk")?;
 
         self.on_chunk(ws, file, data).await?;
 
@@ -462,8 +436,8 @@ impl handler::Downloader for Downloader {
     }
 
     async fn progress(&mut self, bytes: u64) -> crate::Result<()> {
-        self.send(&v2::ServerMsg::Progress(v2::Progress {
-            file: self.file_subpath.clone(),
+        self.send(&v2::ServerMsgOnServer::Progress(v2::Progress {
+            file: self.file_id.clone(),
             bytes_transfered: bytes,
         }))
         .await
