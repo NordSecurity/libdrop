@@ -374,10 +374,6 @@ enum norddrop_result norddrop_purge_transfers_until(const struct norddrop *dev,
  *              "created_at": 1686651025988,
  *              "states": [
  *                  {
- *                      "created_at": 1686651025991,
- *                      "state": "pending"
- *                  },
- *                  {
  *                      "created_at": 1686651025997,
  *                      "state": "started",
  *                      "bytes_sent": 0
@@ -405,7 +401,7 @@ enum norddrop_result norddrop_purge_transfers_until(const struct norddrop *dev,
  *             "by_peer": false
  *         }
  *     ],
- *     "type": "outgoing",
+ *     "type": "incoming",
  *     "paths": [
  *         {
  *             "transfer_id": "b49fc2f8-ce2d-41ac-a081-96a4d760899e",
@@ -489,8 +485,8 @@ enum norddrop_result norddrop_new(struct norddrop **dev,
 
 /**
  * Refresh connections. Should be called when anything about the network
- * changes that might affect connections. Also when peer availability has changed.
- * This will kick-start the automated retries for all transfers.
+ * changes that might affect connections. Also when peer availability has
+ * changed. This will kick-start the automated retries for all transfers.
  *
  * # Arguments
  *
