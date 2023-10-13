@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    fmt::Write,
     fs,
     net::IpAddr,
     path::PathBuf,
@@ -426,11 +427,14 @@ impl handler::Downloader for Downloader {
         if let Ok(time) = SystemTime::now().elapsed() {
             suffix.update(time.as_nanos().to_ne_bytes());
         }
+
         let suffix: String = suffix
             .finalize()
             .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect();
+            .fold(String::new(), |mut output, b| {
+                let _ = write!(output, "{b:02x}");
+                output
+            });
 
         let abs_path = task.prepare_abs_path(&self.state).await?;
 
