@@ -360,36 +360,36 @@ enum norddrop_result norddrop_purge_transfers_until(const struct norddrop *dev,
  * - `failed` - Contains status code of failure. Regular error table should be
  *   consulted for errors.
  * # Incoming File States
- * - `completed` - The file was successfully received and saved to the
- *   disk. Contains the final path of the file.
+ * - `completed` - The file was successfully received and saved to the disk.
+ *   Contains the final path of the file.
  * - `failed` - contains status code of failure. Regular error table should be
  *   consulted for errors.
- * - `paused` - The file was paused due to recoverable errors. Most
- *   probably due to network availability.
- * - `pending` - The download was issued for this file and it will
- *   proceed when possible.
- * - `reject` - The file was rejected by the receiver. Contains indicator
- *   of who rejected the file.
+ * - `paused` - The file was paused due to recoverable errors. Most probably
+ *   due to network availability.
+ * - `pending` - The download was issued for this file and it will proceed when
+ *   possible.
+ * - `reject` - The file was rejected by the receiver. Contains indicator of
+ *   who rejected the file.
  * - `started` - The file was started to be received. Contains the base
  *   directory of the file.
  *
- * Terminal states: `failed`, `completed`, `reject`. Terminal states appear once
- * and it is the final state. Other states might appear multiple times.
+ * Terminal states: `failed`, `completed`, `reject`. Terminal states appear
+ * once and it is the final state. Other states might appear multiple times.
  *
  * # Outgoing File States
- * - `completed` - The file was successfully received and saved to the
- *   disk. Contains the final path of the file.
+ * - `completed` - The file was successfully received and saved to the disk.
+ *   Contains the final path of the file.
  * - `failed` - contains status code of failure. Regular error table should be
  *   consulted for errors.
- * - `paused` - The file was paused due to recoverable errors. Most
- *   probably due to network availability.
- * - `reject` - The file was rejected by the receiver. Contains indicator
- *   of who rejected the file.
+ * - `paused` - The file was paused due to recoverable errors. Most probably
+ *   due to network availability.
+ * - `reject` - The file was rejected by the receiver. Contains indicator of
+ *   who rejected the file.
  * - `started` - The file was started to be received. Contains the base
  *   directory of the file.
  *
- * Terminal states: `failed`, `completed`, `reject`. Terminal states appear once
- * and it is the final state. Other states might appear multiple times.
+ * Terminal states: `failed`, `completed`, `reject`. Terminal states appear
+ * once and it is the final state. Other states might appear multiple times.
  *
  * # JSON example from the sender side
  *  ```json
