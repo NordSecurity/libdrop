@@ -1,8 +1,7 @@
-use std::{fs::File, io::Write, path::Path};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use slog::Logger;
-use uuid;
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
