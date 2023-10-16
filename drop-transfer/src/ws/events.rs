@@ -15,8 +15,14 @@ use crate::{
 struct FileEventTxInner {
     tx: UnboundedSender<(Event, SystemTime)>,
     moose: Arc<dyn Moose>,
-    started: Option<Instant>,
+    state: State,
     transferred: u64,
+}
+
+enum State {
+    Idle,
+    Throttled,
+    InFlight { started: Instant },
 }
 
 impl FileEventTxInner {
@@ -51,7 +57,7 @@ impl FileEventTxFactory {
             inner: Mutex::new(FileEventTxInner {
                 tx: self.events.clone(),
                 moose: self.moose.clone(),
-                started: None,
+                state: State::Idle,
                 transferred: 0,
             }),
             xfer,
@@ -65,10 +71,10 @@ impl<T: Transfer> FileEventTx<T> {
         self.xfer.files()[&self.file_id].info()
     }
 
-    async fn emit(&self, event: Event) {
+    async fn emit_in_flight(&self, event: Event) {
         let mut lock = self.inner.lock().await;
 
-        if lock.started.is_none() {
+        if !matches!(lock.state, State::InFlight { .. }) {
             return;
         }
 
@@ -83,20 +89,24 @@ impl<T: Transfer> FileEventTx<T> {
         lock.emit_event(event);
     }
 
-    async fn start_inner(&self, event: Event) {
+    async fn start_inner(&self, events: impl IntoIterator<Item = Event>) {
         let mut lock = self.inner.lock().await;
-        lock.started = Some(Instant::now());
+        lock.state = State::InFlight {
+            started: Instant::now(),
+        };
 
-        lock.emit_event(event);
+        for event in events.into_iter() {
+            lock.emit_event(event);
+        }
     }
 
     async fn stop(&self, event: Event, status: Result<(), i32>) {
         let mut lock = self.inner.lock().await;
 
-        let elapsed = if let Some(started) = lock.started.take() {
-            started.elapsed()
-        } else {
-            return;
+        let elapsed = match std::mem::replace(&mut lock.state, State::Idle) {
+            State::Idle => return,
+            State::Throttled => Duration::ZERO,
+            State::InFlight { started } => started.elapsed(),
         };
 
         let phase = match event {
@@ -129,10 +139,10 @@ impl<T: Transfer> FileEventTx<T> {
     async fn force_stop(&self, event: Event, status: Result<(), i32>) {
         let mut lock = self.inner.lock().await;
 
-        let elapsed = if let Some(started) = lock.started.take() {
-            started.elapsed()
-        } else {
-            Duration::default()
+        let elapsed = match std::mem::replace(&mut lock.state, State::Idle) {
+            State::Idle => Duration::ZERO,
+            State::Throttled => Duration::ZERO,
+            State::InFlight { started } => started.elapsed(),
         };
 
         let phase = match event {
@@ -165,13 +175,19 @@ impl<T: Transfer> FileEventTx<T> {
     pub async fn stop_silent(&self, status: Status) {
         let mut lock = self.inner.lock().await;
 
-        if let Some(started) = lock.started.take() {
+        let elapsed = match std::mem::replace(&mut lock.state, State::Idle) {
+            State::Idle => None,
+            State::Throttled => Some(Duration::ZERO),
+            State::InFlight { started } => Some(started.elapsed()),
+        };
+
+        if let Some(elapsed) = elapsed {
             let file_info = self.file_info();
 
             lock.moose.event_transfer_file(TransferFileEventData {
                 phase: drop_analytics::TransferFilePhase::Finished,
                 transfer_id: self.xfer.id().to_string(),
-                transfer_time: started.elapsed().as_millis() as i32,
+                transfer_time: elapsed.as_millis() as i32,
                 path_id: file_info.path_id,
                 direction: file_info.direction,
                 transferred: utils::to_kb(lock.transferred),
@@ -187,7 +203,7 @@ impl<T: Transfer> FileEventTx<T> {
 
 impl FileEventTx<IncomingTransfer> {
     pub async fn progress(&self, transfered: u64) {
-        self.emit(crate::Event::FileDownloadProgress(
+        self.emit_in_flight(crate::Event::FileDownloadProgress(
             self.xfer.clone(),
             self.file_id.clone(),
             transfered,
@@ -196,12 +212,12 @@ impl FileEventTx<IncomingTransfer> {
     }
 
     pub async fn start(&self, base_dir: impl Into<String>, offset: u64) {
-        self.start_inner(crate::Event::FileDownloadStarted(
+        self.start_inner([crate::Event::FileDownloadStarted(
             self.xfer.clone(),
             self.file_id.clone(),
             base_dir.into(),
             offset,
-        ))
+        )])
         .await
     }
 
@@ -254,16 +270,26 @@ impl FileEventTx<IncomingTransfer> {
 
 impl FileEventTx<OutgoingTransfer> {
     pub async fn start(&self, offset: u64) {
-        self.start_inner(crate::Event::FileUploadStarted(
+        let events = [crate::Event::FileUploadStarted(
             self.xfer.clone(),
             self.file_id.clone(),
             offset,
-        ))
-        .await
+        )];
+
+        self.start_inner(events).await
+    }
+
+    pub async fn start_with_progress(&self, offset: u64) {
+        let events = [
+            crate::Event::FileUploadStarted(self.xfer.clone(), self.file_id.clone(), offset),
+            crate::Event::FileUploadProgress(self.xfer.clone(), self.file_id.clone(), offset),
+        ];
+
+        self.start_inner(events).await
     }
 
     pub async fn progress(&self, transfered: u64) {
-        self.emit(crate::Event::FileUploadProgress(
+        self.emit_in_flight(crate::Event::FileUploadProgress(
             self.xfer.clone(),
             self.file_id.clone(),
             transfered,
@@ -272,12 +298,21 @@ impl FileEventTx<OutgoingTransfer> {
     }
 
     pub async fn throttled(&self, transfered: u64) {
-        self.emit(crate::Event::FileUploadThrottled {
-            transfer_id: self.xfer.id(),
-            file_id: self.file_id.clone(),
-            transfered,
-        })
-        .await
+        let mut lock = self.inner.lock().await;
+
+        match lock.state {
+            State::Idle => {
+                lock.emit_event(crate::Event::FileUploadThrottled {
+                    transfer_id: self.xfer.id(),
+                    file_id: self.file_id.clone(),
+                    transfered,
+                });
+
+                lock.state = State::Throttled;
+            }
+            State::Throttled => (),
+            State::InFlight { .. } => (),
+        }
     }
 
     pub async fn failed(&self, err: crate::Error) {
@@ -323,7 +358,13 @@ impl FileEventTx<OutgoingTransfer> {
 
 impl<T: Transfer> Drop for FileEventTx<T> {
     fn drop(&mut self) {
-        if let Some(started) = self.inner.get_mut().started {
+        let elapsed = match self.inner.get_mut().state {
+            State::Idle => None,
+            State::Throttled => Some(Duration::ZERO),
+            State::InFlight { started } => Some(started.elapsed()),
+        };
+
+        if let Some(elapsed) = elapsed {
             let file_info = self.file_info();
 
             let transferred = self.inner.get_mut().transferred;
@@ -334,7 +375,7 @@ impl<T: Transfer> Drop for FileEventTx<T> {
                 .event_transfer_file(TransferFileEventData {
                     phase: drop_analytics::TransferFilePhase::Finished,
                     transfer_id: self.xfer.id().to_string(),
-                    transfer_time: started.elapsed().as_millis() as i32,
+                    transfer_time: elapsed.as_millis() as i32,
                     path_id: file_info.path_id,
                     direction: file_info.direction,
                     transferred: utils::to_kb(transferred),
