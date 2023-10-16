@@ -62,7 +62,7 @@ impl PermitInit {
                 Ok(permit) => {
                     let file_id = events.file_id();
                     info!(logger, "Throttle permited file: {file_id}");
-                    events.start(transfered).await;
+                    events.start_with_progress(transfered).await;
 
                     Some(permit)
                 }
