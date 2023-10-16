@@ -18,7 +18,7 @@ use super::{
 use crate::{
     file::{self, FileToRecv},
     manager::FileTerminalState,
-    protocol::v5 as prot,
+    protocol::v6 as prot,
     service::State,
     tasks::AliveGuard,
     transfer::{IncomingTransfer, Transfer},

@@ -4,6 +4,7 @@
 * New API `norddrop_network_refresh` to inform Libdrop that network configuration or peer
 availability has changed. This breaks the previous automated retry behavior where it automatically issued 
 requests and now waits for this API to be called to conserve the resources.
+* Introduce server side authentication
 
 ---
 <br>

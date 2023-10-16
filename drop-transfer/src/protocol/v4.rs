@@ -19,7 +19,7 @@
 
 use serde::{Deserialize, Serialize};
 
-pub use super::v5::{
+pub use super::v6::{
     Cancel, Chunk, Done, Error, File, Progress, ReportChsum, ReqChsum, Start, TransferRequest,
 };
 use crate::FileId;
