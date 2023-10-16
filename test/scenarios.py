@@ -3877,12 +3877,10 @@ scenarios = [
             ),
         },
     ),
-    # TODO: for some reason after migration to paralllel runner this test started to fail
-    # the new runner expects the files already created, but the old one created at runtime, maybe there was a difference
     Scenario(
         "scenario19-2",
         # While we do replace ASCII control chars, they are technically allowed on Linux. So we can write and run the test
-        "Send a file with a ASCII control char in the name, expect it to being renamed to '_'",
+        "Send a file with a ASCII control char in the name, expect it to being renamed to '_' on the receiving side",
         {
             "DROP_PEER_REN": ActionList(
                 [
@@ -3926,7 +3924,7 @@ scenarios = [
                             {
                                 event.File(
                                     FILES["with-illegal-char-\x0A-"].id,
-                                    "with-illegal-char-\x0A-",
+                                    "with-illegal-char-_-",
                                     1048576,
                                 ),
                             },
