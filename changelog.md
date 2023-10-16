@@ -7,6 +7,7 @@ requests and now waits for this API to be called to conserve the resources.
 * Introduce server side authentication
 * Ensure `norddrop_stop()` blocks until all events are processed by the handler.
 * Normalize file paths upon receiving the transfer request immedieatly, thus eliminate misleading file names in the events.
+* Introduce `TransferThrottled` event for file uploads
 
 ---
 <br>
