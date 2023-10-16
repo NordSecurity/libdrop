@@ -1,5 +1,6 @@
 mod handler;
 mod socket;
+mod throttle;
 mod v2;
 mod v4;
 mod v6;
@@ -18,10 +19,7 @@ use hyper::{Request, Response, StatusCode};
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
     net::TcpStream,
-    sync::{
-        mpsc::{self, UnboundedReceiver},
-        Semaphore, SemaphorePermit, TryAcquireError,
-    },
+    sync::mpsc::{self, UnboundedReceiver},
     task::{AbortHandle, JoinSet},
 };
 use tokio_tungstenite::{
@@ -494,91 +492,65 @@ async fn start_upload(
         .outgoing_file_events(xfer.id(), &file_id)
         .await?;
 
-    events.start(uploader.offset()).await;
+    let offset = uploader.offset();
 
-    let upload_job = {
-        async move {
-            let _guard = guard;
-            let xfile = &xfer.files()[&file_id];
+    let permit = throttle::init(&logger, &state, &events, offset)
+        .await
+        .context("Failed to acquire upload permit")?;
 
-            let send_file = async {
-                let _permit = acquire_throttle_permit(&logger, &state.throttle, &file_id)
-                    .await
-                    .ok_or(crate::Error::Canceled)?;
+    let upload_job = async move {
+        let _guard = guard;
+        let xfile = &xfer.files()[&file_id];
 
-                let mut iofile = match xfile.open(uploader.offset()) {
-                    Ok(f) => f,
-                    Err(err) => {
-                        error!(
-                            logger,
-                            "Failed at service::download() while opening a file: {}", err
-                        );
-                        return Err(err);
-                    }
-                };
+        let send_file = async {
+            let _permit = permit.acquire().await.ok_or(crate::Error::Canceled)?;
 
-                loop {
-                    match iofile.read_chunk()? {
-                        Some(chunk) => uploader.chunk(chunk).await?,
-                        None => return Ok(()),
-                    }
-                }
-            };
-
-            match send_file.await {
-                Ok(()) => (),
-                Err(crate::Error::Canceled) => (),
+            let mut iofile = match xfile.open(offset) {
+                Ok(f) => f,
                 Err(err) => {
                     error!(
                         logger,
-                        "Failed at service::download() while reading a file: {}", err
+                        "Failed at service::download() while opening a file: {}", err
                     );
-
-                    let msg = err.to_string();
-
-                    match state
-                        .transfer_manager
-                        .outgoing_failure_post(xfer.id(), &file_id)
-                        .await
-                    {
-                        Err(err) => {
-                            warn!(logger, "Failed to post failure {err:?}");
-                        }
-                        Ok(res) => res.events.failed(err).await,
-                    }
-                    uploader.error(msg).await;
+                    return Err(err);
                 }
             };
-        }
+
+            loop {
+                match iofile.read_chunk()? {
+                    Some(chunk) => uploader.chunk(chunk).await?,
+                    None => return Ok(()),
+                }
+            }
+        };
+
+        match send_file.await {
+            Ok(()) => (),
+            Err(crate::Error::Canceled) => (),
+            Err(err) => {
+                error!(
+                    logger,
+                    "Failed at service::download() while reading a file: {}", err
+                );
+
+                let msg = err.to_string();
+
+                match state
+                    .transfer_manager
+                    .outgoing_failure_post(xfer.id(), &file_id)
+                    .await
+                {
+                    Err(err) => {
+                        warn!(logger, "Failed to post failure {err:?}");
+                    }
+                    Ok(res) => res.events.failed(err).await,
+                }
+                uploader.error(msg).await;
+            }
+        };
     };
 
     Ok((jobs.spawn(upload_job), events))
-}
-
-async fn acquire_throttle_permit<'a>(
-    logger: &slog::Logger,
-    throttle: &'a Semaphore,
-    file_id: &FileId,
-) -> Option<SemaphorePermit<'a>> {
-    match throttle.try_acquire() {
-        Err(TryAcquireError::NoPermits) => info!(logger, "Throttling file: {file_id}"),
-        Err(err) => {
-            error!(logger, "Throttle semaphore failed: {err}");
-            return None;
-        }
-        Ok(permit) => return Some(permit),
-    }
-
-    match throttle.acquire().await {
-        Ok(permit) => {
-            info!(logger, "Throttle permited file: {file_id}");
-            Some(permit)
-        }
-        Err(err) => {
-            error!(logger, "Throttle semaphore failed: {err}");
-            None
-        }
-    }
 }
 
 async fn on_req(

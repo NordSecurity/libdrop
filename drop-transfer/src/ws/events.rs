@@ -179,6 +179,10 @@ impl<T: Transfer> FileEventTx<T> {
             });
         }
     }
+
+    pub fn file_id(&self) -> &FileId {
+        &self.file_id
+    }
 }
 
 impl FileEventTx<IncomingTransfer> {
@@ -264,6 +268,15 @@ impl FileEventTx<OutgoingTransfer> {
             self.file_id.clone(),
             transfered,
         ))
+        .await
+    }
+
+    pub async fn throttled(&self, transfered: u64) {
+        self.emit(crate::Event::FileUploadThrottled {
+            transfer_id: self.xfer.id(),
+            file_id: self.file_id.clone(),
+            transfered,
+        })
         .await
     }
 

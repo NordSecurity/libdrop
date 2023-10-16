@@ -107,6 +107,12 @@ pub enum Event {
         file: String,
         timestamp: u64,
     },
+    TransferThrottled {
+        transfer: String,
+        file: String,
+        transfered: u64,
+        timestamp: u64,
+    },
 }
 
 #[derive(Deserialize, Debug)]
@@ -262,6 +268,17 @@ impl From<(drop_transfer::Event, SystemTime)> for Event {
             } => Self::TransferPaused {
                 transfer: transfer_id.to_string(),
                 file: file_id.to_string(),
+                timestamp,
+            },
+
+            drop_transfer::Event::FileUploadThrottled {
+                transfer_id,
+                file_id,
+                transfered,
+            } => Self::TransferThrottled {
+                transfer: transfer_id.to_string(),
+                file: file_id.to_string(),
+                transfered,
                 timestamp,
             },
         }
