@@ -3,7 +3,7 @@ pub mod v2 {
     pub use super::v1::*;
 }
 pub mod v4;
-pub mod v5;
+pub mod v6;
 
 #[derive(Copy, Clone, strum::Display, strum::EnumString)]
 pub enum Version {
@@ -17,6 +17,8 @@ pub enum Version {
     V4,
     #[strum(serialize = "v5")]
     V5,
+    #[strum(serialize = "v6")]
+    V6,
 }
 
 impl From<Version> for i32 {
@@ -26,6 +28,7 @@ impl From<Version> for i32 {
             Version::V2 => 2,
             Version::V4 => 4,
             Version::V5 => 5,
+            Version::V6 => 6,
         }
     }
 }
