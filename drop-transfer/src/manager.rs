@@ -128,6 +128,7 @@ impl TransferManager {
                         drop(conn)
                     }
                     _ => {
+                        info!(self.logger, "Issuing pending requests for: {}", xfer.id());
                         state.issue_pending_requests(&conn, &self.logger);
                         state.conn = Some(conn);
                     }
