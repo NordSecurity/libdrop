@@ -2519,10 +2519,10 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.WaitForAnotherPeer("DROP_PEER_GEORGE"),
                     action.NewTransferWithFD(
                         "DROP_PEER_STIMPY", "/tmp/testfile-small", cached=True
                     ),
-                    action.WaitForAnotherPeer("DROP_PEER_GEORGE"),
                     action.NewTransferWithFD(
                         "DROP_PEER_GEORGE", "/tmp/testfile-small", cached=True
                     ),
@@ -2548,10 +2548,6 @@ scenarios = [
                                     ),
                                 },
                             ),
-                        ]
-                    ),
-                    action.WaitRacy(
-                        [
                             event.Start(
                                 0, "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI"
                             ),
@@ -5604,6 +5600,7 @@ scenarios = [
                             0, FILES["testfile-small"].id, Error.FILE_FINISHED
                         )
                     ),
+                    action.Sleep(2),
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
@@ -6613,6 +6610,7 @@ scenarios = [
                         )
                     ),
                     action.ExpectCancel([0], True),
+                    action.NoEvent(2),
                     action.Stop(),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-9-ren.sqlite"),
                     action.NetworkRefresh(),
@@ -6913,6 +6911,7 @@ scenarios = [
                     ),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
+                    action.Stop(),
                 ]
             ),
             "DROP_PEER_STIMPY": ActionList(
@@ -6946,6 +6945,7 @@ scenarios = [
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
+                    action.Stop(),
                 ]
             ),
         },
@@ -8214,7 +8214,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
-                    action.ConfigureNetwork(latency="10ms"),
+                    action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -8997,11 +8997,13 @@ scenarios = [
                     action.NetworkRefresh(),
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
+                    action.NoEvent(),
                     action.Stop(),
                     # Start again but this time with a copy of the database. The transfer should be again retried but the other peer should respond with already cancelled
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/41-ren-copy.sqlite"),
                     action.NetworkRefresh(),
                     action.ExpectCancel([0], True),
+                    action.NoEvent(),
                     action.Stop(),
                 ]
             ),
@@ -9023,7 +9025,7 @@ scenarios = [
                     ),
                     action.ExpectCancel([0], True),
                     action.Sleep(
-                        20
+                        30
                     ),  # Give enough time for communication and to silently respond to the sender back that transfer was canceled
                     action.Stop(),
                 ]
@@ -9143,6 +9145,7 @@ scenarios = [
                         "DROP_PEER_STIMPY", dbpath="/tmp/db/42-2-stimpy.sqlite"
                     ),
                     action.ExpectCancel([0], True),
+                    action.NoEvent(),
                     action.Stop(),
                 ]
             ),
@@ -9479,7 +9482,8 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
-                    action.ConfigureNetwork(latency="1ms"),
+                    action.WaitForAnotherPeer("DROP_PEER_GEORGE"),
+                    action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -9512,7 +9516,7 @@ scenarios = [
                             action.NetworkRefresh(),
                             action.Sleep(1),
                         ],
-                        20,
+                        40,
                     ),
                     action.WaitAndIgnoreExcept(
                         [
@@ -9534,7 +9538,6 @@ scenarios = [
             ),
             "DROP_PEER_STIMPY": ActionList(
                 [
-                    action.Sleep(4),
                     action.Start(
                         "DROP_PEER_STIMPY", dbpath="/tmp/db/44-3-stimpy.sqlite"
                     ),
@@ -9587,7 +9590,6 @@ scenarios = [
             ),
             "DROP_PEER_GEORGE": ActionList(
                 [
-                    action.Sleep(4),
                     action.Start(
                         "DROP_PEER_GEORGE", dbpath="/tmp/db/44-3-george.sqlite"
                     ),
@@ -9647,7 +9649,7 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.ConfigureNetwork(latency="1ms"),
+                    action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN"),
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
@@ -9705,9 +9707,8 @@ scenarios = [
             ),
             "DROP_PEER_STIMPY": ActionList(
                 [
-                    action.Sleep(4),
                     action.Start(
-                        "DROP_PEER_STIMPY", dbpath="/tmp/db/44-3-stimpy.sqlite"
+                        "DROP_PEER_STIMPY", dbpath="/tmp/db/44-4-stimpy.sqlite"
                     ),
                     action.Wait(
                         event.Receive(
@@ -9726,15 +9727,15 @@ scenarios = [
                     action.Download(
                         0,
                         FILES["testfile-small"].id,
-                        "/tmp/received",
+                        "/tmp/received/44-4",
                     ),
                     action.Repeated(
                         [
                             action.Stop(),
                             action.Start(
-                                "DROP_PEER_STIMPY", dbpath="/tmp/db/44-3-stimpy.sqlite"
+                                "DROP_PEER_STIMPY", dbpath="/tmp/db/44-4-stimpy.sqlite"
                             ),
-                            action.Sleep(2),
+                            action.Sleep(4),
                         ],
                         5,
                     ),
@@ -9743,24 +9744,24 @@ scenarios = [
                             event.FinishFileDownloaded(
                                 0,
                                 FILES["testfile-small"].id,
-                                "/tmp/received/testfile-small",
+                                "/tmp/received/44-4/testfile-small",
                             )
                         ]
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            action.File("/tmp/received/testfile-small", 1048576),
+                            action.File("/tmp/received/44-4/testfile-small", 1048576),
                         ],
                     ),
                     action.ExpectCancel([0], True),
+                    action.NoEvent(),
                     action.Stop(),
                 ]
             ),
             "DROP_PEER_GEORGE": ActionList(
                 [
-                    action.Sleep(4),
                     action.Start(
-                        "DROP_PEER_GEORGE", dbpath="/tmp/db/44-3-george.sqlite"
+                        "DROP_PEER_GEORGE", dbpath="/tmp/db/44-4-george.sqlite"
                     ),
                     action.Wait(
                         event.Receive(
@@ -9779,15 +9780,15 @@ scenarios = [
                     action.Download(
                         0,
                         FILES["testfile-big"].id,
-                        "/tmp/received",
+                        "/tmp/received/44-4",
                     ),
                     action.Repeated(
                         [
                             action.Stop(),
                             action.Start(
-                                "DROP_PEER_GEORGE", dbpath="/tmp/db/44-3-george.sqlite"
+                                "DROP_PEER_GEORGE", dbpath="/tmp/db/44-4-george.sqlite"
                             ),
-                            action.Sleep(2),
+                            action.Sleep(4),
                         ],
                         5,
                     ),
@@ -9796,16 +9797,17 @@ scenarios = [
                             event.FinishFileDownloaded(
                                 0,
                                 FILES["testfile-big"].id,
-                                "/tmp/received/testfile-big",
+                                "/tmp/received/44-4/testfile-big",
                             )
                         ]
                     ),
                     action.CheckDownloadedFiles(
                         [
-                            action.File("/tmp/received/testfile-big", 10485760),
+                            action.File("/tmp/received/44-4/testfile-big", 10485760),
                         ],
                     ),
                     action.ExpectCancel([0], True),
+                    action.NoEvent(),
                     action.Stop(),
                 ]
             ),
