@@ -4822,7 +4822,7 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario26-1",
+        "analytics-6-1",
         "Test if the instance can recover on database corruption",
         {
             "DROP_PEER_REN": ActionList(
@@ -4859,7 +4859,7 @@ scenarios = [
         tags=["moose"],
     ),
     Scenario(
-        "scenario26-2",
+        "analytics-6-2",
         "Provide database with insufficient permissions, expect file share and in-memory database to work, with failures being reported to moose",
         {
             "DROP_PEER_REN": ActionList(
