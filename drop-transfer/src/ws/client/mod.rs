@@ -10,7 +10,6 @@ use std::{
     net::{IpAddr, SocketAddr},
     ops::ControlFlow,
     sync::Arc,
-    time::Duration,
 };
 
 use anyhow::Context;
@@ -73,7 +72,7 @@ enum RequestError {
 }
 
 pub(crate) fn spawn(
-    mut refresh_trigger: tokio::sync::watch::Receiver<()>,
+    refresh_trigger: tokio::sync::watch::Receiver<()>,
     state: Arc<State>,
     xfer: Arc<OutgoingTransfer>,
     logger: Logger,
@@ -83,9 +82,11 @@ pub(crate) fn spawn(
     let id = xfer.id();
 
     tokio::spawn(async move {
+        let mut backoff = utils::RetryTrigger::new(refresh_trigger);
+
         let task = async {
             loop {
-                let cf = run(state.clone(), xfer.clone(), &logger, &guard).await;
+                let cf = connect_to_peer(&state, &xfer, &logger, &guard).await;
                 if cf.is_break() {
                     debug!(logger, "connection status is irrecoverable");
                     if let Err(err) = state.transfer_manager.outgoing_remove(xfer.id()).await {
@@ -99,7 +100,7 @@ pub(crate) fn spawn(
                     break;
                 }
 
-                let _ = refresh_trigger.changed().await;
+                backoff.backoff().await;
             }
         };
 
@@ -114,34 +115,14 @@ pub(crate) fn spawn(
     });
 }
 
-async fn run(
-    state: Arc<State>,
-    xfer: Arc<OutgoingTransfer>,
-    logger: &Logger,
-    alive: &AliveGuard,
-) -> ControlFlow<()> {
-    for delay in std::iter::once(Duration::from_secs(0)).chain(drop_config::RETRY_INTERVALS) {
-        debug!(
-            logger,
-            "Outcoming transfer job started for {}, will sleep for {:?}",
-            xfer.id(),
-            delay
-        );
-
-        tokio::time::sleep(delay).await;
-        connect_to_peer(&state, &xfer, logger, alive).await?;
-    }
-
-    debug!(logger, "no more retries left, considering failure");
-    ControlFlow::Continue(())
-}
-
 async fn connect_to_peer(
     state: &Arc<State>,
     xfer: &Arc<OutgoingTransfer>,
     logger: &Logger,
     alive: &AliveGuard,
 ) -> ControlFlow<()> {
+    debug!(logger, "Outgoing transfer job started for {}", xfer.id(),);
+
     let (socket, ver) = match establish_ws_conn(state, xfer, logger).await {
         WsConnection::Connected(sock, ver) => (sock, ver),
         WsConnection::Recoverable => return ControlFlow::Continue(()),
