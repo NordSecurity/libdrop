@@ -470,7 +470,9 @@ class WaitRacy(Action):
 
     async def run(self, drop: ffi.Drop):
         await drop._events.wait_racy(
-            self._events, not any(isinstance(ev, event.Progress) for ev in self._events)
+            self._events,
+            not any(isinstance(ev, event.Progress) for ev in self._events),
+            not any(isinstance(ev, event.Throttled) for ev in self._events),
         )
 
     def __str__(self):
