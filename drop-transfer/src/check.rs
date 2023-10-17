@@ -2,14 +2,13 @@ use std::{
     net::{IpAddr, SocketAddr},
     ops::ControlFlow,
     sync::Arc,
-    time::Duration,
 };
 
 use hyper::StatusCode;
 use slog::{debug, info, warn, Logger};
 use tokio_util::sync::CancellationToken;
 
-use crate::{auth, protocol, service::State, tasks::AliveGuard, IncomingTransfer, Transfer};
+use crate::{auth, protocol, service::State, tasks::AliveGuard, utils, IncomingTransfer, Transfer};
 
 #[derive(thiserror::Error, Debug)]
 enum RequestError {
@@ -20,7 +19,7 @@ enum RequestError {
 }
 
 pub(crate) fn spawn(
-    mut refresh_trigger: tokio::sync::watch::Receiver<()>,
+    refresh_trigger: tokio::sync::watch::Receiver<()>,
     state: Arc<State>,
     xfer: Arc<IncomingTransfer>,
     logger: Logger,
@@ -31,11 +30,11 @@ pub(crate) fn spawn(
 
     tokio::spawn(async move {
         let _guard = guard;
+        let mut backoff = utils::RetryTrigger::new(refresh_trigger);
 
         let task = async {
             loop {
                 let cf = run(&state, &xfer, &logger).await;
-
                 if cf.is_break() {
                     info!(logger, "Transfer {} is gone. Clearing", xfer.id());
 
@@ -51,7 +50,7 @@ pub(crate) fn spawn(
                     break;
                 }
 
-                let _ = refresh_trigger.changed().await;
+                backoff.backoff().await;
             }
         };
 
@@ -67,22 +66,13 @@ pub(crate) fn spawn(
 }
 
 async fn run(state: &State, xfer: &Arc<IncomingTransfer>, logger: &Logger) -> ControlFlow<()> {
-    for delay in std::iter::once(Duration::from_secs(0)).chain(drop_config::RETRY_INTERVALS) {
-        debug!(
-            logger,
-            "Incoming transfer job started for {}, will sleep for {:?}",
-            xfer.id(),
-            delay
-        );
-        tokio::time::sleep(delay).await;
+    debug!(logger, "Incoming transfer job started for {}", xfer.id(),);
 
-        if !state.transfer_manager.is_incoming_alive(xfer.id()).await {
-            return ControlFlow::Break(());
-        }
-
-        ask_server(state, xfer, logger).await?;
+    if !state.transfer_manager.is_incoming_alive(xfer.id()).await {
+        return ControlFlow::Break(());
     }
 
+    ask_server(state, xfer, logger).await?;
     ControlFlow::Continue(())
 }
 
