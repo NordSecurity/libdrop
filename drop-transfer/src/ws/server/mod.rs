@@ -905,15 +905,7 @@ impl FileXferTask {
 
                     match result {
                         Err(crate::Error::Canceled) => {
-                            info!(logger, "File {} cancelled", self.file.id());
-
-                            if let Err(err) = state
-                                .transfer_manager
-                                .incoming_download_cancel(self.xfer.id(), self.file.id())
-                                .await
-                            {
-                                warn!(logger, "Failed to store download finish: {err}");
-                            }
+                            info!(logger, "File {} stopped", self.file.id())
                         }
                         Ok(dst_location) => {
                             info!(logger, "File {} downloaded succesfully", self.file.id());

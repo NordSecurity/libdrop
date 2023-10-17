@@ -430,31 +430,6 @@ impl TransferManager {
         !matches!(state.xfer_sync, sync::TransferState::Canceled)
     }
 
-    pub async fn incoming_download_cancel(
-        &self,
-        transfer_id: Uuid,
-        file_id: &FileId,
-    ) -> crate::Result<()> {
-        let mut lock = self.incoming.lock().await;
-
-        let state = lock
-            .get_mut(&transfer_id)
-            .ok_or(crate::Error::BadTransfer)?;
-
-        state.ensure_not_cancelled()?;
-
-        let state = state.file_sync_mut(file_id)?;
-        state.ensure_not_terminated()?;
-
-        *state = IncomingLocalFileState::Idle;
-
-        self.storage
-            .stop_incoming_file(transfer_id, file_id.as_ref())
-            .await;
-
-        Ok(())
-    }
-
     pub async fn incoming_finish_post(
         &self,
         transfer_id: Uuid,
