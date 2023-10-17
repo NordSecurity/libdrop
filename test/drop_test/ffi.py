@@ -124,6 +124,10 @@ class EventQueue:
     async def wait_for_any_event(self, duration: int, ignore_progress: bool = False):
         for _ in range(0, duration):
             with self._lock:
+                self._events = [
+                    ev for ev in self._events if not isinstance(ev, event.Throttled)
+                ]
+
                 if ignore_progress:
                     self._events = [
                         ev for ev in self._events if not isinstance(ev, event.Progress)
@@ -173,7 +177,10 @@ class EventQueue:
     # expect all incoming events to be present in passed events in no
     # particular order
     async def wait_racy(
-        self, target_events: typing.List[event.Event], ignore_progress: bool = True
+        self,
+        target_events: typing.List[event.Event],
+        ignore_progress: bool = True,
+        ignore_throttled: bool = True,
     ) -> None:
         success = []
 
@@ -189,6 +196,9 @@ class EventQueue:
                     self._events = self._events[1:]
 
                     if ignore_progress and isinstance(e, event.Progress):
+                        continue
+
+                    if ignore_throttled and isinstance(e, event.Throttled):
                         continue
 
                     found = False
@@ -642,6 +652,17 @@ def new_event(event_str: str) -> event.Event:
         progress: int = event_data["transfered"]
 
         return event.Progress(transfer_slot, file, progress)
+
+    elif event_type == "TransferThrottled":
+        transfer = event_data["transfer"]
+
+        with event.UUIDS_LOCK:
+            transfer_slot = event.UUIDS.index(transfer)
+
+        file = event_data["file"]
+        progress = event_data["transfered"]
+
+        return event.Throttled(transfer_slot, file, progress)
 
     elif event_type == "TransferFinished":
         transfer = event_data["transfer"]

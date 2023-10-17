@@ -32,7 +32,7 @@ pub(super) struct State {
     pub(crate) auth: Arc<auth::Context>,
     pub(crate) config: Arc<DropConfig>,
     pub(crate) storage: Arc<Storage>,
-    pub(crate) throttle: Semaphore,
+    pub(crate) throttle: Arc<Semaphore>,
     pub(crate) addr: IpAddr,
     #[cfg(unix)]
     pub fdresolv: Option<Arc<crate::file::FdResolver>>,
@@ -70,7 +70,7 @@ impl Service {
     ) -> Result<Self, Error> {
         let task = async {
             let state = Arc::new(State {
-                throttle: Semaphore::new(drop_config::MAX_UPLOADS_IN_FLIGHT), /* TODO: max uploads of 4 files per all libdrop is too restrictive, workout a better plan, like configurable through config */
+                throttle: Arc::new(Semaphore::new(drop_config::MAX_UPLOADS_IN_FLIGHT)), /* TODO: max uploads of 4 files per all libdrop is too restrictive, workout a better plan, like configurable through config */
                 transfer_manager: TransferManager::new(
                     storage.clone(),
                     FileEventTxFactory::new(event_tx.clone(), moose.clone()),
