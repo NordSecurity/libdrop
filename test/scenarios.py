@@ -10145,7 +10145,7 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario-analytics-1",
+        "analytics-1",
         "Send a file to a peer, verify moose events",
         {
             "DROP_PEER_REN": ActionList(
@@ -10281,7 +10281,7 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario-analytics-2",
+        "analytics-2",
         "Send two files to a peer, verify moose events",
         {
             "DROP_PEER_REN": ActionList(
@@ -10476,7 +10476,7 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario-analytics-3",
+        "analytics-3",
         "Try to send a file to an offline peer, wait for retries to happen, verify moose events",
         {
             "DROP_PEER_REN": ActionList(
@@ -10617,7 +10617,7 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario-analytics-4",
+        "analytics-4",
         "Send a file to a peer, break and continue the transfer, verify moose events",
         {
             "DROP_PEER_REN": ActionList(
@@ -10808,7 +10808,7 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario-analytics-5",
+        "analytics-5",
         "Cause a transfer failure mid-transfer, verify moose events",
         {
             "DROP_PEER_REN": ActionList(
