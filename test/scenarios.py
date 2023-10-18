@@ -907,7 +907,7 @@ scenarios = [
                             },
                         )
                     ),
-                    action.SleepMs(200),
+                    action.Sleep(0.2),
                     action.CancelTransferRequest([0]),
                     action.Wait(event.FinishTransferCanceled(0, False)),
                     action.NoEvent(),
@@ -4173,7 +4173,7 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.SleepMs(300),
+                    action.Sleep(0.3),
                     action.NetworkRefresh(),
                     action.Wait(
                         event.Start(0, FILES["testfile-big"].id, transferred=None)
@@ -5412,7 +5412,7 @@ scenarios = [
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-small"].id, False)
                     ),
-                    action.SleepMs(200),
+                    action.Sleep(0.2),
                     action.RejectTransferFile(0, FILES["testfile-small"].id),
                     action.Wait(
                         event.FinishFileFailed(
@@ -7287,7 +7287,7 @@ scenarios = [
                     }"""
                         ]
                     ),
-                    action.SleepMs(200),
+                    action.Sleep(0.2),
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
@@ -7787,7 +7787,7 @@ scenarios = [
                     }"""
                         ]
                     ),
-                    action.SleepMs(200),
+                    action.Sleep(0.2),
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
@@ -8197,7 +8197,7 @@ scenarios = [
                             action.Start(
                                 "DROP_PEER_STIMPY", dbpath="/tmp/db/35-stimpy.sqlite"
                             ),
-                            action.SleepMs(30),
+                            action.Sleep(0.2),
                             action.Stop(),
                         ],
                         100,
@@ -8438,7 +8438,7 @@ scenarios = [
                     action.Repeated(
                         [
                             action.Stop(),
-                            action.SleepMs(20),
+                            action.Sleep(0.02),
                             action.Start(
                                 "DROP_PEER_REN", dbpath="/tmp/scenario35-5.db"
                             ),
@@ -8731,7 +8731,7 @@ scenarios = [
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Stop(),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.SleepMs(400),
+                    action.Sleep(0.4),
                     action.Start("DROP_PEER_REN", "/tmp/db/38.sqlite"),
                     action.NetworkRefresh(),
                     action.Wait(event.FinishTransferCanceled(0, True)),
@@ -8759,7 +8759,7 @@ scenarios = [
                         "/tmp/received/38",
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
-                    action.SleepMs(400),
+                    action.Sleep(0.4),
                     action.CancelTransferRequest([0]),
                     action.Wait(event.FinishTransferCanceled(0, False)),
                     action.NoEvent(duration=10),
@@ -8789,7 +8789,7 @@ scenarios = [
                             },
                         )
                     ),
-                    action.SleepMs(200),
+                    action.Sleep(0.2),
                     action.Stop(),
                     action.Start(
                         "DROP_PEER_REN"
@@ -9055,7 +9055,7 @@ scenarios = [
                             },
                         )
                     ),
-                    action.SleepMs(500),
+                    action.Sleep(0.5),
                     action.Stop(),
                     action.Sleep(1),
                     action.Start("DROP_PEER_REN", "/tmp/db/42-1-ren.sqlite"),
@@ -9111,7 +9111,7 @@ scenarios = [
                             },
                         )
                     ),
-                    action.SleepMs(500),
+                    action.Sleep(0.5),
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
@@ -9214,7 +9214,7 @@ scenarios = [
                             "/tmp/received/testfile-small",
                         )
                     ),
-                    action.SleepMs(500),
+                    action.Sleep(0.5),
                     action.Stop(),
                     action.Start("DROP_PEER_STIMPY", dbpath="/tmp/db/43-stimpy.sqlite"),
                     action.NoEvent(4),
@@ -10642,7 +10642,7 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.SleepMs(300),
+                    action.Sleep(0.3),
                     action.NetworkRefresh(),
                     action.Wait(
                         event.Start(0, FILES["testfile-big"].id, transferred=None)
@@ -11007,7 +11007,7 @@ scenarios = [
                     action.Download(0, FILES["testfile-bulk-02"].id, "/tmp/received/48"),
                     action.Download(0, FILES["testfile-bulk-03"].id, "/tmp/received/48"),
                     action.Download(0, FILES["testfile-bulk-04"].id, "/tmp/received/48"),
-                    action.SleepMs(500),
+                    action.Sleep(0.5),
                     action.Download(0, FILES["testfile-bulk-05"].id, "/tmp/received/48"),
                     action.WaitRacy(
                         [
