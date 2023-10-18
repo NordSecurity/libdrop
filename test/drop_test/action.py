@@ -380,17 +380,6 @@ class Sleep(Action):
         return f"Sleep({self._seconds})"
 
 
-class SleepMs(Action):
-    def __init__(self, ms: int):
-        self._ms: int = ms
-
-    async def run(self, drop: ffi.Drop):
-        await asyncio.sleep(float(self._ms) / float(1000))
-
-    def __str__(self):
-        return f"SleepMs({self._ms})"
-
-
 class Wait(Action):
     def __init__(self, event: Event):
         self._event: Event = event
