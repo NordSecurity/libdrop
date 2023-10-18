@@ -1,5 +1,5 @@
-name: Integration tests
-run-name: ${{ github.actor }} is running integration tests
+name: Analytics tests
+run-name: ${{ github.actor }} is running analytics tests
 on:
   - push
 jobs:
@@ -24,5 +24,5 @@ jobs:
         run: docker images
       - name: run tests
         run: |
-          SCENARIO="scenario.*" make -C test
+          SCENARIO="analytics.*" make -C test
   
