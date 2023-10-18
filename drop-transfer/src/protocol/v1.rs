@@ -13,7 +13,7 @@ use std::{net::IpAddr, sync::Arc};
 use drop_config::DropConfig;
 use serde::{Deserialize, Serialize};
 
-use super::v4;
+pub use super::v4::{Error, Progress};
 use crate::{
     file::{File as _, FileId, FileSubPath, FileToRecv},
     transfer::IncomingTransfer,
@@ -27,9 +27,39 @@ pub struct File {
     pub children: Vec<File>,
 }
 
-pub type Chunk = v4::Chunk<FileSubPath>;
-pub type Progress = v4::Progress<FileSubPath>;
-pub type Error = v4::Error<FileSubPath>;
+// For type safety let us define different types of the same messages,
+// but with different types for each side of the connection.
+// Since the server doesn't know the true file ID, it must resort to setting the
+// ID to subpath. That's why he may use the `FileId` type directly.
+// The server uses true file ID but must use the subpath for communication with
+// the peer. We can either map it manually to the `FileId` type but it would be
+// error-prone, and someone will eventually introduce the bug, because of
+// forgetting to map the ID. The safest option is to use the `FileSubPath` type
+// directly to force the programmer to use the correct thing.
+
+pub type ServerMsgOnServer = ServerMsg<FileId>;
+pub type ServerMsgOnClient = ServerMsg<FileSubPath>;
+pub type ClientMsgOnServer = ClientMsg<FileId>;
+pub type ClientMsgOnClient = ClientMsg<FileSubPath>;
+pub type ChunkOnServer = super::v4::Chunk<FileId>;
+pub type ChunkOnClient = super::v4::Chunk<FileSubPath>;
+
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
+#[serde(tag = "type")]
+pub enum ServerMsg<T> {
+    Progress(Progress<T>),
+    Done(Progress<T>),
+    Error(Error<T>),
+    Start(Download<T>),
+    Cancel(Download<T>),
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
+#[serde(tag = "type")]
+pub enum ClientMsg<T> {
+    Error(Error<T>),
+    Cancel(Download<T>),
+}
 
 #[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct TransferRequest {
@@ -37,25 +67,8 @@ pub struct TransferRequest {
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq)]
-pub struct Download {
-    pub file: FileSubPath,
-}
-
-#[derive(Serialize, Deserialize, Eq, PartialEq)]
-#[serde(tag = "type")]
-pub enum ServerMsg {
-    Progress(Progress),
-    Done(Progress),
-    Error(Error),
-    Start(Download),
-    Cancel(Download),
-}
-
-#[derive(Serialize, Deserialize, Eq, PartialEq)]
-#[serde(tag = "type")]
-pub enum ClientMsg {
-    Error(Error),
-    Cancel(Download),
+pub struct Download<T> {
+    pub file: T,
 }
 
 impl TryFrom<(TransferRequest, IpAddr, Arc<DropConfig>)> for IncomingTransfer {
@@ -140,15 +153,15 @@ impl From<&OutgoingTransfer> for TransferRequest {
     }
 }
 
-impl From<&ServerMsg> for warp::ws::Message {
-    fn from(value: &ServerMsg) -> Self {
+impl From<&ServerMsgOnServer> for warp::ws::Message {
+    fn from(value: &ServerMsgOnServer) -> Self {
         let msg = serde_json::to_string(value).expect("Failed to serialize server message");
         Self::text(msg)
     }
 }
 
-impl From<&ClientMsg> for tokio_tungstenite::tungstenite::Message {
-    fn from(value: &ClientMsg) -> Self {
+impl From<&ClientMsgOnClient> for tokio_tungstenite::tungstenite::Message {
+    fn from(value: &ClientMsgOnClient) -> Self {
         let msg = serde_json::to_string(value).expect("Failed to serialize client message");
         Self::Text(msg)
     }
@@ -170,7 +183,7 @@ mod tests {
     fn test_json<T: Serialize + DeserializeOwned + Eq>(message: T, expected: &str) {
         let json_msg = serde_json::to_value(&message).expect("Failed to serialize");
         let json_exp: serde_json::Value =
-            serde_json::from_str(expected).expect("Failed to convert expected josn to value");
+            serde_json::from_str(expected).expect("Failed to convert expected json to value");
         assert_eq!(json_msg, json_exp);
 
         let deserialized: T = serde_json::from_str(expected).expect("Failed to serialize");
@@ -222,8 +235,21 @@ mod tests {
         );
 
         test_json(
-            ClientMsg::Error(Error {
+            ClientMsgOnClient::Error(Error {
                 file: Some(FileSubPath::from("test/file.ext")),
+                msg: "test message".to_string(),
+            }),
+            r#"
+            {
+              "type": "Error",
+              "file": "test/file.ext",
+              "msg": "test message"
+            }
+            "#,
+        );
+        test_json(
+            ClientMsgOnServer::Error(Error {
+                file: Some(FileId::from("test/file.ext")),
                 msg: "test message".to_string(),
             }),
             r#"
@@ -236,7 +262,20 @@ mod tests {
         );
 
         test_json(
-            ClientMsg::Error(Error {
+            ClientMsgOnServer::Error(Error {
+                file: None,
+                msg: "test message".to_string(),
+            }),
+            r#"
+            {
+              "type": "Error",
+              "file": null,
+              "msg": "test message"
+            }
+            "#,
+        );
+        test_json(
+            ClientMsgOnClient::Error(Error {
                 file: None,
                 msg: "test message".to_string(),
             }),
@@ -250,7 +289,19 @@ mod tests {
         );
 
         test_json(
-            ClientMsg::Cancel(Download {
+            ClientMsgOnServer::Cancel(Download {
+                file: FileId::from("test/file.ext"),
+            }),
+            r#"
+            {
+              "type": "Cancel",
+              "file": "test/file.ext"
+            }
+            "#,
+        );
+
+        test_json(
+            ClientMsgOnClient::Cancel(Download {
                 file: FileSubPath::from("test/file.ext"),
             }),
             r#"
@@ -265,7 +316,19 @@ mod tests {
     #[test]
     fn server_json_messages() {
         test_json(
-            ServerMsg::Progress(Progress {
+            ServerMsgOnServer::Progress(Progress {
+                file: FileId::from("test/file.ext"),
+                bytes_transfered: 41,
+            }),
+            r#"
+            {
+              "type": "Progress",
+              "file": "test/file.ext",
+              "bytes_transfered": 41
+            }"#,
+        );
+        test_json(
+            ServerMsgOnClient::Progress(Progress {
                 file: FileSubPath::from("test/file.ext"),
                 bytes_transfered: 41,
             }),
@@ -278,7 +341,19 @@ mod tests {
         );
 
         test_json(
-            ServerMsg::Done(Progress {
+            ServerMsgOnServer::Done(Progress {
+                file: FileId::from("test/file.ext"),
+                bytes_transfered: 41,
+            }),
+            r#"
+            {
+              "type": "Done",
+              "file": "test/file.ext",
+              "bytes_transfered": 41
+            }"#,
+        );
+        test_json(
+            ServerMsgOnClient::Done(Progress {
                 file: FileSubPath::from("test/file.ext"),
                 bytes_transfered: 41,
             }),
@@ -291,7 +366,19 @@ mod tests {
         );
 
         test_json(
-            ServerMsg::Error(Error {
+            ServerMsgOnServer::Error(Error {
+                file: Some(FileId::from("test/file.ext")),
+                msg: "test message".to_string(),
+            }),
+            r#"
+            {
+              "type": "Error",
+              "file": "test/file.ext",
+              "msg": "test message"
+            }"#,
+        );
+        test_json(
+            ServerMsgOnClient::Error(Error {
                 file: Some(FileSubPath::from("test/file.ext")),
                 msg: "test message".to_string(),
             }),
@@ -304,7 +391,19 @@ mod tests {
         );
 
         test_json(
-            ServerMsg::Error(Error {
+            ServerMsgOnServer::Error(Error {
+                file: None,
+                msg: "test message".to_string(),
+            }),
+            r#"
+            {
+              "type": "Error",
+              "file": null,
+              "msg": "test message"
+            }"#,
+        );
+        test_json(
+            ServerMsgOnClient::Error(Error {
                 file: None,
                 msg: "test message".to_string(),
             }),
@@ -317,7 +416,17 @@ mod tests {
         );
 
         test_json(
-            ServerMsg::Start(Download {
+            ServerMsgOnServer::Start(Download {
+                file: FileId::from("test/file.ext"),
+            }),
+            r#"
+            {
+              "type": "Start",
+              "file": "test/file.ext"
+            }"#,
+        );
+        test_json(
+            ServerMsgOnClient::Start(Download {
                 file: FileSubPath::from("test/file.ext"),
             }),
             r#"
@@ -328,7 +437,17 @@ mod tests {
         );
 
         test_json(
-            ServerMsg::Cancel(Download {
+            ServerMsgOnServer::Cancel(Download {
+                file: FileId::from("test/file.ext"),
+            }),
+            r#"
+            {
+              "type": "Cancel",
+              "file": "test/file.ext"
+            }"#,
+        );
+        test_json(
+            ServerMsgOnClient::Cancel(Download {
                 file: FileSubPath::from("test/file.ext"),
             }),
             r#"

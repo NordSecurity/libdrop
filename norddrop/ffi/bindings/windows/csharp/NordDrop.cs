@@ -127,6 +127,11 @@ public class Norddrop : global::System.IDisposable {
     return ret;
   }
 
+  public NorddropResult NetworkRefresh() {
+    NorddropResult ret = (NorddropResult)libnorddropPINVOKE.Norddrop_NetworkRefresh(swigCPtr);
+    return ret;
+  }
+
   public string GetTransfersSince(long sinceTimestamp) {
     string ret = libnorddropPINVOKE.Norddrop_GetTransfersSince(swigCPtr, sinceTimestamp);
     return ret;
@@ -357,6 +362,9 @@ class libnorddropPINVOKE {
 
   [global::System.Runtime.InteropServices.DllImport("norddrop", EntryPoint="CSharp_NordSecfNordDrop_Norddrop_RemoveTransferFile___")]
   public static extern int Norddrop_RemoveTransferFile(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2, string jarg3);
+
+  [global::System.Runtime.InteropServices.DllImport("norddrop", EntryPoint="CSharp_NordSecfNordDrop_Norddrop_NetworkRefresh___")]
+  public static extern int Norddrop_NetworkRefresh(global::System.Runtime.InteropServices.HandleRef jarg1);
 
   [global::System.Runtime.InteropServices.DllImport("norddrop", EntryPoint="CSharp_NordSecfNordDrop_Norddrop_GetTransfersSince___")]
   public static extern string Norddrop_GetTransfersSince(global::System.Runtime.InteropServices.HandleRef jarg1, long jarg2);

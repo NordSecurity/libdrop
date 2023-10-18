@@ -17,7 +17,7 @@ use super::{
     WebSocket,
 };
 use crate::{
-    manager::FileTerminalState, protocol::v5 as prot, service::State, tasks::AliveGuard,
+    manager::FileTerminalState, protocol::v6 as prot, service::State, tasks::AliveGuard,
     transfer::Transfer, ws::events::FileEventTx, FileId, OutgoingTransfer,
 };
 

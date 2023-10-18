@@ -33,8 +33,14 @@ pub struct MooseConfig {
 pub const PORT: u16 = 49111;
 pub const TRANFER_IDLE_LIFETIME: Duration = Duration::new(60, 0);
 pub const PING_INTERVAL: Duration = Duration::new(30, 0);
-pub const CONNECTION_MAX_RETRY_INTERVAL: Duration = Duration::new(10, 0);
 pub const MAX_UPLOADS_IN_FLIGHT: usize = 4;
 pub const MAX_REQUESTS_PER_SEC: u32 = 50;
 pub const WS_SEND_TIMEOUT: Duration = Duration::new(20, 0);
-pub const ALIVE_CHECK_INTERVAL: Duration = Duration::new(60, 0);
+
+pub const RETRY_INTERVALS: [Duration; 5] = [
+    Duration::new(1, 0),
+    Duration::new(3, 0),
+    Duration::new(5, 0),
+    Duration::new(10, 0),
+    Duration::new(20, 0),
+];

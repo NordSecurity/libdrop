@@ -244,7 +244,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
             return Ok(());
         };
 
-        let msg = v2::ClientMsg::Cancel(v2::Download {
+        let msg = v2::ClientMsgOnClient::Cancel(v2::Download {
             file: file_subpath.clone(),
         });
         socket.send(Message::from(&msg)).await?;
@@ -266,7 +266,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
             return Ok(());
         };
 
-        let msg = v2::ClientMsg::Error(v2::Error {
+        let msg = v2::ClientMsgOnClient::Error(v2::Error {
             file: Some(file_subpath),
             msg: String::from("File failed elsewhere"),
         });
@@ -295,21 +295,23 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         jobs: &mut JoinSet<()>,
         text: String,
     ) -> anyhow::Result<()> {
-        let msg: v2::ServerMsg =
+        let msg: v2::ServerMsgOnClient =
             serde_json::from_str(&text).context("Failed to deserialize server message")?;
 
         match msg {
-            v2::ServerMsg::Progress(v2::Progress {
+            v2::ServerMsgOnClient::Progress(v2::Progress {
                 file,
                 bytes_transfered,
             }) => self.on_progress(file, bytes_transfered).await,
-            v2::ServerMsg::Done(v2::Progress {
+            v2::ServerMsgOnClient::Done(v2::Progress {
                 file,
                 bytes_transfered: _,
             }) => self.on_done(file).await,
-            v2::ServerMsg::Error(v2::Error { file, msg }) => self.on_error(file, msg).await,
-            v2::ServerMsg::Start(v2::Download { file }) => self.on_download(jobs, file).await,
-            v2::ServerMsg::Cancel(v2::Download { file }) => self.on_cancel(file).await,
+            v2::ServerMsgOnClient::Error(v2::Error { file, msg }) => self.on_error(file, msg).await,
+            v2::ServerMsgOnClient::Start(v2::Download { file }) => {
+                self.on_download(jobs, file).await
+            }
+            v2::ServerMsgOnClient::Cancel(v2::Download { file }) => self.on_cancel(file).await,
         }
 
         Ok(())
@@ -344,7 +346,7 @@ impl<const PING: bool> Drop for HandlerLoop<'_, PING> {
 #[async_trait::async_trait]
 impl handler::Uploader for Uploader {
     async fn chunk(&mut self, chunk: &[u8]) -> Result<(), crate::Error> {
-        let msg = v2::Chunk {
+        let msg = v2::ChunkOnClient {
             file: self.file_subpath.clone(),
             data: chunk.to_vec(),
         };
@@ -360,7 +362,7 @@ impl handler::Uploader for Uploader {
     }
 
     async fn error(&mut self, msg: String) {
-        let msg = v2::ClientMsg::Error(v2::Error {
+        let msg = v2::ClientMsgOnClient::Error(v2::Error {
             file: Some(self.file_subpath.clone()),
             msg,
         });

@@ -3,14 +3,40 @@ use std::{
     net::SocketAddr,
     ops,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 use serde::{Deserialize, Serialize};
-use tokio::net::{TcpSocket, TcpStream};
+use tokio::{
+    net::{TcpSocket, TcpStream},
+    sync::watch,
+};
 
 #[derive(Deserialize, Serialize, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(transparent)]
 pub struct Hidden<T>(pub T);
+
+pub struct RetryTrigger {
+    chan: watch::Receiver<()>,
+    retry: usize,
+}
+
+impl RetryTrigger {
+    pub fn new(chan: watch::Receiver<()>) -> Self {
+        Self { chan, retry: 0 }
+    }
+
+    pub async fn backoff(&mut self) {
+        let delay = drop_config::RETRY_INTERVALS
+            .get(self.retry)
+            .map_or(Duration::MAX, |d| *d);
+
+        self.retry = tokio::select! {
+            _ = self.chan.changed() => 0,
+            _ = tokio::time::sleep(delay) => self.retry + 1,
+        };
+    }
+}
 
 impl<T> fmt::Debug for Hidden<T>
 where

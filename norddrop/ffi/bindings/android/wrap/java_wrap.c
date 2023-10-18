@@ -1063,6 +1063,21 @@ SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1remov
 }
 
 
+SWIGEXPORT jint JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1networkRefresh(JNIEnv *jenv, jclass jcls, jlong jarg1, jobject jarg1_) {
+  jint jresult = 0 ;
+  struct norddrop *arg1 = (struct norddrop *) 0 ;
+  enum norddrop_result result;
+  
+  (void)jenv;
+  (void)jcls;
+  (void)jarg1_;
+  arg1 = *(struct norddrop **)&jarg1; 
+  result = (enum norddrop_result)norddrop_network_refresh(arg1);
+  jresult = (jint)result; 
+  return jresult;
+}
+
+
 SWIGEXPORT jstring JNICALL Java_com_nordsec_norddrop_libnorddropJNI_NordDrop_1getTransfersSince(JNIEnv *jenv, jclass jcls, jlong jarg1, jobject jarg1_, jlong jarg2) {
   jstring jresult = 0 ;
   struct norddrop *arg1 = (struct norddrop *) 0 ;

@@ -18,6 +18,7 @@ from .logger import logger
 from .event import Event, print_uuid, get_uuid, UUIDS, UUIDS_LOCK
 from .peer_resolver import peer_resolver
 
+from .ffi import PeerState
 import sys
 
 
@@ -100,6 +101,14 @@ class Action:
 
     async def run(self, drop: ffi.Drop):
         raise NotImplementedError("run() on base Action class")
+
+
+class NetworkRefresh(Action):
+    def __init__(self):
+        pass
+
+    async def run(self, drop: ffi.Drop):
+        drop.network_refresh()
 
 
 class ListenOnPort(Action):
@@ -241,15 +250,17 @@ class Download(Action):
 
 
 class CancelTransferRequest(Action):
-    def __init__(self, uuid_slot: int):
-        self._uuid_slot = uuid_slot
+    def __init__(self, uuid_slots: typing.List[int]):
+        self._uuid_slots = uuid_slots
 
     async def run(self, drop: ffi.Drop):
         with UUIDS_LOCK:
-            drop.cancel_transfer_request(UUIDS[self._uuid_slot])
+            for slot in self._uuid_slots:
+                drop.cancel_transfer_request(UUIDS[slot])
 
     def __str__(self):
-        return f"CancelTransferRequest({print_uuid(self._uuid_slot)})"
+        uuid_strings = ", ".join(map(print_uuid, self._uuid_slots))
+        return f"CancelTransferRequest({uuid_strings})"
 
 
 class CancelTransferFile(Action):
@@ -321,37 +332,52 @@ class CheckFileDoesNotExist(Action):
         return f"CheckFileDoesNotExist({self._files})"
 
 
+# Peer might be already online but libdrop might not be started
+# as it is the most common setup, a sleep on the sender side is usually added.
+# This function is just a nicer sleep for those cases to increase readability
 class WaitForAnotherPeer(Action):
-    def __init__(self):
-        pass
+    def __init__(self, peer: str, state: PeerState = PeerState.Online):
+        self._peer = peer
+        self._state = state
 
     async def run(self, drop: ffi.Drop):
-        await asyncio.sleep(2)
+        ip = peer_resolver.resolve(self._peer)
+
+        is_ipv6 = ":" in ip
+
+        net_type = socket.AF_INET6 if is_ipv6 else socket.AF_INET
+        if self._state == PeerState.Online:
+            while True:
+                try:
+                    s = socket.socket(net_type, socket.SOCK_STREAM)
+                    s.connect((ip, 49111))
+                    s.close()
+                    break
+                except:
+                    await asyncio.sleep(0.1)
+        else:
+            while True:
+                try:
+                    s = socket.socket(net_type, socket.SOCK_STREAM)
+                    s.connect((ip, 49111))
+                    s.close()
+                    await asyncio.sleep(0.1)
+                except:
+                    break
 
     def __str__(self):
         return f"WaitForAnotherPeer"
 
 
 class Sleep(Action):
-    def __init__(self, seconds: int):
-        self._seconds: int = seconds
+    def __init__(self, seconds: float):
+        self._seconds: float = seconds
 
     async def run(self, drop: ffi.Drop):
         await asyncio.sleep(self._seconds)
 
     def __str__(self):
         return f"Sleep({self._seconds})"
-
-
-class SleepMs(Action):
-    def __init__(self, ms: int):
-        self._ms: int = ms
-
-    async def run(self, drop: ffi.Drop):
-        await asyncio.sleep(float(self._ms) / float(1000))
-
-    def __str__(self):
-        return f"SleepMs({self._ms})"
 
 
 class Wait(Action):
@@ -365,6 +391,49 @@ class Wait(Action):
 
     def __str__(self):
         return f"Wait({str(self._event)})"
+
+
+# TODO: there's a bit messy collection of Wait's in here. It would be
+# nice to refactor those waits into a single Wait class and also into boolean
+# actions that can be combined with AND and OR. This way we could `wait(AND(AtLeastOne(Progress), Finish)))` and similar
+
+
+# this tests for specified events while ignoring others. In case the events we renot
+# received it will produce an exception
+class WaitAndIgnoreExcept(Action):
+    def __init__(self, events: typing.List[Event]):
+        self._events: typing.List[Event] = events
+        self._found: typing.List[Event] = []
+
+    async def run(self, drop: ffi.Drop):
+        fuse = 0
+        limit = 100
+
+        while True:
+            e = await drop._events.wait_for_any_event(100, ignore_progress=True)
+
+            if e in self._events:
+                if e in self._found:
+                    raise Exception(f"Event {e} was received twice")
+
+                self._found.append(e)
+
+                if len(self._found) == len(self._events):
+                    break
+                else:
+                    continue
+
+            if e not in self._events:
+                pass
+
+            fuse += 1
+            if fuse > limit:
+                raise Exception(
+                    f"Expected {self._events} (while ignoring others) but got nothing"
+                )
+
+    def __str__(self):
+        return f"WaitAndIgnoreExcept({', '.join(str(e) for e in self._events)})"
 
 
 class WaitForOneOf(Action):
@@ -390,7 +459,9 @@ class WaitRacy(Action):
 
     async def run(self, drop: ffi.Drop):
         await drop._events.wait_racy(
-            self._events, not any(isinstance(ev, event.Progress) for ev in self._events)
+            self._events,
+            not any(isinstance(ev, event.Progress) for ev in self._events),
+            not any(isinstance(ev, event.Throttled) for ev in self._events),
         )
 
     def __str__(self):

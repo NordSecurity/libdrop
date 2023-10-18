@@ -12,7 +12,10 @@ use drop_auth::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH};
 use drop_config::{Config, DropConfig, MooseConfig};
 use drop_transfer::{auth, utils::Hidden, Event, FileToSend, OutgoingTransfer, Service, Transfer};
 use slog::{debug, error, trace, warn, Logger};
-use tokio::sync::{mpsc, Mutex};
+use tokio::{
+    sync::{mpsc, Mutex},
+    task::JoinHandle,
+};
 
 use self::types::TransferDescriptor;
 use crate::{device::types::FinishEvent, ffi, ffi::types as ffi_types};
@@ -25,12 +28,17 @@ const SQLITE_TIMESTAMP_MAX: i64 = 253402300799;
 pub(super) struct NordDropFFI {
     rt: tokio::runtime::Runtime,
     pub logger: Logger,
-    instance: Arc<Mutex<Option<drop_transfer::Service>>>,
+    instance: Arc<Mutex<Option<ServiceData>>>,
     event_dispatcher: Arc<EventDispatcher>,
     keys: Arc<auth::Context>,
     config: DropConfig,
     #[cfg(unix)]
     fdresolv: Option<Arc<drop_transfer::file::FdResolver>>,
+}
+
+struct ServiceData {
+    service: drop_transfer::Service,
+    event_task: JoinHandle<()>,
 }
 
 struct EventDispatcher {
@@ -124,7 +132,7 @@ impl NordDropFFI {
         let event_storage = storage.clone();
         let (tx, mut rx) = mpsc::unbounded_channel::<(Event, SystemTime)>();
 
-        self.rt.spawn(async move {
+        let event_task = self.rt.spawn(async move {
             let mut dispatch = drop_transfer::StorageDispatch::new(&event_storage);
 
             while let Some(e) = rx.recv().await {
@@ -151,7 +159,10 @@ impl NordDropFFI {
             #[cfg(unix)]
             self.fdresolv.clone(),
         )) {
-            Ok(srv) => instance.replace(srv),
+            Ok(service) => instance.replace(ServiceData {
+                service,
+                event_task,
+            }),
             Err(err) => {
                 error!(self.logger, "Failed to start the service: {}", err);
 
@@ -178,7 +189,11 @@ impl NordDropFFI {
             .take()
             .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?;
 
-        self.rt.block_on(instance.stop());
+        self.rt.block_on(async {
+            instance.service.stop().await;
+            let _ = instance.event_task.await;
+        });
+
         Ok(())
     }
 
@@ -196,6 +211,7 @@ impl NordDropFFI {
         let storage = instance
             .as_mut()
             .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+            .service
             .storage();
 
         self.rt.block_on(storage.purge_transfers(&transfer_ids));
@@ -223,6 +239,7 @@ impl NordDropFFI {
         let storage = instance
             .as_mut()
             .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+            .service
             .storage();
 
         self.rt
@@ -251,6 +268,7 @@ impl NordDropFFI {
         let storage = instance
             .as_mut()
             .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+            .service
             .storage();
 
         let result = self.rt.block_on(storage.transfers_since(since_timestamp));
@@ -274,6 +292,7 @@ impl NordDropFFI {
         let storage = instance
             .as_mut()
             .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+            .service
             .storage();
 
         let res = self
@@ -336,9 +355,22 @@ impl NordDropFFI {
             .as_mut()
             .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?;
 
-        self.rt.block_on(instance.send_request(xfer));
+        self.rt.block_on(instance.service.send_request(xfer));
 
         Ok(xfid)
+    }
+
+    pub(super) fn network_refresh(&mut self) -> Result<()> {
+        trace!(self.logger, "norddrop_network_refresh()");
+
+        let mut instance = self.instance.blocking_lock();
+        let instance = instance
+            .as_mut()
+            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?;
+
+        instance.service.network_refresh();
+
+        Ok(())
     }
 
     pub(super) fn download(
@@ -367,6 +399,7 @@ impl NordDropFFI {
             let inst = inst.as_mut().expect("Instance not initialized");
 
             if let Err(e) = inst
+                .service
                 .download(xfid, &file_id.clone().into(), dst.as_ref())
                 .await
             {
@@ -407,7 +440,7 @@ impl NordDropFFI {
         self.rt.spawn(async move {
             let inst = inst.as_mut().expect("Instance not initialized");
 
-            if let Err(e) = inst.cancel_all(xfid).await {
+            if let Err(e) = inst.service.cancel_all(xfid).await {
                 error!(
                     logger,
                     "Failed to cancel a transfer with xfid: {:?}, error: {:?}", xfid, e
@@ -444,7 +477,7 @@ impl NordDropFFI {
         self.rt.spawn(async move {
             let inst = inst.as_ref().expect("Instance not initialized");
 
-            if let Err(err) = inst.reject(xfid, file.clone().into()).await {
+            if let Err(err) = inst.service.reject(xfid, file.clone().into()).await {
                 error!(
                     logger,
                     "Failed to reject a file with xfid: {xfid}, file: {file}, error: {err:?}"

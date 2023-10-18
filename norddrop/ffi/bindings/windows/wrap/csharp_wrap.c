@@ -498,6 +498,18 @@ SWIGEXPORT int SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_RemoveTransferFile__
 }
 
 
+SWIGEXPORT int SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_NetworkRefresh___(void * jarg1) {
+  int jresult ;
+  struct norddrop *arg1 = (struct norddrop *) 0 ;
+  enum norddrop_result result;
+  
+  arg1 = (struct norddrop *)jarg1; 
+  result = (enum norddrop_result)norddrop_network_refresh(arg1);
+  jresult = (int)result; 
+  return jresult;
+}
+
+
 SWIGEXPORT char * SWIGSTDCALL CSharp_NordSecfNordDrop_Norddrop_GetTransfersSince___(void * jarg1, long long jarg2) {
   char * jresult ;
   struct norddrop *arg1 = (struct norddrop *) 0 ;

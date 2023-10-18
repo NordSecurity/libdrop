@@ -87,7 +87,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             .await
             .context("Failed to receive transfer request")?;
 
-        let msg = msg.to_str().ok().context("Expected JOSN message")?;
+        let msg = msg.to_str().ok().context("Expected JSON message")?;
         debug!(self.logger, "Request received:\n\t{msg}");
 
         let req = serde_json::from_str(msg).context("Failed to deserialize transfer request")?;

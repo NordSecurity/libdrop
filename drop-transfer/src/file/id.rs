@@ -81,6 +81,10 @@ impl FileSubPath {
         self.0.iter()
     }
 
+    pub fn iter_mut(&mut self) -> impl DoubleEndedIterator<Item = &mut String> {
+        self.0.iter_mut()
+    }
+
     pub fn append_file_name(mut self, path: impl AsRef<Path>) -> crate::Result<Self> {
         let name = path
             .as_ref()

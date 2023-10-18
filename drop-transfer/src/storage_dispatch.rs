@@ -152,6 +152,7 @@ impl<'a> StorageDispatch<'a> {
             }
             crate::Event::RequestReceived(_) => (),
             crate::Event::RequestQueued(_) => (),
+            crate::Event::FileUploadThrottled { .. } => (),
         }
     }
 

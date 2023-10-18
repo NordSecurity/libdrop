@@ -142,6 +142,12 @@ fn print_event(ev: &Event) {
             transfer_id,
             file_id,
         } => info!("[EVENT] FileDownloadPaused {transfer_id}: {file_id}"),
+
+        Event::FileUploadThrottled {
+            transfer_id,
+            file_id,
+            transfered,
+        } => info!("[EVENT] FileUploadThrottled {transfer_id}: {file_id}, progress: {transfered}"),
     }
 }
 

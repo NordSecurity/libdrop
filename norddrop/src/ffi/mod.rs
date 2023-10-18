@@ -119,7 +119,6 @@ pub unsafe extern "C" fn norddrop_new_transfer(
 #[no_mangle]
 pub unsafe extern "C" fn norddrop_destroy(dev: *mut norddrop) {
     if !dev.is_null() {
-        #[allow(clippy::let_underscore_must_use)]
         let _ = Box::from_raw(dev);
     }
 }
@@ -461,6 +460,48 @@ pub extern "C" fn norddrop_purge_transfers_until(
 ///
 /// JSON formatted transfers
 ///
+/// Each transfer and files in it contain history of states that can be used to
+/// replay what happened and the last state denotes the current state of the
+/// transfer.
+///
+/// # Transfer States(same for both incoming and outgoing transfers)
+/// - `canceled` - The transfer was successfully canceled by either peer.
+///   Contains indicator of who canceled the transfer.
+/// - `failed` - Contains status code of failure. Regular error table should be
+///   consulted for errors.
+
+/// # Incoming File States
+/// - `completed` - The file was successfully received and saved to the disk.
+///   Contains the final path of the file.
+/// - `failed` - contains status code of failure. Regular error table should be
+///   consulted for errors.
+/// - `paused` - The file was paused due to recoverable errors. Most probably
+///   due to network availability.
+/// - `pending` - The download was issued for this file and it will proceed when
+///   possible.
+/// - `reject` - The file was rejected by the receiver. Contains indicator of
+///   who rejected the file.
+/// - `started` - The file was started to be received. Contains the base
+///   directory of the file.
+///
+/// Terminal states: `failed`, `completed`, `reject`. Terminal states appear
+/// once and it is the final state. Other states might appear multiple times.
+///
+/// # Outgoing File States
+/// - `completed` - The file was successfully received and saved to the disk.
+///   Contains the final path of the file.
+/// - `failed` - contains status code of failure. Regular error table should be
+///   consulted for errors.
+/// - `paused` - The file was paused due to recoverable errors. Most probably
+///   due to network availability.
+/// - `reject` - The file was rejected by the receiver. Contains indicator of
+///   who rejected the file.
+/// - `started` - The file was started to be received. Contains the base
+///   directory of the file.
+///
+/// Terminal states: `failed`, `completed`, `reject`. Terminal states appear
+/// once and it is the final state. Other states might appear multiple times.
+///
 /// # JSON example from the sender side
 ///  ```json
 /// {
@@ -484,10 +525,6 @@ pub extern "C" fn norddrop_purge_transfers_until(
 ///              "bytes": 29852,
 ///              "created_at": 1686651025988,
 ///              "states": [
-///                  {
-///                      "created_at": 1686651025991,
-///                      "state": "pending"
-///                  },
 ///                  {
 ///                      "created_at": 1686651025997,
 ///                      "state": "started",
@@ -516,7 +553,7 @@ pub extern "C" fn norddrop_purge_transfers_until(
 ///             "by_peer": false
 ///         }
 ///     ],
-///     "type": "outgoing",
+///     "type": "incoming",
 ///     "paths": [
 ///         {
 ///             "transfer_id": "b49fc2f8-ce2d-41ac-a081-96a4d760899e",
@@ -545,6 +582,170 @@ pub extern "C" fn norddrop_purge_transfers_until(
 ///     ]
 /// }
 /// ```
+/// 
+/// The whole database schema:
+/// ```sql
+/// CREATE TABLE transfers (
+///   id TEXT PRIMARY KEY UNIQUE NOT NULL,
+///   peer TEXT NOT NULL,
+///   is_outgoing INTEGER NOT NULL,
+///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
+/// 'NOW'))   CHECK(is_outgoing = 0 OR is_outgoing = 1)
+/// , is_deleted INTEGER NOT NULL DEFAULT FALSE CHECK (is_deleted IN (FALSE,
+/// TRUE))); CREATE TABLE sqlite_sequence(name,seq);
+/// CREATE TABLE transfer_cancel_states (
+///   id INTEGER PRIMARY KEY AUTOINCREMENT,
+///   transfer_id TEXT NOT NULL,
+///   by_peer INTEGER NOT NULL,
+///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
+/// 'NOW')),   FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE
+/// CASCADE ON UPDATE CASCADE   CHECK(by_peer = 0 OR by_peer = 1)
+/// );
+/// CREATE TABLE transfer_failed_states (
+///   id INTEGER PRIMARY KEY AUTOINCREMENT,
+///   transfer_id TEXT NOT NULL,
+///   status_code INTEGER NOT NULL,
+///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
+/// 'NOW')),   FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE
+/// CASCADE ON UPDATE CASCADE );
+/// CREATE TABLE outgoing_paths (
+///   id INTEGER PRIMARY KEY AUTOINCREMENT,
+///   transfer_id TEXT NOT NULL,
+///   relative_path TEXT NOT NULL,
+///   uri TEXT NOT NULL,
+///   path_hash TEXT NOT NULL,
+///   bytes INT NOT NULL,
+///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
+/// 'NOW')), is_deleted INTEGER NOT NULL DEFAULT FALSE CHECK (is_deleted IN
+/// (FALSE, TRUE)),
+
+///   FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE CASCADE ON
+/// UPDATE CASCADE   CHECK(bytes >= 0)
+///   UNIQUE(transfer_id, path_hash)
+/// );
+/// CREATE TABLE incoming_paths (
+///   id INTEGER PRIMARY KEY AUTOINCREMENT,
+///   transfer_id TEXT NOT NULL,   
+///   relative_path TEXT NOT NULL,
+///   path_hash TEXT NOT NULL,
+///   bytes INT NOT NULL,
+///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
+/// 'NOW')),   checksum BLOB DEFAULT NULL, is_deleted INTEGER NOT NULL DEFAULT
+/// FALSE CHECK (is_deleted IN (FALSE, TRUE)),
+
+///   FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE CASCADE ON
+/// UPDATE CASCADE   CHECK(bytes >= 0)
+///   UNIQUE(transfer_id, path_hash)
+/// );
+/// CREATE TABLE outgoing_path_started_states (
+///   id INTEGER PRIMARY KEY AUTOINCREMENT,
+///   path_id INTEGER NOT NULL,
+///   bytes_sent INTEGER NOT NULL,
+///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
+/// 'NOW')),   FOREIGN KEY(path_id) REFERENCES outgoing_paths(id) ON DELETE
+/// CASCADE ON UPDATE CASCADE,   CHECK(bytes_sent >= 0)
+/// );
+/// CREATE TABLE outgoing_path_failed_states (
+///   id INTEGER PRIMARY KEY AUTOINCREMENT,
+///   path_id INTEGER NOT NULL,
+///   status_code INTEGER NOT NULL,
+///   bytes_sent INTEGER NOT NULL,
+///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
+/// 'NOW')),   FOREIGN KEY(path_id) REFERENCES outgoing_paths(id) ON DELETE
+/// CASCADE ON UPDATE CASCADE,   CHECK(bytes_sent >= 0)
+/// );
+/// CREATE TABLE outgoing_path_completed_states (
+///   id INTEGER PRIMARY KEY AUTOINCREMENT,
+///   path_id INTEGER NOT NULL,
+///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
+/// 'NOW')),   FOREIGN KEY(path_id) REFERENCES outgoing_paths(id) ON DELETE
+/// CASCADE ON UPDATE CASCADE );
+/// CREATE TABLE incoming_path_pending_states (
+///   id INTEGER PRIMARY KEY AUTOINCREMENT,
+///   path_id INTEGER NOT NULL,
+///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
+/// 'NOW')), base_dir TEXT NOT NULL DEFAULT '',   FOREIGN KEY(path_id)
+/// REFERENCES incoming_paths(id) ON DELETE CASCADE ON UPDATE CASCADE );
+/// CREATE TABLE incoming_path_started_states (
+///   id INTEGER PRIMARY KEY AUTOINCREMENT,
+///   path_id INTEGER NOT NULL,
+///   bytes_received INTEGER NOT NULL,
+///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
+/// 'NOW')),   FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON DELETE
+/// CASCADE ON UPDATE CASCADE,   CHECK(bytes_received >= 0)
+/// );
+/// CREATE TABLE incoming_path_failed_states (
+///   id INTEGER PRIMARY KEY AUTOINCREMENT,
+///   path_id INTEGER NOT NULL,
+///   status_code INTEGER NOT NULL,
+///   bytes_received INTEGER NOT NULL,
+///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
+/// 'NOW')),   FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON DELETE
+/// CASCADE ON UPDATE CASCADE,   CHECK(bytes_received >= 0)
+/// );
+/// CREATE TABLE incoming_path_completed_states (
+///   id INTEGER PRIMARY KEY AUTOINCREMENT,
+///   path_id INTEGER NOT NULL,
+///   final_path TEXT NOT NULL,
+///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
+/// 'NOW')),   FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON DELETE
+/// CASCADE ON UPDATE CASCADE );
+/// CREATE TABLE incoming_path_reject_states (
+///   id INTEGER PRIMARY KEY AUTOINCREMENT,
+///   path_id INTEGER NOT NULL,
+///   by_peer INTEGER NOT NULL,
+///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
+/// 'NOW')), bytes_received INTEGER NOT NULL DEFAULT 0,   FOREIGN KEY(path_id)
+/// REFERENCES incoming_paths(id) ON DELETE CASCADE ON UPDATE CASCADE );
+/// CREATE TABLE outgoing_path_reject_states (
+///   id INTEGER PRIMARY KEY AUTOINCREMENT,
+///   path_id INTEGER NOT NULL,
+///   by_peer INTEGER NOT NULL,
+///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
+/// 'NOW')), bytes_sent     INTEGER NOT NULL DEFAULT 0,   FOREIGN KEY(path_id)
+/// REFERENCES outgoing_paths(id) ON DELETE CASCADE ON UPDATE CASCADE );
+/// CREATE TABLE sync_transfer (
+///   sync_id INTEGER PRIMARY KEY AUTOINCREMENT, -- use separate primary key for
+/// cascade to work across sync_ tables   transfer_id TEXT NOT NULL,
+///   local_state INTEGER NOT NULL,
+///   FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE CASCADE ON
+/// UPDATE CASCADE );
+/// CREATE TABLE sync_outgoing_files (
+///   sync_id INTEGER NOT NULL,
+///   path_id INTEGER NOT NULL,
+///   local_state INTEGER NOT NULL,
+///   PRIMARY KEY(sync_id, path_id)
+///   FOREIGN KEY(sync_id) REFERENCES sync_transfer(sync_id) ON DELETE CASCADE
+/// ON UPDATE CASCADE   FOREIGN KEY(path_id) REFERENCES outgoing_paths(id) ON
+/// DELETE CASCADE ON UPDATE CASCADE );
+/// CREATE TABLE sync_incoming_files (
+///   sync_id INTEGER NOT NULL,
+///   path_id INTEGER NOT NULL,
+///   local_state INTEGER NOT NULL,
+///   PRIMARY KEY(sync_id, path_id)
+///   FOREIGN KEY(sync_id) REFERENCES sync_transfer(sync_id) ON DELETE CASCADE
+/// ON UPDATE CASCADE   FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON
+/// DELETE CASCADE ON UPDATE CASCADE );
+/// CREATE TABLE sync_incoming_files_inflight (
+///   sync_id INTEGER NOT NULL,
+///   path_id INTEGER NOT NULL,
+///   base_dir TEXT NOT NULL,
+///   FOREIGN KEY(sync_id, path_id) REFERENCES sync_incoming_files(sync_id,
+/// path_id) ON DELETE CASCADE ON UPDATE CASCADE );
+/// CREATE TABLE incoming_path_paused_states (
+///   path_id INTEGER NOT NULL,
+///   bytes_received INTEGER NOT NULL,
+///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
+/// 'NOW')),   FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON DELETE
+/// CASCADE ON UPDATE CASCADE );
+/// CREATE TABLE outgoing_path_paused_states (
+///   path_id INTEGER NOT NULL,
+///   bytes_sent INTEGER NOT NULL,
+///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
+/// 'NOW')),   FOREIGN KEY(path_id) REFERENCES outgoing_paths(id) ON DELETE
+/// CASCADE ON UPDATE CASCADE );
+
+/// ````
 #[no_mangle]
 pub extern "C" fn norddrop_get_transfers_since(
     dev: &norddrop,
@@ -676,6 +877,31 @@ pub unsafe extern "C" fn norddrop_new(
     result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
 }
 
+/// Refresh connections. Should be called when anything about the network
+/// changes that might affect connections. Also when peer availability has
+/// changed. This will kick-start the automated retries for all transfers.
+///
+/// # Arguments
+///
+/// * `dev` - A pointer to the instance.
+///
+/// # Safety
+/// The pointers provided should be valid
+#[no_mangle]
+pub unsafe extern "C" fn norddrop_network_refresh(dev: &norddrop) -> norddrop_result {
+    let result = panic::catch_unwind(move || {
+        let mut dev = match dev.0.lock() {
+            Ok(inst) => inst,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        dev.network_refresh()
+            .norddrop_log_result(&dev.logger, "norddrop_network_refresh")
+    });
+
+    result.unwrap_or(norddrop_result::NORDDROP_RES_ERROR)
+}
+
 struct KeyValueSerializer<'a> {
     rec: &'a slog::Record<'a>,
     kv: HashMap<slog::Key, String>,
@@ -732,7 +958,6 @@ impl slog::Drain for norddrop_logger_cb {
 
         let mut serializer = KeyValueSerializer::new(record);
 
-        #[allow(clippy::let_underscore_must_use)]
         let _ = kv.serialize(record, &mut serializer);
 
         if let Ok(cstr) = CString::new(serializer.msg()) {

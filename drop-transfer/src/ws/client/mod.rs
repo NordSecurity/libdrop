@@ -1,28 +1,24 @@
 mod handler;
 mod socket;
+mod throttle;
 mod v2;
 mod v4;
-mod v5;
+mod v6;
 
 use std::{
-    future::Future,
     io,
     net::{IpAddr, SocketAddr},
     ops::ControlFlow,
     sync::Arc,
-    time::Duration,
 };
 
 use anyhow::Context;
 use drop_analytics::{TransferStateEventData, MOOSE_STATUS_SUCCESS};
-use hyper::StatusCode;
+use hyper::{Request, Response, StatusCode};
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
     net::TcpStream,
-    sync::{
-        mpsc::{self, UnboundedReceiver},
-        Semaphore, SemaphorePermit, TryAcquireError,
-    },
+    sync::mpsc::{self, UnboundedReceiver},
     task::{AbortHandle, JoinSet},
 };
 use tokio_tungstenite::{
@@ -62,13 +58,21 @@ struct RunContext<'a> {
 }
 
 enum WsConnection {
-    Stopped,
-    Unrecoverable(crate::Error),
     Recoverable,
+    Unrecoverable(crate::Error),
     Connected(WsStream, protocol::Version),
 }
 
+#[derive(thiserror::Error, Debug)]
+enum RequestError {
+    #[error("{0}")]
+    General(#[from] anyhow::Error),
+    #[error("Unexpected HTTP response: {0}")]
+    UnexpectedResponse(StatusCode),
+}
+
 pub(crate) fn spawn(
+    refresh_trigger: tokio::sync::watch::Receiver<()>,
     state: Arc<State>,
     xfer: Arc<OutgoingTransfer>,
     logger: Logger,
@@ -76,39 +80,39 @@ pub(crate) fn spawn(
     stop: CancellationToken,
 ) {
     let id = xfer.id();
-    let job = run(state, xfer, logger.clone(), guard.clone());
 
     tokio::spawn(async move {
-        let _guard = guard;
+        let mut backoff = utils::RetryTrigger::new(refresh_trigger);
+
+        let task = async {
+            loop {
+                let cf = connect_to_peer(&state, &xfer, &logger, &guard).await;
+                if cf.is_break() {
+                    debug!(logger, "connection status is irrecoverable");
+                    if let Err(err) = state.transfer_manager.outgoing_remove(xfer.id()).await {
+                        warn!(
+                            logger,
+                            "Failed to clear sync state for {}: {err}",
+                            xfer.id()
+                        );
+                    }
+
+                    break;
+                }
+
+                backoff.backoff().await;
+            }
+        };
 
         tokio::select! {
             biased;
 
             _ = stop.cancelled() => {
-                debug!(logger, "Client job stop: {id}");
+                debug!(logger, "stop client job for: {}", id);
             },
-            _ = job => (),
+            _ = task => ()
         }
     });
-}
-
-async fn run(state: Arc<State>, xfer: Arc<OutgoingTransfer>, logger: Logger, alive: AliveGuard) {
-    loop {
-        if connect_to_peer(&state, &xfer, &logger, &alive)
-            .await
-            .is_break()
-        {
-            break;
-        }
-    }
-
-    if let Err(err) = state.transfer_manager.outgoing_remove(xfer.id()).await {
-        warn!(
-            logger,
-            "Failed to clear sync state for {}: {err}",
-            xfer.id()
-        );
-    }
 }
 
 async fn connect_to_peer(
@@ -117,10 +121,11 @@ async fn connect_to_peer(
     logger: &Logger,
     alive: &AliveGuard,
 ) -> ControlFlow<()> {
+    debug!(logger, "Outgoing transfer job started for {}", xfer.id(),);
+
     let (socket, ver) = match establish_ws_conn(state, xfer, logger).await {
         WsConnection::Connected(sock, ver) => (sock, ver),
         WsConnection::Recoverable => return ControlFlow::Continue(()),
-        WsConnection::Stopped => return ControlFlow::Break(()),
         WsConnection::Unrecoverable(err) => {
             error!(logger, "Could not connect to peer {}: {}", xfer.id(), err);
 
@@ -165,7 +170,11 @@ async fn connect_to_peer(
                 .await
         }
         Version::V5 => {
-            ctx.run(socket, v5::HandlerInit::new(state, logger, alive))
+            ctx.run(socket, v6::HandlerInit::new(state, logger, alive))
+                .await
+        }
+        Version::V6 => {
+            ctx.run(socket, v6::HandlerInit::new(state, logger, alive))
                 .await
         }
     };
@@ -181,14 +190,19 @@ async fn establish_ws_conn(
     xfer: &OutgoingTransfer,
     logger: &Logger,
 ) -> WsConnection {
-    let break_check = || async { !state.transfer_manager.is_outgoing_alive(xfer.id()).await };
+    let remote = SocketAddr::new(xfer.peer(), drop_config::PORT);
+    let local = SocketAddr::new(state.addr, 0);
 
-    let mut socket = match tcp_connect(state.addr, xfer.peer(), break_check, logger).await {
-        Some(socket) => socket,
-        None => return WsConnection::Stopped,
+    let mut socket = match utils::connect(local, remote).await {
+        Ok(sock) => sock,
+        Err(err) => {
+            debug!(logger, "Failed to connect: {:?}", err,);
+            return WsConnection::Recoverable;
+        }
     };
 
     let mut versions_to_try = [
+        protocol::Version::V6,
         protocol::Version::V5,
         protocol::Version::V4,
         protocol::Version::V2,
@@ -208,19 +222,25 @@ async fn establish_ws_conn(
 
         match make_request(&mut socket, xfer.peer(), ver, state.auth.as_ref(), logger).await {
             Ok(_) => break ver,
-            Err(tungstenite::Error::Http(resp)) if resp.status().is_client_error() => {
-                if resp.status() == StatusCode::UNAUTHORIZED {
-                    return WsConnection::Unrecoverable(crate::Error::AuthenticationFailed);
-                } else {
-                    debug!(
-                        logger,
-                        "Failed to connect to version {}, response: {:?}", ver, resp
-                    );
-                }
-            }
-            Err(err) => {
+            Err(RequestError::General(err)) => {
                 info!(logger, "Error while making the HTTP request: {err:?}");
                 return WsConnection::Recoverable;
+            }
+            Err(RequestError::UnexpectedResponse(status)) => {
+                match status {
+                    StatusCode::UNAUTHORIZED => {
+                        return WsConnection::Unrecoverable(crate::Error::AuthenticationFailed)
+                    }
+                    StatusCode::TOO_MANY_REQUESTS => {
+                        warn!(logger, "The response triggered DoS protection mechanism");
+                        return WsConnection::Recoverable;
+                    }
+                    StatusCode::NOT_FOUND => (), // Server doesn't support
+                    status => debug!(
+                        logger,
+                        "Failed to connect to version {ver}, status: {status}"
+                    ),
+                }
             }
         }
     };
@@ -235,83 +255,82 @@ async fn make_request(
     version: protocol::Version,
     auth: &auth::Context,
     logger: &slog::Logger,
-) -> Result<(), tungstenite::Error> {
+) -> Result<(), RequestError> {
     let addr = SocketAddr::new(ip, drop_config::PORT);
 
     let url = format!("ws://{addr}/drop/{version}",);
 
     debug!(logger, "Making HTTP request: {url}");
 
-    let err = match tokio_tungstenite::client_async(&url, &mut *socket).await {
-        Ok(_) => {
-            debug!(logger, "Connected to {url} without authorization");
-            return Ok(());
+    let mut req = url.as_str().into_client_request().context("Invalid URL")?;
+
+    use protocol::Version as Ver;
+    let server_auth_scheme = match version {
+        Ver::V1 | Ver::V2 | Ver::V4 | Ver::V5 => None,
+        _ => {
+            let nonce = drop_auth::Nonce::generate_as_client();
+
+            let (key, value) = auth::create_www_authentication_header(&nonce);
+            req.headers_mut().insert(key, value);
+
+            Some(nonce)
         }
-        Err(err) => err,
     };
 
-    if let tungstenite::Error::Http(resp) = &err {
-        if resp.status() == StatusCode::UNAUTHORIZED {
+    let resp = send_request_and_wait_for_respnse(socket, req).await?;
+
+    let authorize = || {
+        if let Some(nonce) = &server_auth_scheme {
+            // Validate the server response
+            auth.authorize_server(&resp, ip, nonce)
+                .context("Failed to authorize server. Closing connection")?;
+        }
+        anyhow::Ok(())
+    };
+
+    match resp.status() {
+        status if status.is_success() || status.is_informational() => {
+            authorize()?;
+
+            debug!(logger, "Connected to {url} without authorization");
+            Ok(())
+        }
+        StatusCode::UNAUTHORIZED => {
+            authorize()?;
+
             debug!(logger, "Creating 'authorization' header");
 
             debug!(logger, "Extracting peers ({ip}) public key");
-            match auth.create_authorization_header(resp, ip) {
-                Ok((key, value)) => {
-                    debug!(logger, "Building 'authorization' request");
+            let (key, value) =
+                auth.create_clients_auth_header(&resp, ip, server_auth_scheme.is_some())?;
 
-                    let mut req = url.into_client_request()?;
-                    req.headers_mut().insert(key, value);
+            debug!(logger, "Building 'authorization' request");
+            let mut req = url.as_str().into_client_request().context("Invalid URL")?;
+            req.headers_mut().insert(key, value);
 
-                    debug!(logger, "Re-sending request with the 'authorization' header");
-                    tokio_tungstenite::client_async(req, &mut *socket).await?;
-                    return Ok(());
-                }
-                Err(err) => warn!(
-                    logger,
-                    "Failed to extract 'www-authenticate' header: {err:?}"
-                ),
+            debug!(logger, "Re-sending request with the 'authorization' header");
+            let resp = send_request_and_wait_for_respnse(socket, req).await?;
+
+            match resp.status() {
+                status if status.is_success() || status.is_informational() => Ok(()),
+                status => Err(RequestError::UnexpectedResponse(status)),
             }
         }
+        status => Err(RequestError::UnexpectedResponse(status)),
     }
-
-    Err(err)
 }
 
-async fn tcp_connect<Fut: Future<Output = bool>>(
-    local_ip: IpAddr,
-    remote_ip: IpAddr,
-    break_check: impl Fn() -> Fut,
-    logger: &Logger,
-) -> Option<TcpStream> {
-    let remote = SocketAddr::new(remote_ip, drop_config::PORT);
-    let local = SocketAddr::new(local_ip, 0);
+async fn send_request_and_wait_for_respnse(
+    socket: &mut TcpStream,
+    req: Request<()>,
+) -> anyhow::Result<Response<Option<Vec<u8>>>> {
+    let resp = match tokio_tungstenite::client_async(req, &mut *socket).await {
+        Ok((_, resp)) => resp,
+        Err(tungstenite::Error::Http(resp)) => resp,
+        Err(err) => return Err(err.into()),
+    };
 
-    let mut sleep_time = Duration::from_millis(200);
-
-    loop {
-        if break_check().await {
-            break;
-        }
-
-        match utils::connect(local, remote).await {
-            Ok(sock) => return Some(sock),
-            Err(err) => {
-                debug!(
-                    logger,
-                    "Failed to connect: {:?}, sleeping for {} ms",
-                    err,
-                    sleep_time.as_millis(),
-                );
-
-                tokio::time::sleep(sleep_time).await;
-
-                // Exponential backoff but with upper limit
-                sleep_time = drop_config::CONNECTION_MAX_RETRY_INTERVAL.min(sleep_time * 2);
-            }
-        }
-    }
-
-    None
+    Ok(resp)
 }
 
 impl RunContext<'_> {
@@ -348,6 +367,9 @@ impl RunContext<'_> {
                     anyhow::Ok(())
                 };
                 if let Err(err) = task.await {
+                    // It means that the close() call returned an IO error for some reason. It
+                    // shouldn't happen probably, and even if it does, it's probably best to just
+                    // ignore it
                     error!(self.logger, "Failed to close socket on start: {err:?}");
                 } else {
                     info!(self.logger, "Socket closed on start");
@@ -451,91 +473,65 @@ async fn start_upload(
         .outgoing_file_events(xfer.id(), &file_id)
         .await?;
 
-    events.start(uploader.offset()).await;
+    let offset = uploader.offset();
 
-    let upload_job = {
-        async move {
-            let _guard = guard;
-            let xfile = &xfer.files()[&file_id];
+    let permit = throttle::init(&logger, &state, &events, offset)
+        .await
+        .context("Failed to acquire upload permit")?;
 
-            let send_file = async {
-                let _permit = acquire_throttle_permit(&logger, &state.throttle, &file_id)
-                    .await
-                    .ok_or(crate::Error::Canceled)?;
+    let upload_job = async move {
+        let _guard = guard;
+        let xfile = &xfer.files()[&file_id];
 
-                let mut iofile = match xfile.open(uploader.offset()) {
-                    Ok(f) => f,
-                    Err(err) => {
-                        error!(
-                            logger,
-                            "Failed at service::download() while opening a file: {}", err
-                        );
-                        return Err(err);
-                    }
-                };
+        let send_file = async {
+            let _permit = permit.acquire().await.ok_or(crate::Error::Canceled)?;
 
-                loop {
-                    match iofile.read_chunk()? {
-                        Some(chunk) => uploader.chunk(chunk).await?,
-                        None => return Ok(()),
-                    }
-                }
-            };
-
-            match send_file.await {
-                Ok(()) => (),
-                Err(crate::Error::Canceled) => (),
+            let mut iofile = match xfile.open(offset) {
+                Ok(f) => f,
                 Err(err) => {
                     error!(
                         logger,
-                        "Failed at service::download() while reading a file: {}", err
+                        "Failed at service::download() while opening a file: {}", err
                     );
-
-                    let msg = err.to_string();
-
-                    match state
-                        .transfer_manager
-                        .outgoing_failure_post(xfer.id(), &file_id)
-                        .await
-                    {
-                        Err(err) => {
-                            warn!(logger, "Failed to post failure {err:?}");
-                        }
-                        Ok(res) => res.events.failed(err).await,
-                    }
-                    uploader.error(msg).await;
+                    return Err(err);
                 }
             };
-        }
+
+            loop {
+                match iofile.read_chunk()? {
+                    Some(chunk) => uploader.chunk(chunk).await?,
+                    None => return Ok(()),
+                }
+            }
+        };
+
+        match send_file.await {
+            Ok(()) => (),
+            Err(crate::Error::Canceled) => (),
+            Err(err) => {
+                error!(
+                    logger,
+                    "Failed at service::download() while reading a file: {}", err
+                );
+
+                let msg = err.to_string();
+
+                match state
+                    .transfer_manager
+                    .outgoing_failure_post(xfer.id(), &file_id)
+                    .await
+                {
+                    Err(err) => {
+                        warn!(logger, "Failed to post failure {err:?}");
+                    }
+                    Ok(res) => res.events.failed(err).await,
+                }
+                uploader.error(msg).await;
+            }
+        };
     };
 
     Ok((jobs.spawn(upload_job), events))
-}
-
-async fn acquire_throttle_permit<'a>(
-    logger: &slog::Logger,
-    throttle: &'a Semaphore,
-    file_id: &FileId,
-) -> Option<SemaphorePermit<'a>> {
-    match throttle.try_acquire() {
-        Err(TryAcquireError::NoPermits) => info!(logger, "Throttling file: {file_id}"),
-        Err(err) => {
-            error!(logger, "Throttle semaphore failed: {err}");
-            return None;
-        }
-        Ok(permit) => return Some(permit),
-    }
-
-    match throttle.acquire().await {
-        Ok(permit) => {
-            info!(logger, "Throttle permited file: {file_id}");
-            Some(permit)
-        }
-        Err(err) => {
-            error!(logger, "Throttle semaphore failed: {err}");
-            None
-        }
-    }
 }
 
 async fn on_req(

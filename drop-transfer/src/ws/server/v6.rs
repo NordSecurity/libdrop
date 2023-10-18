@@ -18,7 +18,7 @@ use super::{
 use crate::{
     file::{self, FileToRecv},
     manager::FileTerminalState,
-    protocol::v5 as prot,
+    protocol::v6 as prot,
     service::State,
     tasks::AliveGuard,
     transfer::{IncomingTransfer, Transfer},
@@ -87,7 +87,10 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             .await
             .context("Failed to receive transfer request")?;
 
-        let msg = msg.to_str().ok().context("Expected JOSN message")?;
+        // print msg as ascii
+        debug!(self.logger, "************** msg:\n\t{msg:?}");
+
+        let msg = msg.to_str().ok().context("Expected JSON message")?;
         debug!(self.logger, "Request received:\n\t{msg}");
 
         let req = serde_json::from_str(msg).context("Failed to deserialize transfer request")?;

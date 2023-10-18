@@ -10,7 +10,7 @@ use drop_analytics::{InitEventData, Moose, TransferStateEventData};
 use drop_config::DropConfig;
 use drop_core::Status;
 use drop_storage::Storage;
-use slog::{debug, Logger};
+use slog::{debug, trace, Logger};
 use tokio::sync::{mpsc, Semaphore};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -20,8 +20,9 @@ use crate::{
     error::ResultExt,
     manager,
     tasks::AliveWaiter,
+    transfer::Transfer,
     ws::{self, FileEventTxFactory},
-    Error, Event, FileId, Transfer, TransferManager,
+    Error, Event, FileId, TransferManager,
 };
 
 pub(super) struct State {
@@ -31,7 +32,7 @@ pub(super) struct State {
     pub(crate) auth: Arc<auth::Context>,
     pub(crate) config: Arc<DropConfig>,
     pub(crate) storage: Arc<Storage>,
-    pub(crate) throttle: Semaphore,
+    pub(crate) throttle: Arc<Semaphore>,
     pub(crate) addr: IpAddr,
     #[cfg(unix)]
     pub fdresolv: Option<Arc<crate::file::FdResolver>>,
@@ -50,9 +51,10 @@ pub struct Service {
     stop: CancellationToken,
     waiter: AliveWaiter,
     pub(super) logger: Logger,
+
+    refresh_trigger: tokio::sync::watch::Sender<()>,
 }
 
-// todo: better name to reduce confusion
 impl Service {
     #[allow(clippy::too_many_arguments)]
     pub async fn start(
@@ -68,7 +70,7 @@ impl Service {
     ) -> Result<Self, Error> {
         let task = async {
             let state = Arc::new(State {
-                throttle: Semaphore::new(drop_config::MAX_UPLOADS_IN_FLIGHT),
+                throttle: Arc::new(Semaphore::new(drop_config::MAX_UPLOADS_IN_FLIGHT)), /* TODO: max uploads of 4 files per all libdrop is too restrictive, workout a better plan, like configurable through config */
                 transfer_manager: TransferManager::new(
                     storage.clone(),
                     FileEventTxFactory::new(event_tx.clone(), moose.clone()),
@@ -93,15 +95,23 @@ impl Service {
 
             manager::restore_transfers_state(&state, &logger).await;
 
-            ws::server::spawn(state.clone(), logger.clone(), stop.clone(), guard.clone())?;
+            let refresh_trigger = tokio::sync::watch::channel(()).0;
+            ws::server::spawn(
+                refresh_trigger.subscribe(),
+                state.clone(),
+                logger.clone(),
+                stop.clone(),
+                guard.clone(),
+            )?;
 
-            manager::resume(&state, &logger, &guard, &stop).await;
+            manager::resume(&refresh_trigger.subscribe(), &state, &logger, &guard, &stop).await;
 
             Ok(Self {
+                refresh_trigger,
                 state,
                 stop,
                 waiter,
-                logger,
+                logger: logger.clone(),
             })
         };
 
@@ -122,6 +132,12 @@ impl Service {
 
     pub fn storage(&self) -> &Storage {
         &self.state.storage
+    }
+
+    pub fn network_refresh(&mut self) {
+        if self.refresh_trigger.send(()).is_ok() {
+            trace!(self.logger, "Refresh trigger sent");
+        }
     }
 
     pub async fn send_request(&mut self, xfer: crate::OutgoingTransfer) {
@@ -151,7 +167,10 @@ impl Service {
 
         self.state.emit_event(Event::RequestQueued(xfer.clone()));
 
+        let subscriber = self.refresh_trigger.subscribe();
+
         ws::client::spawn(
+            subscriber,
             self.state.clone(),
             xfer,
             self.logger.clone(),
