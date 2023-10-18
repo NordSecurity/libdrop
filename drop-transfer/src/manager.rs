@@ -8,7 +8,7 @@ use std::{
 use anyhow::Context;
 use drop_config::DropConfig;
 use drop_storage::{sync, types::OutgoingFileToRetry, Storage};
-use slog::{debug, error, info, warn, Logger};
+use slog::{debug, error, info, trace, warn, Logger};
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -128,6 +128,7 @@ impl TransferManager {
                         drop(conn)
                     }
                     _ => {
+                        info!(self.logger, "Issuing pending requests for: {}", xfer.id());
                         state.issue_pending_requests(&conn, &self.logger);
                         state.conn = Some(conn);
                     }
@@ -430,31 +431,6 @@ impl TransferManager {
         !matches!(state.xfer_sync, sync::TransferState::Canceled)
     }
 
-    pub async fn incoming_download_cancel(
-        &self,
-        transfer_id: Uuid,
-        file_id: &FileId,
-    ) -> crate::Result<()> {
-        let mut lock = self.incoming.lock().await;
-
-        let state = lock
-            .get_mut(&transfer_id)
-            .ok_or(crate::Error::BadTransfer)?;
-
-        state.ensure_not_cancelled()?;
-
-        let state = state.file_sync_mut(file_id)?;
-        state.ensure_not_terminated()?;
-
-        *state = IncomingLocalFileState::Idle;
-
-        self.storage
-            .stop_incoming_file(transfer_id, file_id.as_ref())
-            .await;
-
-        Ok(())
-    }
-
     pub async fn incoming_finish_post(
         &self,
         transfer_id: Uuid,
@@ -660,6 +636,7 @@ impl TransferManager {
     }
 
     pub async fn outgoing_remove(&self, transfer_id: Uuid) -> crate::Result<()> {
+        debug!(self.logger, "Removing outgoing transfer: {}", transfer_id);
         let mut lock = self.outgoing.lock().await;
         if !lock.contains_key(&transfer_id) {
             return Err(crate::Error::BadTransfer);
@@ -681,6 +658,7 @@ impl TransferManager {
     }
 
     pub async fn outgoing_disconnect(&self, transfer_id: Uuid) -> crate::Result<()> {
+        trace!(self.logger, "outgoing_disconnect: {}", transfer_id);
         let mut lock = self.outgoing.lock().await;
         let _ = lock
             .get_mut(&transfer_id)
@@ -994,7 +972,16 @@ impl OutgoingLocalFileState {
     }
 }
 
+pub(crate) async fn restore_transfers_state(state: &Arc<State>, logger: &Logger) {
+    let incoming = restore_incoming(&state.storage, &state.config, logger).await;
+    *state.transfer_manager.incoming.lock().await = incoming;
+
+    let outgoing = restore_outgoing(state, logger).await;
+    *state.transfer_manager.outgoing.lock().await = outgoing;
+}
+
 pub(crate) async fn resume(
+    refresh_trigger: &tokio::sync::watch::Receiver<()>,
     state: &Arc<State>,
     logger: &Logger,
     guard: &AliveGuard,
@@ -1004,7 +991,9 @@ pub(crate) async fn resume(
         let xfers = state.transfer_manager.outgoing.lock().await;
 
         for xstate in xfers.values() {
+            let trig = refresh_trigger.clone();
             ws::client::spawn(
+                trig,
                 state.clone(),
                 xstate.xfer.clone(),
                 logger.clone(),
@@ -1018,7 +1007,9 @@ pub(crate) async fn resume(
         let xfers = state.transfer_manager.incoming.lock().await;
 
         for xstate in xfers.values() {
+            let trig = refresh_trigger.clone();
             check::spawn(
+                trig,
                 state.clone(),
                 xstate.xfer.clone(),
                 logger.clone(),
@@ -1027,14 +1018,6 @@ pub(crate) async fn resume(
             );
         }
     }
-}
-
-pub(crate) async fn restore_transfers_state(state: &Arc<State>, logger: &Logger) {
-    let incoming = restore_incoming(&state.storage, &state.config, logger).await;
-    *state.transfer_manager.incoming.lock().await = incoming;
-
-    let outgoing = restore_outgoing(state, logger).await;
-    *state.transfer_manager.outgoing.lock().await = outgoing;
 }
 
 async fn restore_incoming(
@@ -1296,10 +1279,7 @@ fn ensure_resume_matches_existing_transfer<T: Transfer>(
             .files()
             .iter()
             .all(|(key, val)| existing.files().get(key).map_or(false, |v| {
-                val.id() == v.id()
-                    && val.subpath() == v.subpath()
-                    && val.size() == v.size()
-                    && val.mime_type() == v.mime_type()
+                val.id() == v.id() && val.size() == v.size() && val.mime_type() == v.mime_type()
             })),
         "Files do not match"
     );

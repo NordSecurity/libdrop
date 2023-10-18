@@ -3,7 +3,9 @@ import ctypes
 import json
 import typing
 import logging
-from enum import IntEnum
+from enum import IntEnum  # todo why two enums
+from enum import Enum
+
 from threading import Lock
 
 from . import event
@@ -11,8 +13,20 @@ from .logger import logger
 from .config import RUNNERS
 from .peer_resolver import peer_resolver
 
+import datetime
 
 DEBUG_PRINT_EVENT = True
+from .colors import bcolors
+
+
+class PeerState(Enum):
+    Offline = 0
+    Online = 1
+
+
+def tprint(*args, **kwargs):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{timestamp}]", *args, **kwargs)
 
 
 class DropException(Exception):
@@ -102,7 +116,7 @@ class EventQueue:
 
     def callback(self, ctx, s: str):
         if DEBUG_PRINT_EVENT:
-            print("--- event: ", s, flush=True)
+            tprint(bcolors.HEADER + "--- event: ", s, bcolors.ENDC, flush=True)
 
         with self._lock:
             self._events.append(new_event(s))
@@ -110,6 +124,10 @@ class EventQueue:
     async def wait_for_any_event(self, duration: int, ignore_progress: bool = False):
         for _ in range(0, duration):
             with self._lock:
+                self._events = [
+                    ev for ev in self._events if not isinstance(ev, event.Throttled)
+                ]
+
                 if ignore_progress:
                     self._events = [
                         ev for ev in self._events if not isinstance(ev, event.Progress)
@@ -159,7 +177,10 @@ class EventQueue:
     # expect all incoming events to be present in passed events in no
     # particular order
     async def wait_racy(
-        self, target_events: typing.List[event.Event], ignore_progress: bool = True
+        self,
+        target_events: typing.List[event.Event],
+        ignore_progress: bool = True,
+        ignore_throttled: bool = True,
     ) -> None:
         success = []
 
@@ -177,11 +198,18 @@ class EventQueue:
                     if ignore_progress and isinstance(e, event.Progress):
                         continue
 
+                    if ignore_throttled and isinstance(e, event.Throttled):
+                        continue
+
                     found = False
                     for te in target_events:
                         if te == e:
-                            found = True
                             success.append(te)
+                            found = True
+                            tprint(
+                                f"*racy event({len(success)}/{len(target_events)}), found {e}",
+                                flush=True,
+                            )
                             break
 
                     if not found:
@@ -205,10 +233,8 @@ class KeysCtx:
         self.this = RUNNERS[hostname]
 
     def callback(self, ctx, ip, pubkey):
-        print(f"KeysCtx.callback({ctx}, {ip}, {pubkey})")
         ip = ip.decode("utf-8")
         peer = peer_resolver.reverse_lookup(ip)
-        print(f"KeysCtx.callback({ctx}, {ip}, {pubkey}) -> {peer}")
         if peer is None:
             return 1
 
@@ -470,6 +496,17 @@ class Drop:
 
         return transfers.decode("utf-8")
 
+    def network_refresh(self):
+        err = self._lib.norddrop_network_refresh(
+            self._instance,
+        )
+
+        if err != 0:
+            err_type = LibResult(err).name
+            raise DropException(
+                f"network_refresh has failed with code: {err}({err_type})", err
+            )
+
     def purge_transfers_until(self, until_timestamp: int):
         err = self._lib.norddrop_purge_transfers_until(
             self._instance,
@@ -616,6 +653,17 @@ def new_event(event_str: str) -> event.Event:
 
         return event.Progress(transfer_slot, file, progress)
 
+    elif event_type == "TransferThrottled":
+        transfer = event_data["transfer"]
+
+        with event.UUIDS_LOCK:
+            transfer_slot = event.UUIDS.index(transfer)
+
+        file = event_data["file"]
+        progress = event_data["transfered"]
+
+        return event.Throttled(transfer_slot, file, progress)
+
     elif event_type == "TransferFinished":
         transfer = event_data["transfer"]
 
@@ -678,4 +726,4 @@ def new_event(event_str: str) -> event.Event:
 
 def log_callback(ctx, level, msg):
     msg = msg.decode("utf-8")
-    logger.log(LOG_LEVEL_MAP.get(level), f"callback: {level}: {msg}")
+    logger.log(LOG_LEVEL_MAP.get(level), f"{msg}")

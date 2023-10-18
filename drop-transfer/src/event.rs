@@ -52,6 +52,12 @@ pub enum Event {
         by_peer: bool,
     },
 
+    FileUploadThrottled {
+        transfer_id: Uuid,
+        file_id: FileId,
+        transfered: u64,
+    },
+
     IncomingTransferCanceled(Arc<IncomingTransfer>, bool),
     OutgoingTransferCanceled(Arc<OutgoingTransfer>, bool),
 

@@ -80,6 +80,10 @@ public class NordDrop {
     return NorddropResult.swigToEnum(libnorddropJNI.NordDrop_removeTransferFile(swigCPtr, this, txid, fid));
   }
 
+  public NorddropResult networkRefresh() {
+    return NorddropResult.swigToEnum(libnorddropJNI.NordDrop_networkRefresh(swigCPtr, this));
+  }
+
   public String getTransfersSince(long sinceTimestamp) {
     return libnorddropJNI.NordDrop_getTransfersSince(swigCPtr, this, sinceTimestamp);
   }

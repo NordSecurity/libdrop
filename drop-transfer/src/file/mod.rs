@@ -142,7 +142,11 @@ impl File for FileToRecv {
 }
 
 impl FileToRecv {
-    pub fn new(file_id: FileId, subpath: FileSubPath, size: u64) -> Self {
+    pub fn new(file_id: FileId, mut subpath: FileSubPath, size: u64) -> Self {
+        subpath.iter_mut().for_each(|s| {
+            *s = crate::utils::normalize_filename(&*s);
+        });
+
         Self {
             file_id,
             subpath,

@@ -1,3 +1,17 @@
+### v6.0.0
+### **Connection Clarity**
+---
+* New API `norddrop_network_refresh` to inform Libdrop that network configuration or peer
+availability has changed. This breaks the previous automated retry behavior where it automatically issued 
+requests and now waits for this API to be called to conserve the resources.
+* Introduce server side authentication
+* Ensure `norddrop_stop()` blocks until all events are processed by the handler.
+* Normalize file paths upon receiving the transfer request immedieatly, thus eliminate misleading file names in the events.
+* Introduce `TransferThrottled` event for file uploads
+
+---
+<br>
+
 ### v5.4.0
 ### **Unforeseen Moose**
 ---

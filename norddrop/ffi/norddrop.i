@@ -78,6 +78,10 @@ struct norddrop {};
 
     enum norddrop_result remove_transfer_file(const char* txid, const char* fid);
 
+    enum norddrop_result network_refresh();
+
+
+
     %newobject get_transfers_since;
     char *get_transfers_since(long long since_timestamp);
 
