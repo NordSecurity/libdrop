@@ -5419,7 +5419,7 @@ scenarios = [
                             0, FILES["testfile-small"].id, Error.FILE_REJECTED
                         ),
                     ),
-                    action.SleepMs(200),
+                    action.Sleep(2),
                     action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
@@ -5450,6 +5450,7 @@ scenarios = [
                             0, FILES["testfile-small"].id, Error.FILE_REJECTED
                         ),
                     ),
+                    action.NoEvent(),
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
@@ -5894,7 +5895,7 @@ scenarios = [
                     ),
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
-                    action.NoEvent(),
+                    action.NoEvent(6),
                     action.AssertTransfers(
                         [
                             """{
@@ -6174,9 +6175,8 @@ scenarios = [
                     ),
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
-                    action.NoEvent(),
+                    action.NoEvent(6),
                     action.Stop(),
-                    action.NoEvent(),
                 ]
             ),
         },
@@ -6424,15 +6424,15 @@ scenarios = [
                             "/tmp/received/29-5/testfile-big",
                         )
                     ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(6),
+                    action.Stop(),
                     action.CheckDownloadedFiles(
                         [
                             action.File("/tmp/received/29-5/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
-                    action.NoEvent(),
-                    action.Stop(),
                 ]
             ),
         },
@@ -6944,7 +6944,7 @@ scenarios = [
                     ),
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
-                    action.NoEvent(),
+                    action.NoEvent(6),
                     action.Stop(),
                 ]
             ),
@@ -8987,6 +8987,7 @@ scenarios = [
                             },
                         )
                     ),
+                    action.NoEvent(),
                     # restart so database writes would be flushed before copying
                     action.Stop(),
                     # Make a copy of database
@@ -10000,6 +10001,7 @@ scenarios = [
                     action.CompareTrees(Path("/tmp/received/47-1"), []),
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
+                    action.NoEvent(),
                     action.Stop(),
                 ]
             ),
