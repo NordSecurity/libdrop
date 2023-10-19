@@ -144,4 +144,3 @@ CREATE TABLE IF NOT EXISTS incoming_path_completed_states (
   FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- TODO: indexes
