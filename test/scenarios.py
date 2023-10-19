@@ -5975,7 +5975,6 @@ scenarios = [
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
-                    # TODO: could be nice to actually signal the peer via docker that peer is online, this would reduce flakyness
                     action.NetworkRefresh(),
                     action.Wait(
                         event.Start(0, FILES["testfile-big"].id, transferred=None)
@@ -6687,8 +6686,6 @@ scenarios = [
                         )
                     ),
                     # give it some time to arrive
-                    # TODO: it would be better if we would have an explicit event for this
-                    # or slightly worse - coordinate testrunners from two peers via central container about stuff which happened
                     action.Sleep(3),
                     action.Stop(),
                     action.Sleep(3),
@@ -6771,8 +6768,6 @@ scenarios = [
                         )
                     ),
                     # give it some time to arrive
-                    # TODO: it would be better if we would have an explicit event for this
-                    # or slightly worse - coordinate testrunners from two peers via central container about stuff which happened
                     action.Sleep(3),
                     action.Stop(),
                     action.Sleep(3),
@@ -6834,8 +6829,6 @@ scenarios = [
                         )
                     ),
                     # give it some time to arrive
-                    # TODO: it would be better if we would have an explicit event for this
-                    # or slightly worse - coordinate testrunners from two peers via central container about stuff which happened
                     action.Sleep(3),
                     action.Stop(),
                     action.Sleep(3),
@@ -8428,7 +8421,6 @@ scenarios = [
                         ),
                     ),
                     action.ConfigureNetwork(latency="10ms"),
-                    # TODO: what happens if i use Action.Parallel?
                     action.WaitRacy(
                         [
                             event.Start(0, FILES["testfile-big"].id),
@@ -9382,7 +9374,6 @@ scenarios = [
                     ),
                     action.NoEvent(),
                     action.Sleep(5),  # synchronize
-                    # TODO: make it enum'y and type safe
                     action.NetworkRefresh(),
                     action.WaitRacy(
                         [
@@ -9398,7 +9389,6 @@ scenarios = [
                             ),
                         ],
                     ),
-                    # TODO if ExpectCancel is taking an array, it makes sense for CancelTransferRequest to take in an array as well
                     action.CancelTransferRequest([0, 1]),
                     action.ExpectCancel([0, 1], False),
                     action.NoEvent(6),
@@ -9666,7 +9656,6 @@ scenarios = [
                             },
                         ),
                     ),
-                    # TODO: for such cases it would make sense to introduce "signals" for all of the peers to synchronize on
                     action.WaitForAnotherPeer("DROP_PEER_GEORGE"),
                     action.NewTransfer("DROP_PEER_GEORGE", ["/tmp/testfile-big"]),
                     action.Wait(
