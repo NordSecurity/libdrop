@@ -70,7 +70,7 @@ impl Service {
     ) -> Result<Self, Error> {
         let task = async {
             let state = Arc::new(State {
-                throttle: Arc::new(Semaphore::new(drop_config::MAX_UPLOADS_IN_FLIGHT)), /* TODO: max uploads of 4 files per all libdrop is too restrictive, workout a better plan, like configurable through config */
+                throttle: Arc::new(Semaphore::new(drop_config::MAX_UPLOADS_IN_FLIGHT)),
                 transfer_manager: TransferManager::new(
                     storage.clone(),
                     FileEventTxFactory::new(event_tx.clone(), moose.clone()),

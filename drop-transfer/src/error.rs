@@ -57,12 +57,7 @@ impl Error {
     pub fn os_err_code(&self) -> Option<i32> {
         match self {
             Error::Io(ioerr) => ioerr.raw_os_error().map(|c| c as _),
-            Error::WsServer(_) => {
-                // TODO(msz): Theoretically it should be possible to extract OS error from WS
-                // server but warp does not make it easy. Maybe one
-                // day we will rewrite warp server with raw tungstenite
-                None
-            }
+            Error::WsServer(_) => None,
             Error::WsClient(terr) => {
                 if let tungstenite::Error::Io(ioerr) = terr {
                     ioerr.raw_os_error().map(|c| c as _)
