@@ -517,7 +517,6 @@ class AssertNoEventOfType(Action):
         return f"AssertNoEventOfType({self._duration}, {self._forbidden})"
 
 
-# TODO: this should be split to only wait for one event
 class ExpectCancel(Action):
     def __init__(self, uuid_slots: typing.List[int], by_peer: bool):
         self._uuid_slots = uuid_slots
