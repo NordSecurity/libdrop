@@ -460,7 +460,8 @@ pub extern "C" fn norddrop_purge_transfers_until(
 /// # Arguments
 ///
 /// * `dev` - Pointer to the instance
-/// * `since_timestamp` - Timestamp in seconds
+/// * `since_timestamp` - UNIX timestamp in seconds, accepts a value between
+///   -210866760000 and 253402300799
 ///
 /// # Returns
 ///
@@ -507,6 +508,9 @@ pub extern "C" fn norddrop_purge_transfers_until(
 ///
 /// Terminal states: `failed`, `completed`, `reject`. Terminal states appear
 /// once and it is the final state. Other states might appear multiple times.
+///
+/// Fields `created_at` in the returned JSON refer to the creation time as a
+/// UNIX timestamp in milliseconds.
 ///
 /// # JSON example from the sender side
 ///  ```json
@@ -588,170 +592,6 @@ pub extern "C" fn norddrop_purge_transfers_until(
 ///     ]
 /// }
 /// ```
-/// 
-/// The whole database schema:
-/// ```sql
-/// CREATE TABLE transfers (
-///   id TEXT PRIMARY KEY UNIQUE NOT NULL,
-///   peer TEXT NOT NULL,
-///   is_outgoing INTEGER NOT NULL,
-///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
-/// 'NOW'))   CHECK(is_outgoing = 0 OR is_outgoing = 1)
-/// , is_deleted INTEGER NOT NULL DEFAULT FALSE CHECK (is_deleted IN (FALSE,
-/// TRUE))); CREATE TABLE sqlite_sequence(name,seq);
-/// CREATE TABLE transfer_cancel_states (
-///   id INTEGER PRIMARY KEY AUTOINCREMENT,
-///   transfer_id TEXT NOT NULL,
-///   by_peer INTEGER NOT NULL,
-///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
-/// 'NOW')),   FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE
-/// CASCADE ON UPDATE CASCADE   CHECK(by_peer = 0 OR by_peer = 1)
-/// );
-/// CREATE TABLE transfer_failed_states (
-///   id INTEGER PRIMARY KEY AUTOINCREMENT,
-///   transfer_id TEXT NOT NULL,
-///   status_code INTEGER NOT NULL,
-///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
-/// 'NOW')),   FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE
-/// CASCADE ON UPDATE CASCADE );
-/// CREATE TABLE outgoing_paths (
-///   id INTEGER PRIMARY KEY AUTOINCREMENT,
-///   transfer_id TEXT NOT NULL,
-///   relative_path TEXT NOT NULL,
-///   uri TEXT NOT NULL,
-///   path_hash TEXT NOT NULL,
-///   bytes INT NOT NULL,
-///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
-/// 'NOW')), is_deleted INTEGER NOT NULL DEFAULT FALSE CHECK (is_deleted IN
-/// (FALSE, TRUE)),
-
-///   FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE CASCADE ON
-/// UPDATE CASCADE   CHECK(bytes >= 0)
-///   UNIQUE(transfer_id, path_hash)
-/// );
-/// CREATE TABLE incoming_paths (
-///   id INTEGER PRIMARY KEY AUTOINCREMENT,
-///   transfer_id TEXT NOT NULL,   
-///   relative_path TEXT NOT NULL,
-///   path_hash TEXT NOT NULL,
-///   bytes INT NOT NULL,
-///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
-/// 'NOW')),   checksum BLOB DEFAULT NULL, is_deleted INTEGER NOT NULL DEFAULT
-/// FALSE CHECK (is_deleted IN (FALSE, TRUE)),
-
-///   FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE CASCADE ON
-/// UPDATE CASCADE   CHECK(bytes >= 0)
-///   UNIQUE(transfer_id, path_hash)
-/// );
-/// CREATE TABLE outgoing_path_started_states (
-///   id INTEGER PRIMARY KEY AUTOINCREMENT,
-///   path_id INTEGER NOT NULL,
-///   bytes_sent INTEGER NOT NULL,
-///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
-/// 'NOW')),   FOREIGN KEY(path_id) REFERENCES outgoing_paths(id) ON DELETE
-/// CASCADE ON UPDATE CASCADE,   CHECK(bytes_sent >= 0)
-/// );
-/// CREATE TABLE outgoing_path_failed_states (
-///   id INTEGER PRIMARY KEY AUTOINCREMENT,
-///   path_id INTEGER NOT NULL,
-///   status_code INTEGER NOT NULL,
-///   bytes_sent INTEGER NOT NULL,
-///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
-/// 'NOW')),   FOREIGN KEY(path_id) REFERENCES outgoing_paths(id) ON DELETE
-/// CASCADE ON UPDATE CASCADE,   CHECK(bytes_sent >= 0)
-/// );
-/// CREATE TABLE outgoing_path_completed_states (
-///   id INTEGER PRIMARY KEY AUTOINCREMENT,
-///   path_id INTEGER NOT NULL,
-///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
-/// 'NOW')),   FOREIGN KEY(path_id) REFERENCES outgoing_paths(id) ON DELETE
-/// CASCADE ON UPDATE CASCADE );
-/// CREATE TABLE incoming_path_pending_states (
-///   id INTEGER PRIMARY KEY AUTOINCREMENT,
-///   path_id INTEGER NOT NULL,
-///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
-/// 'NOW')), base_dir TEXT NOT NULL DEFAULT '',   FOREIGN KEY(path_id)
-/// REFERENCES incoming_paths(id) ON DELETE CASCADE ON UPDATE CASCADE );
-/// CREATE TABLE incoming_path_started_states (
-///   id INTEGER PRIMARY KEY AUTOINCREMENT,
-///   path_id INTEGER NOT NULL,
-///   bytes_received INTEGER NOT NULL,
-///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
-/// 'NOW')),   FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON DELETE
-/// CASCADE ON UPDATE CASCADE,   CHECK(bytes_received >= 0)
-/// );
-/// CREATE TABLE incoming_path_failed_states (
-///   id INTEGER PRIMARY KEY AUTOINCREMENT,
-///   path_id INTEGER NOT NULL,
-///   status_code INTEGER NOT NULL,
-///   bytes_received INTEGER NOT NULL,
-///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
-/// 'NOW')),   FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON DELETE
-/// CASCADE ON UPDATE CASCADE,   CHECK(bytes_received >= 0)
-/// );
-/// CREATE TABLE incoming_path_completed_states (
-///   id INTEGER PRIMARY KEY AUTOINCREMENT,
-///   path_id INTEGER NOT NULL,
-///   final_path TEXT NOT NULL,
-///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
-/// 'NOW')),   FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON DELETE
-/// CASCADE ON UPDATE CASCADE );
-/// CREATE TABLE incoming_path_reject_states (
-///   id INTEGER PRIMARY KEY AUTOINCREMENT,
-///   path_id INTEGER NOT NULL,
-///   by_peer INTEGER NOT NULL,
-///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
-/// 'NOW')), bytes_received INTEGER NOT NULL DEFAULT 0,   FOREIGN KEY(path_id)
-/// REFERENCES incoming_paths(id) ON DELETE CASCADE ON UPDATE CASCADE );
-/// CREATE TABLE outgoing_path_reject_states (
-///   id INTEGER PRIMARY KEY AUTOINCREMENT,
-///   path_id INTEGER NOT NULL,
-///   by_peer INTEGER NOT NULL,
-///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
-/// 'NOW')), bytes_sent     INTEGER NOT NULL DEFAULT 0,   FOREIGN KEY(path_id)
-/// REFERENCES outgoing_paths(id) ON DELETE CASCADE ON UPDATE CASCADE );
-/// CREATE TABLE sync_transfer (
-///   sync_id INTEGER PRIMARY KEY AUTOINCREMENT, -- use separate primary key for
-/// cascade to work across sync_ tables   transfer_id TEXT NOT NULL,
-///   local_state INTEGER NOT NULL,
-///   FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE CASCADE ON
-/// UPDATE CASCADE );
-/// CREATE TABLE sync_outgoing_files (
-///   sync_id INTEGER NOT NULL,
-///   path_id INTEGER NOT NULL,
-///   local_state INTEGER NOT NULL,
-///   PRIMARY KEY(sync_id, path_id)
-///   FOREIGN KEY(sync_id) REFERENCES sync_transfer(sync_id) ON DELETE CASCADE
-/// ON UPDATE CASCADE   FOREIGN KEY(path_id) REFERENCES outgoing_paths(id) ON
-/// DELETE CASCADE ON UPDATE CASCADE );
-/// CREATE TABLE sync_incoming_files (
-///   sync_id INTEGER NOT NULL,
-///   path_id INTEGER NOT NULL,
-///   local_state INTEGER NOT NULL,
-///   PRIMARY KEY(sync_id, path_id)
-///   FOREIGN KEY(sync_id) REFERENCES sync_transfer(sync_id) ON DELETE CASCADE
-/// ON UPDATE CASCADE   FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON
-/// DELETE CASCADE ON UPDATE CASCADE );
-/// CREATE TABLE sync_incoming_files_inflight (
-///   sync_id INTEGER NOT NULL,
-///   path_id INTEGER NOT NULL,
-///   base_dir TEXT NOT NULL,
-///   FOREIGN KEY(sync_id, path_id) REFERENCES sync_incoming_files(sync_id,
-/// path_id) ON DELETE CASCADE ON UPDATE CASCADE );
-/// CREATE TABLE incoming_path_paused_states (
-///   path_id INTEGER NOT NULL,
-///   bytes_received INTEGER NOT NULL,
-///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
-/// 'NOW')),   FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON DELETE
-/// CASCADE ON UPDATE CASCADE );
-/// CREATE TABLE outgoing_path_paused_states (
-///   path_id INTEGER NOT NULL,
-///   bytes_sent INTEGER NOT NULL,
-///   created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f',
-/// 'NOW')),   FOREIGN KEY(path_id) REFERENCES outgoing_paths(id) ON DELETE
-/// CASCADE ON UPDATE CASCADE );
-
-/// ````
 #[no_mangle]
 pub extern "C" fn norddrop_get_transfers_since(
     dev: &norddrop,
