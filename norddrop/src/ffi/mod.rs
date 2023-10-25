@@ -512,53 +512,58 @@ pub extern "C" fn norddrop_purge_transfers_until(
 /// Fields `created_at` in the returned JSON refer to the creation time as a
 /// UNIX timestamp in milliseconds.
 ///
-/// # JSON example from the sender side
+/// # Examples of the same transfer from both sides
+/// ## Sender
 ///  ```json
+/// [
 /// {
-///      "id": "b49fc2f8-ce2d-41ac-a081-96a4d760899e",
-///      "peer_id": "192.168.0.0",
-///      "created_at": 1686651025988,
-///      "states": [
-///          {
-///              "created_at": 1686651026008,
-///              "state": "cancel",
-///              "by_peer": true
-///          }
-///      ],
-///      "type": "outgoing",
-///      "paths": [
-///          {
-///              "transfer_id": "b49fc2f8-ce2d-41ac-a081-96a4d760899e",
-///              "base_path": "/home/user/Pictures",
-///              "relative_path": "doggo.jpg",
-///              "file_id": "Unu_l4PVyu15-RsdVL9IOQvaKQdqcqUy7F9EpvP-CrY",
-///              "bytes": 29852,
-///              "created_at": 1686651025988,
-///              "states": [
-///                  {
-///                      "created_at": 1686651025997,
-///                      "state": "started",
-///                      "bytes_sent": 0
-///                  },
-///                  {
-///                      "created_at": 1686651026002,
-///                      "state": "completed"
-///                  }
-///              ]
-///          }
-///      ]
-///  }
-/// ```
-/// 
-/// # JSON example from the receiver side
-/// ```json
-/// {
-///     "id": "b49fc2f8-ce2d-41ac-a081-96a4d760899e",
-///     "peer_id": "172.17.0.1",
-///     "created_at": 1686651025988,
+///     "id": "0352847a-dfd5-40de-b214-edc1d06e469e",
+///     "created_at": 1698240954430,
+///     "peer_id": "192.168.1.3",
 ///     "states": [
 ///         {
-///             "created_at": 1686651026007,
+///             "created_at": 1698240956418,
+///             "state": "cancel",
+///             "by_peer": true
+///         }
+///     ],
+///     "type": "outgoing",
+///     "paths": [
+///         {
+///             "created_at": 1698240954430,
+///             "transfer_id": "0352847a-dfd5-40de-b214-edc1d06e469e",
+///             "base_path": "/tmp",
+///             "relative_path": "testfile-big",
+///             "file_id": "ESDW8PFTBoD8UYaqxMSWp6FBCZN3SKnhyHFqlhrdMzU",
+///             "bytes": 10485760,
+///             "bytes_sent": 10485760,
+///             "states": [
+///                 {
+///                     "created_at": 1698240955416,
+///                     "state": "started",
+///                     "bytes_sent": 0
+///                 },
+///                 {
+///                     "created_at": 1698240955856,
+///                     "state": "completed"
+///                 }
+///             ]
+///         }
+///     ]
+/// }
+/// ]
+/// ```
+/// 
+/// ## Receiver
+/// ```json
+/// [
+/// {
+///     "id": "0352847a-dfd5-40de-b214-edc1d06e469e",
+///     "created_at": 1698240954437,
+///     "peer_id": "192.168.1.2",
+///     "states": [
+///         {
+///             "created_at": 1698240956417,
 ///             "state": "cancel",
 ///             "by_peer": false
 ///         }
@@ -566,31 +571,33 @@ pub extern "C" fn norddrop_purge_transfers_until(
 ///     "type": "incoming",
 ///     "paths": [
 ///         {
-///             "transfer_id": "b49fc2f8-ce2d-41ac-a081-96a4d760899e",
-///             "relative_path": "doggo.jpg",
-///             "file_id": "Unu_l4PVyu15-RsdVL9IOQvaKQdqcqUy7F9EpvP-CrY",
-///             "bytes": 29852,
-///             "created_at": 1686651025988,
+///             "created_at": 1698240954437,
+///             "transfer_id": "0352847a-dfd5-40de-b214-edc1d06e469e",
+///             "relative_path": "testfile-big",
+///             "file_id": "ESDW8PFTBoD8UYaqxMSWp6FBCZN3SKnhyHFqlhrdMzU",
+///             "bytes": 10485760,
+///             "bytes_received": 10485760,
 ///             "states": [
 ///                 {
-///                     "created_at": 1686651025992,
-///                     "state": "pending"
+///                     "created_at": 1698240955415,
+///                     "state": "pending",
+///                     "base_dir": "/tmp/received"
 ///                 },
 ///                 {
-///                     "created_at": 1686651026000,
+///                     "created_at": 1698240955415,
 ///                     "state": "started",
-///                     "base_dir": "/root",
 ///                     "bytes_received": 0
 ///                 },
 ///                 {
-///                     "created_at": 1686651026003,
+///                     "created_at": 1698240955855,
 ///                     "state": "completed",
-///                     "final_path": "/root/doggo.jpg"
+///                     "final_path": "/tmp/received/testfile-big"
 ///                 }
 ///             ]
 ///         }
 ///     ]
 /// }
+/// ]
 /// ```
 #[no_mangle]
 pub extern "C" fn norddrop_get_transfers_since(
