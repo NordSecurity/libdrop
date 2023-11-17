@@ -7,7 +7,7 @@ let package = Package(
     name: "LibdropSwift",
     platforms: [
         .iOS(.v13),
-        .macOS(.v10_15)
+        .macOS(.v10_15),
         .tvOS(.v17)
     ],
     products: [
