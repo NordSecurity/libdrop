@@ -1,26 +1,27 @@
-pub mod error;
-pub mod sync;
-pub mod types;
-
+use std::collections::hash_map::Entry::{Occupied, Vacant};
+use std::collections::HashMap;
 use std::{io, path::Path, vec};
-use std::collections::btree_map::Entry::{Occupied, Vacant};
-use std::collections::BTreeMap;
 
 use include_dir::{include_dir, Dir};
 use rusqlite::{params, Connection, OpenFlags, Transaction};
 use rusqlite_migration::Migrations;
 use slog::{debug, error, trace, warn, Logger};
 use tokio::sync::Mutex;
+use uuid::Uuid;
+
 use types::{
     DbTransferType, FileSyncState, IncomingFileToRetry, IncomingPath, IncomingPathStateEvent,
     IncomingPathStateEventData, IncomingTransferToRetry, OutgoingFileToRetry, OutgoingPath,
     OutgoingPathStateEvent, OutgoingPathStateEventData, TempFileLocation, Transfer, TransferFiles,
     TransferIncomingPath, TransferOutgoingPath, TransferStateEvent, TransferType,
 };
-use uuid::Uuid;
 
 use crate::error::Error;
 pub use crate::types::{FileChecksum, FinishedIncomingFile, OutgoingTransferToRetry, TransferInfo};
+
+pub mod error;
+pub mod sync;
+pub mod types;
 
 type Result<T> = std::result::Result<T, Error>;
 type QueryResult<T> = std::result::Result<T, rusqlite::Error>;
@@ -1131,13 +1132,11 @@ impl Storage {
         // 2. outgoing paths with their states
         // 3. incoming paths with their states
         // Because a single query is used for transfers and their states
-        // (the same applies to paths as well),
-        // a tree map is used to store the transfers. For each DB record,
-        // which is a state with transfer information, a transfer is looked for in the map or
-        // inserted. To this transfer the state is appended.
-        // `BTreeMap` is used to preserve the insertion order. Because the queries return
-        // results in insertion order (order by rowid), they are already sorted and this
-        // data structure preserves this order.
+        // (the same applies to paths as well), a hashmap is used to collect states for each
+        // transfer. For each state their transfer is taken from a hash map (or inserted), and
+        // this transfers state list is appended.
+        // For transfers, their rowid is selected as well and used to sort the transfers.
+        // Because its not part of `Transfer` structure, a tuple is used as hashmap value.
         trace!(
         self.logger,
         "Fetching transfers since timestamp";
@@ -1145,65 +1144,72 @@ impl Storage {
 
         let task = async {
             let mut conn = self.conn.lock().await;
-            let mut transfers_map: BTreeMap<String, Transfer> = BTreeMap::new();
+            let mut transfers_map: HashMap<Uuid, (u64, Transfer)> = HashMap::new();
             let tx = conn.transaction()?;
             // transfer_cancel_states.by_peer shares a type with transfer_failed_states.status_code
             // and transfer_cancel_states.created_at with transfer_failed_states.created_at
             // therefore the same column can be used for them.
-            let _ = tx.prepare(r#"
+            let _ = tx
+                .prepare(
+                    r#"
                 WITH ts AS  (
                     select 1, id, transfer_id, by_peer, created_at from transfer_cancel_states
                     union all
                     select 2, id, transfer_id, status_code, created_at from transfer_failed_states
                 )
-                select t.*, ts.* from transfers t
+                select t.*, ts.*, t.rowid from transfers t
                     left join ts on ts.transfer_id = t.id
                     where not t.is_deleted and t.created_at >= datetime(?1, 'unixepoch')
-                    order by t.rowid
-                "#)?.query_map(params![since_timestamp], |row| {
-                let id: String = row.get(0)?;
-                let transfer: &mut Transfer = match transfers_map.entry(id) {
-                    Occupied(e) => e.into_mut(),
-                    Vacant(k) => {
-                        let transfer_type = match row.get::<_, u32>(2)? {
-                            0 => DbTransferType::Incoming(vec![]),
-                            1 => DbTransferType::Outgoing(vec![]),
-                            _ => unreachable!(),
-                        };
-                        let t = Transfer {
-                            id: Uuid::parse_str(k.key()).map_err(|_| rusqlite::Error::InvalidQuery)?,
-                            peer_id: row.get(1)?,
-                            transfer_type,
-                            created_at: row.get(3)?,
-                            states: vec![],
-                        };
-                        k.insert(t)
+                "#,
+                )?
+                .query_map(params![since_timestamp], |row| {
+                    let id = Uuid::parse_str(row.get::<_, String>(0)?.as_str())
+                        .map_err(|_| rusqlite::Error::InvalidQuery)?;
+                    let rowid: u64 = row.get(10)?;
+                    let transfer: &mut Transfer = &mut match transfers_map.entry(id) {
+                        Occupied(e) => e.into_mut(),
+                        Vacant(k) => {
+                            let transfer_type = match row.get::<_, u32>(2)? {
+                                0 => DbTransferType::Incoming(vec![]),
+                                1 => DbTransferType::Outgoing(vec![]),
+                                _ => unreachable!(),
+                            };
+                            let t = Transfer {
+                                id,
+                                peer_id: row.get(1)?,
+                                transfer_type,
+                                created_at: row.get(3)?,
+                                states: vec![],
+                            };
+                            k.insert((rowid, t))
+                        }
                     }
-                };
-                let status_type: Option<i64> = row.get(5)?;
-                if let Some(status_type) = status_type {
-                    if status_type == 1 {
-                        transfer.states.push(TransferStateEvent {
-                            transfer_id: transfer.id,
-                            created_at: row.get(9)?,
-                            data: types::TransferStateEventData::Cancel {
-                                by_peer: row.get(8)?,
-                            },
-                        });
-                    } else {
-                        transfer.states.push(TransferStateEvent {
-                            transfer_id: transfer.id,
-                            created_at: row.get(9)?,
-                            data: types::TransferStateEventData::Failed {
-                                status_code: row.get(8)?,
-                            },
-                        });
+                    .1;
+                    let status_type: Option<i64> = row.get(5)?;
+                    if let Some(status_type) = status_type {
+                        if status_type == 1 {
+                            transfer.states.push(TransferStateEvent {
+                                transfer_id: transfer.id,
+                                created_at: row.get(9)?,
+                                data: types::TransferStateEventData::Cancel {
+                                    by_peer: row.get(8)?,
+                                },
+                            });
+                        } else {
+                            transfer.states.push(TransferStateEvent {
+                                transfer_id: transfer.id,
+                                created_at: row.get(9)?,
+                                data: types::TransferStateEventData::Failed {
+                                    status_code: row.get(8)?,
+                                },
+                            });
+                        }
                     }
-                }
-                Ok(())
-            })?.count();
+                    Ok(())
+                })?
+                .count();
 
-            let mut outgoing_paths: BTreeMap<i64, OutgoingPath> = BTreeMap::new();
+            let mut outgoing_paths: HashMap<i64, OutgoingPath> = HashMap::new();
             // Here is the same situation as before - because the columns after created_at
             // are all integers, they can be shared.
             let _ = tx.prepare(r#"
@@ -1218,11 +1224,10 @@ impl Storage {
                 union all
                 select 5, path_id, created_at, bytes_sent, null from outgoing_path_paused_states
             )
-            SELECT op.*, ops.* from outgoing_paths op
+            SELECT op.*, ops.*, op.rowid from outgoing_paths op
                 left join ops on ops.path_id = op.id
                 left join transfers t on t.id = op.transfer_id and not t.is_deleted and t.created_at >= datetime(?1, 'unixepoch')
                 where not op.is_deleted
-                order by op.rowid
             "#)?.query_map(params![since_timestamp], |row| {
                 let path_id: i64 = row.get(0)?;
                 let path = match outgoing_paths.entry(path_id) {
@@ -1263,6 +1268,8 @@ impl Storage {
                         e.insert(res)
                     }
                 };
+
+
 
                 let opt_status_type: Option<i32> = row.get(8)?;
                 if let Some(status_type) = opt_status_type {
@@ -1313,22 +1320,26 @@ impl Storage {
             for (_, mut path) in outgoing_paths {
                 path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
 
-                path.bytes_sent = path.states.iter().rev().map(|state| match state.data {
-                    OutgoingPathStateEventData::Started { bytes_sent } => bytes_sent,
-                    OutgoingPathStateEventData::Failed { bytes_sent, .. } => bytes_sent,
-                    OutgoingPathStateEventData::Completed => path.bytes,
-                    OutgoingPathStateEventData::Rejected { bytes_sent, .. } => bytes_sent,
-                    OutgoingPathStateEventData::Paused { bytes_sent } => bytes_sent,
-                }).next().unwrap_or(0);
+                path.bytes_sent = path
+                    .states
+                    .last()
+                    .map(|state| match state.data {
+                        OutgoingPathStateEventData::Started { bytes_sent } => bytes_sent,
+                        OutgoingPathStateEventData::Failed { bytes_sent, .. } => bytes_sent,
+                        OutgoingPathStateEventData::Completed => path.bytes,
+                        OutgoingPathStateEventData::Rejected { bytes_sent, .. } => bytes_sent,
+                        OutgoingPathStateEventData::Paused { bytes_sent } => bytes_sent,
+                    })
+                    .unwrap_or(0);
 
-                if let Some(t) = transfers_map.get_mut(&path.transfer_id.to_string()) {
+                if let Some((_, t)) = transfers_map.get_mut(&path.transfer_id) {
                     if let DbTransferType::Outgoing(pp) = &mut t.transfer_type {
                         pp.push(path)
                     }
                 }
             }
 
-            let mut incoming_paths: BTreeMap<i64, IncomingPath> = BTreeMap::new();
+            let mut incoming_paths: HashMap<i64, IncomingPath> = HashMap::new();
             // And this is more interesting - base_ir and final_patch are text type. For these fields
             // a separate column will be used.
             let _ = tx.prepare(r#"
@@ -1428,24 +1439,29 @@ impl Storage {
             for (_, mut path) in incoming_paths {
                 path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
 
-                path.bytes_received = path.states.iter().rev().find_map(|state| match state.data {
-                    IncomingPathStateEventData::Pending { .. } => None,
-                    IncomingPathStateEventData::Started { bytes_received, .. } => {
-                        Some(bytes_received)
-                    }
-                    IncomingPathStateEventData::Failed { bytes_received, .. } => {
-                        Some(bytes_received)
-                    }
-                    IncomingPathStateEventData::Completed { .. } => Some(path.bytes),
-                    IncomingPathStateEventData::Rejected { bytes_received, .. } => {
-                        Some(bytes_received)
-                    }
-                    IncomingPathStateEventData::Paused { bytes_received } => {
-                        Some(bytes_received)
-                    }
-                }).unwrap_or(0);
+                path.bytes_received = path
+                    .states
+                    .iter()
+                    .rev()
+                    .find_map(|state| match state.data {
+                        IncomingPathStateEventData::Pending { .. } => None,
+                        IncomingPathStateEventData::Started { bytes_received, .. } => {
+                            Some(bytes_received)
+                        }
+                        IncomingPathStateEventData::Failed { bytes_received, .. } => {
+                            Some(bytes_received)
+                        }
+                        IncomingPathStateEventData::Completed { .. } => Some(path.bytes),
+                        IncomingPathStateEventData::Rejected { bytes_received, .. } => {
+                            Some(bytes_received)
+                        }
+                        IncomingPathStateEventData::Paused { bytes_received } => {
+                            Some(bytes_received)
+                        }
+                    })
+                    .unwrap_or(0);
 
-                if let Some(t) = transfers_map.get_mut(&path.transfer_id.to_string()) {
+                if let Some((_, t)) = transfers_map.get_mut(&path.transfer_id) {
                     if let DbTransferType::Incoming(ip) = &mut t.transfer_type {
                         ip.push(path)
                     }
@@ -1453,9 +1469,17 @@ impl Storage {
             }
             drop(tx);
             drop(conn);
-            let mut transfers: Vec<Transfer> = transfers_map.into_values().collect();
+            let mut transfers: Vec<(u64, Transfer)> = transfers_map.into_values().collect();
+            transfers.sort_by_key(|rt| rt.0);
+            let mut transfers: Vec<Transfer> = transfers.into_iter().map(|rt| rt.1).collect();
             for transfer in &mut transfers {
-                transfer.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+                transfer
+                    .states
+                    .sort_by(|a, b| a.created_at.cmp(&b.created_at));
+                match transfer.transfer_type {
+                    DbTransferType::Incoming(ref mut p) => p.sort_by_key(|ip| ip.id),
+                    DbTransferType::Outgoing(ref mut p) => p.sort_by_key(|op| op.id),
+                };
             }
             Ok::<Vec<_>, Error>(transfers)
         };
