@@ -1,27 +1,32 @@
-use std::collections::hash_map::Entry::{Occupied, Vacant};
-use std::collections::HashMap;
-use std::{io, path::Path, vec};
+pub mod error;
+pub mod sync;
+pub mod types;
+
+use std::{
+    collections::{
+        hash_map::Entry::{Occupied, Vacant},
+        HashMap,
+    },
+    io,
+    path::Path,
+    vec,
+};
 
 use include_dir::{include_dir, Dir};
 use rusqlite::{params, Connection, OpenFlags, Transaction};
 use rusqlite_migration::Migrations;
 use slog::{debug, error, trace, warn, Logger};
 use tokio::sync::Mutex;
-use uuid::Uuid;
-
 use types::{
     DbTransferType, FileSyncState, IncomingFileToRetry, IncomingPath, IncomingPathStateEvent,
     IncomingPathStateEventData, IncomingTransferToRetry, OutgoingFileToRetry, OutgoingPath,
     OutgoingPathStateEvent, OutgoingPathStateEventData, TempFileLocation, Transfer, TransferFiles,
     TransferIncomingPath, TransferOutgoingPath, TransferStateEvent, TransferType,
 };
+use uuid::Uuid;
 
 use crate::error::Error;
 pub use crate::types::{FileChecksum, FinishedIncomingFile, OutgoingTransferToRetry, TransferInfo};
-
-pub mod error;
-pub mod sync;
-pub mod types;
 
 type Result<T> = std::result::Result<T, Error>;
 type QueryResult<T> = std::result::Result<T, rusqlite::Error>;
@@ -1132,11 +1137,12 @@ impl Storage {
         // 2. outgoing paths with their states
         // 3. incoming paths with their states
         // Because a single query is used for transfers and their states
-        // (the same applies to paths as well), a hashmap is used to collect states for each
-        // transfer. For each state their transfer is taken from a hash map (or inserted), and
-        // this transfers state list is appended.
-        // For transfers, their rowid is selected as well and used to sort the transfers.
-        // Because its not part of `Transfer` structure, a tuple is used as hashmap value.
+        // (the same applies to paths as well), a hashmap is used to collect states for
+        // each transfer. For each state their transfer is taken from a hash map
+        // (or inserted), and this transfers state list is appended.
+        // For transfers, their rowid is selected as well and used to sort the
+        // transfers. Because its not part of `Transfer` structure, a tuple is
+        // used as hashmap value.
         trace!(
         self.logger,
         "Fetching transfers since timestamp";
@@ -1146,9 +1152,10 @@ impl Storage {
             let mut conn = self.conn.lock().await;
             let mut transfers_map: HashMap<Uuid, (u64, Transfer)> = HashMap::new();
             let tx = conn.transaction()?;
-            // transfer_cancel_states.by_peer shares a type with transfer_failed_states.status_code
-            // and transfer_cancel_states.created_at with transfer_failed_states.created_at
-            // therefore the same column can be used for them.
+            // transfer_cancel_states.by_peer shares a type with
+            // transfer_failed_states.status_code and transfer_cancel_states.
+            // created_at with transfer_failed_states.created_at therefore the
+            // same column can be used for them.
             let _ = tx
                 .prepare(
                     r#"
@@ -1320,18 +1327,13 @@ impl Storage {
             for (_, mut path) in outgoing_paths {
                 path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
 
-                path.bytes_sent = path
-                    .states
-                    .last()
-                    .map(|state| match state.data {
-                        OutgoingPathStateEventData::Started { bytes_sent } => bytes_sent,
-                        OutgoingPathStateEventData::Failed { bytes_sent, .. } => bytes_sent,
-                        OutgoingPathStateEventData::Completed => path.bytes,
-                        OutgoingPathStateEventData::Rejected { bytes_sent, .. } => bytes_sent,
-                        OutgoingPathStateEventData::Paused { bytes_sent } => bytes_sent,
-                    })
-                    .unwrap_or(0);
-
+                path.bytes_sent = path.states.last().map_or(0, |state| match state.data {
+                    OutgoingPathStateEventData::Started { bytes_sent } => bytes_sent,
+                    OutgoingPathStateEventData::Failed { bytes_sent, .. } => bytes_sent,
+                    OutgoingPathStateEventData::Completed => path.bytes,
+                    OutgoingPathStateEventData::Rejected { bytes_sent, .. } => bytes_sent,
+                    OutgoingPathStateEventData::Paused { bytes_sent } => bytes_sent,
+                });
                 if let Some((_, t)) = transfers_map.get_mut(&path.transfer_id) {
                     if let DbTransferType::Outgoing(pp) = &mut t.transfer_type {
                         pp.push(path)
@@ -1340,8 +1342,8 @@ impl Storage {
             }
 
             let mut incoming_paths: HashMap<i64, IncomingPath> = HashMap::new();
-            // And this is more interesting - base_ir and final_patch are text type. For these fields
-            // a separate column will be used.
+            // And this is more interesting - base_ir and final_patch are text type. For
+            // these fields a separate column will be used.
             let _ = tx.prepare(r#"
             WITH ips AS (
                 select 1, path_id, created_at, null, null, base_dir from incoming_path_pending_states
