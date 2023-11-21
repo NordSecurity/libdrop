@@ -717,15 +717,25 @@ class PurgeTransfers(Action):
 
 
 class Start(Action):
-    def __init__(self, addr: str, dbpath: str = ":memory:"):
+    def __init__(
+        self,
+        addr: str,
+        dbpath: str = ":memory:",
+        checksum_events_size_threshold=2**32,  # don't emit events for existing tests
+    ):
         self._addr = addr
         self._dbpath = dbpath
+        self._checksum_events_size_threshold = checksum_events_size_threshold
 
     async def run(self, drop: ffi.Drop):
-        drop.start(peer_resolver.resolve(self._addr), self._dbpath)
+        drop.start(
+            peer_resolver.resolve(self._addr),
+            self._dbpath,
+            self._checksum_events_size_threshold,
+        )
 
     def __str__(self):
-        return f"Start(addr={peer_resolver.resolve(self._addr)}, dbpath={self._dbpath})"
+        return f"Start(addr={peer_resolver.resolve(self._addr)}, dbpath={self._dbpath}, checksum_events_size_threshold={self._checksum_events_size_threshold})"
 
 
 class RemoveTransferFile(Action):

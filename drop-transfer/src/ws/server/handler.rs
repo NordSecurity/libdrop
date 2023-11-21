@@ -73,7 +73,11 @@ pub trait Downloader {
     async fn init(&mut self, task: &super::FileXferTask) -> crate::Result<DownloadInit>;
     async fn open(&mut self, tmp_location: &Hidden<PathBuf>) -> crate::Result<fs::File>;
     async fn progress(&mut self, bytes: u64) -> crate::Result<()>;
-    async fn validate(&mut self, location: &Hidden<PathBuf>) -> crate::Result<()>;
+    async fn validate(
+        &mut self,
+        location: &Hidden<PathBuf>,
+        progress: Option<tokio::sync::watch::Sender<u64>>,
+    ) -> crate::Result<()>;
 }
 
 impl<T> From<T> for MsgToSend

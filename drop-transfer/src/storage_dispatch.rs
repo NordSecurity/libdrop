@@ -153,6 +153,26 @@ impl<'a> StorageDispatch<'a> {
             crate::Event::RequestReceived(_) => (),
             crate::Event::RequestQueued(_) => (),
             crate::Event::FileUploadThrottled { .. } => (),
+
+            crate::Event::ChecksumStarted {
+                transfer_id: _,
+                file_id: _,
+            } => {
+                // not stored in the database
+            }
+            crate::Event::ChecksumFinished {
+                transfer_id: _,
+                file_id: _,
+            } => {
+                // not stored in the database
+            }
+            crate::Event::ChecksumProgress {
+                transfer_id: _,
+                file_id: _,
+                progress: _,
+            } => {
+                // not stored in the database
+            }
         }
     }
 

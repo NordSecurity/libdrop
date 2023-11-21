@@ -16,7 +16,7 @@ use super::{
     socket::WebSocket,
 };
 use crate::{
-    file,
+    file::{self},
     manager::FileTerminalState,
     protocol::v4,
     service::State,
@@ -604,9 +604,13 @@ impl handler::Downloader for Downloader {
         .await
     }
 
-    async fn validate(&mut self, path: &Hidden<PathBuf>) -> crate::Result<()> {
+    async fn validate(
+        &mut self,
+        path: &Hidden<PathBuf>,
+        progress_tx: Option<tokio::sync::watch::Sender<u64>>,
+    ) -> crate::Result<()> {
         let file = std::fs::File::open(&path.0)?;
-        let csum = file::checksum(&mut io::BufReader::new(file)).await?;
+        let csum = file::checksum(&mut io::BufReader::new(file), progress_tx).await?;
 
         if self.full_csum.get().await != csum {
             return Err(crate::Error::ChecksumMismatch);

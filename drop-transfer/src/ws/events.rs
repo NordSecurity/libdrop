@@ -202,6 +202,31 @@ impl<T: Transfer> FileEventTx<T> {
 }
 
 impl FileEventTx<IncomingTransfer> {
+    pub async fn checksum_start(&self) {
+        self.emit_in_flight(crate::Event::ChecksumStarted {
+            transfer_id: self.xfer.id(),
+            file_id: self.file_id.clone(),
+        })
+        .await
+    }
+
+    pub async fn checksum_finish(&self) {
+        self.emit_in_flight(crate::Event::ChecksumFinished {
+            transfer_id: self.xfer.id(),
+            file_id: self.file_id.clone(),
+        })
+        .await
+    }
+
+    pub async fn checksum_progress(&self, progress: u64) {
+        self.emit_in_flight(crate::Event::ChecksumProgress {
+            transfer_id: self.xfer.id(),
+            file_id: self.file_id.clone(),
+            progress,
+        })
+        .await
+    }
+
     pub async fn progress(&self, transfered: u64) {
         self.emit_in_flight(crate::Event::FileDownloadProgress(
             self.xfer.clone(),

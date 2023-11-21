@@ -11,6 +11,8 @@ pub struct DropConfig {
     pub dir_depth_limit: usize,
     pub transfer_file_limit: usize,
     pub storage_path: String,
+    // If set the checksum events will be emited for every file of this or bigger size
+    pub checksum_events_size_threshold: Option<usize>,
 }
 
 impl Default for DropConfig {
@@ -19,6 +21,7 @@ impl Default for DropConfig {
             dir_depth_limit: 5,
             transfer_file_limit: 1000,
             storage_path: "libdrop.sqlite".to_string(),
+            checksum_events_size_threshold: None,
         }
     }
 }

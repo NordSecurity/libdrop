@@ -447,7 +447,11 @@ impl handler::Downloader for Downloader {
         .await
     }
 
-    async fn validate(&mut self, _: &Hidden<PathBuf>) -> crate::Result<()> {
+    async fn validate(
+        &mut self,
+        _path: &Hidden<PathBuf>,
+        _: Option<tokio::sync::watch::Sender<u64>>,
+    ) -> crate::Result<()> {
         Ok(())
     }
 }

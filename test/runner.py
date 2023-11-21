@@ -17,10 +17,6 @@ from scenarios import scenarios as all_scenarios
 TESTCASE_TIMEOUT = 100
 SCENARIOS_AT_ONCE = 100
 
-STDERR_ERR_PATTERNS = [
-    ["drop-storage", "ERROR"],
-]
-
 
 def prepare_docker() -> docker.DockerClient:
     # Initialize docker client

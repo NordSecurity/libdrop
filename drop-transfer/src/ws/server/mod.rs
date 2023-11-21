@@ -14,6 +14,7 @@ use std::{
     ops::ControlFlow,
     path::{Path, PathBuf},
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::Context;
@@ -88,7 +89,7 @@ struct StreamCtx<'a> {
     state: &'a State,
     tmp_loc: &'a Hidden<PathBuf>,
     stream: &'a mut UnboundedReceiver<Vec<u8>>,
-    events: &'a FileEventTx<IncomingTransfer>,
+    events: Arc<FileEventTx<IncomingTransfer>>,
 }
 
 #[derive(Debug)]
@@ -714,6 +715,7 @@ impl FileXferTask {
         }: StreamCtx<'_>,
         downloader: &mut impl Downloader,
         offset: u64,
+        emit_checksum_events: bool,
     ) -> crate::Result<PathBuf> {
         let mut out_file = match downloader.open(tmp_loc).await {
             Ok(out_file) => out_file,
@@ -763,7 +765,36 @@ impl FileXferTask {
                 return Err(crate::Error::UnexpectedData);
             }
 
-            downloader.validate(tmp_loc).await?;
+            if emit_checksum_events {
+                events.checksum_start().await;
+
+                let progress_chan = tokio::sync::watch::channel(0u64).0;
+
+                tokio::spawn({
+                    let events = events.clone();
+
+                    let mut rx = progress_chan.subscribe();
+                    async move {
+                        loop {
+                            let _ = tokio::time::sleep(Duration::from_millis(100)).await;
+
+                            if let Ok(()) = rx.changed().await {
+                                let p = *rx.borrow_and_update();
+                                events.checksum_progress(p).await;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                });
+
+                downloader.validate(tmp_loc, Some(progress_chan)).await?;
+
+                events.checksum_finish().await;
+            } else {
+                downloader.validate(tmp_loc, None).await?;
+            }
+
             Ok(())
         };
 
@@ -882,6 +913,14 @@ impl FileXferTask {
 
                 events.start(self.base_dir.to_string_lossy(), offset).await;
 
+                let emit_checksum_events = {
+                    if let Some(threshold) = state.config.checksum_events_size_threshold {
+                        self.file.size() >= threshold as u64
+                    } else {
+                        false
+                    }
+                };
+
                 let result = self
                     .stream_file(
                         StreamCtx {
@@ -889,10 +928,11 @@ impl FileXferTask {
                             state: &state,
                             tmp_loc: &tmp_location,
                             stream: &mut stream,
-                            events: &events,
+                            events: events.clone(),
                         },
                         &mut downloader,
                         offset,
+                        emit_checksum_events,
                     )
                     .await;
 
@@ -967,7 +1007,7 @@ impl TmpFileState {
         let file = fs::File::open(path)?;
 
         let meta = file.metadata()?;
-        let csum = file::checksum(&mut io::BufReader::new(file)).await?;
+        let csum = file::checksum(&mut io::BufReader::new(file), None).await?;
         Ok(TmpFileState { meta, csum })
     }
 }
