@@ -1193,23 +1193,27 @@ impl Storage {
                     }
                     .1;
                     let status_type: Option<i64> = row.get(5)?;
-                    if let Some(status_type) = status_type {
-                        if status_type == 1 {
-                            transfer.states.push(TransferStateEvent {
-                                transfer_id: transfer.id,
-                                created_at: row.get(9)?,
-                                data: types::TransferStateEventData::Cancel {
-                                    by_peer: row.get(8)?,
-                                },
-                            });
-                        } else {
-                            transfer.states.push(TransferStateEvent {
-                                transfer_id: transfer.id,
-                                created_at: row.get(9)?,
-                                data: types::TransferStateEventData::Failed {
-                                    status_code: row.get(8)?,
-                                },
-                            });
+                    match status_type {
+                        Some(1) => transfer.states.push(TransferStateEvent {
+                            transfer_id: transfer.id,
+                            created_at: row.get(9)?,
+                            data: types::TransferStateEventData::Cancel {
+                                by_peer: row.get(8)?,
+                            },
+                        }),
+                        Some(2) => transfer.states.push(TransferStateEvent {
+                            transfer_id: transfer.id,
+                            created_at: row.get(9)?,
+                            data: types::TransferStateEventData::Failed {
+                                status_code: row.get(8)?,
+                            },
+                        }),
+                        Some(other) => warn!(
+                                        self.logger,
+                                        "Unexpected union member identifier for transfer state";
+                                        "identifier" => other),
+                        None => {
+                            // This was a transfer without any states.
                         }
                     }
                     Ok(())
@@ -1268,15 +1272,18 @@ impl Storage {
 
                                 res.base_path = Some(path);
                             }
-                            _unkown => {
+                            unknown => {
+                                warn!(
+                                        self.logger,
+                                        "Unexpected URI scheme when decoding transfer outgoing path's base_path";
+                                        "scheme" => unknown,
+                                    "uri" => uri.to_string());
                                 return Err(rusqlite::Error::InvalidQuery);
                             }
                         }
                         e.insert(res)
                     }
                 };
-
-
 
                 let opt_status_type: Option<i32> = row.get(8)?;
                 if let Some(status_type) = opt_status_type {
@@ -1317,7 +1324,10 @@ impl Storage {
                                 bytes_sent: row.get(11)?
                             },
                         }),
-                        _ => {}
+                        other => warn!(
+                                        self.logger,
+                                        "Unexpected union member identifier for outgoing path status";
+                                        "identifier" => other)
                     }
                 }
 
