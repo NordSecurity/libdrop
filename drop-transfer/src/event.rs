@@ -62,4 +62,18 @@ pub enum Event {
     OutgoingTransferCanceled(Arc<OutgoingTransfer>, bool),
 
     OutgoingTransferFailed(Arc<OutgoingTransfer>, Error, bool),
+
+    ChecksumStarted {
+        transfer_id: Uuid,
+        file_id: FileId,
+    },
+    ChecksumFinished {
+        transfer_id: Uuid,
+        file_id: FileId,
+    },
+    ChecksumProgress {
+        transfer_id: Uuid,
+        file_id: FileId,
+        progress: u64,
+    },
 }

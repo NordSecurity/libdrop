@@ -273,6 +273,66 @@ class Paused(Event):
         return f"Paused(transfer={print_uuid(self._uuid_slot)}, file={self._file})"
 
 
+class ChecksumProgress(Event):
+    def __init__(self, uuid_slot: int, file: str, checksummed_bytes: int):
+        self._uuid_slot = uuid_slot
+        self._file = file
+        self._checksummed_bytes = checksummed_bytes
+
+    def __eq__(self, rhs):
+        if not isinstance(rhs, ChecksumProgress):
+            return False
+        if self._uuid_slot != rhs._uuid_slot:
+            return False
+        if self._file != rhs._file:
+            return False
+        if self._checksummed_bytes == rhs._checksummed_bytes:
+            return False
+
+        return True
+
+    def __str__(self):
+        return f"ChecksumProgress(transfer={print_uuid(self._uuid_slot)}, file={self._file}, checksummed_bytes={self._checksummed_bytes}, total_size={self._total_size})"
+
+
+class ChecksumStarted(Event):
+    def __init__(self, uuid_slot: int, file: str):
+        self._uuid_slot = uuid_slot
+        self._file = file
+
+    def __eq__(self, rhs):
+        if not isinstance(rhs, ChecksumStarted):
+            return False
+        if self._uuid_slot != rhs._uuid_slot:
+            return False
+        if self._file != rhs._file:
+            return False
+
+        return True
+
+    def __str__(self):
+        return f"ChecksumStarted(transfer={print_uuid(self._uuid_slot)}, file={self._file})"
+
+
+class ChecksumFinished(Event):
+    def __init__(self, uuid_slot: int, file: str):
+        self._uuid_slot = uuid_slot
+        self._file = file
+
+    def __eq__(self, rhs):
+        if not isinstance(rhs, ChecksumFinished):
+            return False
+        if self._uuid_slot != rhs._uuid_slot:
+            return False
+        if self._file != rhs._file:
+            return False
+
+        return True
+
+    def __str__(self):
+        return f"ChecksumFinished(transfer={print_uuid(self._uuid_slot)}, file={self._file})"
+
+
 class FinishFileFailed(Event):
     def __init__(
         self,

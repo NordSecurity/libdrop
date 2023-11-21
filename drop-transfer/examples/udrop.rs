@@ -148,6 +148,21 @@ fn print_event(ev: &Event) {
             file_id,
             transfered,
         } => info!("[EVENT] FileUploadThrottled {transfer_id}: {file_id}, progress: {transfered}"),
+        Event::ChecksumStarted {
+            transfer_id,
+            file_id,
+        } => info!("[EVENT] ChecksumStarted {transfer_id}: {file_id}"),
+
+        Event::ChecksumFinished {
+            transfer_id,
+            file_id,
+        } => info!("[EVENT] ChecksumFinished {transfer_id}: {file_id}"),
+
+        Event::ChecksumProgress {
+            transfer_id,
+            file_id,
+            progress,
+        } => info!("[EVENT] ChecksumProgress {transfer_id}: {file_id}, progress: {progress}"),
     }
 }
 

@@ -339,6 +339,9 @@ pub extern "C" fn norddrop_set_fd_resolver_callback(
 ///
 /// * `storage_path` - storage path for persistence engine.
 ///
+/// * `checksum_events_size_threshold_bytes` - emit checksum events only if file
+///   is equal or greater than this size. If omited, no checksumming events are
+///   emited.
 ///
 /// # Safety
 /// The pointers provided must be valid
