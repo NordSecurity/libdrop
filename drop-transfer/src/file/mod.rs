@@ -296,19 +296,27 @@ impl FileToSend {
     }
 
     /// Calculate sha2 of a file. This is a blocking operation
-    pub(crate) async fn checksum(&self, limit: u64) -> crate::Result<[u8; 32]> {
+    pub(crate) async fn checksum(
+        &self,
+        limit: u64,
+        progress_tx: Option<tokio::sync::watch::Sender<u64>>,
+    ) -> crate::Result<[u8; 32]> {
         let reader = reader::open(&self.source)?;
         let mut reader = io::BufReader::new(reader).take(limit);
-        let csum = checksum(&mut reader).await?;
+        let csum = checksum(&mut reader, progress_tx).await?;
         Ok(csum)
     }
 }
 
-pub async fn checksum(reader: &mut impl io::Read) -> io::Result<[u8; 32]> {
+pub async fn checksum(
+    reader: &mut impl io::Read,
+    progress_tx: Option<tokio::sync::watch::Sender<u64>>,
+) -> io::Result<[u8; 32]> {
     let mut csum = sha2::Sha256::new();
 
     let mut buf = vec![0u8; 8 * 1024]; // 8kB buffer
 
+    let mut total_n: u64 = 0;
     loop {
         let n = reader.read(&mut buf)?;
         if n == 0 {
@@ -316,6 +324,11 @@ pub async fn checksum(reader: &mut impl io::Read) -> io::Result<[u8; 32]> {
         }
 
         csum.write_all(&buf[..n])?;
+
+        total_n += n as u64;
+        if let Some(ref tx) = progress_tx {
+            let _ = tx.send(total_n);
+        }
 
         // Since these are all blocking operation we need to give tokio runtime a
         // timeslice
@@ -349,7 +362,7 @@ mod tests {
 
     #[tokio::test]
     async fn checksum() {
-        let csum = super::checksum(&mut &TEST[..]).await.unwrap();
+        let csum = super::checksum(&mut &TEST[..], None).await.unwrap();
         assert_eq!(csum.as_slice(), EXPECTED);
     }
 
@@ -363,7 +376,7 @@ mod tests {
 
             let size = TEST.len() as _;
             let file = super::FileToSend::from_path(tmp.path(), size).unwrap();
-            file.checksum(size).await.unwrap()
+            file.checksum(size, None).await.unwrap()
         };
 
         assert_eq!(csum.as_slice(), EXPECTED);
@@ -391,7 +404,7 @@ mod tests {
         let mut cx = Context::from_waker(&waker);
 
         let mut cursor = io::Cursor::new(&buf);
-        let mut future = super::checksum(&mut cursor);
+        let mut future = super::checksum(&mut cursor, None);
         let mut future = unsafe { Pin::new_unchecked(&mut future) };
 
         // expect it to yield 3 times (one at the very end)

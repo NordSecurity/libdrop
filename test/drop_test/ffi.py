@@ -151,7 +151,10 @@ class EventQueue:
             return evs
 
     async def wait_for(
-        self, target_event: event.Event, ignore_progress: bool = True
+        self,
+        target_event: event.Event,
+        ignore_progress: bool = True,
+        ignore_checksum_progress: bool = True,
     ) -> None:
         # TODO: a better solution would be to have infinite loop with a timeout check for all wait commands
         for _ in range(100):
@@ -161,6 +164,11 @@ class EventQueue:
                     self._events = self._events[1:]
 
                     if ignore_progress and isinstance(e, event.Progress):
+                        continue
+
+                    if ignore_checksum_progress and isinstance(
+                        e, event.ChecksumProgress
+                    ):
                         continue
 
                     if e == target_event:
@@ -181,6 +189,7 @@ class EventQueue:
         target_events: typing.List[event.Event],
         ignore_progress: bool = True,
         ignore_throttled: bool = True,
+        ignore_checksum_progress: bool = True,
     ) -> None:
         success = []
 
@@ -199,6 +208,11 @@ class EventQueue:
                         continue
 
                     if ignore_throttled and isinstance(e, event.Throttled):
+                        continue
+
+                    if ignore_checksum_progress and isinstance(
+                        e, event.ChecksumProgress
+                    ):
                         continue
 
                     found = False
@@ -544,7 +558,7 @@ class Drop:
                 f"remove_transfer_file has failed with code: {err}({err_type})", err
             )
 
-    def start(self, addr: str, dbpath: str):
+    def start(self, addr: str, dbpath: str, checksum_events_size_threshold=None):
         cfg = {
             "dir_depth_limit": 5,
             "transfer_file_limit": 1000,
@@ -553,6 +567,9 @@ class Drop:
             "moose_prod": False,
             "storage_path": dbpath,
         }
+
+        if checksum_events_size_threshold is not None:
+            cfg["checksum_events_size_threshold_bytes"] = checksum_events_size_threshold
 
         err = self._lib.norddrop_start(
             self._instance,
@@ -720,6 +737,40 @@ def new_event(event_str: str) -> event.Event:
         status = event_data["status"]
 
         return event.RuntimeError(status)
+
+    elif event_type == "ChecksumProgress":
+        transfer = event_data["transfer"]
+
+        with event.UUIDS_LOCK:
+            transfer_slot = event.UUIDS.index(transfer)
+
+        return event.ChecksumProgress(
+            transfer_slot,
+            event_data["file"],
+            event_data["bytes_checksummed"],
+        )
+
+    elif event_type == "ChecksumStarted":
+        transfer = event_data["transfer"]
+
+        with event.UUIDS_LOCK:
+            transfer_slot = event.UUIDS.index(transfer)
+
+        return event.ChecksumStarted(
+            transfer_slot,
+            event_data["file"],
+        )
+
+    elif event_type == "ChecksumFinished":
+        transfer = event_data["transfer"]
+
+        with event.UUIDS_LOCK:
+            transfer_slot = event.UUIDS.index(transfer)
+
+        return event.ChecksumFinished(
+            transfer_slot,
+            event_data["file"],
+        )
 
     raise ValueError(f"Unhandled event received: {event_type}")
 

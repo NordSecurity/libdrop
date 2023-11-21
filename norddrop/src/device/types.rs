@@ -1,7 +1,8 @@
 use std::time::SystemTime;
 
-use drop_transfer::{utils::Hidden, File as _, Transfer};
+use drop_transfer::{utils::Hidden, File as _, FileId, Transfer};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::utils;
 
@@ -113,6 +114,23 @@ pub enum Event {
         transfered: u64,
         timestamp: u64,
     },
+
+    ChecksumStarted {
+        transfer: Uuid,
+        file: FileId,
+        timestamp: u64,
+    },
+    ChecksumFinished {
+        transfer: Uuid,
+        file: FileId,
+        timestamp: u64,
+    },
+    ChecksumProgress {
+        transfer: Uuid,
+        file: FileId,
+        bytes_checksummed: u64,
+        timestamp: u64,
+    },
 }
 
 #[derive(Deserialize, Debug)]
@@ -123,6 +141,9 @@ pub struct Config {
     pub moose_event_path: String,
     pub moose_prod: bool,
     pub storage_path: String,
+
+    #[serde(rename = "checksum_events_size_threshold_bytes")]
+    pub checksum_events_size_threshold: Option<usize>,
 }
 
 impl From<&drop_transfer::Error> for Status {
@@ -281,6 +302,34 @@ impl From<(drop_transfer::Event, SystemTime)> for Event {
                 transfered,
                 timestamp,
             },
+            drop_transfer::Event::ChecksumStarted {
+                transfer_id,
+                file_id,
+            } => Self::ChecksumStarted {
+                transfer: transfer_id,
+                file: file_id,
+                timestamp,
+            },
+
+            drop_transfer::Event::ChecksumFinished {
+                transfer_id,
+                file_id,
+            } => Self::ChecksumFinished {
+                transfer: transfer_id,
+                file: file_id,
+                timestamp,
+            },
+
+            drop_transfer::Event::ChecksumProgress {
+                transfer_id,
+                file_id,
+                progress,
+            } => Self::ChecksumProgress {
+                transfer: transfer_id,
+                file: file_id,
+                bytes_checksummed: progress,
+                timestamp,
+            },
         }
     }
 }
@@ -326,6 +375,7 @@ impl From<Config> for drop_config::Config {
             moose_prod,
             storage_path,
             moose_app_version,
+            checksum_events_size_threshold,
         } = val;
 
         drop_config::Config {
@@ -333,6 +383,7 @@ impl From<Config> for drop_config::Config {
                 dir_depth_limit,
                 transfer_file_limit,
                 storage_path,
+                checksum_events_size_threshold,
             },
             moose: drop_config::MooseConfig {
                 app_version: moose_app_version,
@@ -360,7 +411,8 @@ mod tests {
           "moose_app_version": "1.2.5",
           "storage_path": ":memory:",
           "max_uploads_in_flight": 16,
-          "max_requests_per_sec": 15
+          "max_requests_per_sec": 15,
+          "checksum_events_size_threshold_bytes": 1234
         }
         "#;
 
@@ -372,6 +424,7 @@ mod tests {
                     dir_depth_limit,
                     transfer_file_limit,
                     storage_path,
+                    checksum_events_size_threshold: checksum_events_size_threshold_bytes,
                 },
             moose:
                 drop_config::MooseConfig {
@@ -387,5 +440,6 @@ mod tests {
         assert_eq!(storage_path, ":memory:");
         assert_eq!(app_version, "1.2.5");
         assert!(prod);
+        assert_eq!(checksum_events_size_threshold_bytes, Some(1234));
     }
 }
