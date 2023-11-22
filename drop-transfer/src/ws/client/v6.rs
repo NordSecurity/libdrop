@@ -168,7 +168,12 @@ impl HandlerLoop<'_> {
                     .outgoing_ensure_file_not_terminated(xfer.id(), &file_id)
                     .await?;
 
-                let checksum = xfer.files()[&file_id].checksum(limit, None).await?;
+                let checksum = xfer.files()[&file_id]
+                    .checksum::<_, futures::future::Ready<()>>(
+                        limit,
+                        None::<fn(u64) -> futures::future::Ready<()>>,
+                    )
+                    .await?;
 
                 crate::Result::Ok(prot::ReportChsum {
                     file: file_id.clone(),

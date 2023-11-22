@@ -14,7 +14,6 @@ use std::{
     ops::ControlFlow,
     path::{Path, PathBuf},
     sync::Arc,
-    time::Duration,
 };
 
 use anyhow::Context;
@@ -89,7 +88,7 @@ struct StreamCtx<'a> {
     state: &'a State,
     tmp_loc: &'a Hidden<PathBuf>,
     stream: &'a mut UnboundedReceiver<Vec<u8>>,
-    events: Arc<FileEventTx<IncomingTransfer>>,
+    events: &'a FileEventTx<IncomingTransfer>,
 }
 
 #[derive(Debug)]
@@ -768,31 +767,22 @@ impl FileXferTask {
             if emit_checksum_events {
                 events.checksum_start().await;
 
-                let progress_chan = tokio::sync::watch::channel(0u64).0;
-
-                tokio::spawn({
-                    let events = events.clone();
-
-                    let mut rx = progress_chan.subscribe();
-                    async move {
-                        loop {
-                            let _ = tokio::time::sleep(Duration::from_millis(100)).await;
-
-                            if let Ok(()) = rx.changed().await {
-                                let p = *rx.borrow_and_update();
-                                events.checksum_progress(p).await;
-                            } else {
-                                break;
-                            }
-                        }
+                let progress_cb = {
+                    move |progress: u64| async move {
+                        events.checksum_progress(progress).await;
                     }
-                });
+                };
 
-                downloader.validate(tmp_loc, Some(progress_chan)).await?;
+                downloader.validate(tmp_loc, Some(progress_cb)).await?;
 
                 events.checksum_finish().await;
             } else {
-                downloader.validate(tmp_loc, None).await?;
+                downloader
+                    .validate::<_, futures::future::Ready<()>>(
+                        tmp_loc,
+                        None::<fn(u64) -> futures::future::Ready<()>>,
+                    )
+                    .await?;
             }
 
             Ok(())
@@ -928,7 +918,7 @@ impl FileXferTask {
                             state: &state,
                             tmp_loc: &tmp_location,
                             stream: &mut stream,
-                            events: events.clone(),
+                            events: &events,
                         },
                         &mut downloader,
                         offset,
@@ -1007,7 +997,11 @@ impl TmpFileState {
         let file = fs::File::open(path)?;
 
         let meta = file.metadata()?;
-        let csum = file::checksum(&mut io::BufReader::new(file), None).await?;
+        let csum = file::checksum::<_, futures::future::Ready<()>>(
+            &mut io::BufReader::new(file),
+            None::<fn(u64) -> futures::future::Ready<()>>,
+        )
+        .await?;
         Ok(TmpFileState { meta, csum })
     }
 }
