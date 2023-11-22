@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, sync::Arc, time::Duration};
+use std::{fs, future::Future, path::PathBuf, sync::Arc, time::Duration};
 
 use tokio::{sync::mpsc::Sender, task::JoinSet};
 use warp::ws::Message;
@@ -67,17 +67,19 @@ pub enum DownloadInit {
         tmp_location: Hidden<PathBuf>,
     },
 }
-
 #[async_trait::async_trait]
 pub trait Downloader {
     async fn init(&mut self, task: &super::FileXferTask) -> crate::Result<DownloadInit>;
     async fn open(&mut self, tmp_location: &Hidden<PathBuf>) -> crate::Result<fs::File>;
     async fn progress(&mut self, bytes: u64) -> crate::Result<()>;
-    async fn validate(
+    async fn validate<F, Fut>(
         &mut self,
         location: &Hidden<PathBuf>,
-        progress: Option<tokio::sync::watch::Sender<u64>>,
-    ) -> crate::Result<()>;
+        progress: Option<F>,
+    ) -> crate::Result<()>
+    where
+        F: FnMut(u64) -> Fut + Send + Sync,
+        Fut: Future<Output = ()> + Send + Sync;
 }
 
 impl<T> From<T> for MsgToSend
