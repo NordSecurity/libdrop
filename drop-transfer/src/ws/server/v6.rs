@@ -1,4 +1,7 @@
-use std::{cmp::Ordering, collections::HashMap, fs, io, net::IpAddr, path::PathBuf, sync::Arc};
+use std::{
+    cmp::Ordering, collections::HashMap, fs, future::Future, io, net::IpAddr, path::PathBuf,
+    sync::Arc,
+};
 
 use anyhow::Context;
 use async_cell::sync::AsyncCell;
@@ -657,13 +660,17 @@ impl handler::Downloader for Downloader {
         .await
     }
 
-    async fn validate(
+    async fn validate<F, Fut>(
         &mut self,
         path: &Hidden<PathBuf>,
-        progress_tx: Option<tokio::sync::watch::Sender<u64>>,
-    ) -> crate::Result<()> {
+        progress_cb: Option<F>,
+    ) -> crate::Result<()>
+    where
+        F: FnMut(u64) -> Fut + Send + Sync,
+        Fut: Future<Output = ()> + Send,
+    {
         let file = std::fs::File::open(&path.0)?;
-        let csum = file::checksum(&mut io::BufReader::new(file), progress_tx).await?;
+        let csum = file::checksum(&mut io::BufReader::new(file), progress_cb).await?;
 
         if self.full_csum.get().await != csum {
             return Err(crate::Error::ChecksumMismatch);

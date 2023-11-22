@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     fmt::Write,
     fs,
+    future::Future,
     net::IpAddr,
     path::PathBuf,
     sync::Arc,
@@ -447,11 +448,11 @@ impl handler::Downloader for Downloader {
         .await
     }
 
-    async fn validate(
-        &mut self,
-        _path: &Hidden<PathBuf>,
-        _: Option<tokio::sync::watch::Sender<u64>>,
-    ) -> crate::Result<()> {
+    async fn validate<F, Fut>(&mut self, _path: &Hidden<PathBuf>, _: Option<F>) -> crate::Result<()>
+    where
+        F: FnMut(u64) -> Fut + Send + Sync,
+        Fut: Future<Output = ()>,
+    {
         Ok(())
     }
 }
