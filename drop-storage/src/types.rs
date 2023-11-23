@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use crate::sync;
 
-type TransferId = uuid::Uuid;
+pub(crate) type TransferId = uuid::Uuid;
 type FileId = String;
 
 fn serialize_datetime<S>(timestamp: &NaiveDateTime, serializer: S) -> Result<S::Ok, S::Error>

@@ -2,7 +2,15 @@ pub mod error;
 pub mod sync;
 pub mod types;
 
-use std::{io, path::Path, vec};
+use std::{
+    collections::{
+        hash_map::Entry::{Occupied, Vacant},
+        HashMap,
+    },
+    io,
+    path::Path,
+    vec,
+};
 
 use include_dir::{include_dir, Dir};
 use rusqlite::{params, Connection, OpenFlags, Transaction};
@@ -22,6 +30,7 @@ pub use crate::types::{FileChecksum, FinishedIncomingFile, OutgoingTransferToRet
 
 type Result<T> = std::result::Result<T, Error>;
 type QueryResult<T> = std::result::Result<T, rusqlite::Error>;
+
 // SQLite storage wrapper
 pub struct Storage {
     conn: Mutex<Connection>,
@@ -1122,104 +1131,368 @@ impl Storage {
     }
 
     pub async fn transfers_since(&self, since_timestamp: i64) -> Vec<Transfer> {
+        // Collect transfers since a given timestamp.
+        // This performs 3 queries, fetching by insertion order:
+        // 1. transfers with their states.
+        // 2. outgoing paths with their states
+        // 3. incoming paths with their states
+        // Because a single query is used for transfers and their states
+        // (the same applies to paths as well), a hashmap is used to collect states for
+        // each transfer. For each state their transfer is taken from a hash map
+        // (or inserted), and this transfers state list is appended.
+        // For transfers, their rowid is selected as well and used to sort the
+        // transfers. Because its not part of `Transfer` structure, a tuple is
+        // used as hashmap value.
         trace!(
         self.logger,
         "Fetching transfers since timestamp";
         "since_timestamp" => since_timestamp);
 
         let task = async {
-            let conn = self.conn.lock().await;
-            let mut transfers = conn
+            let mut conn = self.conn.lock().await;
+            let mut transfers_map: HashMap<Uuid, (u64, Transfer)> = HashMap::new();
+            let tx = conn.transaction()?;
+            // transfer_cancel_states.by_peer shares a type with
+            // transfer_failed_states.status_code and transfer_cancel_states.
+            // created_at with transfer_failed_states.created_at therefore the
+            // same column can be used for them.
+            let _ = tx
                 .prepare(
                     r#"
-                SELECT id, peer, created_at, is_outgoing FROM transfers
-                WHERE created_at >= datetime(?1, 'unixepoch') AND NOT is_deleted
+                WITH ts AS  (
+                    select 1, id, transfer_id, by_peer, created_at from transfer_cancel_states
+                    union all
+                    select 2, id, transfer_id, status_code, created_at from transfer_failed_states
+                )
+                select t.*, ts.*, t.rowid from transfers t
+                    left join ts on ts.transfer_id = t.id
+                    where not t.is_deleted and t.created_at >= datetime(?1, 'unixepoch')
                 "#,
                 )?
                 .query_map(params![since_timestamp], |row| {
-                    let transfer_type = match row.get::<_, u32>("is_outgoing")? {
-                        0 => DbTransferType::Incoming(vec![]),
-                        1 => DbTransferType::Outgoing(vec![]),
-                        _ => unreachable!(),
-                    };
-
-                    let id: String = row.get("id")?;
-
-                    Ok(Transfer {
-                        id: Uuid::parse_str(&id).map_err(|_| rusqlite::Error::InvalidQuery)?,
-                        peer_id: row.get("peer")?,
-                        transfer_type,
-                        created_at: row.get("created_at")?,
-                        states: vec![],
-                    })
-                })?
-                .collect::<QueryResult<Vec<Transfer>>>()?;
-
-            for transfer in &mut transfers {
-                match transfer.transfer_type {
-                    DbTransferType::Incoming(_) => {
-                        transfer.transfer_type = DbTransferType::Incoming(Self::get_incoming_paths(
-                            &conn,
-                            transfer.id,
-                            &self.logger,
-                        ))
+                    let id = Uuid::parse_str(row.get::<_, String>(0)?.as_str())
+                        .map_err(|_| rusqlite::Error::InvalidQuery)?;
+                    let rowid: u64 = row.get(10)?;
+                    let transfer: &mut Transfer = &mut match transfers_map.entry(id) {
+                        Occupied(e) => e.into_mut(),
+                        Vacant(k) => {
+                            let transfer_type = match row.get::<_, u32>(2)? {
+                                0 => DbTransferType::Incoming(vec![]),
+                                1 => DbTransferType::Outgoing(vec![]),
+                                _ => unreachable!(),
+                            };
+                            let t = Transfer {
+                                id,
+                                peer_id: row.get(1)?,
+                                transfer_type,
+                                created_at: row.get(3)?,
+                                states: vec![],
+                            };
+                            k.insert((rowid, t))
+                        }
                     }
-                    DbTransferType::Outgoing(_) => {
-                        transfer.transfer_type = DbTransferType::Outgoing(Self::get_outgoing_paths(
-                            &conn,
-                            transfer.id,
-                            &self.logger,
-                        ))
+                    .1;
+                    let status_type: Option<i64> = row.get(5)?;
+                    match status_type {
+                        Some(1) => transfer.states.push(TransferStateEvent {
+                            transfer_id: transfer.id,
+                            created_at: row.get(9)?,
+                            data: types::TransferStateEventData::Cancel {
+                                by_peer: row.get(8)?,
+                            },
+                        }),
+                        Some(2) => transfer.states.push(TransferStateEvent {
+                            transfer_id: transfer.id,
+                            created_at: row.get(9)?,
+                            data: types::TransferStateEventData::Failed {
+                                status_code: row.get(8)?,
+                            },
+                        }),
+                        Some(other) => warn!(
+                                        self.logger,
+                                        "Unexpected union member identifier for transfer state";
+                                        "identifier" => other),
+                        None => {
+                            // This was a transfer without any states.
+                        }
+                    }
+                    Ok(())
+                })?
+                .count();
+
+            let mut outgoing_paths: HashMap<i64, OutgoingPath> = HashMap::new();
+            // Here is the same situation as before - because the columns after created_at
+            // are all integers, they can be shared.
+            let _ = tx.prepare(r#"
+            WITH ops AS (
+                select 1, path_id, created_at, bytes_sent, null from outgoing_path_started_states
+                union all
+                select 2, path_id, created_at, status_code, bytes_sent from outgoing_path_failed_states
+                union all
+                select 3, path_id, created_at, null, null from outgoing_path_completed_states
+                union all
+                select 4, path_id, created_at, by_peer, bytes_sent from outgoing_path_reject_states
+                union all
+                select 5, path_id, created_at, bytes_sent, null from outgoing_path_paused_states
+            )
+            SELECT op.*, ops.*, op.rowid from outgoing_paths op
+                left join ops on ops.path_id = op.id
+                left join transfers t on t.id = op.transfer_id and not t.is_deleted and t.created_at >= datetime(?1, 'unixepoch')
+                where not op.is_deleted
+            "#)?.query_map(params![since_timestamp], |row| {
+                let path_id: i64 = row.get(0)?;
+                let path = match outgoing_paths.entry(path_id) {
+                    Occupied(p) => p.into_mut(),
+                    Vacant(e) => {
+                        let transfer_id: String = row.get(1)?;
+                        let mut res = OutgoingPath {
+                            id: *e.key(),
+                            transfer_id: Uuid::parse_str(&transfer_id).map_err(|_| rusqlite::Error::InvalidQuery)?,
+                            content_uri: None,
+                            base_path: None,
+                            relative_path: row.get(2)?,
+                            file_id: row.get(4)?,
+                            bytes: row.get(5)?,
+                            bytes_sent: 0,
+                            created_at: row.get(6)?,
+                            states: vec![],
+                        };
+                        let uri_str: String = row.get(3)?;
+                        let uri = url::Url::parse(&uri_str).map_err(|_| rusqlite::Error::InvalidQuery)?; // Error handling like uuid
+
+                        match uri.scheme() {
+                            "content" => res.content_uri = Some(uri),
+                            "file" => {
+                                let mut path = uri.to_file_path().map_err(|_| rusqlite::Error::InvalidQuery)?; // Error handling like uuid
+
+                                let count = Path::new(&res.relative_path).components().count();
+                                for _ in 0..count {
+                                    path.pop();
+                                }
+
+                                res.base_path = Some(path);
+                            }
+                            unknown => {
+                                warn!(
+                                        self.logger,
+                                        "Unexpected URI scheme when decoding transfer outgoing path's base_path";
+                                        "scheme" => unknown,
+                                    "uri" => uri.to_string());
+                                return Err(rusqlite::Error::InvalidQuery);
+                            }
+                        }
+                        e.insert(res)
+                    }
+                };
+
+                let opt_status_type: Option<i32> = row.get(8)?;
+                if let Some(status_type) = opt_status_type {
+                    let created_at = row.get(10)?;
+                    match status_type {
+                        1 => path.states.push(OutgoingPathStateEvent {
+                            path_id,
+                            created_at,
+                            data: OutgoingPathStateEventData::Started {
+                                bytes_sent: row.get(11)?,
+                            },
+                        }),
+                        2 => path.states.push(OutgoingPathStateEvent {
+                            path_id,
+                            created_at,
+                            data: OutgoingPathStateEventData::Failed {
+                                status_code: row.get(11)?,
+                                bytes_sent: row.get(12)?,
+                            },
+                        }),
+                        3 => path.states.push(OutgoingPathStateEvent {
+                            path_id,
+                            created_at,
+                            data: OutgoingPathStateEventData::Completed,
+                        }),
+                        4 => path.states.push(OutgoingPathStateEvent {
+                            path_id,
+                            created_at,
+                            data: OutgoingPathStateEventData::Rejected {
+                                by_peer: row.get(11)?,
+                                bytes_sent: row.get(12)?,
+                            },
+                        }),
+                        5 => path.states.push(OutgoingPathStateEvent {
+                            path_id,
+                            created_at,
+                            data: OutgoingPathStateEventData::Paused {
+                                bytes_sent: row.get(11)?
+                            },
+                        }),
+                        other => warn!(
+                                        self.logger,
+                                        "Unexpected union member identifier for outgoing path status";
+                                        "identifier" => other)
                     }
                 }
 
-                let tid = transfer.id.to_string();
+                Ok(())
+            })?.count();
 
-                transfer.states.extend(
-                    conn.prepare(
-                        r#"
-                    SELECT created_at, by_peer FROM transfer_cancel_states WHERE transfer_id = ?1
-                    "#,
-                    )?
-                    .query_map(params![tid], |row| {
-                        Ok(TransferStateEvent {
-                            transfer_id: transfer.id,
-                            created_at: row.get("created_at")?,
-                            data: types::TransferStateEventData::Cancel {
-                                by_peer: row.get("by_peer")?,
-                            },
-                        })
-                    })?
-                    .collect::<QueryResult<Vec<TransferStateEvent>>>()?,
-                );
+            for (_, mut path) in outgoing_paths {
+                path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
 
-                transfer.states.extend(
-                conn.prepare(
-                    r#"
-                    SELECT created_at, status_code FROM transfer_failed_states WHERE transfer_id = ?1
-                    "#,
-                )?
-                .query_map(params![tid], |row| {
-                    Ok(TransferStateEvent {
-                        transfer_id: transfer.id,
-                        created_at: row.get("created_at")?,
-                        data: types::TransferStateEventData::Failed {
-                            status_code: row.get("status_code")?,
-                        },
-                    })
-                })?
-                .collect::<QueryResult<Vec<TransferStateEvent>>>()?,
-            );
+                path.bytes_sent = path.states.last().map_or(0, |state| match state.data {
+                    OutgoingPathStateEventData::Started { bytes_sent } => bytes_sent,
+                    OutgoingPathStateEventData::Failed { bytes_sent, .. } => bytes_sent,
+                    OutgoingPathStateEventData::Completed => path.bytes,
+                    OutgoingPathStateEventData::Rejected { bytes_sent, .. } => bytes_sent,
+                    OutgoingPathStateEventData::Paused { bytes_sent } => bytes_sent,
+                });
+                if let Some((_, t)) = transfers_map.get_mut(&path.transfer_id) {
+                    if let DbTransferType::Outgoing(pp) = &mut t.transfer_type {
+                        pp.push(path)
+                    }
+                }
             }
 
-            drop(conn);
+            let mut incoming_paths: HashMap<i64, IncomingPath> = HashMap::new();
+            // And this is more interesting - base_ir and final_patch are text type. For
+            // these fields a separate column will be used.
+            let _ = tx.prepare(r#"
+            WITH ips AS (
+                select 1, path_id, created_at, null, null, base_dir from incoming_path_pending_states
+                union all
+                select 2, path_id, created_at, bytes_received, null, null from incoming_path_started_states
+                union all
+                select 3, path_id, created_at, status_code, bytes_received, null from incoming_path_failed_states
+                union all
+                select 4, path_id, created_at, null, null, final_path from incoming_path_completed_states
+                union all
+                select 5, path_id, created_at, by_peer, bytes_received, null from incoming_path_reject_states
+                union all
+                select 6, path_id, created_at, bytes_received, null, null from incoming_path_paused_states
+            )
+            SELECT ip.*, ips.* from incoming_paths ip
+                left join ips on ips.path_id = ip.id
+                left join transfers t on t.id = ip.transfer_id and not t.is_deleted and t.created_at >= datetime(?1, 'unixepoch')
+                where not ip.is_deleted
+                order by ip.rowid
+            "#)?.query_map(params![since_timestamp], |row| {
+                let path_id: i64 = row.get(0)?;
+                let path = match incoming_paths.entry(path_id) {
+                    Occupied(p) => p.into_mut(),
+                    Vacant(e) => {
+                        let transfer_id: String = row.get(1)?;
+                        let res = IncomingPath {
+                            id: *e.key(),
+                            transfer_id: Uuid::parse_str(&transfer_id).map_err(|_| rusqlite::Error::InvalidQuery)?,
+                            relative_path: row.get(2)?,
+                            file_id: row.get(3)?,
+                            bytes: row.get(4)?,
+                            bytes_received: 0,
+                            created_at: row.get(5)?,
+                            states: vec![],
+                        };
+                        e.insert(res)
+                    }
+                };
 
+                let opt_status_type: Option<i32> = row.get(8)?;
+                if let Some(status_type) = opt_status_type {
+                    let created_at = row.get(10)?;
+                    match status_type {
+                        1 => path.states.push(IncomingPathStateEvent {
+                            path_id,
+                            created_at,
+                            data: IncomingPathStateEventData::Pending {
+                                base_dir: row.get(13)?
+                            },
+                        }),
+                        2 => path.states.push(IncomingPathStateEvent {
+                            path_id,
+                            created_at,
+                            data: IncomingPathStateEventData::Started {
+                                bytes_received: row.get(11)?
+                            },
+                        }),
+                        3 => path.states.push(IncomingPathStateEvent {
+                            path_id,
+                            created_at,
+                            data: IncomingPathStateEventData::Failed {
+                                status_code: row.get(11)?,
+                                bytes_received: row.get(12)?,
+                            },
+                        }),
+                        4 => path.states.push(IncomingPathStateEvent {
+                            path_id,
+                            created_at,
+                            data: IncomingPathStateEventData::Completed {
+                                final_path: row.get(13)?
+                            },
+                        }),
+                        5 => path.states.push(IncomingPathStateEvent {
+                            path_id,
+                            created_at,
+                            data: IncomingPathStateEventData::Rejected {
+                                by_peer: row.get(11)?,
+                                bytes_received: row.get(12)?,
+                            },
+                        }),
+                        6 => path.states.push(IncomingPathStateEvent {
+                            path_id,
+                            created_at,
+                            data: IncomingPathStateEventData::Paused {
+                                bytes_received: row.get(11)?
+                            },
+                        }),
+                        _ => {}
+                    }
+                }
+
+                Ok(())
+            })?.count();
+
+            for (_, mut path) in incoming_paths {
+                path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+
+                path.bytes_received = path
+                    .states
+                    .iter()
+                    .rev()
+                    .find_map(|state| match state.data {
+                        IncomingPathStateEventData::Pending { .. } => None,
+                        IncomingPathStateEventData::Started { bytes_received, .. } => {
+                            Some(bytes_received)
+                        }
+                        IncomingPathStateEventData::Failed { bytes_received, .. } => {
+                            Some(bytes_received)
+                        }
+                        IncomingPathStateEventData::Completed { .. } => Some(path.bytes),
+                        IncomingPathStateEventData::Rejected { bytes_received, .. } => {
+                            Some(bytes_received)
+                        }
+                        IncomingPathStateEventData::Paused { bytes_received } => {
+                            Some(bytes_received)
+                        }
+                    })
+                    .unwrap_or(0);
+
+                if let Some((_, t)) = transfers_map.get_mut(&path.transfer_id) {
+                    if let DbTransferType::Incoming(ip) = &mut t.transfer_type {
+                        ip.push(path)
+                    }
+                }
+            }
+            drop(tx);
+            drop(conn);
+            let mut transfers: Vec<(u64, Transfer)> = transfers_map.into_values().collect();
+            transfers.sort_by_key(|rt| rt.0);
+            let mut transfers: Vec<Transfer> = transfers.into_iter().map(|rt| rt.1).collect();
             for transfer in &mut transfers {
                 transfer
                     .states
                     .sort_by(|a, b| a.created_at.cmp(&b.created_at));
+                match transfer.transfer_type {
+                    DbTransferType::Incoming(ref mut p) => p.sort_by_key(|ip| ip.id),
+                    DbTransferType::Outgoing(ref mut p) => p.sort_by_key(|op| op.id),
+                };
             }
-
             Ok::<Vec<_>, Error>(transfers)
         };
 
@@ -1404,381 +1677,6 @@ impl Storage {
                 0
             }
             Ok(count) => count,
-        }
-    }
-
-    fn get_outgoing_paths(
-        conn: &Connection,
-        transfer_id: Uuid,
-        logger: &slog::Logger,
-    ) -> Vec<OutgoingPath> {
-        let tid = transfer_id.to_string();
-
-        trace!(
-            logger,
-            "Fetching outgoing paths for transfer";
-            "transfer_id" => &tid
-        );
-
-        let task = || {
-            let mut paths: Vec<_> = conn
-                .prepare(
-                    r#"
-                SELECT * FROM outgoing_paths WHERE transfer_id = ?1 AND NOT is_deleted
-                "#,
-                )?
-                .query_map(params![tid], |row| {
-                    Ok((
-                        row.get("id")?,
-                        row.get("relative_path")?,
-                        row.get("path_hash")?,
-                        row.get("bytes")?,
-                        row.get("created_at")?,
-                        row.get::<_, String>("uri")?,
-                    ))
-                })?
-                .map(|row| {
-                    let (id, relative_path, file_id, bytes, created_at, uri) = row?;
-
-                    let mut res = OutgoingPath {
-                        id,
-                        transfer_id,
-                        content_uri: None,
-                        base_path: None,
-                        relative_path,
-                        file_id,
-                        bytes,
-                        bytes_sent: 0,
-                        created_at,
-                        states: vec![],
-                    };
-
-                    let uri = url::Url::parse(&uri)?;
-
-                    match uri.scheme() {
-                        "content" => res.content_uri = Some(uri),
-                        "file" => {
-                            let mut path = uri.to_file_path().map_err(|_| {
-                                crate::Error::InvalidUri("Failed to extract file path".to_string())
-                            })?;
-
-                            let count = Path::new(&res.relative_path).components().count();
-                            for _ in 0..count {
-                                path.pop();
-                            }
-
-                            res.base_path = Some(path);
-                        }
-                        unkown => {
-                            return Err(crate::Error::InvalidUri(format!(
-                                "Unknown URI scheme: {unkown}"
-                            )))
-                        }
-                    }
-
-                    Ok(res)
-                })
-                .collect::<Result<_>>()?;
-
-            for path in &mut paths {
-                path.states.extend(
-                    conn.prepare(
-                        r#"
-                    SELECT * FROM outgoing_path_started_states WHERE path_id = ?1
-                    "#,
-                    )?
-                    .query_map(params![path.id], |row| {
-                        Ok(OutgoingPathStateEvent {
-                            path_id: row.get("path_id")?,
-                            created_at: row.get("created_at")?,
-                            data: OutgoingPathStateEventData::Started {
-                                bytes_sent: row.get("bytes_sent")?,
-                            },
-                        })
-                    })?
-                    .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
-                );
-
-                path.states.extend(
-                    conn.prepare(
-                        r#"
-                    SELECT * FROM outgoing_path_failed_states WHERE path_id = ?1
-                    "#,
-                    )?
-                    .query_map(params![path.id], |row| {
-                        Ok(OutgoingPathStateEvent {
-                            path_id: row.get("path_id")?,
-                            created_at: row.get("created_at")?,
-                            data: OutgoingPathStateEventData::Failed {
-                                status_code: row.get("status_code")?,
-                                bytes_sent: row.get("bytes_sent")?,
-                            },
-                        })
-                    })?
-                    .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
-                );
-
-                path.states.extend(
-                    conn.prepare(
-                        r#"
-                    SELECT * FROM outgoing_path_completed_states WHERE path_id = ?1
-                    "#,
-                    )?
-                    .query_map(params![path.id], |row| {
-                        Ok(OutgoingPathStateEvent {
-                            path_id: row.get("path_id")?,
-                            created_at: row.get("created_at")?,
-                            data: OutgoingPathStateEventData::Completed,
-                        })
-                    })?
-                    .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
-                );
-
-                path.states.extend(
-                    conn.prepare(
-                        r#"
-                    SELECT * FROM outgoing_path_reject_states WHERE path_id = ?1
-                    "#,
-                    )?
-                    .query_map(params![path.id], |row| {
-                        Ok(OutgoingPathStateEvent {
-                            path_id: row.get("path_id")?,
-                            created_at: row.get("created_at")?,
-                            data: OutgoingPathStateEventData::Rejected {
-                                by_peer: row.get("by_peer")?,
-                                bytes_sent: row.get("bytes_sent")?,
-                            },
-                        })
-                    })?
-                    .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
-                );
-
-                path.states.extend(
-                    conn.prepare(
-                        r#"
-                    SELECT * FROM outgoing_path_paused_states WHERE path_id = ?1
-                    "#,
-                    )?
-                    .query_map(params![path.id], |row| {
-                        Ok(OutgoingPathStateEvent {
-                            path_id: row.get("path_id")?,
-                            created_at: row.get("created_at")?,
-                            data: OutgoingPathStateEventData::Paused {
-                                bytes_sent: row.get("bytes_sent")?,
-                            },
-                        })
-                    })?
-                    .collect::<QueryResult<Vec<OutgoingPathStateEvent>>>()?,
-                );
-
-                path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
-
-                path.bytes_sent = path
-                    .states
-                    .iter()
-                    .rev()
-                    .map(|state| match state.data {
-                        OutgoingPathStateEventData::Started { bytes_sent } => bytes_sent,
-                        OutgoingPathStateEventData::Failed { bytes_sent, .. } => bytes_sent,
-                        OutgoingPathStateEventData::Completed => path.bytes,
-                        OutgoingPathStateEventData::Rejected { bytes_sent, .. } => bytes_sent,
-                        OutgoingPathStateEventData::Paused { bytes_sent } => bytes_sent,
-                    })
-                    .next()
-                    .unwrap_or(0);
-            }
-
-            Ok::<Vec<_>, Error>(paths)
-        };
-
-        match task() {
-            Ok(paths) => paths,
-            Err(e) => {
-                error!(logger, "Failed to get outgoing paths"; "error" => %e);
-                vec![]
-            }
-        }
-    }
-
-    fn get_incoming_paths(
-        conn: &Connection,
-        transfer_id: Uuid,
-        logger: &slog::Logger,
-    ) -> Vec<IncomingPath> {
-        let tid = transfer_id.to_string();
-
-        trace!(
-            logger,
-            "Fetching incoming paths for transfer";
-            "transfer_id" => &tid
-        );
-
-        let task = || {
-            let mut paths = conn
-                .prepare(
-                    r#"
-                SELECT * FROM incoming_paths WHERE transfer_id = ?1 AND NOT is_deleted
-                "#,
-                )?
-                .query_map(params![tid], |row| {
-                    Ok(IncomingPath {
-                        id: row.get("id")?,
-                        transfer_id,
-                        relative_path: row.get("relative_path")?,
-                        file_id: row.get("path_hash")?,
-                        bytes: row.get("bytes")?,
-                        bytes_received: 0,
-                        created_at: row.get("created_at")?,
-                        states: vec![],
-                    })
-                })?
-                .collect::<QueryResult<Vec<IncomingPath>>>()?;
-
-            for path in &mut paths {
-                path.states.extend(
-                    conn.prepare(
-                        r#"
-                    SELECT * FROM incoming_path_pending_states WHERE path_id = ?1
-                    "#,
-                    )?
-                    .query_map(params![path.id], |row| {
-                        Ok(IncomingPathStateEvent {
-                            path_id: row.get("path_id")?,
-                            created_at: row.get("created_at")?,
-                            data: IncomingPathStateEventData::Pending {
-                                base_dir: row.get("base_dir")?,
-                            },
-                        })
-                    })?
-                    .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
-                );
-
-                path.states.extend(
-                    conn.prepare(
-                        r#"
-                    SELECT * FROM incoming_path_started_states WHERE path_id = ?1
-                    "#,
-                    )?
-                    .query_map(params![path.id], |row| {
-                        Ok(IncomingPathStateEvent {
-                            path_id: row.get("path_id")?,
-                            created_at: row.get("created_at")?,
-                            data: IncomingPathStateEventData::Started {
-                                bytes_received: row.get("bytes_received")?,
-                            },
-                        })
-                    })?
-                    .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
-                );
-
-                path.states.extend(
-                    conn.prepare(
-                        r#"
-                    SELECT * FROM incoming_path_failed_states WHERE path_id = ?1
-                    "#,
-                    )?
-                    .query_map(params![path.id], |row| {
-                        Ok(IncomingPathStateEvent {
-                            path_id: row.get("path_id")?,
-                            created_at: row.get("created_at")?,
-                            data: IncomingPathStateEventData::Failed {
-                                status_code: row.get("status_code")?,
-                                bytes_received: row.get("bytes_received")?,
-                            },
-                        })
-                    })?
-                    .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
-                );
-
-                path.states.extend(
-                    conn.prepare(
-                        r#"
-                    SELECT * FROM incoming_path_completed_states WHERE path_id = ?1
-                    "#,
-                    )?
-                    .query_map(params![path.id], |row| {
-                        Ok(IncomingPathStateEvent {
-                            path_id: row.get("path_id")?,
-                            created_at: row.get("created_at")?,
-                            data: IncomingPathStateEventData::Completed {
-                                final_path: row.get("final_path")?,
-                            },
-                        })
-                    })?
-                    .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
-                );
-
-                path.states.extend(
-                    conn.prepare(
-                        r#"
-                    SELECT * FROM incoming_path_reject_states WHERE path_id = ?1
-                    "#,
-                    )?
-                    .query_map(params![path.id], |row| {
-                        Ok(IncomingPathStateEvent {
-                            path_id: row.get("path_id")?,
-                            created_at: row.get("created_at")?,
-                            data: IncomingPathStateEventData::Rejected {
-                                by_peer: row.get("by_peer")?,
-                                bytes_received: row.get("bytes_received")?,
-                            },
-                        })
-                    })?
-                    .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
-                );
-
-                path.states.extend(
-                    conn.prepare(
-                        r#"
-                    SELECT * FROM incoming_path_paused_states WHERE path_id = ?1
-                    "#,
-                    )?
-                    .query_map(params![path.id], |row| {
-                        Ok(IncomingPathStateEvent {
-                            path_id: row.get("path_id")?,
-                            created_at: row.get("created_at")?,
-                            data: IncomingPathStateEventData::Paused {
-                                bytes_received: row.get("bytes_received")?,
-                            },
-                        })
-                    })?
-                    .collect::<QueryResult<Vec<IncomingPathStateEvent>>>()?,
-                );
-
-                path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
-
-                path.bytes_received = path
-                    .states
-                    .iter()
-                    .rev()
-                    .find_map(|state| match state.data {
-                        IncomingPathStateEventData::Pending { .. } => None,
-                        IncomingPathStateEventData::Started { bytes_received, .. } => {
-                            Some(bytes_received)
-                        }
-                        IncomingPathStateEventData::Failed { bytes_received, .. } => {
-                            Some(bytes_received)
-                        }
-                        IncomingPathStateEventData::Completed { .. } => Some(path.bytes),
-                        IncomingPathStateEventData::Rejected { bytes_received, .. } => {
-                            Some(bytes_received)
-                        }
-                        IncomingPathStateEventData::Paused { bytes_received } => {
-                            Some(bytes_received)
-                        }
-                    })
-                    .unwrap_or(0);
-            }
-
-            Ok::<Vec<_>, Error>(paths)
-        };
-
-        match task() {
-            Ok(paths) => paths,
-            Err(e) => {
-                error!(logger, "Failed to get incoming paths"; "error" => %e);
-                vec![]
-            }
         }
     }
 }
