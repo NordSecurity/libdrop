@@ -1,9 +1,9 @@
 ### UNRELEASED
-### **UNRELEASED**
+### **Checksummed and Optimized**
 ---
-* Introduce `ChecksumStarted`, `ChecksumProgress`, and `ChecksumFinised` events for checksum computation progress.
-* Add the `checksum_events_size_treshold_bytes` optional config field for controlling how the checksuming events are emitted.
-* Optmize `transfers_since()` function significantly
+* Introduce `ChecksumStarted`, `ChecksumProgress`, and `ChecksumFinished` events on the downloader side when resuming and after the download.
+* Add the `checksum_events_size_treshold_bytes` optional config field for controlling the threshold of file size after which the checksum events are emited.
+* Optimize `transfers_since()`
 
 ---
 <br>

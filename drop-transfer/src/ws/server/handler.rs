@@ -3,8 +3,13 @@ use std::{fs, future::Future, path::PathBuf, sync::Arc, time::Duration};
 use tokio::{sync::mpsc::Sender, task::JoinSet};
 use warp::ws::Message;
 
-use super::socket::WebSocket;
-use crate::{transfer::IncomingTransfer, utils::Hidden, ws, FileId};
+use super::{socket::WebSocket, TmpFileState};
+use crate::{
+    transfer::IncomingTransfer,
+    utils::Hidden,
+    ws::{self},
+    FileId,
+};
 
 pub struct MsgToSend {
     pub msg: Message,
@@ -62,20 +67,21 @@ pub trait Request {
 }
 
 pub enum DownloadInit {
-    Stream {
-        offset: u64,
-        tmp_location: Hidden<PathBuf>,
-    },
+    Stream { offset: u64 },
 }
 #[async_trait::async_trait]
 pub trait Downloader {
-    async fn init(&mut self, task: &super::FileXferTask) -> crate::Result<DownloadInit>;
+    async fn init(
+        &mut self,
+        task: &super::FileXferTask,
+        tmp_file: Option<TmpFileState>,
+    ) -> crate::Result<DownloadInit>;
     async fn open(&mut self, tmp_location: &Hidden<PathBuf>) -> crate::Result<fs::File>;
     async fn progress(&mut self, bytes: u64) -> crate::Result<()>;
     async fn validate<F, Fut>(
         &mut self,
         location: &Hidden<PathBuf>,
-        progress: Option<F>,
+        progress_cb: Option<F>,
     ) -> crate::Result<()>
     where
         F: FnMut(u64) -> Fut + Send + Sync,

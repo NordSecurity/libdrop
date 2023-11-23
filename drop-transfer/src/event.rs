@@ -66,6 +66,7 @@ pub enum Event {
     ChecksumStarted {
         transfer_id: Uuid,
         file_id: FileId,
+        size: u64,
     },
     ChecksumFinished {
         transfer_id: Uuid,

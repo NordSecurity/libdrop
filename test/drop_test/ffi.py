@@ -759,6 +759,7 @@ def new_event(event_str: str) -> event.Event:
         return event.ChecksumStarted(
             transfer_slot,
             event_data["file"],
+            event_data["size"],
         )
 
     elif event_type == "ChecksumFinished":
