@@ -23,6 +23,7 @@ use warp::ws::Message;
 use super::{
     handler::{self, MsgToSend},
     socket::WebSocket,
+    TmpFileState,
 };
 use crate::{
     manager::FileTerminalState,
@@ -395,7 +396,12 @@ impl Drop for Downloader {
 
 #[async_trait::async_trait]
 impl handler::Downloader for Downloader {
-    async fn init(&mut self, task: &super::FileXferTask) -> crate::Result<handler::DownloadInit> {
+    // v2 doesn't support resumes, so no checksum logic is happening in here
+    async fn init(
+        &mut self,
+        task: &super::FileXferTask,
+        _: Option<TmpFileState>,
+    ) -> crate::Result<handler::DownloadInit> {
         let mut suffix = sha1::Sha1::new();
 
         suffix.update(task.xfer.id().as_bytes());
@@ -427,7 +433,7 @@ impl handler::Downloader for Downloader {
         self.tmp_loc = Some(tmp_location.clone());
         Ok(handler::DownloadInit::Stream {
             offset: 0,
-            tmp_location,
+            // tmp_location,
         })
     }
 

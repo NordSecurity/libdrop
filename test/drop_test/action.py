@@ -386,7 +386,9 @@ class Wait(Action):
 
     async def run(self, drop: ffi.Drop):
         await drop._events.wait_for(
-            self._event, not isinstance(self._event, event.Progress)
+            self._event,
+            not isinstance(self._event, event.Progress),
+            not isinstance(self._event, event.ChecksumProgress),
         )
 
     def __str__(self):
@@ -624,14 +626,30 @@ class CompareTrees(Action):
 
 
 class WaitForResume(Action):
-    def __init__(self, uuid_slot: int, file_id: str, tmp_file_path_glob: str):
+    def __init__(
+        self,
+        uuid_slot: int,
+        file_id: str,
+        tmp_file_path_glob: str,
+        checksum_events: bool = False,
+    ):
         self._uuid_slot = uuid_slot
         self._file_id = file_id
         self._tmp_file_path = tmp_file_path_glob
+        self._checksum_events = checksum_events
 
     async def run(self, drop: ffi.Drop):
         file_list = glob.glob(self._tmp_file_path)
         stat = os.stat(file_list[0])  # just take the first find
+
+        if self._checksum_events:
+            await drop._events.wait_for(
+                event.ChecksumStarted(self._uuid_slot, self._file_id, stat.st_size)
+            )
+
+            await drop._events.wait_for(
+                event.ChecksumFinished(self._uuid_slot, self._file_id)
+            )
 
         await drop._events.wait_for(
             event.Start(self._uuid_slot, self._file_id, transferred=stat.st_size), False

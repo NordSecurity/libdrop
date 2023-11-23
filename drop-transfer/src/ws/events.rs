@@ -22,6 +22,7 @@ struct FileEventTxInner {
 enum State {
     Idle,
     Throttled,
+    Preflight,
     InFlight { started: Instant },
 }
 
@@ -74,7 +75,9 @@ impl<T: Transfer> FileEventTx<T> {
     async fn emit_in_flight(&self, event: Event) {
         let mut lock = self.inner.lock().await;
 
-        if !matches!(lock.state, State::InFlight { .. }) {
+        if !(matches!(lock.state, State::Preflight { .. })
+            || matches!(lock.state, State::InFlight { .. }))
+        {
             return;
         }
 
@@ -107,6 +110,7 @@ impl<T: Transfer> FileEventTx<T> {
             State::Idle => return,
             State::Throttled => Duration::ZERO,
             State::InFlight { started } => started.elapsed(),
+            State::Preflight => Duration::ZERO,
         };
 
         let phase = match event {
@@ -143,6 +147,7 @@ impl<T: Transfer> FileEventTx<T> {
             State::Idle => Duration::ZERO,
             State::Throttled => Duration::ZERO,
             State::InFlight { started } => started.elapsed(),
+            State::Preflight => Duration::ZERO,
         };
 
         let phase = match event {
@@ -179,6 +184,7 @@ impl<T: Transfer> FileEventTx<T> {
             State::Idle => None,
             State::Throttled => Some(Duration::ZERO),
             State::InFlight { started } => Some(started.elapsed()),
+            State::Preflight => Some(Duration::ZERO),
         };
 
         if let Some(elapsed) = elapsed {
@@ -202,10 +208,11 @@ impl<T: Transfer> FileEventTx<T> {
 }
 
 impl FileEventTx<IncomingTransfer> {
-    pub async fn checksum_start(&self) {
+    pub async fn checksum_start(&self, size: u64) {
         self.emit_in_flight(crate::Event::ChecksumStarted {
             transfer_id: self.xfer.id(),
             file_id: self.file_id.clone(),
+            size,
         })
         .await
     }
@@ -244,6 +251,11 @@ impl FileEventTx<IncomingTransfer> {
             offset,
         )])
         .await
+    }
+
+    pub async fn preflight(&self) {
+        let mut lock = self.inner.lock().await;
+        lock.state = State::Preflight;
     }
 
     pub async fn failed(&self, err: crate::Error) {
@@ -337,6 +349,7 @@ impl FileEventTx<OutgoingTransfer> {
             }
             State::Throttled => (),
             State::InFlight { .. } => (),
+            State::Preflight => (),
         }
     }
 
@@ -387,6 +400,7 @@ impl<T: Transfer> Drop for FileEventTx<T> {
             State::Idle => None,
             State::Throttled => Some(Duration::ZERO),
             State::InFlight { started } => Some(started.elapsed()),
+            State::Preflight => Some(Duration::ZERO),
         };
 
         if let Some(elapsed) = elapsed {

@@ -157,6 +157,7 @@ impl<'a> StorageDispatch<'a> {
             crate::Event::ChecksumStarted {
                 transfer_id: _,
                 file_id: _,
+                size: _,
             } => {
                 // not stored in the database
             }
