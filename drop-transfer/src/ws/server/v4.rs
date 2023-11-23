@@ -16,6 +16,7 @@ use warp::ws::Message;
 use super::{
     handler::{self, MsgToSend},
     socket::WebSocket,
+    TmpFileState,
 };
 use crate::{
     file::{self},
@@ -515,27 +516,13 @@ impl Downloader {
 
 #[async_trait::async_trait]
 impl handler::Downloader for Downloader {
-    async fn init(&mut self, task: &super::FileXferTask) -> crate::Result<handler::DownloadInit> {
-        let filename_len = task.file.subpath().name().len();
-
-        if filename_len + super::MAX_FILE_SUFFIX_LEN > super::MAX_FILENAME_LENGTH {
-            return Err(crate::Error::FilenameTooLong);
-        }
-
-        let tmp_location: Hidden<PathBuf> = Hidden(
-            task.base_dir
-                .join(super::temp_file_name(task.xfer.id(), task.file.id())),
-        );
-
-        // Check if we can resume the temporary file
-        match super::TmpFileState::load(&tmp_location.0).await {
-            Ok(super::TmpFileState { meta, csum }) => {
-                debug!(
-                    self.logger,
-                    "Found temporary file: {tmp_location:?}, of size: {}",
-                    meta.len()
-                );
-
+    async fn init(
+        &mut self,
+        task: &super::FileXferTask,
+        tmpstate: Option<TmpFileState>,
+    ) -> crate::Result<handler::DownloadInit> {
+        match tmpstate {
+            Some(TmpFileState { meta, csum }) => {
                 self.offset = match meta.len().cmp(&task.file.size()) {
                     Ordering::Less => {
                         let report = self.request_csum(meta.len()).await?;
@@ -576,16 +563,13 @@ impl handler::Downloader for Downloader {
                         0
                     }
                 };
-            }
-            Err(err) => {
-                debug!(self.logger, "Failed to load temporary file info: {err}");
-            }
-        };
 
-        Ok(handler::DownloadInit::Stream {
-            offset: self.offset,
-            tmp_location,
-        })
+                Ok(handler::DownloadInit::Stream {
+                    offset: self.offset,
+                })
+            }
+            None => Ok(handler::DownloadInit::Stream { offset: 0 }),
+        }
     }
 
     async fn open(&mut self, path: &Hidden<PathBuf>) -> crate::Result<fs::File> {

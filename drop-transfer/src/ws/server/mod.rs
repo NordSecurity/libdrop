@@ -9,6 +9,7 @@ use std::{
     borrow::Borrow,
     collections::HashMap,
     fs,
+    future::Future,
     io::{self, Write},
     net::SocketAddr,
     ops::ControlFlow,
@@ -78,7 +79,7 @@ pub struct FileStreamCtx<'a> {
     task: FileXferTask,
 }
 
-struct TmpFileState {
+pub struct TmpFileState {
     meta: fs::Metadata,
     csum: [u8; 32],
 }
@@ -765,7 +766,7 @@ impl FileXferTask {
             }
 
             if emit_checksum_events {
-                events.checksum_start().await;
+                events.checksum_start(self.file.size()).await;
 
                 let progress_cb = {
                     move |progress: u64| async move {
@@ -862,6 +863,64 @@ impl FileXferTask {
         Ok(dst)
     }
 
+    async fn handle_tmp_file(
+        &mut self,
+        logger: &Logger,
+        events: &FileEventTx<IncomingTransfer>,
+        tmp_location: &Hidden<PathBuf>,
+        emit_checksum_events: bool,
+    ) -> Option<TmpFileState> {
+        // TODO: we load the file's metadata to check if we should emit checksum events
+        // based on size threshold. However TmpFileState::load also does the
+        // same thing. We should refactor this to avoid double loading.
+        let tmp_size = fs::File::open(&tmp_location.0)
+            .and_then(|file| file.metadata())
+            .map(|metadata| metadata.len())
+            .ok();
+
+        let will_emit_checksum_events = emit_checksum_events && tmp_size.is_some();
+
+        let cb = if will_emit_checksum_events {
+            let size = tmp_size.unwrap_or(0);
+            events.checksum_start(size).await;
+
+            Some({
+                let ev = events.clone();
+                move |progress: u64| {
+                    let ev = ev.clone();
+                    async move {
+                        ev.checksum_progress(progress).await;
+                    }
+                }
+            })
+        } else {
+            None
+        };
+
+        // Check if we can resume the temporary file
+        let tmp_file_state = match TmpFileState::load(&tmp_location.0, cb).await {
+            Ok(tmp_file_state) => {
+                debug!(
+                    logger,
+                    "Found temporary file: {:?}, of size: {}",
+                    tmp_location.0,
+                    tmp_file_state.meta.len()
+                );
+                Some(tmp_file_state)
+            }
+            Err(err) => {
+                debug!(logger, "Failed to load temporary file info: {err}");
+                return None;
+            }
+        };
+
+        if will_emit_checksum_events {
+            events.checksum_finish().await;
+        }
+
+        tmp_file_state
+    }
+
     #[allow(clippy::too_many_arguments)]
     async fn run(
         mut self,
@@ -873,7 +932,33 @@ impl FileXferTask {
         logger: Logger,
         guard: AliveGuard,
     ) {
-        let init_res = match downloader.init(&self).await {
+        let filename_len = self.file.subpath().name().len();
+
+        if filename_len + MAX_FILE_SUFFIX_LEN > MAX_FILENAME_LENGTH {
+            events.failed(Error::FilenameTooLong).await;
+            return;
+        }
+
+        let emit_checksum_events = {
+            if let Some(threshold) = state.config.checksum_events_size_threshold {
+                self.file.size() >= threshold as u64
+            } else {
+                false
+            }
+        };
+
+        events.preflight().await;
+
+        let tmp_location: Hidden<PathBuf> = Hidden(
+            self.base_dir
+                .join(temp_file_name(self.xfer.id(), self.file.id())),
+        );
+
+        let tmp_file_state = self
+            .handle_tmp_file(&logger, &events, &tmp_location, emit_checksum_events)
+            .await;
+
+        let init_res = match downloader.init(&self, tmp_file_state).await {
             Ok(init) => init,
             Err(crate::Error::Canceled) => {
                 warn!(logger, "File cancelled on download init stage");
@@ -886,10 +971,7 @@ impl FileXferTask {
         };
 
         match init_res {
-            handler::DownloadInit::Stream {
-                offset,
-                tmp_location,
-            } => {
+            handler::DownloadInit::Stream { offset } => {
                 if req_send
                     .send(ServerReq::Start {
                         file: self.file.id().clone(),
@@ -902,14 +984,6 @@ impl FileXferTask {
                 }
 
                 events.start(self.base_dir.to_string_lossy(), offset).await;
-
-                let emit_checksum_events = {
-                    if let Some(threshold) = state.config.checksum_events_size_threshold {
-                        self.file.size() >= threshold as u64
-                    } else {
-                        false
-                    }
-                };
 
                 let result = self
                     .stream_file(
@@ -993,15 +1067,16 @@ impl FileXferTask {
 
 impl TmpFileState {
     // Blocking operation
-    async fn load(path: &Path) -> io::Result<Self> {
+    async fn load<F, Fut>(path: &Path, progress_cb: Option<F>) -> io::Result<Self>
+    where
+        F: Fn(u64) -> Fut + Sync + Send,
+        Fut: Future<Output = ()>,
+    {
         let file = fs::File::open(path)?;
 
         let meta = file.metadata()?;
-        let csum = file::checksum::<_, futures::future::Ready<()>>(
-            file,
-            None::<fn(u64) -> futures::future::Ready<()>>,
-        )
-        .await?;
+
+        let csum = file::checksum(&mut io::BufReader::new(file), progress_cb).await?;
         Ok(TmpFileState { meta, csum })
     }
 }

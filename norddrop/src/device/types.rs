@@ -118,6 +118,7 @@ pub enum Event {
     ChecksumStarted {
         transfer: Uuid,
         file: FileId,
+        size: u64,
         timestamp: u64,
     },
     ChecksumFinished {
@@ -305,9 +306,11 @@ impl From<(drop_transfer::Event, SystemTime)> for Event {
             drop_transfer::Event::ChecksumStarted {
                 transfer_id,
                 file_id,
+                size,
             } => Self::ChecksumStarted {
                 transfer: transfer_id,
                 file: file_id,
+                size,
                 timestamp,
             },
 

@@ -4187,7 +4187,9 @@ scenarios = [
             "DROP_PEER_STIMPY": ActionList(
                 [
                     action.Start(
-                        "DROP_PEER_STIMPY", dbpath="/tmp/db/21-1-stimpy.sqlite"
+                        "DROP_PEER_STIMPY",
+                        dbpath="/tmp/db/21-1-stimpy.sqlite",
+                        checksum_events_size_threshold=0,
                     ),
                     action.Wait(
                         event.Receive(
@@ -4213,12 +4215,24 @@ scenarios = [
                     action.Stop(),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     action.Start(
-                        "DROP_PEER_STIMPY", dbpath="/tmp/db/21-1-stimpy.sqlite"
+                        "DROP_PEER_STIMPY",
+                        dbpath="/tmp/db/21-1-stimpy.sqlite",
+                        checksum_events_size_threshold=0,
                     ),
                     action.WaitForResume(
                         0,
                         FILES["testfile-big"].id,
                         "/tmp/received/21-1/*.dropdl-part",
+                        True,
+                    ),
+                    action.Wait(
+                        event.ChecksumStarted(0, FILES["testfile-big"].id, 10485760)
+                    ),
+                    action.Wait(
+                        event.ChecksumFinished(
+                            0,
+                            FILES["testfile-big"].id,
+                        )
                     ),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -11069,7 +11083,11 @@ scenarios = [
                         "/tmp/received/49",
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
-                    action.Wait(event.ChecksumStarted(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.ChecksumStarted(0, FILES["testfile-big"].id, 10485760)
+                    ),
+                    action.Wait(event.ChecksumProgress(0, FILES["testfile-big"].id)),
+                    action.Wait(event.ChecksumProgress(0, FILES["testfile-big"].id)),
                     action.Wait(event.ChecksumFinished(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(

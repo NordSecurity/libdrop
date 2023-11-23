@@ -274,7 +274,9 @@ class Paused(Event):
 
 
 class ChecksumProgress(Event):
-    def __init__(self, uuid_slot: int, file: str, checksummed_bytes: int):
+    def __init__(
+        self, uuid_slot: int, file: str, checksummed_bytes: typing.Optional[int] = None
+    ):
         self._uuid_slot = uuid_slot
         self._file = file
         self._checksummed_bytes = checksummed_bytes
@@ -286,19 +288,22 @@ class ChecksumProgress(Event):
             return False
         if self._file != rhs._file:
             return False
-        if self._checksummed_bytes == rhs._checksummed_bytes:
-            return False
+
+        if self._checksummed_bytes is not None and rhs._checksummed_bytes is not None:
+            if self._checksummed_bytes != rhs._checksummed_bytes:
+                return False
 
         return True
 
     def __str__(self):
-        return f"ChecksumProgress(transfer={print_uuid(self._uuid_slot)}, file={self._file}, checksummed_bytes={self._checksummed_bytes}, total_size={self._total_size})"
+        return f"ChecksumProgress(transfer={print_uuid(self._uuid_slot)}, file={self._file}, checksummed_bytes={self._checksummed_bytes})"
 
 
 class ChecksumStarted(Event):
-    def __init__(self, uuid_slot: int, file: str):
+    def __init__(self, uuid_slot: int, file: str, size: int):
         self._uuid_slot = uuid_slot
         self._file = file
+        self._size = size
 
     def __eq__(self, rhs):
         if not isinstance(rhs, ChecksumStarted):
@@ -307,11 +312,13 @@ class ChecksumStarted(Event):
             return False
         if self._file != rhs._file:
             return False
+        if self._size != rhs._size:
+            return False
 
         return True
 
     def __str__(self):
-        return f"ChecksumStarted(transfer={print_uuid(self._uuid_slot)}, file={self._file})"
+        return f"ChecksumStarted(transfer={print_uuid(self._uuid_slot)}, file={self._file}), size={self._size}"
 
 
 class ChecksumFinished(Event):

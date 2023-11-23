@@ -151,7 +151,8 @@ fn print_event(ev: &Event) {
         Event::ChecksumStarted {
             transfer_id,
             file_id,
-        } => info!("[EVENT] ChecksumStarted {transfer_id}: {file_id}"),
+            size,
+        } => info!("[EVENT] ChecksumStarted {transfer_id}: {file_id}: {size}"),
 
         Event::ChecksumFinished {
             transfer_id,
