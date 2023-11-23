@@ -5,7 +5,7 @@ mod reader;
 use std::{
     fmt,
     future::Future,
-    io::{self, Read, Write},
+    io::{self, BufRead, Read, Write},
     path::{Path, PathBuf},
 };
 #[cfg(unix)]
@@ -32,6 +32,8 @@ pub type FdResolver = dyn Fn(&str) -> Option<RawFd> + Send + Sync;
 
 const HEADER_SIZE: usize = 1024;
 const UNKNOWN_STR: &str = "unknown";
+
+const CHECKSUM_CHUNK_SIZE: usize = 256 * 1024; // 256 KiB
 
 pub trait File {
     fn id(&self) -> &FileId;
@@ -306,15 +308,16 @@ impl FileToSend {
         F: FnMut(u64) -> Fut + Send + Sync,
         Fut: Future<Output = ()>,
     {
-        let reader = reader::open(&self.source)?;
-        let mut reader = io::BufReader::new(reader).take(limit);
-        let csum = checksum(&mut reader, progress_cb).await?;
+        let reader = reader::open(&self.source)?.take(limit);
+        let csum = checksum(reader, progress_cb).await?;
         Ok(csum)
     }
 }
 
+/// This function performs buffering internally. No need to use buffered
+/// readers.
 pub async fn checksum<F, Fut>(
-    reader: &mut impl io::Read,
+    reader: impl io::Read,
     mut progress_cb: Option<F>,
 ) -> io::Result<[u8; 32]>
 where
@@ -323,16 +326,19 @@ where
 {
     let mut csum = sha2::Sha256::new();
 
-    let mut buf = vec![0u8; 256 * 1024];
+    let mut reader = io::BufReader::with_capacity(CHECKSUM_CHUNK_SIZE, reader);
 
     let mut total_n: u64 = 0;
     loop {
-        let n = reader.read(&mut buf)?;
-        if n == 0 {
+        let buf = reader.fill_buf()?;
+        if buf.is_empty() {
             break;
         }
 
-        csum.write_all(&buf[..n])?;
+        csum.write_all(buf)?;
+
+        let n = buf.len();
+        reader.consume(n);
 
         total_n += n as u64;
         if let Some(progress_cb) = progress_cb.as_mut() {
