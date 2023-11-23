@@ -1,6 +1,5 @@
 use std::{
-    cmp::Ordering, collections::HashMap, fs, future::Future, io, net::IpAddr, path::PathBuf,
-    sync::Arc,
+    cmp::Ordering, collections::HashMap, fs, future::Future, net::IpAddr, path::PathBuf, sync::Arc,
 };
 
 use anyhow::Context;
@@ -617,7 +616,7 @@ impl handler::Downloader for Downloader {
         Fut: Future<Output = ()> + Send + Sync,
     {
         let file = std::fs::File::open(&path.0)?;
-        let csum = file::checksum(&mut io::BufReader::new(file), progress_cb).await?;
+        let csum = file::checksum(file, progress_cb).await?;
 
         if self.full_csum.get().await != csum {
             return Err(crate::Error::ChecksumMismatch);
