@@ -1,3 +1,13 @@
+### UNRELEASED
+### **UNRELEASED**
+---
+* Introduce `ChecksumStarted`, `ChecksumProgress`, and `ChecksumFinised` events for checksum computation progress.
+* Add the `checksum_events_size_treshold_bytes` optional config field for controlling how the checksuming events are emitted.
+* Optmize `transfers_since()` function significantly
+
+---
+<br>
+
 ### v6.0.0
 ### **Connection Clarity**
 ---
