@@ -998,7 +998,7 @@ impl TmpFileState {
 
         let meta = file.metadata()?;
         let csum = file::checksum::<_, futures::future::Ready<()>>(
-            &mut io::BufReader::new(file),
+            file,
             None::<fn(u64) -> futures::future::Ready<()>>,
         )
         .await?;
