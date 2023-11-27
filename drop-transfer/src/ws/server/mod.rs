@@ -1076,7 +1076,7 @@ impl TmpFileState {
 
         let meta = file.metadata()?;
 
-        let csum = file::checksum(&mut io::BufReader::new(file), progress_cb).await?;
+        let csum = file::checksum(file, progress_cb).await?;
         Ok(TmpFileState { meta, csum })
     }
 }
