@@ -884,15 +884,7 @@ impl FileXferTask {
             let size = tmp_size.unwrap_or(0);
             events.checksum_start(size).await;
 
-            Some({
-                let ev = events.clone();
-                move |progress: u64| {
-                    let ev = ev.clone();
-                    async move {
-                        ev.checksum_progress(progress).await;
-                    }
-                }
-            })
+            Some(|progress| events.checksum_progress(progress))
         } else {
             None
         };
