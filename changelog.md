@@ -1,4 +1,4 @@
-### UNRELEASED
+### v6.1.0
 ### **Checksummed and Optimized**
 ---
 * Introduce `ChecksumStarted`, `ChecksumProgress`, and `ChecksumFinished` events on the downloader side when resuming and after the download.
