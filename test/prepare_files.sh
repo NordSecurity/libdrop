@@ -41,6 +41,7 @@ dd bs=1024K count=1 if=/dev/urandom of="/tmp/duplicate/testfile.small.with.compl
 dd bs=10240K count=2 if=/dev/urandom of="/tmp/duplicate/testfile-big"
 dd bs=1024K count=1 if=/dev/urandom of="/tmp/name/file-01"
 dd bs=1024K count=1 if=/dev/urandom of="/tmp/different/name/file-02"
+dd bs=1024K count=1 if=/dev/urandom of="/tmp/utf8-testfile-宁察"
 
 # Create tiny jpeg and gif files to test analytics
 # "/tmp/tiny-jpeg.jpg"

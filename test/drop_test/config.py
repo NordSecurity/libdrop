@@ -131,6 +131,9 @@ FILES = {
         size=26,
         id="QP4qGg8W2oWG8c9fBZOla0czYwfHfScKXXG0lVf57Jc",
     ),
+    "utf8-testfile-\u5b81\u5BDF": TestFile(
+        size=1 * 1024, id="iYHFSaSzwOXygOqayOaVNlF4cQUF2nyZyTzaIpnVau8"
+    ),
 }
 
 DBFILES = {"26-1-corrupted.sqlite": b"this is a corrupted sqlite file"}
