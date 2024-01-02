@@ -3953,6 +3953,86 @@ scenarios = [
         },
     ),
     Scenario(
+        "scenario19-3",
+        "Send a file with UTF8 symbols",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN"),
+                    # Wait for another peer to appear
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY", ["/tmp/utf8-testfile-\u5b81\u5BDF"]
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["utf8-testfile-\u5b81\u5BDF"].id,
+                                    "utf8-testfile-\u5b81\u5BDF",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["utf8-testfile-\u5b81\u5BDF"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["utf8-testfile-\u5b81\u5BDF"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["utf8-testfile-\u5b81\u5BDF"].id,
+                                    "utf8-testfile-\u5b81\u5BDF",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["utf8-testfile-\u5b81\u5BDF"].id,
+                        "/tmp/received/19-3",
+                    ),
+                    action.Wait(event.Start(0, FILES["utf8-testfile-\u5b81\u5BDF"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["utf8-testfile-\u5b81\u5BDF"].id,
+                            "/tmp/received/19-3/utf8-testfile-\u5b81\u5BDF",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File(
+                                "/tmp/received/19-3/utf8-testfile-\u5b81\u5BDF", 1048576
+                            ),
+                        ],
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
         "scenario20",
         "Send multiple files within a single transfer",
         {
