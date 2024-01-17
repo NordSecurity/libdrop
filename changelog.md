@@ -1,3 +1,11 @@
+### v6.1.1
+### **Checksummed and Optimized**
+---
+* Update moose tracker to v4.0.0
+
+---
+<br>
+
 ### v6.1.0
 ### **Checksummed and Optimized**
 ---
