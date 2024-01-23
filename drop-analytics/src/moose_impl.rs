@@ -14,7 +14,7 @@ const DROP_MOOSE_APP_NAME: &str = "norddrop";
 
 /// Version of the tracker used, should be updated every time the tracker
 /// library is updated
-const DROP_MOOSE_TRACKER_VERSION: &str = "4.0.0";
+const DROP_MOOSE_TRACKER_VERSION: &str = "4.0.1";
 
 pub struct MooseImpl {
     logger: slog::Logger,
