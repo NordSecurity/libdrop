@@ -1,7 +1,16 @@
+### v6.1.2
+### **Checksummed and Optimized**
+---
+* Update moose tracker to v4.0.1. This update reduces log pollution from moose as it reduces log severity.
+
+---
+<br>
+
+
 ### v6.1.1
 ### **Checksummed and Optimized**
 ---
-* Update moose tracker to v4.0.0
+* Update moose tracker to v4.0.0. Which adds the previously missing `path_id` field in the `transfer_file` event
 
 ---
 <br>
