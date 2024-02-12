@@ -749,6 +749,11 @@ fn initialize_moose(
             error!(logger, "Failed to init moose: {err:?}");
 
             if !prod {
+                error!(
+                    logger,
+                    "Moose is in debug mode and failed to initialize. Bailing initialization"
+                );
+
                 return Err(ffi::types::NORDDROP_RES_ERROR);
             }
 
