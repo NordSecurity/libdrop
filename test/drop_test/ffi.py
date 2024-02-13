@@ -512,7 +512,6 @@ class Drop:
             "dir_depth_limit": 5,
             "transfer_file_limit": 1000,
             "moose_event_path": "/tmp/moose-events.json",
-            "moose_app_version": "test-framework",
             "moose_prod": False,
             "storage_path": dbpath,
         }

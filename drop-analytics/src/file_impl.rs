@@ -25,7 +25,6 @@ struct InitEvent {
     #[serde(flatten)]
     event: crate::InitEventData,
     lib_version: String,
-    app_version: String,
     prod: bool,
 }
 
@@ -33,23 +32,15 @@ pub struct FileImpl {
     event_path: String,
     logger: Logger,
     lib_version: String,
-    app_version: String,
     prod: bool,
 }
 
 impl FileImpl {
-    pub fn new(
-        logger: Logger,
-        event_path: String,
-        lib_version: String,
-        app_version: String,
-        prod: bool,
-    ) -> Self {
+    pub fn new(logger: Logger, event_path: String, lib_version: String, prod: bool) -> Self {
         Self {
             event_path,
             logger,
             lib_version,
-            app_version,
             prod,
         }
     }
@@ -76,7 +67,6 @@ impl super::Moose for FileImpl {
         let event = self.write_event(MooseEventType::Init(InitEvent {
             event: data,
             lib_version: self.lib_version.clone(),
-            app_version: self.app_version.clone(),
             prod: self.prod,
         }));
 
