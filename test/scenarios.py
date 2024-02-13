@@ -4525,7 +4525,6 @@ scenarios = [
                             "type": "init",
                             "result": 0,
                             "lib_version": "*",
-                            "app_version": "test-framework",
                             "prod": false,
                             "init_duration": ">0"
                         }""",
@@ -4623,7 +4622,6 @@ scenarios = [
                             "type": "init",
                             "result": 0,
                             "lib_version": "*",
-                            "app_version": "test-framework",
                             "prod": false,
                             "init_duration": ">0"
                         }""",
@@ -8997,7 +8995,7 @@ scenarios = [
                             "transfer_time": ">0",
                             "transferred": 0,
                             "path_id": \""""
-                            + FILES["tiny-jpeg.jpg"].id
+                            + FILES["tiny-gif.gif"].id
                             + """\",
                             "direction": "upload"
                         }""",
@@ -9009,7 +9007,7 @@ scenarios = [
                             "transfer_time": ">0",
                             "transferred": 0,
                             "path_id": \""""
-                            + FILES["tiny-gif.gif"].id
+                            + FILES["tiny-jpeg.jpg"].id
                             + """\",
                             "direction": "upload"
                         }""",
@@ -9089,7 +9087,7 @@ scenarios = [
                             "transfer_time": ">0",
                             "transferred": 0,
                             "path_id": \""""
-                            + FILES["tiny-jpeg.jpg"].id
+                            + FILES["tiny-gif.gif"].id
                             + """\",
                             "direction": "download"
                         }""",
@@ -9101,7 +9099,7 @@ scenarios = [
                             "transfer_time": ">0",
                             "transferred": 0,
                             "path_id": \""""
-                            + FILES["tiny-gif.gif"].id
+                            + FILES["tiny-jpeg.jpg"].id
                             + """\",
                             "direction": "download"
                         }""",
