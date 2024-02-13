@@ -131,6 +131,12 @@ impl TransferManager {
                         drop(conn)
                     }
                     _ => {
+                        if let Some(conn) = &state.conn {
+                            if !conn.is_closed() {
+                                anyhow::bail!("The transfer connection is in progress already");
+                            }
+                        }
+
                         info!(self.logger, "Issuing pending requests for: {}", xfer.id());
                         state.issue_pending_requests(&conn, &self.logger);
                         state.conn = Some(conn);
