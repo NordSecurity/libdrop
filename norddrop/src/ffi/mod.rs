@@ -330,9 +330,6 @@ pub extern "C" fn norddrop_set_fd_resolver_callback(
 /// * `transfer_file_limit` - when aggregating files from the path, if this
 /// limit is reached, an error is returned.
 ///
-/// * `moose_app_version` - version of the application that is using libdrop,
-///   passed down in the context later.
-///
 /// * `moose_event_path` - moose database path.
 ///
 /// * `moose_prod` - moose production flag.
