@@ -553,7 +553,7 @@ pub extern "C" fn norddrop_purge_transfers_until(
 /// }
 /// ]
 /// ```
-///
+/// 
 /// ## Receiver
 /// ```json
 /// [

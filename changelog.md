@@ -1,3 +1,12 @@
+### UNRELEASED
+### **Checksummed and Optimized**
+---
+* Update moose tracker to v5.0.0 which introduces automatic context sharing and QoL improvements to development
+* Removed `moose_app_version` field from config (it will be ignored, if present)
+
+---
+<br>
+
 ### v6.1.2
 ### **Checksummed and Optimized**
 ---
