@@ -1,11 +1,8 @@
 name: Lint
-on:
-  pull_request:
-    branches: [dev, main]
-  push:
-    branches: [dev, main]
+on: 
+  - push
 jobs:
-  lint-rust:
+  rust:
     container: rust:1.72.1-bullseye
     runs-on: ubuntu-latest
     steps:
@@ -44,7 +41,7 @@ jobs:
             --deny clippy::wildcard_imports
             --deny clippy::unwrap_used
             --deny warnings
-  lint-python:
+  python:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
