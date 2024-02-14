@@ -23,6 +23,7 @@ pub struct EventTransferRequest {
 
 #[derive(Serialize)]
 pub struct EventRequestQueued {
+    peer: String,
     transfer: String,
     files: Vec<File>,
     timestamp: u64,
@@ -350,6 +351,7 @@ impl<T: drop_transfer::Transfer> From<&T> for EventTransferRequest {
 impl<T: drop_transfer::Transfer> From<&T> for EventRequestQueued {
     fn from(t: &T) -> EventRequestQueued {
         EventRequestQueued {
+            peer: t.peer().to_string(),
             transfer: t.id().to_string(),
             files: extract_transfer_files(t),
             timestamp: utils::current_timestamp(),

@@ -27,6 +27,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -177,6 +178,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -197,6 +199,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             1,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -437,6 +440,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -454,6 +458,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             1,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -576,6 +581,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -632,6 +638,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -684,6 +691,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -745,6 +753,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -796,6 +805,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["nested/big/testfile-01"].id,
@@ -900,6 +910,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -957,6 +968,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -995,6 +1007,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -1024,6 +1037,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -1103,6 +1117,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["deep/path/file1.ext1"].id,
@@ -1316,6 +1331,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["deep/path/file1.ext1"].id,
@@ -1532,6 +1548,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
@@ -1611,6 +1628,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -1630,6 +1648,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             1,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["duplicate/testfile-small"].id,
@@ -1735,6 +1754,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES[
@@ -1765,6 +1785,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             1,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES[
@@ -1900,25 +1921,25 @@ scenarios = [
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     # fmt: off
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(0, { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
+                    action.Wait(event.Queued(0, "DROP_PEER_STIMPY", { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(1, { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
+                    action.Wait(event.Queued(1, "DROP_PEER_STIMPY", { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(2, { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
+                    action.Wait(event.Queued(2, "DROP_PEER_STIMPY", { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(3, { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
+                    action.Wait(event.Queued(3, "DROP_PEER_STIMPY", { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(4, { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
+                    action.Wait(event.Queued(4, "DROP_PEER_STIMPY", { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(5, { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
+                    action.Wait(event.Queued(5, "DROP_PEER_STIMPY", { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(6, { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
+                    action.Wait(event.Queued(6, "DROP_PEER_STIMPY", { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(7, { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
+                    action.Wait(event.Queued(7, "DROP_PEER_STIMPY", { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(8, { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
+                    action.Wait(event.Queued(8, "DROP_PEER_STIMPY", { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(9, { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
+                    action.Wait(event.Queued(9, "DROP_PEER_STIMPY", { event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), })),
                     # fmt: on
                     # fmt: off
                     action.WaitRacy(
@@ -2040,25 +2061,25 @@ scenarios = [
                     ),
                     # fmt: off
                     action.WaitRacy([
-                        event.Queued(0, {
+                        event.Queued(0, "DROP_PEER_STIMPY", {
                             event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
                             event.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
                             event.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
                             event.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
                         }),
-                        event.Queued(1, {
+                        event.Queued(1, "DROP_PEER_STIMPY", {
                             event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
                             event.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
                             event.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
                             event.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
                         }),
-                        event.Queued(2, {
+                        event.Queued(2, "DROP_PEER_STIMPY", {
                             event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
                             event.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
                             event.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
                             event.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
                         }),
-                        event.Queued(3, {
+                        event.Queued(3, "DROP_PEER_STIMPY", {
                             event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
                             event.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
                             event.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
@@ -2206,25 +2227,25 @@ scenarios = [
                     ),
                     # fmt: off
                     action.WaitRacy([
-                        event.Queued(0, {
+                        event.Queued(0, "DROP_PEER_STIMPY", {
                             event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
                             event.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
                             event.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
                             event.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
                         }),
-                        event.Queued(1, {
+                        event.Queued(1, "DROP_PEER_STIMPY", {
                             event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
                             event.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
                             event.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
                             event.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
                         }),
-                        event.Queued(2, {
+                        event.Queued(2, "DROP_PEER_STIMPY", {
                             event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
                             event.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
                             event.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
                             event.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
                         }),
-                        event.Queued(3, {
+                        event.Queued(3, "DROP_PEER_STIMPY", {
                             event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
                             event.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
                             event.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
@@ -2385,6 +2406,7 @@ scenarios = [
                         [
                             event.Queued(
                                 0,
+                                "DROP_PEER_STIMPY",
                                 {
                                     event.File(
                                         "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
@@ -2395,6 +2417,7 @@ scenarios = [
                             ),
                             event.Queued(
                                 1,
+                                "DROP_PEER_GEORGE",
                                 {
                                     event.File(
                                         "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
@@ -2530,6 +2553,7 @@ scenarios = [
                         [
                             event.Queued(
                                 0,
+                                "DROP_PEER_STIMPY",
                                 {
                                     event.File(
                                         "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
@@ -2540,6 +2564,7 @@ scenarios = [
                             ),
                             event.Queued(
                                 1,
+                                "DROP_PEER_GEORGE",
                                 {
                                     event.File(
                                         "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
@@ -2673,6 +2698,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -2753,6 +2779,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -2820,6 +2847,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -2916,6 +2944,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -2996,6 +3025,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -3081,6 +3111,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["deep/path/file1.ext1"].id,
@@ -3119,6 +3150,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             1,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["deep/path/file1.ext1"].id,
@@ -3291,6 +3323,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["name/file-01"].id,
@@ -3410,6 +3443,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -3575,6 +3609,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -3673,6 +3708,7 @@ scenarios = [
                         [
                             event.Queued(
                                 0,
+                                "DROP_PEER_STIMPY",
                                 {
                                     event.File(
                                         FILES[
@@ -3685,6 +3721,7 @@ scenarios = [
                             ),
                             event.Queued(
                                 1,
+                                "DROP_PEER_STIMPY",
                                 {
                                     event.File(
                                         FILES[
@@ -3697,6 +3734,7 @@ scenarios = [
                             ),
                             event.Queued(
                                 2,
+                                "DROP_PEER_GEORGE",
                                 {
                                     event.File(
                                         FILES[
@@ -3709,6 +3747,7 @@ scenarios = [
                             ),
                             event.Queued(
                                 3,
+                                "DROP_PEER_GEORGE",
                                 {
                                     event.File(
                                         FILES[
@@ -3889,6 +3928,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["with-illegal-char-\x0A-"].id,
@@ -3967,6 +4007,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["utf8-testfile-\u5b81\u5BDF"].id,
@@ -4051,6 +4092,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -4244,6 +4286,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -4348,6 +4391,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -4441,6 +4485,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["nested/big/testfile-01"].id,
@@ -4601,6 +4646,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["zero-sized-file"].id, "zero-sized-file", 0
@@ -4675,6 +4721,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -4783,6 +4830,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -4855,6 +4903,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -4923,6 +4972,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -4981,6 +5031,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -5040,6 +5091,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -5099,6 +5151,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -5157,6 +5210,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -5223,6 +5277,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -5289,6 +5344,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -5362,6 +5418,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -5434,6 +5491,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -5513,6 +5571,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY6",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -5666,6 +5725,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -5853,6 +5913,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -5961,6 +6022,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -6092,6 +6154,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -6220,6 +6283,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
@@ -6338,6 +6402,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -6386,6 +6451,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -6442,6 +6508,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -6482,6 +6549,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -6566,6 +6634,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -6648,6 +6717,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -6709,6 +6779,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -6767,6 +6838,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -6885,6 +6957,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -7003,6 +7076,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -7121,6 +7195,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -7232,6 +7307,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -7343,6 +7419,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -7481,6 +7558,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -7619,6 +7697,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -7754,6 +7833,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["deep/path/file1.ext1"].id,
@@ -7861,6 +7941,7 @@ scenarios = [
                         [
                             event.Queued(
                                 0,
+                                "DROP_PEER_STIMPY",
                                 {
                                     event.File(
                                         FILES["testfile-small"].id,
@@ -7871,6 +7952,7 @@ scenarios = [
                             ),
                             event.Queued(
                                 1,
+                                "DROP_PEER_STIMPY",
                                 {
                                     event.File(
                                         FILES["testfile-small"].id,
@@ -7970,6 +8052,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -8055,6 +8138,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -8103,6 +8187,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -8201,6 +8286,7 @@ scenarios = [
                         [
                             event.Queued(
                                 0,
+                                "DROP_PEER_STIMPY",
                                 {
                                     event.File(
                                         FILES["testfile-small"].id,
@@ -8288,6 +8374,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -8301,6 +8388,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             1,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -8434,6 +8522,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -8484,6 +8573,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -8528,6 +8618,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -8603,6 +8694,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -8662,6 +8754,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -8740,6 +8833,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -8860,6 +8954,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -8928,6 +9023,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -8984,6 +9080,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -9047,6 +9144,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -9122,6 +9220,7 @@ scenarios = [
                         [
                             event.Queued(
                                 0,
+                                "DROP_PEER_STIMPY",
                                 {
                                     event.File(
                                         FILES["testfile-small"].id,
@@ -9132,6 +9231,7 @@ scenarios = [
                             ),
                             event.Queued(
                                 1,
+                                "DROP_PEER_GEORGE",
                                 {
                                     event.File(
                                         FILES["testfile-big"].id,
@@ -9240,6 +9340,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -9253,6 +9354,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             1,
+                            "DROP_PEER_GEORGE",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -9370,6 +9472,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -9383,6 +9486,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             1,
+                            "DROP_PEER_GEORGE",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -9537,6 +9641,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -9551,6 +9656,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             1,
+                            "DROP_PEER_GEORGE",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -9707,6 +9813,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -9746,6 +9853,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -9825,6 +9933,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -9899,6 +10008,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -9972,6 +10082,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id,
@@ -10039,6 +10150,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -10176,6 +10288,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["tiny-jpeg.jpg"].id, "tiny-jpeg.jpg", 134
@@ -10360,6 +10473,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -10501,6 +10615,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -10690,6 +10805,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
@@ -10863,6 +10979,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-small"].id,
@@ -11030,7 +11147,7 @@ scenarios = [
                         "/tmp/testfile-bulk-04",
                         "/tmp/testfile-bulk-05",
                     ]),
-                    action.Wait(event.Queued(0, { 
+                    action.Wait(event.Queued(0, "DROP_PEER_STIMPY",{ 
                         event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
                         event.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
                         event.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
@@ -11111,6 +11228,7 @@ scenarios = [
                     action.Wait(
                         event.Queued(
                             0,
+                            "DROP_PEER_STIMPY",
                             {
                                 event.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
