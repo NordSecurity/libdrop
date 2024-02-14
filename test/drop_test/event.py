@@ -52,23 +52,26 @@ class File:
 
 
 class Queued(Event):
-    def __init__(self, uuid_slot: int, files: typing.Set[File]):
+    def __init__(self, uuid_slot: int, peer: str, files: typing.Set[File]):
         self._uuid_slot = uuid_slot
+        self._peer: str = peer
         self._files: typing.Set[File] = files
 
     def __eq__(self, rhs) -> bool:
         if not isinstance(rhs, Queued):
             return NotImplemented
 
-        if self._uuid_slot != rhs._uuid_slot or Counter(self._files) != Counter(
-            rhs._files
+        if (
+            self._uuid_slot != rhs._uuid_slot
+            or self._peer != rhs._peer
+            or Counter(self._files) != Counter(rhs._files)
         ):
             return False
 
         return True
 
     def __str__(self):
-        return f"Queued(uuid={print_uuid(self._uuid_slot)}, files={self._files})"
+        return f"Queued(peer={self._peer}, uuid={print_uuid(self._uuid_slot)}, files={self._files})"
 
 
 class Receive(Event):
