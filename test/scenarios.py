@@ -978,6 +978,11 @@ scenarios = [
                             },
                         )
                     ),
+                    action.Wait(
+                        event.TransferDeferred(
+                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                        )
+                    ),
                     action.CancelTransferRequest([0]),
                     action.Wait(event.FinishTransferCanceled(0, False)),
                     action.Sleep(4),
@@ -1017,6 +1022,11 @@ scenarios = [
                             },
                         )
                     ),
+                    action.Wait(
+                        event.TransferDeferred(
+                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                        )
+                    ),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1031,7 +1041,6 @@ scenarios = [
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.ConfigureNetwork(latency="100ms"),
                     action.Start("DROP_PEER_REN"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
@@ -1047,10 +1056,16 @@ scenarios = [
                             },
                         )
                     ),
+                    action.Wait(
+                        event.TransferDeferred(
+                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                        )
+                    ),
                     action.Sleep(8),
-                    action.NoEvent(),
                     action.NetworkRefresh(),
-                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.WaitAndIgnoreExcept(
+                        [event.Start(0, FILES["testfile-big"].id)]
+                    ),
                     action.Wait(
                         event.FinishFileUploaded(
                             0,
@@ -1064,7 +1079,7 @@ scenarios = [
             ),
             "DROP_PEER_STIMPY": ActionList(
                 [
-                    action.Sleep(10),
+                    action.Sleep(5),
                     action.Start("DROP_PEER_STIMPY"),
                     action.Wait(
                         event.Receive(
@@ -6410,13 +6425,17 @@ scenarios = [
                             },
                         )
                     ),
+                    action.Wait(
+                        event.TransferDeferred(
+                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                        )
+                    ),
                     action.Stop(),
+                    action.Sleep(7),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-6-ren.sqlite"),
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NetworkRefresh(),
-                    # retries happen every 10 seconds, give some time for a retry to happen
-                    action.Sleep(20),
-                    action.NoEvent(),
+                    action.Sleep(10),
                 ]
             ),
             "DROP_PEER_STIMPY": ActionList(
@@ -6459,6 +6478,11 @@ scenarios = [
                             },
                         )
                     ),
+                    action.Wait(
+                        event.TransferDeferred(
+                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                        )
+                    ),
                     action.RejectTransferFile(0, FILES["testfile-big"].id),
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-big"].id, False)
@@ -6466,7 +6490,7 @@ scenarios = [
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NetworkRefresh(),
                     # give some time for the retry to happen
-                    action.Sleep(20),
+                    action.Sleep(10),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -6514,6 +6538,11 @@ scenarios = [
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             },
+                        )
+                    ),
+                    action.Wait(
+                        event.TransferDeferred(
+                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
                         )
                     ),
                     action.CancelTransferRequest([0]),
@@ -6736,7 +6765,6 @@ scenarios = [
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-small"].id, True)
                     ),
-                    action.NoEvent(),
                 ]
             ),
             "DROP_PEER_STIMPY": ActionList(
@@ -6832,7 +6860,7 @@ scenarios = [
             "DROP_PEER_REN": ActionList(
                 [
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
-                    action.ConfigureNetwork(),
+                    action.ConfigureNetwork(rate="100mbit"),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-13-ren.sqlite"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
@@ -6859,12 +6887,14 @@ scenarios = [
                     # restart
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-13-ren.sqlite"),
                     action.NetworkRefresh(),
-                    action.Wait(
-                        event.FinishFileFailed(
-                            0, FILES["testfile-big"].id, Error.IO, os_err=2
-                        )
+                    action.WaitAndIgnoreExcept(
+                        [
+                            event.FinishFileFailed(
+                                0, FILES["testfile-big"].id, Error.IO, os_err=2
+                            ),
+                            event.FinishTransferCanceled(0, True),
+                        ]
                     ),
-                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -6892,10 +6922,12 @@ scenarios = [
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
-                    action.Wait(
-                        event.FinishFileFailed(
-                            0, FILES["testfile-big"].id, Error.BAD_TRANSFER_STATE
-                        )
+                    action.WaitAndIgnoreExcept(
+                        [
+                            event.FinishFileFailed(
+                                0, FILES["testfile-big"].id, Error.BAD_TRANSFER_STATE
+                            )
+                        ]
                     ),
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
@@ -8062,6 +8094,11 @@ scenarios = [
                             },
                         )
                     ),
+                    action.Wait(
+                        event.TransferDeferred(
+                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                        )
+                    ),
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.AssertTransfers(
@@ -8210,9 +8247,9 @@ scenarios = [
                                 0,
                                 FILES["testfile-small"].id,
                             ),
+                            event.FinishTransferCanceled(0, True),
                         ]
                     ),
-                    action.ExpectCancel([0], True),
                     action.NoEvent(6),
                     action.Stop(),
                 ]
@@ -8583,6 +8620,11 @@ scenarios = [
                             },
                         )
                     ),
+                    action.Wait(
+                        event.TransferDeferred(
+                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                        )
+                    ),
                     action.Stop(),
                     # block the port on the interface libdrop's working on
                     action.ListenOnPort("DROP_PEER_REN"),
@@ -8769,7 +8811,7 @@ scenarios = [
                     action.Start(
                         "DROP_PEER_REN"
                     ),  # starting with in memory database, effectively loosing all the data
-                    action.Sleep(61),  # 60s is a check request interval
+                    action.Sleep(10),
                     action.AssertTransfers([]),
                     action.Stop(),
                 ]
@@ -8790,6 +8832,8 @@ scenarios = [
                             },
                         )
                     ),
+                    action.Sleep(2.0),
+                    action.NetworkRefresh(),
                     action.ExpectCancel([0], True),
                     # TODO: would be nice if peer ID could be matched dynamically with peer_resolver
                     action.AssertTransfers(
@@ -9350,6 +9394,11 @@ scenarios = [
                             },
                         ),
                     ),
+                    action.Wait(
+                        event.TransferDeferred(
+                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                        )
+                    ),
                     action.NewTransfer("DROP_PEER_GEORGE", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -9363,6 +9412,11 @@ scenarios = [
                                 ),
                             },
                         ),
+                    ),
+                    action.Wait(
+                        event.TransferDeferred(
+                            1, "DROP_PEER_GEORGE", Error.IO, ignore_os=True
+                        )
                     ),
                     action.NoEvent(),
                     action.Sleep(5),  # synchronize
@@ -9686,7 +9740,13 @@ scenarios = [
                         ]
                     ),
                     action.CancelTransferRequest([0, 1]),
-                    action.ExpectCancel([0, 1], False),
+                    action.NetworkRefresh(),
+                    action.WaitAndIgnoreExcept(
+                        [
+                            event.FinishTransferCanceled(0, False),
+                            event.FinishTransferCanceled(1, False),
+                        ]
+                    ),
                     action.NoEvent(6),
                     action.Stop(),
                 ]
@@ -11378,6 +11438,45 @@ scenarios = [
                     # fmt: on
                     action.NoEvent(),
                     action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario51",
+        "Send a file to offline peer. Expect TransferDeferred events",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            "DROP_PEER_STIMPY",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(
+                        event.TransferDeferred(
+                            0, "DROP_PEER_STIMPY", Error.IO, 111  # not connected
+                        )
+                    ),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    # This peer is needed because the peer lookup fails otherwise
+                    action.WaitForAnotherPeer("DROP_PEER_REN"),
+                    action.Sleep(1),
                 ]
             ),
         },

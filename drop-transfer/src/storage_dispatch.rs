@@ -154,6 +154,13 @@ impl<'a> StorageDispatch<'a> {
             crate::Event::RequestQueued(_) => (),
             crate::Event::FileUploadThrottled { .. } => (),
 
+            crate::Event::OutgoingTransferDeferred {
+                transfer: _,
+                error: _,
+            } => {
+                // not stored in the database
+            }
+
             crate::Event::ChecksumStarted {
                 transfer_id: _,
                 file_id: _,

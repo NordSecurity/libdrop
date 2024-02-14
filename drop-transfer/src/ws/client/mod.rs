@@ -58,7 +58,7 @@ struct RunContext<'a> {
 }
 
 enum WsConnection {
-    Recoverable,
+    Recoverable(crate::Error),
     Unrecoverable(crate::Error),
     Connected(WsStream, protocol::Version),
 }
@@ -126,7 +126,18 @@ async fn connect_to_peer(
 
     let (socket, ver) = match establish_ws_conn(state, xfer, logger).await {
         WsConnection::Connected(sock, ver) => (sock, ver),
-        WsConnection::Recoverable => return ControlFlow::Continue(()),
+        WsConnection::Recoverable(error) => {
+            info!(logger, "Transfer deferred {}: {error}", xfer.id());
+
+            if state.transfer_manager.is_outgoing_alive(xfer.id()).await {
+                state.emit_event(Event::OutgoingTransferDeferred {
+                    transfer: Arc::clone(xfer),
+                    error,
+                });
+            }
+
+            return ControlFlow::Continue(());
+        }
         WsConnection::Unrecoverable(err) => {
             error!(logger, "Could not connect to peer {}: {}", xfer.id(), err);
 
@@ -198,7 +209,7 @@ async fn establish_ws_conn(
         Ok(sock) => sock,
         Err(err) => {
             debug!(logger, "Failed to connect: {:?}", err,);
-            return WsConnection::Recoverable;
+            return WsConnection::Recoverable(crate::Error::Io(err));
         }
     };
 
@@ -225,7 +236,7 @@ async fn establish_ws_conn(
             Ok(_) => break ver,
             Err(RequestError::General(err)) => {
                 info!(logger, "Error while making the HTTP request: {err:?}");
-                return WsConnection::Recoverable;
+                return WsConnection::Recoverable(crate::Error::ConnectionClosedByPeer);
             }
             Err(RequestError::UnexpectedResponse(status)) => {
                 match status {
@@ -234,7 +245,7 @@ async fn establish_ws_conn(
                     }
                     StatusCode::TOO_MANY_REQUESTS => {
                         warn!(logger, "The response triggered DoS protection mechanism");
-                        return WsConnection::Recoverable;
+                        return WsConnection::Recoverable(crate::Error::TooManyRequests);
                     }
                     StatusCode::NOT_FOUND => (), // Server doesn't support
                     status => debug!(

@@ -417,3 +417,37 @@ class RuntimeError(Event):
 
     def __str__(self):
         return f"RuntimeError(status={self._status})"
+
+
+class TransferDeferred(Event):
+    def __init__(
+        self,
+        uuid_slot: int,
+        peer: str,
+        status: int,
+        os_err: typing.Optional[int] = None,
+        ignore_os: bool = False,
+    ):
+        self._uuid_slot = uuid_slot
+        self._peer = peer
+        self._status = status
+        self._os_err = os_err
+        self._ignore_os = ignore_os
+
+    def __eq__(self, rhs):
+        if not isinstance(rhs, TransferDeferred):
+            return False
+        if self._uuid_slot != rhs._uuid_slot:
+            return False
+        if self._peer != rhs._peer:
+            return False
+        if self._status != rhs._status:
+            return False
+        if not (self._ignore_os or rhs._ignore_os):
+            if self._os_err != rhs._os_err:
+                return False
+
+        return True
+
+    def __str__(self):
+        return f"TransferDeferred(transfer={print_uuid(self._uuid_slot)}, peer={self._peer}, status={self._status}, os_err={self._os_err})"

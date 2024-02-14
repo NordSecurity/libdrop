@@ -6,6 +6,7 @@
 * Add `peer` field to `TransferQueued` event
 * Fix ocassional `TransferStarted` after file rejection
 * Add `connection_retries` config parameter
+* Add `TransferDeffered` event indicating the connection to peer couldn't be establish at this time
 
 ---
 <br>

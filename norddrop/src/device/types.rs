@@ -115,6 +115,12 @@ pub enum Event {
         transfered: u64,
         timestamp: u64,
     },
+    TransferDeferred {
+        transfer: Uuid,
+        peer: String,
+        #[serde(flatten)]
+        status: Status,
+    },
 
     ChecksumStarted {
         transfer: Uuid,
@@ -342,6 +348,13 @@ impl From<(drop_transfer::Event, SystemTime)> for Event {
                 bytes_checksummed: progress,
                 timestamp,
             },
+            drop_transfer::Event::OutgoingTransferDeferred { transfer, error } => {
+                Self::TransferDeferred {
+                    transfer: transfer.id(),
+                    peer: transfer.peer().to_string(),
+                    status: Status::from(&error),
+                }
+            }
         }
     }
 }
