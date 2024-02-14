@@ -721,6 +721,7 @@ def new_event(event_str: str) -> event.Event:
 
         return event.Queued(
             transfer_slot,
+            peer_resolver.reverse_lookup(event_data["peer"]),
             {event.File(f["id"], f["path"], f["size"]) for f in event_data["files"]},
         )
 
