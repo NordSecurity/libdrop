@@ -4525,7 +4525,6 @@ scenarios = [
                             "type": "init",
                             "result": 0,
                             "lib_version": "*",
-                            "app_version": "test-framework",
                             "prod": false,
                             "init_duration": ">0"
                         }""",
@@ -4623,7 +4622,6 @@ scenarios = [
                             "type": "init",
                             "result": 0,
                             "lib_version": "*",
-                            "app_version": "test-framework",
                             "prod": false,
                             "init_duration": ">0"
                         }""",
@@ -8819,7 +8817,6 @@ scenarios = [
                             "type": "init",
                             "result": 0,
                             "lib_version": "*",
-                            "app_version": "test-framework",
                             "prod": false,
                             "init_duration": ">0"
                         }""",
@@ -8898,7 +8895,6 @@ scenarios = [
                             "type": "init",
                             "result": 0,
                             "lib_version": "*",
-                            "app_version": "test-framework",
                             "prod": false,
                             "init_duration": ">0"
                         }""",
@@ -8969,7 +8965,6 @@ scenarios = [
                             "type": "init",
                             "result": 0,
                             "lib_version": "*",
-                            "app_version": "test-framework",
                             "prod": false,
                             "init_duration": ">0"
                         }""",
@@ -9000,7 +8995,7 @@ scenarios = [
                             "transfer_time": ">0",
                             "transferred": 0,
                             "path_id": \""""
-                            + FILES["tiny-jpeg.jpg"].id
+                            + FILES["tiny-gif.gif"].id
                             + """\",
                             "direction": "upload"
                         }""",
@@ -9012,7 +9007,7 @@ scenarios = [
                             "transfer_time": ">0",
                             "transferred": 0,
                             "path_id": \""""
-                            + FILES["tiny-gif.gif"].id
+                            + FILES["tiny-jpeg.jpg"].id
                             + """\",
                             "direction": "upload"
                         }""",
@@ -9081,7 +9076,6 @@ scenarios = [
                             "type": "init",
                             "result": 0,
                             "lib_version": "*",
-                            "app_version": "test-framework",
                             "prod": false,
                             "init_duration": ">0"
                         }""",
@@ -9093,7 +9087,7 @@ scenarios = [
                             "transfer_time": ">0",
                             "transferred": 0,
                             "path_id": \""""
-                            + FILES["tiny-jpeg.jpg"].id
+                            + FILES["tiny-gif.gif"].id
                             + """\",
                             "direction": "download"
                         }""",
@@ -9105,7 +9099,7 @@ scenarios = [
                             "transfer_time": ">0",
                             "transferred": 0,
                             "path_id": \""""
-                            + FILES["tiny-gif.gif"].id
+                            + FILES["tiny-jpeg.jpg"].id
                             + """\",
                             "direction": "download"
                         }""",
@@ -9152,7 +9146,6 @@ scenarios = [
                             "type": "init",
                             "result": 0,
                             "lib_version": "*",
-                            "app_version": "test-framework",
                             "prod": false,
                             "init_duration": ">0"
                         }""",
@@ -9234,7 +9227,6 @@ scenarios = [
                             "type": "init",
                             "result": 0,
                             "lib_version": "*",
-                            "app_version": "test-framework",
                             "prod": false,
                             "init_duration": ">0"
                         }""",
@@ -9292,7 +9284,6 @@ scenarios = [
                             "type": "init",
                             "result": 0,
                             "lib_version": "*",
-                            "app_version": "test-framework",
                             "prod": false,
                             "init_duration": ">0"
                         }""",
@@ -9404,7 +9395,6 @@ scenarios = [
                             "type": "init",
                             "result": 0,
                             "lib_version": "*",
-                            "app_version": "test-framework",
                             "prod": false,
                             "init_duration": ">0"
                         }""",
@@ -9424,7 +9414,6 @@ scenarios = [
                             "type": "init",
                             "result": 0,
                             "lib_version": "*",
-                            "app_version": "test-framework",
                             "prod": false,
                             "init_duration": ">0"
                         }""",
@@ -9484,7 +9473,6 @@ scenarios = [
                             "type": "init",
                             "result": 0,
                             "lib_version": "*",
-                            "app_version": "test-framework",
                             "prod": false,
                             "init_duration": ">0"
                         }""",
@@ -9559,7 +9547,6 @@ scenarios = [
                             "type": "init",
                             "result": 0,
                             "lib_version": "*",
-                            "app_version": "test-framework",
                             "prod": false,
                             "init_duration": ">0"
                         }""",
@@ -9577,6 +9564,206 @@ scenarios = [
                         }""",
                         ]
                     ),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "analytics-6-1",
+        "Test if the instance can recover on database corruption",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start(
+                        "DROP_PEER_REN",
+                        dbpath="/tmp/db/26-1-corrupted.sqlite",
+                    ),
+                    action.Wait(event.RuntimeError(Error.DB_LOST)),
+                    action.NoEvent(),
+                    action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "exception",
+                            "code": 11,
+                            "note": "Initial DB open failed, recreating",
+                            "message": "Failed to open DB file",
+                            "name": "DB Error"
+                        }""",
+                            """{
+                            "type": "init",
+                            "result": 0,
+                            "lib_version": "*",
+                            "prod": false,
+                            "init_duration": ">0"
+                        }""",
+                        ]
+                    ),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "analytics-6-2",
+        "Provide database with insufficient permissions, expect file share and in-memory database to work, with failures being reported to moose",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.WaitForAnotherPeer(),
+                    action.DropPrivileges(),
+                    action.Start(
+                        "DROP_PEER_REN",
+                        dbpath="/root/no-access-db.sqlite",
+                    ),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-small"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.AssertTransfers(
+                        [
+                            """{
+                        "id": "*",
+                        "created_at": "*",
+                        "states": [
+                            {
+                                "created_at": "*",
+                                "state": "cancel",
+                                "by_peer": true
+                            }
+                        ],
+                        "type": "outgoing",
+                        "paths": [
+                            {
+                                "relative_path": "testfile-small",
+                                "base_path": "/tmp",
+                                "bytes": 1048576,
+                                "states": [
+                                    {
+                                        "created_at": "*",
+                                        "state": "started",
+                                        "bytes_sent": 0
+                                    },
+                                    {
+                                        "created_at": "*",
+                                        "state": "completed"
+                                    }
+                                ]
+                            }
+                        ]
+                    }""",
+                        ]
+                    ),
+                    action.Stop(),
+                    action.AssertMooseEvents(
+                        [
+                            """{
+                            "type": "exception",
+                            "code": 11,
+                            "note": "Initial DB open failed, recreating",
+                            "message": "Failed to open DB file",
+                            "name": "DB Error"
+                        }""",
+                            """{
+                            "type": "exception",
+                            "code": 11,
+                            "note": "Permission denied (os error 13)",
+                            "message": "Failed to remove old DB file",
+                            "name": "DB Error"
+                        }""",
+                            """{
+                            "type": "init",
+                            "result": 0,
+                            "lib_version": "*",
+                            "prod": false,
+                            "init_duration": ">0"
+                        }""",
+                            """{
+                            "type": "transfer_intent",
+                            "transfer_id": "*",
+                            "path_ids": \""""
+                            + FILES["testfile-small"].id
+                            + """\",
+                            "extensions": "none",
+                            "mime_types": "unknown",
+                            "file_count": 1,
+                            "file_sizes": "1024",
+                            "transfer_size": 1024
+                        }""",
+                            """{
+                            "type": "transfer_state",
+                            "protocol_version": 5,
+                            "result": 0
+                        }""",
+                            """{
+                            "type": "file",
+                            "result": 0,
+                            "phase": "finished",
+                            "transfer_id": "*",
+                            "transfer_time": ">0",
+                            "transferred": ">=0",
+                            "path_id": \""""
+                            + FILES["testfile-small"].id
+                            + """\",
+                            "direction": "upload"
+                        }""",
+                        ]
+                    ),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-small"].id,
+                        "/tmp/received/26-2",
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-small"].id,
+                            "/tmp/received/26-2/testfile-small",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/26-2/testfile-small", 1048576),
+                        ],
+                    ),
+                    action.CancelTransferRequest(0),
+                    action.ExpectCancel([0], False),
                 ]
             ),
         },
