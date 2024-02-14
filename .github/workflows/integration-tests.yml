@@ -2,7 +2,6 @@ name: Integration tests
 run-name: ${{ github.actor }} is running integration tests
 on:
   - push
-  - pull_request_target
 jobs:
   tests:
     runs-on: ubuntu-latest    
