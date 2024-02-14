@@ -24,6 +24,7 @@ enum State {
     Throttled,
     Preflight,
     InFlight { started: Instant },
+    Terminal,
 }
 
 impl FileEventTxInner {
@@ -94,6 +95,11 @@ impl<T: Transfer> FileEventTx<T> {
 
     async fn start_inner(&self, events: impl IntoIterator<Item = Event>) {
         let mut lock = self.inner.lock().await;
+
+        if matches!(lock.state, State::Terminal) {
+            return;
+        }
+
         lock.state = State::InFlight {
             started: Instant::now(),
         };
@@ -111,6 +117,7 @@ impl<T: Transfer> FileEventTx<T> {
             State::Throttled => Duration::ZERO,
             State::InFlight { started } => started.elapsed(),
             State::Preflight => Duration::ZERO,
+            State::Terminal => return,
         };
 
         let phase = match event {
@@ -140,14 +147,15 @@ impl<T: Transfer> FileEventTx<T> {
         lock.emit_event(event);
     }
 
-    async fn force_stop(&self, event: Event, status: Result<(), i32>) {
+    async fn terminate(&self, event: Event, status: Result<(), i32>) {
         let mut lock = self.inner.lock().await;
 
-        let elapsed = match std::mem::replace(&mut lock.state, State::Idle) {
+        let elapsed = match std::mem::replace(&mut lock.state, State::Terminal) {
             State::Idle => Duration::ZERO,
             State::Throttled => Duration::ZERO,
             State::InFlight { started } => started.elapsed(),
             State::Preflight => Duration::ZERO,
+            State::Terminal => return,
         };
 
         let phase = match event {
@@ -185,6 +193,7 @@ impl<T: Transfer> FileEventTx<T> {
             State::Throttled => Some(Duration::ZERO),
             State::InFlight { started } => Some(started.elapsed()),
             State::Preflight => Some(Duration::ZERO),
+            State::Terminal => return,
         };
 
         if let Some(elapsed) = elapsed {
@@ -260,7 +269,7 @@ impl FileEventTx<IncomingTransfer> {
 
     pub async fn failed(&self, err: crate::Error) {
         let status = i32::from(&err);
-        self.force_stop(
+        self.terminate(
             crate::Event::FileDownloadFailed(self.xfer.clone(), self.file_id.clone(), err),
             Err(status),
         )
@@ -268,7 +277,7 @@ impl FileEventTx<IncomingTransfer> {
     }
 
     pub async fn rejected(&self, by_peer: bool) {
-        self.force_stop(
+        self.terminate(
             crate::Event::FileDownloadRejected {
                 transfer_id: self.xfer.id(),
                 file_id: self.file_id.clone(),
@@ -280,7 +289,7 @@ impl FileEventTx<IncomingTransfer> {
     }
 
     pub async fn success(&self, final_path: impl Into<PathBuf>) {
-        self.force_stop(
+        self.terminate(
             crate::Event::FileDownloadSuccess(
                 self.xfer.clone(),
                 crate::event::DownloadSuccess {
@@ -350,12 +359,13 @@ impl FileEventTx<OutgoingTransfer> {
             State::Throttled => (),
             State::InFlight { .. } => (),
             State::Preflight => (),
+            State::Terminal => (),
         }
     }
 
     pub async fn failed(&self, err: crate::Error) {
         let status = i32::from(&err);
-        self.force_stop(
+        self.terminate(
             crate::Event::FileUploadFailed(self.xfer.clone(), self.file_id.clone(), err),
             Err(status),
         )
@@ -363,7 +373,7 @@ impl FileEventTx<OutgoingTransfer> {
     }
 
     pub async fn success(&self) {
-        self.force_stop(
+        self.terminate(
             crate::Event::FileUploadSuccess(self.xfer.clone(), self.file_id.clone()),
             Ok(()),
         )
@@ -382,7 +392,7 @@ impl FileEventTx<OutgoingTransfer> {
     }
 
     pub async fn rejected(&self, by_peer: bool) {
-        self.force_stop(
+        self.terminate(
             crate::Event::FileUploadRejected {
                 transfer_id: self.xfer.id(),
                 file_id: self.file_id.clone(),
@@ -401,6 +411,7 @@ impl<T: Transfer> Drop for FileEventTx<T> {
             State::Throttled => Some(Duration::ZERO),
             State::InFlight { started } => Some(started.elapsed()),
             State::Preflight => Some(Duration::ZERO),
+            State::Terminal => return,
         };
 
         if let Some(elapsed) = elapsed {
