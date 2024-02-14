@@ -63,6 +63,11 @@ pub enum Event {
 
     OutgoingTransferFailed(Arc<OutgoingTransfer>, Error, bool),
 
+    OutgoingTransferDeferred {
+        transfer: Arc<OutgoingTransfer>,
+        error: Error,
+    },
+
     ChecksumStarted {
         transfer_id: Uuid,
         file_id: FileId,

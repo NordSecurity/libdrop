@@ -19,7 +19,6 @@ from .event import Event, print_uuid, get_uuid, UUIDS, UUIDS_LOCK
 from .peer_resolver import peer_resolver
 
 from .ffi import PeerState
-import sys
 
 
 def to_num(s: str):

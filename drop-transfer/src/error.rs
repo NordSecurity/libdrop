@@ -51,6 +51,10 @@ pub enum Error {
     FileStateMismatch(FileTerminalState),
     #[error("Empty transfer")]
     EmptyTransfer,
+    #[error("Peer closed the connection")]
+    ConnectionClosedByPeer,
+    #[error("Peer responded with too many requests status")]
+    TooManyRequests,
 }
 
 impl Error {
@@ -99,6 +103,8 @@ impl From<&Error> for u32 {
             Error::FileStateMismatch(FileTerminalState::Completed) => Status::FileFinished as _,
             Error::FileStateMismatch(FileTerminalState::Failed) => Status::FileFailed as _,
             Error::EmptyTransfer => Status::EmptyTransfer as _,
+            Error::ConnectionClosedByPeer => Status::ConnectionClosedByPeer as _,
+            Error::TooManyRequests => Status::TooManyRequests as _,
         }
     }
 }
