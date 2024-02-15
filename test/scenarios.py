@@ -11295,4 +11295,91 @@ scenarios = [
         },
         tags=["moose"],
     ),
+    Scenario(
+        "scenario50",
+        "Send a buch of files and expect `Throttled` event. Then reject the throttled file. Expect no `Started` event",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.Start("DROP_PEER_REN"),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY",
+                        [
+                            "/tmp/testfile-bulk-01",
+                            "/tmp/testfile-bulk-02",
+                            "/tmp/testfile-bulk-03",
+                            "/tmp/testfile-bulk-04",
+                            "/tmp/testfile-bulk-05",
+                        ],
+                    ),
+                    # fmt: off
+                    action.Wait(event.Queued(0, "DROP_PEER_STIMPY", {
+                        event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
+                        event.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
+                        event.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
+                        event.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                        event.File(FILES["testfile-bulk-05"].id, "testfile-bulk-05", 10485760),
+                    })),
+                    action.WaitRacy([
+                        event.Start(0,     FILES["testfile-bulk-01"].id),
+                        event.Start(0,     FILES["testfile-bulk-02"].id),
+                        event.Start(0,     FILES["testfile-bulk-03"].id),
+                        event.Start(0,     FILES["testfile-bulk-04"].id),
+                        event.Throttled(0, FILES["testfile-bulk-05"].id),
+                    ]),
+                    action.RejectTransferFile(0, FILES["testfile-bulk-05"].id),
+                    action.RejectTransferFile(0, FILES["testfile-bulk-01"].id),
+                    action.RejectTransferFile(0, FILES["testfile-bulk-02"].id),
+                    action.RejectTransferFile(0, FILES["testfile-bulk-03"].id),
+                    action.RejectTransferFile(0, FILES["testfile-bulk-04"].id),
+                    action.WaitRacy([
+                        event.FinishFileRejected(0, FILES["testfile-bulk-01"].id, False),
+                        event.FinishFileRejected(0, FILES["testfile-bulk-02"].id, False),
+                        event.FinishFileRejected(0, FILES["testfile-bulk-03"].id, False),
+                        event.FinishFileRejected(0, FILES["testfile-bulk-04"].id, False),
+                        event.FinishFileRejected(0, FILES["testfile-bulk-05"].id, False),
+                    ]),
+                    # fmt: on
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.ConfigureNetwork(),
+                    action.Start("DROP_PEER_STIMPY"),
+                    # fmt: off
+                    action.Wait(event.Receive(0, "DROP_PEER_REN", { 
+                        event.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
+                        event.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
+                        event.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
+                        event.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                        event.File(FILES["testfile-bulk-05"].id, "testfile-bulk-05", 10485760),
+                    })),
+                    action.Download(0, FILES["testfile-bulk-01"].id, "/tmp/received/50"),
+                    action.Wait(event.Start(0, FILES["testfile-bulk-01"].id)),
+                    action.Download(0, FILES["testfile-bulk-02"].id, "/tmp/received/50"),
+                    action.Wait(event.Start(0, FILES["testfile-bulk-02"].id)),
+                    action.Download(0, FILES["testfile-bulk-03"].id, "/tmp/received/50"),
+                    action.Wait(event.Start(0, FILES["testfile-bulk-03"].id)),
+                    action.Download(0, FILES["testfile-bulk-04"].id, "/tmp/received/50"),
+                    action.Wait(event.Start(0, FILES["testfile-bulk-04"].id)),
+                    action.Download(0, FILES["testfile-bulk-05"].id, "/tmp/received/50"),
+                    action.Wait(event.Start(0, FILES["testfile-bulk-05"].id)),
+                    action.WaitRacy([
+                        event.FinishFileRejected(0, FILES["testfile-bulk-01"].id, True),
+                        event.FinishFileRejected(0, FILES["testfile-bulk-02"].id, True),
+                        event.FinishFileRejected(0, FILES["testfile-bulk-03"].id, True),
+                        event.FinishFileRejected(0, FILES["testfile-bulk-04"].id, True),
+                        event.FinishFileRejected(0, FILES["testfile-bulk-05"].id, True),
+                    ]),
+                    # fmt: on
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]
