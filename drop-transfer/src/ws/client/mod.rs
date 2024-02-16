@@ -82,7 +82,8 @@ pub(crate) fn spawn(
     let id = xfer.id();
 
     tokio::spawn(async move {
-        let mut backoff = utils::RetryTrigger::new(refresh_trigger);
+        let mut backoff =
+            utils::RetryTrigger::new(refresh_trigger, state.config.connection_retries);
 
         let task = async {
             loop {

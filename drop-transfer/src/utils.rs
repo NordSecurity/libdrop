@@ -18,18 +18,25 @@ pub struct Hidden<T>(pub T);
 
 pub struct RetryTrigger {
     chan: watch::Receiver<()>,
-    retry: usize,
+    retry: u32,
+    retries: u32,
 }
 
 impl RetryTrigger {
-    pub fn new(chan: watch::Receiver<()>) -> Self {
-        Self { chan, retry: 0 }
+    pub fn new(chan: watch::Receiver<()>, retries: u32) -> Self {
+        Self {
+            chan,
+            retry: 0,
+            retries,
+        }
     }
 
     pub async fn backoff(&mut self) {
-        let delay = drop_config::RETRY_INTERVALS
-            .get(self.retry)
-            .map_or(Duration::MAX, |d| *d);
+        let delay = if self.retry + 1 < self.retries {
+            drop_config::FIRST_RETRY_AFTER * (0x01 << self.retry)
+        } else {
+            Duration::MAX
+        };
 
         self.retry = tokio::select! {
             _ = self.chan.changed() => 0,
