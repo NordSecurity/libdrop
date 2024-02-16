@@ -13,6 +13,7 @@ pub struct DropConfig {
     pub storage_path: String,
     // If set the checksum events will be emited for every file of this or bigger size
     pub checksum_events_size_threshold: Option<usize>,
+    pub connection_retries: u32,
 }
 
 impl Default for DropConfig {
@@ -22,6 +23,7 @@ impl Default for DropConfig {
             transfer_file_limit: 1000,
             storage_path: "libdrop.sqlite".to_string(),
             checksum_events_size_threshold: None,
+            connection_retries: 5,
         }
     }
 }
@@ -38,11 +40,4 @@ pub const PING_INTERVAL: Duration = Duration::new(30, 0);
 pub const MAX_UPLOADS_IN_FLIGHT: usize = 4;
 pub const MAX_REQUESTS_PER_SEC: u32 = 50;
 pub const WS_SEND_TIMEOUT: Duration = Duration::new(20, 0);
-
-pub const RETRY_INTERVALS: [Duration; 5] = [
-    Duration::new(1, 0),
-    Duration::new(3, 0),
-    Duration::new(5, 0),
-    Duration::new(10, 0),
-    Duration::new(20, 0),
-];
+pub const FIRST_RETRY_AFTER: Duration = Duration::new(1, 0);

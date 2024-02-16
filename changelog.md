@@ -5,6 +5,7 @@
 * Removed `moose_app_version` field from config (it will be ignored, if present)
 * Add `peer` field to `TransferQueued` event
 * Fix ocassional `TransferStarted` after file rejection
+* Add `connection_retries` config parameter
 
 ---
 <br>
