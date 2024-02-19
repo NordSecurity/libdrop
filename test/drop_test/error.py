@@ -22,6 +22,9 @@ class Error(IntEnum):
     FILE_REJECTED = (34,)
     FILE_FAILED = (35,)
     FILE_FINISHED = (36,)
+    EMPTY_TRANSFER = (37,)
+    CONNECTION_CLOSED_BY_PEER = (38,)
+    TOO_MANY_REQUESTS = (39,)
 
 
 class ReturnCodes(IntEnum):

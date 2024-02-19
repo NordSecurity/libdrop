@@ -30,7 +30,8 @@ pub(crate) fn spawn(
 
     tokio::spawn(async move {
         let _guard = guard;
-        let mut backoff = utils::RetryTrigger::new(refresh_trigger);
+        let mut backoff =
+            utils::RetryTrigger::new(refresh_trigger, state.config.connection_retries);
 
         let task = async {
             loop {

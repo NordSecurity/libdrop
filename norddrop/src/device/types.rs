@@ -115,6 +115,12 @@ pub enum Event {
         transfered: u64,
         timestamp: u64,
     },
+    TransferDeferred {
+        transfer: Uuid,
+        peer: String,
+        #[serde(flatten)]
+        status: Status,
+    },
 
     ChecksumStarted {
         transfer: Uuid,
@@ -145,6 +151,15 @@ pub struct Config {
 
     #[serde(rename = "checksum_events_size_threshold_bytes")]
     pub checksum_events_size_threshold: Option<usize>,
+
+    #[serde(default = "Config::default_connection_retries")]
+    pub connection_retries: u32,
+}
+
+impl Config {
+    const fn default_connection_retries() -> u32 {
+        5
+    }
 }
 
 impl From<&drop_transfer::Error> for Status {
@@ -333,6 +348,13 @@ impl From<(drop_transfer::Event, SystemTime)> for Event {
                 bytes_checksummed: progress,
                 timestamp,
             },
+            drop_transfer::Event::OutgoingTransferDeferred { transfer, error } => {
+                Self::TransferDeferred {
+                    transfer: transfer.id(),
+                    peer: transfer.peer().to_string(),
+                    status: Status::from(&error),
+                }
+            }
         }
     }
 }
@@ -379,6 +401,7 @@ impl From<Config> for drop_config::Config {
             moose_prod,
             storage_path,
             checksum_events_size_threshold,
+            connection_retries,
         } = val;
 
         drop_config::Config {
@@ -387,6 +410,7 @@ impl From<Config> for drop_config::Config {
                 transfer_file_limit,
                 storage_path,
                 checksum_events_size_threshold,
+                connection_retries,
             },
             moose: drop_config::MooseConfig {
                 event_path: moose_event_path,
@@ -427,6 +451,7 @@ mod tests {
                     transfer_file_limit,
                     storage_path,
                     checksum_events_size_threshold: checksum_events_size_threshold_bytes,
+                    connection_retries,
                 },
             moose: drop_config::MooseConfig { event_path, prod },
         } = cfg.into();
@@ -437,5 +462,6 @@ mod tests {
         assert_eq!(storage_path, ":memory:");
         assert!(prod);
         assert_eq!(checksum_events_size_threshold_bytes, Some(1234));
+        assert_eq!(connection_retries, 5);
     }
 }

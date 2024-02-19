@@ -241,6 +241,10 @@ class EventQueue:
             f"Events not received\nwhile looking for(racy), remained:\n{''.join(str(e) + chr(10) for e in target_events if e not in success)}\n"
         )
 
+    async def clear(self):
+        with self._lock:
+            self._events = []
+
 
 class KeysCtx:
     def __init__(self, hostname: str):
@@ -565,6 +569,7 @@ class Drop:
             "moose_event_path": "/tmp/moose-events.json",
             "moose_prod": False,
             "storage_path": dbpath,
+            "connection_retries": 1,
         }
 
         if checksum_events_size_threshold is not None:
@@ -771,6 +776,19 @@ def new_event(event_str: str) -> event.Event:
         return event.ChecksumFinished(
             transfer_slot,
             event_data["file"],
+        )
+
+    elif event_type == "TransferDeferred":
+        transfer = event_data["transfer"]
+
+        with event.UUIDS_LOCK:
+            transfer_slot = event.UUIDS.index(transfer)
+
+        return event.TransferDeferred(
+            transfer_slot,
+            peer_resolver.reverse_lookup(event_data["peer"]),
+            event_data["status"],
+            event_data.get("os_error_code"),
         )
 
     raise ValueError(f"Unhandled event received: {event_type}")

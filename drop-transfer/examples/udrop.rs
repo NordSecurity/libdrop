@@ -164,6 +164,10 @@ fn print_event(ev: &Event) {
             file_id,
             progress,
         } => info!("[EVENT] ChecksumProgress {transfer_id}: {file_id}, progress: {progress}"),
+        Event::OutgoingTransferDeferred { transfer, error } => info!(
+            "[EVENT] OutgoingTransferDeferred {}: error: {error}",
+            transfer.id()
+        ),
     }
 }
 
