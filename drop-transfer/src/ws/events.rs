@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
-use drop_analytics::{Moose, TransferFileEventData, MOOSE_STATUS_SUCCESS};
+use drop_analytics::{Moose, TransferFileEventData, TransferStateEventData, MOOSE_STATUS_SUCCESS};
 use drop_core::Status;
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
 
@@ -15,24 +15,16 @@ use crate::{
 struct FileEventTxInner {
     tx: UnboundedSender<(Event, SystemTime)>,
     moose: Arc<dyn Moose>,
-    state: State,
+    state: FileState,
     transferred: u64,
 }
 
-enum State {
+enum FileState {
     Idle,
     Throttled,
     Preflight,
     InFlight { started: Instant },
     Terminal,
-}
-
-impl FileEventTxInner {
-    fn emit_event(&self, event: Event) {
-        self.tx
-            .send((event, SystemTime::now()))
-            .expect("Failed to emit File event");
-    }
 }
 
 pub type IncomingFileEventTx = FileEventTx<IncomingTransfer>;
@@ -44,26 +36,72 @@ pub struct FileEventTx<T: Transfer> {
     file_id: FileId,
 }
 
-pub struct FileEventTxFactory {
+pub struct EventTxFactory {
     events: UnboundedSender<(Event, SystemTime)>,
     moose: Arc<dyn Moose>,
 }
 
-impl FileEventTxFactory {
+pub struct TransferEventTx<T: Transfer> {
+    inner: Mutex<TransferEventTxInner>,
+    pub xfer: Arc<T>,
+}
+
+pub type IncomingTransferEventTx = TransferEventTx<IncomingTransfer>;
+pub type OutgoingTransferEventTx = TransferEventTx<OutgoingTransfer>;
+
+enum TransferState {
+    Ongoing,
+    Terminated,
+}
+
+struct TransferEventTxInner {
+    tx: UnboundedSender<(Event, SystemTime)>,
+    moose: Arc<dyn Moose>,
+    state: TransferState,
+}
+
+trait EventTx {
+    fn emit(&self, event: Event);
+}
+
+impl EventTx for UnboundedSender<(Event, SystemTime)> {
+    fn emit(&self, event: Event) {
+        // Sometimes on shutdown it can error out. It's better not to handle this error
+        // at all
+        let _ = self.send((event, SystemTime::now()));
+    }
+}
+
+impl EventTxFactory {
     pub fn new(events: UnboundedSender<(Event, SystemTime)>, moose: Arc<dyn Moose>) -> Self {
         Self { events, moose }
     }
 
-    pub fn create<T: Transfer>(&self, xfer: Arc<T>, file_id: FileId) -> FileEventTx<T> {
+    pub fn file<T: Transfer>(&self, xfer: Arc<T>, file_id: FileId) -> FileEventTx<T> {
         FileEventTx {
             inner: Mutex::new(FileEventTxInner {
                 tx: self.events.clone(),
                 moose: self.moose.clone(),
-                state: State::Idle,
+                state: FileState::Idle,
                 transferred: 0,
             }),
             xfer,
             file_id,
+        }
+    }
+
+    pub fn transfer<T: Transfer>(&self, xfer: Arc<T>, blocked: bool) -> TransferEventTx<T> {
+        TransferEventTx {
+            inner: Mutex::new(TransferEventTxInner {
+                tx: self.events.clone(),
+                moose: self.moose.clone(),
+                state: if blocked {
+                    TransferState::Terminated
+                } else {
+                    TransferState::Ongoing
+                },
+            }),
+            xfer,
         }
     }
 }
@@ -76,8 +114,8 @@ impl<T: Transfer> FileEventTx<T> {
     async fn emit_in_flight(&self, event: Event) {
         let mut lock = self.inner.lock().await;
 
-        if !(matches!(lock.state, State::Preflight { .. })
-            || matches!(lock.state, State::InFlight { .. }))
+        if !(matches!(lock.state, FileState::Preflight { .. })
+            || matches!(lock.state, FileState::InFlight { .. }))
         {
             return;
         }
@@ -90,34 +128,34 @@ impl<T: Transfer> FileEventTx<T> {
             _ => {}
         }
 
-        lock.emit_event(event);
+        lock.tx.emit(event);
     }
 
     async fn start_inner(&self, events: impl IntoIterator<Item = Event>) {
         let mut lock = self.inner.lock().await;
 
-        if matches!(lock.state, State::Terminal) {
+        if matches!(lock.state, FileState::Terminal) {
             return;
         }
 
-        lock.state = State::InFlight {
+        lock.state = FileState::InFlight {
             started: Instant::now(),
         };
 
         for event in events.into_iter() {
-            lock.emit_event(event);
+            lock.tx.emit(event);
         }
     }
 
     async fn stop(&self, event: Event, status: Result<(), i32>) {
         let mut lock = self.inner.lock().await;
 
-        let elapsed = match std::mem::replace(&mut lock.state, State::Idle) {
-            State::Idle => return,
-            State::Throttled => Duration::ZERO,
-            State::InFlight { started } => started.elapsed(),
-            State::Preflight => Duration::ZERO,
-            State::Terminal => return,
+        let elapsed = match std::mem::replace(&mut lock.state, FileState::Idle) {
+            FileState::Idle => return,
+            FileState::Throttled => Duration::ZERO,
+            FileState::InFlight { started } => started.elapsed(),
+            FileState::Preflight => Duration::ZERO,
+            FileState::Terminal => return,
         };
 
         let phase = match event {
@@ -144,18 +182,18 @@ impl<T: Transfer> FileEventTx<T> {
             result,
         });
 
-        lock.emit_event(event);
+        lock.tx.emit(event);
     }
 
     async fn terminate(&self, event: Event, status: Result<(), i32>) {
         let mut lock = self.inner.lock().await;
 
-        let elapsed = match std::mem::replace(&mut lock.state, State::Terminal) {
-            State::Idle => Duration::ZERO,
-            State::Throttled => Duration::ZERO,
-            State::InFlight { started } => started.elapsed(),
-            State::Preflight => Duration::ZERO,
-            State::Terminal => return,
+        let elapsed = match std::mem::replace(&mut lock.state, FileState::Terminal) {
+            FileState::Idle => Duration::ZERO,
+            FileState::Throttled => Duration::ZERO,
+            FileState::InFlight { started } => started.elapsed(),
+            FileState::Preflight => Duration::ZERO,
+            FileState::Terminal => return,
         };
 
         let phase = match event {
@@ -182,18 +220,18 @@ impl<T: Transfer> FileEventTx<T> {
             result,
         });
 
-        lock.emit_event(event);
+        lock.tx.emit(event);
     }
 
     pub async fn stop_silent(&self, status: Status) {
         let mut lock = self.inner.lock().await;
 
-        let elapsed = match std::mem::replace(&mut lock.state, State::Idle) {
-            State::Idle => None,
-            State::Throttled => Some(Duration::ZERO),
-            State::InFlight { started } => Some(started.elapsed()),
-            State::Preflight => Some(Duration::ZERO),
-            State::Terminal => return,
+        let elapsed = match std::mem::replace(&mut lock.state, FileState::Idle) {
+            FileState::Idle => None,
+            FileState::Throttled => Some(Duration::ZERO),
+            FileState::InFlight { started } => Some(started.elapsed()),
+            FileState::Preflight => Some(Duration::ZERO),
+            FileState::Terminal => return,
         };
 
         if let Some(elapsed) = elapsed {
@@ -264,7 +302,7 @@ impl FileEventTx<IncomingTransfer> {
 
     pub async fn preflight(&self) {
         let mut lock = self.inner.lock().await;
-        lock.state = State::Preflight;
+        lock.state = FileState::Preflight;
     }
 
     pub async fn failed(&self, err: crate::Error) {
@@ -347,19 +385,19 @@ impl FileEventTx<OutgoingTransfer> {
         let mut lock = self.inner.lock().await;
 
         match lock.state {
-            State::Idle => {
-                lock.emit_event(crate::Event::FileUploadThrottled {
+            FileState::Idle => {
+                lock.tx.emit(crate::Event::FileUploadThrottled {
                     transfer_id: self.xfer.id(),
                     file_id: self.file_id.clone(),
                     transfered,
                 });
 
-                lock.state = State::Throttled;
+                lock.state = FileState::Throttled;
             }
-            State::Throttled => (),
-            State::InFlight { .. } => (),
-            State::Preflight => (),
-            State::Terminal => (),
+            FileState::Throttled => (),
+            FileState::InFlight { .. } => (),
+            FileState::Preflight => (),
+            FileState::Terminal => (),
         }
     }
 
@@ -404,14 +442,106 @@ impl FileEventTx<OutgoingTransfer> {
     }
 }
 
+impl<T: Transfer> TransferEventTx<T> {
+    async fn emit_ongoing(&self, event: Event) {
+        let lock = self.inner.lock().await;
+
+        if let TransferState::Terminated = lock.state {
+            return;
+        }
+
+        lock.tx.emit(event);
+    }
+
+    async fn stop(&self, event: Event) {
+        let mut lock = self.inner.lock().await;
+
+        if let TransferState::Terminated =
+            std::mem::replace(&mut lock.state, TransferState::Terminated)
+        {
+            return;
+        }
+
+        lock.tx.emit(event);
+    }
+}
+
+impl TransferEventTx<OutgoingTransfer> {
+    pub async fn queued(&self) {
+        self.emit_ongoing(Event::RequestQueued(self.xfer.clone()))
+            .await;
+    }
+
+    pub async fn failed(&self, err: crate::Error, by_peer: bool) {
+        let mut lock = self.inner.lock().await;
+
+        if let TransferState::Terminated =
+            std::mem::replace(&mut lock.state, TransferState::Terminated)
+        {
+            return;
+        }
+
+        lock.moose.event_transfer_state(TransferStateEventData {
+            protocol_version: 0,
+            transfer_id: self.xfer.id().to_string(),
+            result: i32::from(&err),
+        });
+
+        lock.tx.emit(Event::OutgoingTransferFailed(
+            self.xfer.clone(),
+            err,
+            by_peer,
+        ));
+    }
+
+    pub async fn deferred(&self, err: crate::Error) {
+        self.emit_ongoing(Event::OutgoingTransferDeferred {
+            transfer: self.xfer.clone(),
+            error: err,
+        })
+        .await;
+    }
+
+    pub async fn connected(&self, protocol_version: i32) {
+        let lock = self.inner.lock().await;
+
+        if let TransferState::Terminated = lock.state {
+            return;
+        }
+
+        lock.moose.event_transfer_state(TransferStateEventData {
+            protocol_version,
+            transfer_id: self.xfer.id().to_string(),
+            result: MOOSE_STATUS_SUCCESS,
+        });
+    }
+
+    pub async fn cancel(&self, by_peer: bool) {
+        self.stop(Event::OutgoingTransferCanceled(self.xfer.clone(), by_peer))
+            .await;
+    }
+}
+
+impl TransferEventTx<IncomingTransfer> {
+    pub async fn received(&self) {
+        self.emit_ongoing(Event::RequestReceived(self.xfer.clone()))
+            .await;
+    }
+
+    pub async fn cancel(&self, by_peer: bool) {
+        self.stop(Event::IncomingTransferCanceled(self.xfer.clone(), by_peer))
+            .await;
+    }
+}
+
 impl<T: Transfer> Drop for FileEventTx<T> {
     fn drop(&mut self) {
         let elapsed = match self.inner.get_mut().state {
-            State::Idle => None,
-            State::Throttled => Some(Duration::ZERO),
-            State::InFlight { started } => Some(started.elapsed()),
-            State::Preflight => Some(Duration::ZERO),
-            State::Terminal => return,
+            FileState::Idle => None,
+            FileState::Throttled => Some(Duration::ZERO),
+            FileState::InFlight { started } => Some(started.elapsed()),
+            FileState::Preflight => Some(Duration::ZERO),
+            FileState::Terminal => return,
         };
 
         if let Some(elapsed) = elapsed {
