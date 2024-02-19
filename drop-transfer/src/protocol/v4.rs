@@ -20,7 +20,7 @@
 use serde::{Deserialize, Serialize};
 
 pub use super::v6::{
-    Cancel, Chunk, Done, Error, File, Progress, ReportChsum, ReqChsum, Start, TransferRequest,
+    Cancel, Chunk, Done, Error, Progress, ReportChsum, ReqChsum, Start, TransferRequest,
 };
 use crate::FileId;
 
@@ -62,6 +62,7 @@ mod tests {
     use serde::de::DeserializeOwned;
 
     use super::*;
+    use crate::protocol::v6::File;
 
     fn test_json<T: Serialize + DeserializeOwned + Eq>(message: T, expected: &str) {
         let json_msg = serde_json::to_value(&message).expect("Failed to serialize");

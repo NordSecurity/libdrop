@@ -22,6 +22,8 @@ pub enum Status {
     FileFailed = 35,
     FileFinished = 36,
     EmptyTransfer = 37,
+    ConnectionClosedByPeer = 38,
+    TooManyRequests = 39,
 }
 
 impl serde::Serialize for Status {
