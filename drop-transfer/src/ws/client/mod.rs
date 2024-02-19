@@ -13,7 +13,6 @@ use std::{
 };
 
 use anyhow::Context;
-use drop_analytics::{TransferStateEventData, MOOSE_STATUS_SUCCESS};
 use hyper::{Request, Response, StatusCode};
 use slog::{debug, error, info, warn, Logger};
 use tokio::{
@@ -42,7 +41,7 @@ use crate::{
     transfer::Transfer,
     utils,
     ws::{client::handler::MsgToSend, Pinger},
-    Event, OutgoingTransfer,
+    OutgoingTransfer,
 };
 
 pub enum ClientReq {
@@ -90,14 +89,6 @@ pub(crate) fn spawn(
                 let cf = connect_to_peer(&state, &xfer, &logger, &guard).await;
                 if cf.is_break() {
                     debug!(logger, "connection status is irrecoverable");
-                    if let Err(err) = state.transfer_manager.outgoing_remove(xfer.id()).await {
-                        warn!(
-                            logger,
-                            "Failed to clear sync state for {}: {err}",
-                            xfer.id()
-                        );
-                    }
-
                     break;
                 }
 
@@ -129,36 +120,32 @@ async fn connect_to_peer(
         WsConnection::Recoverable(error) => {
             info!(logger, "Transfer deferred {}: {error}", xfer.id());
 
-            if state.transfer_manager.is_outgoing_alive(xfer.id()).await {
-                state.emit_event(Event::OutgoingTransferDeferred {
-                    transfer: Arc::clone(xfer),
-                    error,
-                });
+            if let Some(tx) = state.transfer_manager.outgoing_event_tx(xfer.id()).await {
+                tx.deferred(error).await;
             }
-
             return ControlFlow::Continue(());
         }
         WsConnection::Unrecoverable(err) => {
             error!(logger, "Could not connect to peer {}: {}", xfer.id(), err);
 
-            state.moose.event_transfer_state(TransferStateEventData {
-                transfer_id: xfer.id().to_string(),
-                result: i32::from(&err),
-                protocol_version: 0,
-            });
-
-            state.emit_event(Event::OutgoingTransferFailed(xfer.clone(), err, false));
+            match state.transfer_manager.outgoing_remove(xfer.id()).await {
+                Err(err) => {
+                    warn!(
+                        logger,
+                        "Failed to clear sync state (on conneciton failure) for {}: {err}",
+                        xfer.id()
+                    );
+                }
+                Ok(state) => state.xfer_events.failed(err, false).await,
+            }
 
             return ControlFlow::Break(());
         }
     };
 
-    state.moose.event_transfer_state(TransferStateEventData {
-        protocol_version: ver.into(),
-        transfer_id: xfer.id().to_string(),
-        result: MOOSE_STATUS_SUCCESS,
-    });
-
+    if let Some(tx) = state.transfer_manager.outgoing_event_tx(xfer.id()).await {
+        tx.connected(ver.into()).await;
+    }
     info!(logger, "Client connected, using version: {ver}");
 
     let ctx = RunContext {
@@ -412,7 +399,7 @@ impl RunContext<'_> {
 
                     // API request
                     req = api_req_rx.recv() => {
-                        if on_req(&mut socket, &mut handler, self.logger, req).await?.is_break() {
+                        if self.on_req(&mut socket, &mut handler, req).await?.is_break() {
                             break;
                         }
                     },
@@ -420,7 +407,7 @@ impl RunContext<'_> {
                     recv = socket.recv() => {
                         let msg =  recv.context("Failed to receive WS message")?;
 
-                        if on_recv(&mut socket, &mut handler, msg, self.logger, &mut jobs).await.context("Handler on recv")?.is_break() {
+                        if self.on_recv(&mut socket, &mut handler, msg, &mut jobs).await.context("Handler on recv")?.is_break() {
                             break;
                         }
                     },
@@ -468,6 +455,90 @@ impl RunContext<'_> {
         jobs.shutdown().await;
 
         cf
+    }
+
+    async fn on_recv(
+        &mut self,
+        socket: &mut WebSocket,
+        handler: &mut impl HandlerLoop,
+        msg: Message,
+        jobs: &mut JoinSet<()>,
+    ) -> anyhow::Result<ControlFlow<()>> {
+        match msg {
+            Message::Text(text) => {
+                debug!(self.logger, "Received:\n\t{text}");
+                handler.on_text_msg(socket, jobs, text).await?;
+            }
+            Message::Close(_) => {
+                debug!(self.logger, "Got CLOSE frame");
+                handler.on_close().await;
+
+                match self
+                    .state
+                    .transfer_manager
+                    .outgoing_remove(self.xfer.id())
+                    .await
+                {
+                    Err(err) => {
+                        warn!(
+                            self.logger,
+                            "Failed to clear sync state (on message) for {}: {err}",
+                            self.xfer.id()
+                        );
+                    }
+                    Ok(state) => state.xfer_events.cancel(true).await,
+                }
+
+                return Ok(ControlFlow::Break(()));
+            }
+            Message::Ping(_) => {
+                debug!(self.logger, "PING");
+            }
+            Message::Pong(_) => {
+                debug!(self.logger, "PONG");
+            }
+            _ => warn!(self.logger, "Client received invalid WS message type"),
+        }
+
+        Ok(ControlFlow::Continue(()))
+    }
+
+    async fn on_req(
+        &mut self,
+        socket: &mut WebSocket,
+        handler: &mut impl HandlerLoop,
+        req: Option<ClientReq>,
+    ) -> anyhow::Result<ControlFlow<()>> {
+        match req.context("API channel broken")? {
+            ClientReq::Reject { file } => {
+                handler.issue_reject(socket, file.clone()).await?;
+            }
+            ClientReq::Fail { file } => {
+                handler.issue_failure(socket, file.clone()).await?;
+            }
+            ClientReq::Close => {
+                debug!(self.logger, "Stopping client connection gracefuly");
+                socket.close().await?;
+                handler.on_close().await;
+
+                if let Err(err) = self
+                    .state
+                    .transfer_manager
+                    .outgoing_remove(self.xfer.id())
+                    .await
+                {
+                    warn!(
+                        self.logger,
+                        "Failed to clear sync state (on request) for {}: {err}",
+                        self.xfer.id()
+                    );
+                }
+
+                return Ok(ControlFlow::Break(()));
+            }
+        }
+
+        Ok(ControlFlow::Continue(()))
     }
 }
 
@@ -544,60 +615,6 @@ async fn start_upload(
     };
 
     Ok((jobs.spawn(upload_job), events))
-}
-
-async fn on_req(
-    socket: &mut WebSocket,
-    handler: &mut impl HandlerLoop,
-    logger: &Logger,
-    req: Option<ClientReq>,
-) -> anyhow::Result<ControlFlow<()>> {
-    match req.context("API channel broken")? {
-        ClientReq::Reject { file } => {
-            handler.issue_reject(socket, file.clone()).await?;
-        }
-        ClientReq::Fail { file } => {
-            handler.issue_failure(socket, file.clone()).await?;
-        }
-        ClientReq::Close => {
-            debug!(logger, "Stopping client connection gracefuly");
-            socket.close().await?;
-            handler.on_close(false).await;
-
-            return Ok(ControlFlow::Break(()));
-        }
-    }
-
-    Ok(ControlFlow::Continue(()))
-}
-
-async fn on_recv(
-    socket: &mut WebSocket,
-    handler: &mut impl HandlerLoop,
-    msg: Message,
-    logger: &slog::Logger,
-    jobs: &mut JoinSet<()>,
-) -> anyhow::Result<ControlFlow<()>> {
-    match msg {
-        Message::Text(text) => {
-            debug!(logger, "Received:\n\t{text}");
-            handler.on_text_msg(socket, jobs, text).await?;
-        }
-        Message::Close(_) => {
-            debug!(logger, "Got CLOSE frame");
-            handler.on_close(true).await;
-            return Ok(ControlFlow::Break(()));
-        }
-        Message::Ping(_) => {
-            debug!(logger, "PING");
-        }
-        Message::Pong(_) => {
-            debug!(logger, "PONG");
-        }
-        _ => warn!(logger, "Client received invalid WS message type"),
-    }
-
-    Ok(ControlFlow::Continue(()))
 }
 
 async fn on_upload_finished(

@@ -47,7 +47,7 @@ use crate::{
         server::handler::{MsgToSend, Request},
         Pinger,
     },
-    Error, Event, File, FileId,
+    Error, File, FileId,
 };
 
 const MAX_FILENAME_LENGTH: usize = 255;
@@ -586,8 +586,8 @@ impl RunContext<'_> {
             .register_incoming(xfer.clone(), req_send)
             .await?;
 
-        if is_new {
-            self.state.emit_event(Event::RequestReceived(xfer.clone()));
+        if let Some(xfer_tx) = is_new {
+            xfer_tx.received().await;
 
             check::spawn(
                 self.refresh_trigger.clone(),
@@ -627,11 +627,7 @@ impl RunContext<'_> {
                         xfer.id()
                     );
                 }
-                Ok(false) => {
-                    self.state
-                        .emit_event(crate::Event::IncomingTransferCanceled(xfer.clone(), true));
-                }
-                _ => (),
+                Ok(state) => state.xfer_events.cancel(true).await,
             }
 
             return Ok(ControlFlow::Break(()));
