@@ -11535,4 +11535,107 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario52",
+        "Repeatedly stop and start transfer, except paused events to be present all the time",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.ConfigureNetwork(rate="4mbit"),
+                    action.Start("DROP_PEER_REN"),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            "DROP_PEER_STIMPY",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.Repeated(
+                        [
+                            action.WaitAndIgnoreExcept(
+                                [event.Paused(0, FILES["testfile-big"].id)]
+                            ),
+                            action.Sleep(0.3),
+                            action.NetworkRefresh(),
+                        ],
+                        times=40,
+                    ),
+                    action.WaitAndIgnoreExcept(
+                        [event.FinishFileUploaded(0, FILES["testfile-big"].id)]
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.ConfigureNetwork(rate="4mbit"),
+                    action.Start(
+                        "DROP_PEER_STIMPY",
+                        dbpath="/tmp/db/50-stimpy.sqlite",
+                    ),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/50",
+                    ),
+                    action.Repeated(
+                        [
+                            action.WaitForOneOf(
+                                [
+                                    event.Start(0, FILES["testfile-big"].id, None),
+                                    event.ChecksumStarted(0, FILES["testfile-big"].id),
+                                ]
+                            ),
+                            action.Stop(),
+                            action.WaitAndIgnoreExcept(
+                                [event.Paused(0, FILES["testfile-big"].id)]
+                            ),
+                            action.Start(
+                                "DROP_PEER_STIMPY",
+                                dbpath="/tmp/db/50-stimpy.sqlite",
+                            ),
+                        ],
+                        times=40,
+                    ),
+                    action.WaitAndIgnoreExcept(
+                        [
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["testfile-big"].id,
+                                "/tmp/received/50/testfile-big",
+                            )
+                        ]
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/50/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]

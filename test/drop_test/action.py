@@ -404,22 +404,22 @@ class Wait(Action):
 class WaitAndIgnoreExcept(Action):
     def __init__(self, events: typing.List[Event]):
         self._events: typing.List[Event] = events
-        self._found: typing.List[Event] = []
 
     async def run(self, drop: ffi.Drop):
         fuse = 0
         limit = 100
+        found = []
 
         while True:
             e = await drop._events.wait_for_any_event(100, ignore_progress=True)
 
             if e in self._events:
-                if e in self._found:
+                if e in found:
                     raise Exception(f"Event {e} was received twice")
 
-                self._found.append(e)
+                found.append(e)
 
-                if len(self._found) == len(self._events):
+                if len(found) == len(self._events):
                     break
                 else:
                     continue

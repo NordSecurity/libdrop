@@ -303,7 +303,7 @@ class ChecksumProgress(Event):
 
 
 class ChecksumStarted(Event):
-    def __init__(self, uuid_slot: int, file: str, size: int):
+    def __init__(self, uuid_slot: int, file: str, size: typing.Optional[int] = None):
         self._uuid_slot = uuid_slot
         self._file = file
         self._size = size
@@ -315,8 +315,9 @@ class ChecksumStarted(Event):
             return False
         if self._file != rhs._file:
             return False
-        if self._size != rhs._size:
-            return False
+        if self._size is not None and rhs._size is not None:
+            if self._size != rhs._size:
+                return False
 
         return True
 
