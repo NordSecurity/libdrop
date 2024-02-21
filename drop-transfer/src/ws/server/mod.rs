@@ -920,61 +920,51 @@ impl FileXferTask {
         logger: Logger,
         guard: AliveGuard,
     ) {
-        let filename_len = self.file.subpath().name().len();
-
-        if filename_len + MAX_FILE_SUFFIX_LEN > MAX_FILENAME_LENGTH {
-            events.failed(Error::FilenameTooLong).await;
-            return;
-        }
-
-        let emit_checksum_events = {
-            if let Some(threshold) = state.config.checksum_events_size_threshold {
-                self.file.size() >= threshold as u64
-            } else {
-                false
-            }
-        };
-
-        events.preflight().await;
-
-        let tmp_location: Hidden<PathBuf> = Hidden(
-            self.base_dir
-                .join(temp_file_name(self.xfer.id(), self.file.id())),
-        );
-
-        let tmp_file_state = self
-            .handle_tmp_file(&logger, &events, &tmp_location, emit_checksum_events)
-            .await;
-
-        let init_res = match downloader.init(&self, tmp_file_state).await {
-            Ok(init) => init,
-            Err(crate::Error::Canceled) => {
-                warn!(logger, "File cancelled on download init stage");
-                return;
-            }
-            Err(err) => {
-                events.failed(err).await;
-                return;
-            }
-        };
-
-        match init_res {
-            handler::DownloadInit::Stream { offset } => {
-                if req_send
-                    .send(ServerReq::Start {
-                        file: self.file.id().clone(),
-                        offset,
-                    })
-                    .is_err()
-                {
-                    debug!(logger, "Client is disconnected. Stopping file stream");
-                    return;
+        let task = async {
+            // Check file and dir names are shorter then MAX
+            for name in self.file.subpath().iter() {
+                if name.len() + MAX_FILE_SUFFIX_LEN > MAX_FILENAME_LENGTH {
+                    return Err(Error::FilenameTooLong);
                 }
+            }
 
-                events.start(self.base_dir.to_string_lossy(), offset).await;
+            let emit_checksum_events = {
+                if let Some(threshold) = state.config.checksum_events_size_threshold {
+                    self.file.size() >= threshold as u64
+                } else {
+                    false
+                }
+            };
 
-                let result = self
-                    .stream_file(
+            events.preflight().await;
+
+            let tmp_location: Hidden<PathBuf> = Hidden(
+                self.base_dir
+                    .join(temp_file_name(self.xfer.id(), self.file.id())),
+            );
+
+            let tmp_file_state = self
+                .handle_tmp_file(&logger, &events, &tmp_location, emit_checksum_events)
+                .await;
+
+            let init_res = downloader.init(&self, tmp_file_state).await?;
+
+            match init_res {
+                handler::DownloadInit::Stream { offset } => {
+                    if req_send
+                        .send(ServerReq::Start {
+                            file: self.file.id().clone(),
+                            offset,
+                        })
+                        .is_err()
+                    {
+                        debug!(logger, "Client is disconnected. Stopping file stream");
+                        return Err(Error::Canceled);
+                    }
+
+                    events.start(self.base_dir.to_string_lossy(), offset).await;
+
+                    self.stream_file(
                         StreamCtx {
                             logger: &logger,
                             state: &state,
@@ -986,70 +976,73 @@ impl FileXferTask {
                         offset,
                         emit_checksum_events,
                     )
-                    .await;
-
-                // This is a critical part that we need to execute atomically.
-                // Since the outter task can be aborted, let's move it to a separate task
-                // so that it's never interrupted.
-                let error_logger = logger.clone();
-                if let Err(e) = tokio::spawn(async move {
-                    let _guard = guard;
-
-                    match result {
-                        Err(crate::Error::Canceled) => {
-                            info!(logger, "File {} stopped", self.file.id())
-                        }
-                        Ok(dst_location) => {
-                            info!(logger, "File {} downloaded succesfully", self.file.id());
-
-                            if let Err(err) = state
-                                .transfer_manager
-                                .incoming_finish_post(self.xfer.id(), self.file.id(), true)
-                                .await
-                            {
-                                warn!(logger, "Failed to post finish: {err}");
-                            }
-
-                            if let Err(e) = req_send.send(ServerReq::Done {
-                                file: self.file.id().clone(),
-                            }) {
-                                warn!(logger, "Failed to send DONE message: {}", e);
-                            };
-
-                            events.success(dst_location).await;
-                        }
-                        Err(err) => {
-                            info!(
-                                logger,
-                                "File {} finished with error: {err:?}",
-                                self.file.id()
-                            );
-
-                            if let Err(err) = state
-                                .transfer_manager
-                                .incoming_finish_post(self.xfer.id(), self.file.id(), false)
-                                .await
-                            {
-                                warn!(logger, "Failed to post finish: {err}");
-                            }
-
-                            if let Err(e) = req_send.send(ServerReq::Fail {
-                                file: self.file.id().clone(),
-                                msg: err.to_string(),
-                            }) {
-                                warn!(logger, "Failed to send FAIL message: {}", e);
-                            };
-
-                            events.failed(err).await;
-                        }
-                    }
-                })
-                .await
-                {
-                    error!(error_logger, "Failed to spawn file xfer task: {:?}", e);
-                };
+                    .await
+                }
             }
-        }
+        };
+
+        let result = task.await;
+
+        // This is a critical part that we need to execute atomically.
+        // Since the outter task can be aborted, let's move it to a separate task
+        // so that it's never interrupted.
+        let error_logger = logger.clone();
+        if let Err(e) = tokio::spawn(async move {
+            let _guard = guard;
+
+            match result {
+                Err(crate::Error::Canceled) => {
+                    info!(logger, "File {} stopped", self.file.id())
+                }
+                Ok(dst_location) => {
+                    info!(logger, "File {} downloaded succesfully", self.file.id());
+
+                    if let Err(err) = state
+                        .transfer_manager
+                        .incoming_finish_post(self.xfer.id(), self.file.id(), true)
+                        .await
+                    {
+                        warn!(logger, "Failed to post finish: {err}");
+                    }
+
+                    if let Err(e) = req_send.send(ServerReq::Done {
+                        file: self.file.id().clone(),
+                    }) {
+                        warn!(logger, "Failed to send DONE message: {}", e);
+                    };
+
+                    events.success(dst_location).await;
+                }
+                Err(err) => {
+                    info!(
+                        logger,
+                        "File {} finished with error: {err:?}",
+                        self.file.id()
+                    );
+
+                    if let Err(err) = state
+                        .transfer_manager
+                        .incoming_finish_post(self.xfer.id(), self.file.id(), false)
+                        .await
+                    {
+                        warn!(logger, "Failed to post finish: {err}");
+                    }
+
+                    if let Err(e) = req_send.send(ServerReq::Fail {
+                        file: self.file.id().clone(),
+                        msg: err.to_string(),
+                    }) {
+                        warn!(logger, "Failed to send FAIL message: {}", e);
+                    };
+
+                    events.failed(err).await;
+                }
+            }
+        })
+        .await
+        {
+            error!(error_logger, "Failed to spawn file xfer task: {:?}", e);
+        };
     }
 }
 
