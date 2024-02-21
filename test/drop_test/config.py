@@ -42,8 +42,11 @@ class TestFile:
 
 
 FILES = {
-    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt": TestFile(
-        size=1 * 1024, id="p3cYEJWds51Uqb174hrbHxfE6ASz_ioErmh39jLsiWU"
+    "a" * 251
+    + ".txt": TestFile(size=1 * 1024, id="qP5G0HRpMIiygYDk_ERNe_ut5qhcDbAO2Wx8vPgXrYQ"),
+    "a" * 251
+    + "/testfile.txt": TestFile(
+        size=1 * 1024, id="NPdkvOI9aJQbptTXYYwTDvGu3aSnuR8xqAMBNe2BDgg"
     ),
     "testfile-small": TestFile(
         size=1 * 1024, id="BzgNijPq2HAy4UH75K3kqXou9sTVT7AbSWRGUrU7oGI"
