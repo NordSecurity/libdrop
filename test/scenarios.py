@@ -3696,28 +3696,20 @@ scenarios = [
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer(
                         "DROP_PEER_STIMPY",
-                        [
-                            "/tmp/thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                        ],
+                        ["/tmp/" + "a" * 251 + ".txt"],
                     ),
                     action.NewTransfer(
                         "DROP_PEER_STIMPY",
-                        [
-                            "/tmp/thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                        ],
+                        ["/tmp/" + "a" * 251 + ".txt"],
                     ),
                     action.WaitForAnotherPeer("DROP_PEER_GEORGE"),
                     action.NewTransfer(
                         "DROP_PEER_GEORGE",
-                        [
-                            "/tmp/thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                        ],
+                        ["/tmp/" + "a" * 251 + ".txt"],
                     ),
                     action.NewTransfer(
                         "DROP_PEER_GEORGE",
-                        [
-                            "/tmp/thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                        ],
+                        ["/tmp/" + "a" * 251 + ".txt"],
                     ),
                     action.WaitRacy(
                         [
@@ -3726,10 +3718,8 @@ scenarios = [
                                 "DROP_PEER_STIMPY",
                                 {
                                     event.File(
-                                        FILES[
-                                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                                        ].id,
-                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        FILES["a" * 251 + ".txt"].id,
+                                        "a" * 251 + ".txt",
                                         1048576,
                                     ),
                                 },
@@ -3739,10 +3729,8 @@ scenarios = [
                                 "DROP_PEER_STIMPY",
                                 {
                                     event.File(
-                                        FILES[
-                                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                                        ].id,
-                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        FILES["a" * 251 + ".txt"].id,
+                                        "a" * 251 + ".txt",
                                         1048576,
                                     ),
                                 },
@@ -3752,10 +3740,8 @@ scenarios = [
                                 "DROP_PEER_GEORGE",
                                 {
                                     event.File(
-                                        FILES[
-                                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                                        ].id,
-                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        FILES["a" * 251 + ".txt"].id,
+                                        "a" * 251 + ".txt",
                                         1048576,
                                     ),
                                 },
@@ -3765,13 +3751,31 @@ scenarios = [
                                 "DROP_PEER_GEORGE",
                                 {
                                     event.File(
-                                        FILES[
-                                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                                        ].id,
-                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        FILES["a" * 251 + ".txt"].id,
+                                        "a" * 251 + ".txt",
                                         1048576,
                                     ),
                                 },
+                            ),
+                            event.FinishFileFailed(
+                                0,
+                                FILES["a" * 251 + ".txt"].id,
+                                Error.BAD_TRANSFER_STATE,
+                            ),
+                            event.FinishFileFailed(
+                                1,
+                                FILES["a" * 251 + ".txt"].id,
+                                Error.BAD_TRANSFER_STATE,
+                            ),
+                            event.FinishFileFailed(
+                                2,
+                                FILES["a" * 251 + ".txt"].id,
+                                Error.BAD_TRANSFER_STATE,
+                            ),
+                            event.FinishFileFailed(
+                                3,
+                                FILES["a" * 251 + ".txt"].id,
+                                Error.BAD_TRANSFER_STATE,
                             ),
                             event.FinishTransferCanceled(0, True),
                             event.FinishTransferCanceled(1, True),
@@ -3793,10 +3797,8 @@ scenarios = [
                                 "DROP_PEER_REN",
                                 {
                                     event.File(
-                                        FILES[
-                                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                                        ].id,
-                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        FILES["a" * 251 + ".txt"].id,
+                                        "a" * 251 + ".txt",
                                         1048576,
                                     ),
                                 },
@@ -3806,10 +3808,8 @@ scenarios = [
                                 "DROP_PEER_REN",
                                 {
                                     event.File(
-                                        FILES[
-                                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                                        ].id,
-                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        FILES["a" * 251 + ".txt"].id,
+                                        "a" * 251 + ".txt",
                                         1048576,
                                     ),
                                 },
@@ -3818,32 +3818,24 @@ scenarios = [
                     ),
                     action.Download(
                         0,
-                        FILES[
-                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                        ].id,
+                        FILES["a" * 251 + ".txt"].id,
                         "/tmp/received/19-1/stimpy/0",
                     ),
                     action.Download(
                         1,
-                        FILES[
-                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                        ].id,
+                        FILES["a" * 251 + ".txt"].id,
                         "/tmp/received/19-1/stimpy/1",
                     ),
                     action.WaitRacy(
                         [
                             event.FinishFileFailed(
                                 0,
-                                FILES[
-                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                                ].id,
+                                FILES["a" * 251 + ".txt"].id,
                                 Error.FILENAME_TOO_LONG,
                             ),
                             event.FinishFileFailed(
                                 1,
-                                FILES[
-                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                                ].id,
+                                FILES["a" * 251 + ".txt"].id,
                                 Error.FILENAME_TOO_LONG,
                             ),
                         ]
@@ -3864,10 +3856,8 @@ scenarios = [
                                 "DROP_PEER_REN",
                                 {
                                     event.File(
-                                        FILES[
-                                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                                        ].id,
-                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        FILES["a" * 251 + ".txt"].id,
+                                        "a" * 251 + ".txt",
                                         1048576,
                                     ),
                                 },
@@ -3877,10 +3867,8 @@ scenarios = [
                                 "DROP_PEER_REN",
                                 {
                                     event.File(
-                                        FILES[
-                                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                                        ].id,
-                                        "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt",
+                                        FILES["a" * 251 + ".txt"].id,
+                                        "a" * 251 + ".txt",
                                         1048576,
                                     ),
                                 },
@@ -3889,32 +3877,24 @@ scenarios = [
                     ),
                     action.Download(
                         0,
-                        FILES[
-                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                        ].id,
+                        FILES["a" * 251 + ".txt"].id,
                         "/tmp/received/19-1/george/0",
                     ),
                     action.Download(
                         1,
-                        FILES[
-                            "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                        ].id,
+                        FILES["a" * 251 + ".txt"].id,
                         "/tmp/received/19-1/george/1",
                     ),
                     action.WaitRacy(
                         [
                             event.FinishFileFailed(
                                 0,
-                                FILES[
-                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                                ].id,
+                                FILES["a" * 251 + ".txt"].id,
                                 Error.FILENAME_TOO_LONG,
                             ),
                             event.FinishFileFailed(
                                 1,
-                                FILES[
-                                    "thisisaverylongfilenameusingonlylowercaselettersandnumbersanditcontainshugestringofnumbers01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234561234567891234567891234567890123456789012345678901234567890123456.txt"
-                                ].id,
+                                FILES["a" * 251 + ".txt"].id,
                                 Error.FILENAME_TOO_LONG,
                             ),
                         ]
@@ -4079,6 +4059,80 @@ scenarios = [
                                 "/tmp/received/19-3/utf8-testfile-\u5b81\u5BDF", 1048576
                             ),
                         ],
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario19-4",
+        "Send directory with too long name, expect it to fail",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN"),
+                    # Wait for another peer to appear
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY",
+                        ["/tmp/" + "a" * 251],
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            "DROP_PEER_STIMPY",
+                            {
+                                event.File(
+                                    FILES["a" * 251 + "/testfile.txt"].id,
+                                    "a" * 251 + "/testfile.txt",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0,
+                            FILES["a" * 251 + "/testfile.txt"].id,
+                            Error.BAD_TRANSFER_STATE,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["a" * 251 + "/testfile.txt"].id,
+                                    "a" * 251 + "/testfile.txt",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["a" * 251 + "/testfile.txt"].id,
+                        "/tmp/received/19-4",
+                    ),
+                    action.Wait(
+                        event.FinishFileFailed(
+                            0,
+                            FILES["a" * 251 + "/testfile.txt"].id,
+                            Error.FILENAME_TOO_LONG,
+                        )
                     ),
                     action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
