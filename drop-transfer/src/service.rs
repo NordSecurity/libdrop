@@ -21,7 +21,7 @@ use crate::{
     manager,
     tasks::AliveWaiter,
     transfer::Transfer,
-    ws::{self, FileEventTxFactory},
+    ws::{self, EventTxFactory},
     Error, Event, FileId, TransferManager,
 };
 
@@ -73,7 +73,7 @@ impl Service {
                 throttle: Arc::new(Semaphore::new(drop_config::MAX_UPLOADS_IN_FLIGHT)),
                 transfer_manager: TransferManager::new(
                     storage.clone(),
-                    FileEventTxFactory::new(event_tx.clone(), moose.clone()),
+                    EventTxFactory::new(event_tx.clone(), moose.clone()),
                     logger.clone(),
                 ),
                 event_tx,
@@ -145,27 +145,28 @@ impl Service {
 
         self.state.moose.event_transfer_intent(xfer.info());
 
-        if let Err(err) = self
+        match self
             .state
             .transfer_manager
             .insert_outgoing(xfer.clone())
             .await
         {
-            self.state
-                .moose
-                .event_transfer_state(TransferStateEventData {
-                    transfer_id: xfer.id().to_string(),
-                    result: i32::from(&err),
-                    protocol_version: 0,
-                });
+            Err(err) => {
+                self.state
+                    .moose
+                    .event_transfer_state(TransferStateEventData {
+                        transfer_id: xfer.id().to_string(),
+                        result: i32::from(&err),
+                        protocol_version: 0,
+                    });
 
-            self.state
-                .emit_event(Event::OutgoingTransferFailed(xfer.clone(), err, true));
+                self.state
+                    .emit_event(Event::OutgoingTransferFailed(xfer.clone(), err, true));
 
-            return;
-        }
-
-        self.state.emit_event(Event::RequestQueued(xfer.clone()));
+                return;
+            }
+            Ok(tx) => tx.queued().await,
+        };
 
         let subscriber = self.refresh_trigger.subscribe();
 
@@ -270,13 +271,13 @@ impl Service {
             {
                 Ok(res) => {
                     futures::future::join_all(
-                        res.events.iter().map(|ev| ev.stop_silent(Status::Canceled)),
+                        res.file_events
+                            .iter()
+                            .map(|ev| ev.stop_silent(Status::Canceled)),
                     )
                     .await;
 
-                    self.state
-                        .emit_event(crate::Event::OutgoingTransferCanceled(res.xfer, false));
-
+                    res.xfer_events.cancel(false).await;
                     return Ok(());
                 }
                 Err(crate::Error::BadTransfer) => (),
@@ -292,13 +293,13 @@ impl Service {
             {
                 Ok(res) => {
                     futures::future::join_all(
-                        res.events.iter().map(|ev| ev.stop_silent(Status::Canceled)),
+                        res.file_events
+                            .iter()
+                            .map(|ev| ev.stop_silent(Status::Canceled)),
                     )
                     .await;
 
-                    self.state
-                        .emit_event(crate::Event::IncomingTransferCanceled(res.xfer, false));
-
+                    res.xfer_events.cancel(false).await;
                     return Ok(());
                 }
                 Err(crate::Error::BadTransfer) => (),

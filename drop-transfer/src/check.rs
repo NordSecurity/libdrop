@@ -43,9 +43,7 @@ pub(crate) fn spawn(
                         Err(err) => {
                             warn!(logger, "Failed to clear incoming transfer: {err:?}");
                         }
-                        Ok(false) => state
-                            .emit_event(crate::Event::IncomingTransferCanceled(xfer.clone(), true)),
-                        _ => (),
+                        Ok(state) => state.xfer_events.cancel(true).await,
                     }
 
                     break;

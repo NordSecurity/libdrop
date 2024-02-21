@@ -275,18 +275,9 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         Ok(())
     }
 
-    async fn on_close(&mut self, by_peer: bool) {
-        debug!(self.logger, "ClientHandler::on_close(by_peer: {})", by_peer);
-
+    async fn on_close(&mut self) {
+        debug!(self.logger, "ClientHandler::on_close()");
         self.on_stop().await;
-
-        if by_peer {
-            self.state
-                .emit_event(crate::Event::OutgoingTransferCanceled(
-                    self.xfer.clone(),
-                    by_peer,
-                ));
-        }
     }
 
     async fn on_text_msg(

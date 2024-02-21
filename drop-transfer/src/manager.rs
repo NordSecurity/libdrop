@@ -23,14 +23,15 @@ use crate::{
         self,
         client::ClientReq,
         server::{FileXferTask, ServerReq},
-        FileEventTx, FileEventTxFactory, IncomingFileEventTx, OutgoingFileEventTx,
+        EventTxFactory, FileEventTx, IncomingFileEventTx, IncomingTransferEventTx,
+        OutgoingFileEventTx, OutgoingTransferEventTx, TransferEventTx,
     },
     File, FileId, FileToRecv, FileToSend, Transfer,
 };
 
 pub struct CloseResult<T: Transfer> {
-    pub xfer: Arc<T>,
-    pub events: Vec<Arc<FileEventTx<T>>>,
+    pub file_events: Vec<Arc<FileEventTx<T>>>,
+    pub xfer_events: Arc<TransferEventTx<T>>,
 }
 
 pub struct FinishResult<T: Transfer> {
@@ -62,7 +63,8 @@ pub struct IncomingState {
     pub dir_mappings: DirMapping,
     xfer_sync: sync::TransferState,
     file_sync: HashMap<FileId, IncomingLocalFileState>,
-    events: HashMap<FileId, Arc<IncomingFileEventTx>>,
+    pub file_events: HashMap<FileId, Arc<IncomingFileEventTx>>,
+    pub xfer_events: Arc<IncomingTransferEventTx>,
 }
 
 pub struct OutgoingState {
@@ -70,7 +72,8 @@ pub struct OutgoingState {
     conn: Option<UnboundedSender<ClientReq>>,
     xfer_sync: sync::TransferState,
     file_sync: HashMap<FileId, OutgoingLocalFileState>,
-    events: HashMap<FileId, Arc<OutgoingFileEventTx>>,
+    pub file_events: HashMap<FileId, Arc<OutgoingFileEventTx>>,
+    pub xfer_events: Arc<OutgoingTransferEventTx>,
 }
 
 /// Transfer manager is responsible for keeping track of all ongoing or pending
@@ -80,7 +83,7 @@ pub struct TransferManager {
     pub outgoing: Mutex<HashMap<Uuid, OutgoingState>>,
     storage: Arc<Storage>,
     logger: Logger,
-    event_factory: FileEventTxFactory,
+    event_factory: EventTxFactory,
 }
 
 #[derive(Default)]
@@ -89,7 +92,7 @@ pub struct DirMapping {
 }
 
 impl TransferManager {
-    pub fn new(storage: Arc<Storage>, event_factory: FileEventTxFactory, logger: Logger) -> Self {
+    pub fn new(storage: Arc<Storage>, event_factory: EventTxFactory, logger: Logger) -> Self {
         Self {
             incoming: Default::default(),
             outgoing: Default::default(),
@@ -99,12 +102,12 @@ impl TransferManager {
         }
     }
 
-    /// Returns `true` if the transfer is new one
+    /// Returns `Some()` if the transfer is new one
     pub async fn register_incoming(
         &self,
         xfer: Arc<IncomingTransfer>,
         conn: UnboundedSender<ServerReq>,
-    ) -> anyhow::Result<bool> {
+    ) -> anyhow::Result<Option<Arc<IncomingTransferEventTx>>> {
         let mut lock = self.incoming.lock().await;
 
         match lock.entry(xfer.id()) {
@@ -134,7 +137,7 @@ impl TransferManager {
                     }
                 }
 
-                Ok(false)
+                Ok(None)
             }
             Entry::Vacant(vacc) => {
                 if self
@@ -147,14 +150,14 @@ impl TransferManager {
                     if let Err(e) = conn.send(ServerReq::Close) {
                         warn!(self.logger, "Failed to send close request: {}", e);
                     }
-                    return Ok(false);
+                    return Ok(None);
                 }
 
                 self.storage
                     .update_transfer_sync_states(xfer.id(), sync::TransferState::Active)
                     .await;
 
-                vacc.insert(IncomingState {
+                let state = vacc.insert(IncomingState {
                     conn: Some(conn),
                     dir_mappings: Default::default(),
                     xfer_sync: sync::TransferState::Active,
@@ -163,11 +166,12 @@ impl TransferManager {
                         .keys()
                         .map(|file_id| (file_id.clone(), IncomingLocalFileState::Idle))
                         .collect(),
-                    xfer,
-                    events: HashMap::new(),
+                    xfer: xfer.clone(),
+                    file_events: HashMap::new(),
+                    xfer_events: Arc::new(self.event_factory.transfer(xfer, false)),
                 });
 
-                Ok(true)
+                Ok(Some(state.xfer_events.clone()))
             }
         }
     }
@@ -212,10 +216,13 @@ impl TransferManager {
         Ok(())
     }
 
-    pub async fn insert_outgoing(&self, xfer: Arc<OutgoingTransfer>) -> crate::Result<()> {
+    pub async fn insert_outgoing(
+        &self,
+        xfer: Arc<OutgoingTransfer>,
+    ) -> crate::Result<Arc<OutgoingTransferEventTx>> {
         let mut lock = self.outgoing.lock().await;
 
-        match lock.entry(xfer.id()) {
+        let state = match lock.entry(xfer.id()) {
             Entry::Occupied(_) => {
                 warn!(
                     self.logger,
@@ -238,13 +245,14 @@ impl TransferManager {
                         .keys()
                         .map(|file_id| (file_id.clone(), OutgoingLocalFileState::Alive))
                         .collect(),
-                    xfer,
-                    events: HashMap::new(),
-                });
+                    xfer: xfer.clone(),
+                    file_events: HashMap::new(),
+                    xfer_events: Arc::new(self.event_factory.transfer(xfer, false)),
+                })
             }
         };
 
-        Ok(())
+        Ok(state.xfer_events.clone())
     }
 
     pub async fn incoming_file_events(
@@ -404,21 +412,17 @@ impl TransferManager {
         })
     }
 
-    /// Returns `true` if the cancel event should be suppressed
-    pub async fn incoming_remove(&self, transfer_id: Uuid) -> crate::Result<bool> {
+    pub async fn incoming_remove(&self, transfer_id: Uuid) -> crate::Result<IncomingState> {
+        debug!(self.logger, "Removing incoming transfer: {transfer_id}");
         let mut lock = self.incoming.lock().await;
-        if !lock.contains_key(&transfer_id) {
-            return Err(crate::Error::BadTransfer);
+
+        match lock.entry(transfer_id) {
+            Entry::Occupied(occ) => {
+                self.storage.transfer_sync_clear(transfer_id).await;
+                Ok(occ.remove())
+            }
+            Entry::Vacant(_) => Err(crate::Error::BadTransfer),
         }
-        self.storage.transfer_sync_clear(transfer_id).await;
-
-        let was_cancelled = if let Some(state) = lock.remove(&transfer_id) {
-            matches!(state.xfer_sync, sync::TransferState::Canceled)
-        } else {
-            true
-        };
-
-        Ok(was_cancelled)
     }
 
     pub async fn is_incoming_alive(&self, transfer_id: Uuid) -> bool {
@@ -564,8 +568,8 @@ impl TransferManager {
         }
 
         let res = CloseResult {
-            xfer: state.xfer.clone(),
-            events: state.events.values().cloned().collect(),
+            file_events: state.file_events.values().cloned().collect(),
+            xfer_events: state.xfer_events.clone(),
         };
 
         Ok(res)
@@ -587,8 +591,8 @@ impl TransferManager {
                 self.storage.transfer_sync_clear(transfer_id).await;
 
                 let res = CloseResult {
-                    xfer: state.xfer.clone(),
-                    events: state.events.values().cloned().collect(),
+                    file_events: state.file_events.values().cloned().collect(),
+                    xfer_events: state.xfer_events.clone(),
                 };
 
                 lock.remove(&transfer_id);
@@ -612,8 +616,8 @@ impl TransferManager {
                 }
 
                 Ok(CloseResult {
-                    xfer: state.xfer.clone(),
-                    events: state.events.values().cloned().collect(),
+                    file_events: state.file_events.values().cloned().collect(),
+                    xfer_events: state.xfer_events.clone(),
                 })
             }
             sync::TransferState::Canceled => Err(crate::Error::BadTransfer),
@@ -635,16 +639,26 @@ impl TransferManager {
         state.ensure_not_terminated()
     }
 
-    pub async fn outgoing_remove(&self, transfer_id: Uuid) -> crate::Result<()> {
-        debug!(self.logger, "Removing outgoing transfer: {}", transfer_id);
+    pub async fn outgoing_remove(&self, transfer_id: Uuid) -> crate::Result<OutgoingState> {
+        debug!(self.logger, "Removing outgoing transfer: {transfer_id}");
         let mut lock = self.outgoing.lock().await;
-        if !lock.contains_key(&transfer_id) {
-            return Err(crate::Error::BadTransfer);
-        }
-        self.storage.transfer_sync_clear(transfer_id).await;
-        lock.remove(&transfer_id);
 
-        Ok(())
+        match lock.entry(transfer_id) {
+            Entry::Occupied(occ) => {
+                self.storage.transfer_sync_clear(transfer_id).await;
+                Ok(occ.remove())
+            }
+            Entry::Vacant(_) => Err(crate::Error::BadTransfer),
+        }
+    }
+
+    pub async fn outgoing_event_tx(
+        &self,
+        transfer_id: Uuid,
+    ) -> Option<Arc<OutgoingTransferEventTx>> {
+        let lock = self.outgoing.lock().await;
+        lock.get(&transfer_id)
+            .map(|state| state.xfer_events.clone())
     }
 
     pub async fn incoming_disconnect(&self, transfer_id: Uuid) -> crate::Result<()> {
@@ -708,13 +722,13 @@ impl OutgoingState {
 
     fn file_events(
         &mut self,
-        factory: &FileEventTxFactory,
+        factory: &EventTxFactory,
         file_id: &FileId,
     ) -> Arc<OutgoingFileEventTx> {
-        self.events
+        self.file_events
             .entry(file_id.clone())
             .or_insert_with_key(|file_id| {
-                Arc::new(factory.create(self.xfer.clone(), file_id.clone()))
+                Arc::new(factory.file(self.xfer.clone(), file_id.clone()))
             })
             .clone()
     }
@@ -785,13 +799,13 @@ impl IncomingState {
 
     fn file_events(
         &mut self,
-        factory: &FileEventTxFactory,
+        factory: &EventTxFactory,
         file_id: &FileId,
     ) -> Arc<IncomingFileEventTx> {
-        self.events
+        self.file_events
             .entry(file_id.clone())
             .or_insert_with_key(|file_id| {
-                Arc::new(factory.create(self.xfer.clone(), file_id.clone()))
+                Arc::new(factory.file(self.xfer.clone(), file_id.clone()))
             })
             .clone()
     }
@@ -973,7 +987,13 @@ impl OutgoingLocalFileState {
 }
 
 pub(crate) async fn restore_transfers_state(state: &Arc<State>, logger: &Logger) {
-    let incoming = restore_incoming(&state.storage, &state.config, logger).await;
+    let incoming = restore_incoming(
+        &state.transfer_manager.event_factory,
+        &state.storage,
+        &state.config,
+        logger,
+    )
+    .await;
     *state.transfer_manager.incoming.lock().await = incoming;
 
     let outgoing = restore_outgoing(state, logger).await;
@@ -1021,6 +1041,7 @@ pub(crate) async fn resume(
 }
 
 async fn restore_incoming(
+    factory: &EventTxFactory,
     storage: &Storage,
     config: &DropConfig,
     logger: &Logger,
@@ -1089,13 +1110,18 @@ async fn restore_incoming(
                 }
             }
 
+            let xfer = Arc::new(xfer);
             let mut xstate = IncomingState {
-                xfer: Arc::new(xfer),
+                xfer: xfer.clone(),
                 conn: None,
                 dir_mappings: Default::default(),
                 xfer_sync: sync.local_state,
                 file_sync,
-                events: HashMap::new(),
+                file_events: HashMap::new(),
+                xfer_events: Arc::new(factory.transfer(
+                    xfer,
+                    matches!(sync.local_state, sync::TransferState::Canceled),
+                )),
             };
 
             debug!(
@@ -1184,12 +1210,17 @@ async fn restore_outgoing(state: &Arc<State>, logger: &Logger) -> HashMap<Uuid, 
                 file_sync.insert(file_id.clone(), local);
             }
 
+            let xfer = Arc::new(xfer);
             let xstate = OutgoingState {
-                xfer: Arc::new(xfer),
+                xfer: xfer.clone(),
                 conn: None,
                 xfer_sync: sync.local_state,
                 file_sync,
-                events: HashMap::new(),
+                file_events: HashMap::new(),
+                xfer_events: Arc::new(state.transfer_manager.event_factory.transfer(
+                    xfer,
+                    matches!(sync.local_state, sync::TransferState::Canceled),
+                )),
             };
             anyhow::Ok(xstate)
         };
