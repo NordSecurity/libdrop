@@ -9,6 +9,7 @@
 * Add `TransferDeffered` event indicating the connection to peer couldn't be establish at this time
 * Disallow downloading file for which any path component is larger than 250 characters
 * Fix ocassional missing of `TransferPaused` event when toggling libdrop on and off quickly
+* Report file transfer error in case file subpath contains perent directory `..`
 
 ---
 <br>
