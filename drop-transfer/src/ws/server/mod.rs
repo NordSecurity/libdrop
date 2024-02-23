@@ -36,7 +36,7 @@ use self::socket::{WebSocket, WsStream};
 use super::{events::FileEventTx, IncomingFileEventTx};
 use crate::{
     check,
-    file::{self, FileToRecv},
+    file::{self, FileSubPath, FileToRecv},
     protocol,
     quarantine::PathExt,
     service::State,
@@ -921,12 +921,7 @@ impl FileXferTask {
         guard: AliveGuard,
     ) {
         let task = async {
-            // Check file and dir names are shorter then MAX
-            for name in self.file.subpath().iter() {
-                if name.len() + MAX_FILE_SUFFIX_LEN > MAX_FILENAME_LENGTH {
-                    return Err(Error::FilenameTooLong);
-                }
-            }
+            validate_subpath_for_download(self.file.subpath())?;
 
             let emit_checksum_events = {
                 if let Some(threshold) = state.config.checksum_events_size_threshold {
@@ -1184,4 +1179,49 @@ pub fn remove_temp_files<P, I>(
 
 fn temp_file_name(transfer_id: uuid::Uuid, file_id: &FileId) -> String {
     format!("{}-{file_id}.dropdl-part", transfer_id.as_simple(),)
+}
+
+/// Check file and dir names are shorter then MAX and contain illegal values
+fn validate_subpath_for_download(subpath: &FileSubPath) -> crate::Result<()> {
+    const DISALLOWED: &[&str] = &[".."];
+
+    for name in subpath.iter() {
+        if name.len() + MAX_FILE_SUFFIX_LEN > MAX_FILENAME_LENGTH {
+            return Err(Error::FilenameTooLong);
+        }
+
+        if DISALLOWED.contains(&name.as_str()) {
+            return Err(Error::BadPath(
+                "File subpath contains disallowed element".into(),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::file::FileSubPath;
+
+    #[test]
+    fn validate_subpath() {
+        let sp = FileSubPath::from_path("abc/dfg/hjk.txt").unwrap();
+        assert!(super::validate_subpath_for_download(&sp).is_ok());
+
+        let sp = FileSubPath::from_path("abc/../hjk.txt").unwrap();
+        assert!(matches!(
+            super::validate_subpath_for_download(&sp),
+            Err(crate::Error::BadPath(..))
+        ));
+
+        let mut path = String::from("abc/");
+        path.extend(std::iter::repeat('x').take(251));
+        path.push_str("/hjk.txt");
+        let sp = FileSubPath::from_path(&path).unwrap();
+        assert!(matches!(
+            super::validate_subpath_for_download(&sp),
+            Err(crate::Error::FilenameTooLong)
+        ));
+    }
 }
