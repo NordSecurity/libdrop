@@ -1,5 +1,12 @@
 ### UNRELEASED
-### **Checksummed and Optimized**
+### **UNRELEASED**
+---
+
+---
+<br>
+
+### v6.2.0
+### **Entanglement**
 ---
 * Update moose tracker to v5.0.0 which introduces automatic context sharing and QoL improvements to development
 * Removed `moose_app_version` field from config (it will be ignored, if present)
