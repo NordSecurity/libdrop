@@ -1,6 +1,6 @@
 ### UNRELEASED
-### **UNRELEASED**
 ---
+* Add `MOOSE_RELEASE_TAG` file
 
 ---
 <br>
