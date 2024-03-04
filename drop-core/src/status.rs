@@ -24,6 +24,7 @@ pub enum Status {
     EmptyTransfer = 37,
     ConnectionClosedByPeer = 38,
     TooManyRequests = 39,
+    PermissionDenied = 40,
 }
 
 impl serde::Serialize for Status {
