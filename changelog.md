@@ -1,6 +1,7 @@
 ### UNRELEASED
 ---
 * Add `MOOSE_RELEASE_TAG` file
+* Broaden the set of illegal filename characters to encompass FAT and EXT filesystems
 
 ---
 <br>
