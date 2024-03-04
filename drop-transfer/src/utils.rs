@@ -105,14 +105,9 @@ pub fn filepath_variants(location: &'_ Path) -> crate::Result<impl Iterator<Item
 pub fn normalize_filename(filename: impl AsRef<str>) -> String {
     const REPLACEMENT_CHAR: &str = "_";
 
-    #[cfg(windows)]
+    // This is unified across all platforms, because we don't have a control
+    // over the filesystem mounted on user's device
     const ILLEGAL_CHARS: &[char] = &['<', '>', ':', '"', '\\', '/', '|', '?', '*'];
-
-    #[cfg(all(not(windows), any(target_os = "macos", target_os = "ios")))]
-    const ILLEGAL_CHARS: &[char] = &[':', '/'];
-
-    #[cfg(all(not(windows), not(any(target_os = "macos", target_os = "ios"))))]
-    const ILLEGAL_CHARS: &[char] = &['/'];
 
     #[cfg(windows)]
     fn check_illegal_filename(mut name: String) -> String {
@@ -197,12 +192,12 @@ mod tests {
         let norm = normalize_filename(ascii_control);
         assert_eq!(norm, "abc_d_e_f");
 
+        let special_char = "a\\b<\\asdf>as:d?f";
+        let norm = normalize_filename(special_char);
+        assert_eq!(norm, "a_b__asdf_as_d_f");
+
         #[cfg(windows)]
         {
-            let special_char = "a\\b<\\asdf>as:d?f";
-            let norm = normalize_filename(special_char);
-            assert_eq!(norm, "a_b__asdf_as_d_f");
-
             let dot_at_end = "asdf.";
             let norm = normalize_filename(dot_at_end);
             assert_eq!(norm, "asdf._");
