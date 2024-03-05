@@ -876,3 +876,14 @@ class CopyFile(Action):
 
     def __str__(self):
         return f"CopyFile({self._src}, {self._dst})"
+
+
+class Mkdir(Action):
+    def __init__(self, path: str):
+        self._path = path
+
+    async def run(self, drop: ffi.Drop):
+        os.makedirs(self._path)
+
+    def __str__(self):
+        return f"Mkdir({self._path})"
