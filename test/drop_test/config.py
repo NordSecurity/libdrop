@@ -137,6 +137,12 @@ FILES = {
     "utf8-testfile-\u5b81\u5BDF": TestFile(
         size=1 * 1024, id="iYHFSaSzwOXygOqayOaVNlF4cQUF2nyZyTzaIpnVau8"
     ),
+    "dir-with-invalid_char-</file-01": TestFile(
+        size=1 * 1024, id="ud9-3O_ym2LGed16d_kgAt3ocF2DSZ5C3beII-nG1MU"
+    ),
+    "dir-with-invalid_char->/file-01": TestFile(
+        size=1 * 1024, id="XIF2Dwumm68nQvewqbSkp5R5tAUGIIG_PscdNzBTnjw"
+    ),
 }
 
 DBFILES = {"26-1-corrupted.sqlite": b"this is a corrupted sqlite file"}
