@@ -1087,6 +1087,13 @@ fn move_tmp_to_dst(
                 continue;
             }
             Err(err) => {
+                // On Win the permissions error is returned in case there's a
+                // directory with the same name. Let's do it for all OSes since
+                // there should be no harm.
+                if path.exists() {
+                    continue;
+                }
+
                 error!(logger, "Failed to crate destination file: {err}");
                 return Err(err.into());
             }

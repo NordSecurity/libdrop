@@ -3,6 +3,7 @@
 * Add `MOOSE_RELEASE_TAG` file
 * Broaden the set of illegal filename characters to encompass FAT and EXT filesystems
 * Add `PermissionDenied` (40) status code
+* Fix a Windows bug where a permissions error is reported when there exists a folder with the same name as one of the transfer files in the destination
 
 ---
 <br>
