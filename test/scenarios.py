@@ -4947,7 +4947,7 @@ scenarios = [
                         event.FinishFileFailed(
                             0,
                             FILES["testfile-small"].id,
-                            Error.IO,
+                            Error.PERMISSION_DENIED,
                             13,
                         )
                     ),
