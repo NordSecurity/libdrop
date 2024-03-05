@@ -25,6 +25,7 @@ class Error(IntEnum):
     EMPTY_TRANSFER = (37,)
     CONNECTION_CLOSED_BY_PEER = (38,)
     TOO_MANY_REQUESTS = (39,)
+    PERMISSION_DENIED = (40,)
 
 
 class ReturnCodes(IntEnum):

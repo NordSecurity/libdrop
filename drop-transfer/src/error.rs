@@ -1,4 +1,4 @@
-use std::io::Error as IoError;
+use std::io::{Error as IoError, ErrorKind};
 
 use drop_analytics::MOOSE_STATUS_SUCCESS;
 use tokio_tungstenite::tungstenite;
@@ -85,7 +85,14 @@ impl From<&Error> for u32 {
             Error::BadTransfer => Status::BadTransfer as _,
             Error::BadTransferState(_) => Status::BadTransferState as _,
             Error::BadFileId => Status::BadFileId as _,
-            Error::Io(_) => Status::IoError as _,
+            Error::Io(io) => {
+                let status = match io.kind() {
+                    ErrorKind::PermissionDenied => Status::PermissionDenied,
+                    _ => Status::IoError,
+                };
+
+                status as _
+            }
             Error::DirectoryNotExpected => Status::BadFile as _,
             Error::TransferLimitsExceeded => Status::TransferLimitsExceeded as _,
             Error::MismatchedSize => Status::MismatchedSize as _,
