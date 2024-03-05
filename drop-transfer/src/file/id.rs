@@ -101,6 +101,10 @@ impl FileSubPath {
         self.0.last().expect("Missing last path component")
     }
 
+    pub fn root(&self) -> &String {
+        self.0.first().expect("Missing first path component")
+    }
+
     pub fn from_path(path: impl AsRef<Path>) -> crate::Result<Self> {
         let vec = path
             .as_ref()

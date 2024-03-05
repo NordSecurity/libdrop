@@ -8,15 +8,11 @@
 //!
 //! * server (receiver) ->   client (sender): `Done (file)`
 
-use std::{net::IpAddr, sync::Arc};
-
-use drop_config::DropConfig;
 use serde::{Deserialize, Serialize};
 
 pub use super::v4::{Error, Progress};
 use crate::{
-    file::{File as _, FileId, FileSubPath, FileToRecv},
-    transfer::IncomingTransfer,
+    file::{File as _, FileId, FileSubPath},
     OutgoingTransfer, Transfer,
 };
 
@@ -69,48 +65,6 @@ pub struct TransferRequest {
 #[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct Download<T> {
     pub file: T,
-}
-
-impl TryFrom<(TransferRequest, IpAddr, Arc<DropConfig>)> for IncomingTransfer {
-    type Error = crate::Error;
-
-    fn try_from(
-        (TransferRequest { files }, peer, config): (TransferRequest, IpAddr, Arc<DropConfig>),
-    ) -> Result<Self, Self::Error> {
-        fn process_file(
-            in_files: &mut Vec<FileToRecv>,
-            subpath: FileSubPath,
-            File { size, children, .. }: File,
-        ) -> crate::Result<()> {
-            match size {
-                Some(size) => {
-                    in_files.push(FileToRecv::new(FileId::from(&subpath), subpath, size));
-                }
-                None => {
-                    for file in children {
-                        process_file(
-                            in_files,
-                            subpath.clone().append_file_name(&file.name)?,
-                            file,
-                        )?;
-                    }
-                }
-            }
-
-            Ok(())
-        }
-
-        let mut in_files = Vec::new();
-        for file in files {
-            process_file(
-                &mut in_files,
-                FileSubPath::from_file_name(&file.name)?,
-                file,
-            )?;
-        }
-
-        Self::new(peer, in_files, &config)
-    }
 }
 
 impl From<&OutgoingTransfer> for TransferRequest {
