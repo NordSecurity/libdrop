@@ -255,6 +255,20 @@ impl<T: Transfer> FileEventTx<T> {
 }
 
 impl FileEventTx<IncomingTransfer> {
+    pub async fn pending(&self, base_dir: impl Into<String>) {
+        let lock = self.inner.lock().await;
+
+        if !matches!(lock.state, FileState::Idle) {
+            return;
+        }
+
+        lock.tx.emit(crate::Event::FileDownloadPending {
+            transfer_id: self.xfer.id(),
+            file_id: self.file_id.clone(),
+            base_dir: base_dir.into(),
+        });
+    }
+
     pub async fn checksum_start(&self, size: u64) {
         self.emit_in_flight(crate::Event::ChecksumStarted {
             transfer_id: self.xfer.id(),

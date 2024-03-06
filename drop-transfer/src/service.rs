@@ -184,14 +184,13 @@ impl Service {
         &mut self,
         uuid: Uuid,
         file_id: &FileId,
-        parent_dir: &Path,
+        parent_dir: &str,
     ) -> crate::Result<()> {
         debug!(
             self.logger,
-            "Client::download() called with Uuid: {}, file: {:?}, parent_dir: {}",
+            "Client::download() called with Uuid: {}, file: {:?}, parent_dir: {parent_dir}",
             uuid,
             file_id,
-            parent_dir.display()
         );
 
         let mut lock = self.state.transfer_manager.incoming.lock().await;
@@ -200,10 +199,16 @@ impl Service {
         let started = state.validate_for_download(file_id)?;
 
         if started {
-            validate_dest_path(parent_dir)?;
+            validate_dest_path(parent_dir.as_ref())?;
+            state.file_events(file_id)?.pending(parent_dir).await;
 
             state
-                .start_download(&self.state.storage, file_id, parent_dir, &self.logger)
+                .start_download(
+                    &self.state.storage,
+                    file_id,
+                    parent_dir.as_ref(),
+                    &self.logger,
+                )
                 .await?;
         }
 

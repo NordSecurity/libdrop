@@ -400,7 +400,7 @@ impl NordDropFFI {
 
             if let Err(e) = inst
                 .service
-                .download(xfid, &file_id.clone().into(), dst.as_ref())
+                .download(xfid, &file_id.clone().into(), &dst)
                 .await
             {
                 error!(

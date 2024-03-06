@@ -123,6 +123,25 @@ class Start(Event):
         return f"Start(transfer={print_uuid(self._uuid_slot)}, file={self._file}, transfered={self._transferred})"
 
 
+class Pending(Event):
+    def __init__(self, uuid_slot: int, file: str):
+        self._uuid_slot = uuid_slot
+        self._file = file
+
+    def __eq__(self, rhs):
+        if not isinstance(rhs, Pending):
+            return False
+        if self._uuid_slot != rhs._uuid_slot:
+            return False
+        if self._file != rhs._file:
+            return False
+
+        return True
+
+    def __str__(self):
+        return f"Pending(transfer={print_uuid(self._uuid_slot)}, file={self._file})"
+
+
 class Progress(Event):
     def __init__(
         self, uuid_slot: int, file: str, transferred: typing.Optional[int] = None

@@ -168,6 +168,11 @@ fn print_event(ev: &Event) {
             "[EVENT] OutgoingTransferDeferred {}: error: {error}",
             transfer.id()
         ),
+        Event::FileDownloadPending {
+            transfer_id,
+            file_id,
+            base_dir,
+        } => info!("[EVENT] FileDownloadPending {transfer_id}: {file_id}, base_dir: {base_dir}"),
     }
 }
 
@@ -198,7 +203,7 @@ async fn listen(
 
                 for file in xfer.files().values() {
                     service
-                        .download(xfid, file.id(), out_dir)
+                        .download(xfid, file.id(), &out_dir.to_string_lossy())
                         .await
                         .context("Cannot issue download call")?;
                 }
