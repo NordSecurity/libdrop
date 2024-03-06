@@ -181,6 +181,12 @@ impl<'a> StorageDispatch<'a> {
             } => {
                 // not stored in the database
             }
+
+            crate::Event::FileDownloadPending {
+                transfer_id: _,
+                file_id: _,
+                base_dir: _,
+            } => (),
         }
     }
 

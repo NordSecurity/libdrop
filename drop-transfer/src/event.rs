@@ -23,6 +23,12 @@ pub enum Event {
     FileUploadStarted(Arc<OutgoingTransfer>, FileId, u64),
     FileDownloadStarted(Arc<IncomingTransfer>, FileId, String, u64),
 
+    FileDownloadPending {
+        transfer_id: Uuid,
+        file_id: FileId,
+        base_dir: String,
+    },
+
     FileUploadProgress(Arc<OutgoingTransfer>, FileId, u64),
     FileDownloadProgress(Arc<IncomingTransfer>, FileId, u64),
 
