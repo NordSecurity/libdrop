@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{hash_map::Entry, HashMap},
     fmt::Write,
     fs,
     future::Future,
@@ -26,13 +26,14 @@ use super::{
     TmpFileState,
 };
 use crate::{
+    file::FileSubPath,
     manager::FileTerminalState,
     protocol::v2,
     service::State,
     transfer::{IncomingTransfer, Transfer},
-    utils::Hidden,
+    utils::{self, Hidden},
     ws::{self, events::FileEventTx},
-    File, FileId,
+    File, FileId, FileToRecv,
 };
 
 pub struct HandlerInit<'a, const PING: bool = true> {
@@ -465,6 +466,174 @@ impl handler::Downloader for Downloader {
 
 impl handler::Request for (v2::TransferRequest, IpAddr, Arc<DropConfig>) {
     fn parse(self) -> anyhow::Result<IncomingTransfer> {
-        self.try_into().context("Failed to parse transfer request")
+        let (v2::TransferRequest { files }, peer, config) = self;
+        Ok(IncomingTransfer::new(peer, map_files(files)?, &config)?)
+    }
+}
+
+fn map_files(files: Vec<v2::File>) -> anyhow::Result<Vec<FileToRecv>> {
+    fn process_file(
+        files: &mut Vec<(FileSubPath, u64)>,
+        subpath: FileSubPath,
+        v2::File { size, children, .. }: v2::File,
+    ) -> crate::Result<()> {
+        match size {
+            Some(size) => {
+                files.push((subpath, size));
+            }
+            None => {
+                for file in children {
+                    process_file(files, subpath.clone().append_file_name(&file.name)?, file)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    let mut info = Vec::new();
+    for file in files {
+        process_file(&mut info, FileSubPath::from_file_name(&file.name)?, file)?;
+    }
+
+    let mut files = Vec::with_capacity(info.len());
+    let mut used_mappings = HashMap::new();
+
+    for (mut path, size) in info {
+        let uroot = path.root();
+        let nroot = utils::normalize_filename(uroot);
+
+        for nvariant in utils::filepath_variants(nroot.as_ref())?
+            .filter_map(|p| p.into_os_string().into_string().ok())
+        {
+            let nroot = match used_mappings.entry(nvariant) {
+                Entry::Occupied(occ) => {
+                    if occ.get() == uroot {
+                        // Good we known the root
+                        occ.key().to_string()
+                    } else {
+                        // The mapping is occupied by other root dir or file.
+                        continue;
+                    }
+                }
+                Entry::Vacant(vacc) => {
+                    // New mapping, lets insert it
+                    let nroot = vacc.key().to_string();
+                    vacc.insert(uroot.to_string());
+                    nroot
+                }
+            };
+
+            let id = FileId::from(&path);
+            let mut piter = path.iter_mut();
+            *piter.next().context("Subpath should always contain root")? = nroot;
+            piter.for_each(|s| *s = utils::normalize_filename(&*s));
+
+            files.push(FileToRecv::new(id, path, size));
+            break;
+        }
+    }
+
+    Ok(files)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::file::FileSubPath;
+
+    #[test]
+    fn file_mapping() {
+        // all good
+        let input = vec![
+            v2::File {
+                name: "a".into(),
+                size: None,
+                children: vec![v2::File {
+                    name: "b".into(),
+                    size: Some(0),
+                    children: vec![],
+                }],
+            },
+            v2::File {
+                name: "b".into(),
+                size: Some(0),
+                children: vec![],
+            },
+            v2::File {
+                name: "c".into(),
+                size: Some(0),
+                children: vec![],
+            },
+        ];
+        let output = map_files(input).unwrap();
+
+        assert_eq!(*output[0].subpath(), FileSubPath::from("a/b"));
+        assert_eq!(*output[1].subpath(), FileSubPath::from("b"));
+        assert_eq!(*output[2].subpath(), FileSubPath::from("c"));
+
+        // Same root name
+        let input = vec![v2::File {
+            name: "a".into(),
+            size: None,
+            children: vec![
+                v2::File {
+                    name: "b".into(),
+                    size: Some(0),
+                    children: vec![],
+                },
+                v2::File {
+                    name: "c".into(),
+                    size: Some(0),
+                    children: vec![],
+                },
+            ],
+        }];
+        let output = map_files(input).unwrap();
+
+        assert_eq!(*output[0].subpath(), FileSubPath::from("a/b"));
+        assert_eq!(*output[1].subpath(), FileSubPath::from("a/c"));
+
+        // Same root name after rename
+        let input = vec![
+            v2::File {
+                name: "<".into(),
+                size: None,
+                children: vec![
+                    v2::File {
+                        name: "a".into(),
+                        size: Some(0),
+                        children: vec![],
+                    },
+                    v2::File {
+                        name: "b".into(),
+                        size: Some(0),
+                        children: vec![],
+                    },
+                ],
+            },
+            v2::File {
+                name: ">".into(),
+                size: None,
+                children: vec![
+                    v2::File {
+                        name: "c".into(),
+                        size: Some(0),
+                        children: vec![],
+                    },
+                    v2::File {
+                        name: "d".into(),
+                        size: Some(0),
+                        children: vec![],
+                    },
+                ],
+            },
+        ];
+        let output = map_files(input).unwrap();
+
+        assert_eq!(*output[0].subpath(), FileSubPath::from("_/a"));
+        assert_eq!(*output[1].subpath(), FileSubPath::from("_/b"));
+        assert_eq!(*output[2].subpath(), FileSubPath::from("_(1)/c"));
+        assert_eq!(*output[3].subpath(), FileSubPath::from("_(1)/d"));
     }
 }
