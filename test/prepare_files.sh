@@ -13,6 +13,8 @@ mkdir -p /tmp/empty-dir
 mkdir -p /tmp/empty-dir/one
 mkdir -p /tmp/empty-dir/one/two
 mkdir -p /tmp/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+mkdir -p /tmp/dir-with-invalid_char-\<
+mkdir -p /tmp/dir-with-invalid_char-\>
 
 # FILES dictionary
 dd bs=1024K count=1 if=/dev/urandom of="/tmp/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.txt"
@@ -44,6 +46,8 @@ dd bs=10240K count=2 if=/dev/urandom of="/tmp/duplicate/testfile-big"
 dd bs=1024K count=1 if=/dev/urandom of="/tmp/name/file-01"
 dd bs=1024K count=1 if=/dev/urandom of="/tmp/different/name/file-02"
 dd bs=1024K count=1 if=/dev/urandom of="/tmp/utf8-testfile-宁察"
+dd bs=1024K count=1 if=/dev/urandom of="/tmp/dir-with-invalid_char-</file-01"
+dd bs=1024K count=1 if=/dev/urandom of="/tmp/dir-with-invalid_char->/file-01"
 
 # Create tiny jpeg and gif files to test analytics
 # "/tmp/tiny-jpeg.jpg"

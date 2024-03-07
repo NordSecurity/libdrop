@@ -4223,6 +4223,162 @@ scenarios = [
         },
     ),
     Scenario(
+        "scenario19-5",
+        "Send two dirs for which their name is going to be the same after normalization. Expect their contents in not merged",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN"),
+                    # Wait for another peer to appear
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY",
+                        [
+                            "/tmp/dir-with-invalid_char-<",
+                            "/tmp/dir-with-invalid_char->",
+                        ],
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            "DROP_PEER_STIMPY",
+                            {
+                                event.File(
+                                    FILES["dir-with-invalid_char-</file-01"].id,
+                                    "dir-with-invalid_char-</file-01",
+                                    1048576,
+                                ),
+                                event.File(
+                                    FILES["dir-with-invalid_char->/file-01"].id,
+                                    "dir-with-invalid_char->/file-01",
+                                    1048576,
+                                ),
+                            },
+                        )
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(0, FILES["dir-with-invalid_char-</file-01"].id),
+                            event.Start(0, FILES["dir-with-invalid_char->/file-01"].id),
+                            event.FinishFileUploaded(
+                                0,
+                                FILES["dir-with-invalid_char-</file-01"].id,
+                            ),
+                            event.FinishFileUploaded(
+                                0,
+                                FILES["dir-with-invalid_char->/file-01"].id,
+                            ),
+                        ]
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.WaitForOneOf(
+                        [
+                            event.Receive(
+                                0,
+                                "DROP_PEER_REN",
+                                {
+                                    event.File(
+                                        FILES["dir-with-invalid_char-</file-01"].id,
+                                        "dir-with-invalid_char-_/file-01",
+                                        1048576,
+                                    ),
+                                    event.File(
+                                        FILES["dir-with-invalid_char->/file-01"].id,
+                                        "dir-with-invalid_char-_(1)/file-01",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                            event.Receive(
+                                0,
+                                "DROP_PEER_REN",
+                                {
+                                    event.File(
+                                        FILES["dir-with-invalid_char-</file-01"].id,
+                                        "dir-with-invalid_char-_(1)/file-01",
+                                        1048576,
+                                    ),
+                                    event.File(
+                                        FILES["dir-with-invalid_char->/file-01"].id,
+                                        "dir-with-invalid_char-_/file-01",
+                                        1048576,
+                                    ),
+                                },
+                            ),
+                        ]
+                    ),
+                    action.Download(
+                        0,
+                        FILES["dir-with-invalid_char-</file-01"].id,
+                        "/tmp/received/19-5",
+                    ),
+                    action.Wait(
+                        event.Start(0, FILES["dir-with-invalid_char-</file-01"].id)
+                    ),
+                    action.WaitForOneOf(
+                        [
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["dir-with-invalid_char-</file-01"].id,
+                                "/tmp/received/19-5/dir-with-invalid_char-_/file-01",
+                            ),
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["dir-with-invalid_char-</file-01"].id,
+                                "/tmp/received/19-5/dir-with-invalid_char-_(1)/file-01",
+                            ),
+                        ]
+                    ),
+                    action.Download(
+                        0,
+                        FILES["dir-with-invalid_char->/file-01"].id,
+                        "/tmp/received/19-5",
+                    ),
+                    action.Wait(
+                        event.Start(0, FILES["dir-with-invalid_char->/file-01"].id)
+                    ),
+                    action.WaitForOneOf(
+                        [
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["dir-with-invalid_char->/file-01"].id,
+                                "/tmp/received/19-5/dir-with-invalid_char-_(1)/file-01",
+                            ),
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["dir-with-invalid_char->/file-01"].id,
+                                "/tmp/received/19-5/dir-with-invalid_char-_/file-01",
+                            ),
+                        ]
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File(
+                                "/tmp/received/19-5/dir-with-invalid_char-_/file-01",
+                                1048576,
+                            ),
+                            action.File(
+                                "/tmp/received/19-5/dir-with-invalid_char-_(1)/file-01",
+                                1048576,
+                            ),
+                        ],
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
         "scenario20",
         "Send multiple files within a single transfer",
         {

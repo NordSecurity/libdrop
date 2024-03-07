@@ -1,5 +1,11 @@
 use std::{
-    cmp::Ordering, collections::HashMap, fs, future::Future, net::IpAddr, path::PathBuf, sync::Arc,
+    cmp::Ordering,
+    collections::{hash_map::Entry, HashMap},
+    fs,
+    future::Future,
+    net::IpAddr,
+    path::PathBuf,
+    sync::Arc,
 };
 
 use anyhow::Context;
@@ -25,7 +31,7 @@ use crate::{
     service::State,
     tasks::AliveGuard,
     transfer::{IncomingTransfer, Transfer},
-    utils::Hidden,
+    utils::{self, Hidden},
     ws::events::FileEventTx,
     File, FileId,
 };
@@ -667,12 +673,130 @@ impl handler::Request for (prot::TransferRequest, IpAddr, Arc<DropConfig>) {
     fn parse(self) -> anyhow::Result<IncomingTransfer> {
         let (prot::TransferRequest { files, id }, peer, config) = self;
 
-        let files = files
-            .into_iter()
-            .map(|f| FileToRecv::new(f.id, f.path, f.size))
-            .collect();
-
-        IncomingTransfer::new_with_uuid(peer, files, id, &config)
+        IncomingTransfer::new_with_uuid(peer, map_files(files)?, id, &config)
             .context("Failed to crate transfer")
+    }
+}
+
+fn map_files(files: Vec<prot::File>) -> anyhow::Result<Vec<FileToRecv>> {
+    let mut out = Vec::with_capacity(files.len());
+
+    let mut used_mappings = HashMap::new();
+
+    for prot::File { mut path, id, size } in files {
+        let uroot = path.root();
+        let nroot = utils::normalize_filename(uroot);
+
+        for nvariant in utils::filepath_variants(nroot.as_ref())?
+            .filter_map(|p| p.into_os_string().into_string().ok())
+        {
+            let nroot = match used_mappings.entry(nvariant) {
+                Entry::Occupied(occ) => {
+                    if occ.get() == uroot {
+                        // Good we known the root
+                        occ.key().to_string()
+                    } else {
+                        // The mapping is occupied by other root dir or file.
+                        continue;
+                    }
+                }
+                Entry::Vacant(vacc) => {
+                    // New mapping, lets insert it
+                    let nroot = vacc.key().to_string();
+                    vacc.insert(uroot.to_string());
+                    nroot
+                }
+            };
+
+            let mut piter = path.iter_mut();
+            *piter.next().context("Subpath should always contain root")? = nroot;
+            piter.for_each(|s| *s = utils::normalize_filename(&*s));
+
+            out.push(FileToRecv::new(id, path, size));
+            break;
+        }
+    }
+
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::file::FileSubPath;
+
+    #[test]
+    fn file_mapping() {
+        // all good
+        let input = vec![
+            prot::File {
+                path: FileSubPath::from("a/b"),
+                id: FileId::from("id1"),
+                size: 0,
+            },
+            prot::File {
+                path: FileSubPath::from("b"),
+                id: FileId::from("id2"),
+                size: 0,
+            },
+            prot::File {
+                path: FileSubPath::from("c"),
+                id: FileId::from("id3"),
+                size: 0,
+            },
+        ];
+        let output = map_files(input).unwrap();
+
+        assert_eq!(*output[0].subpath(), FileSubPath::from("a/b"));
+        assert_eq!(*output[1].subpath(), FileSubPath::from("b"));
+        assert_eq!(*output[2].subpath(), FileSubPath::from("c"));
+
+        // Same root name
+        let input = vec![
+            prot::File {
+                path: FileSubPath::from("a/b"),
+                id: FileId::from("id1"),
+                size: 0,
+            },
+            prot::File {
+                path: FileSubPath::from("a/c"),
+                id: FileId::from("id2"),
+                size: 0,
+            },
+        ];
+        let output = map_files(input).unwrap();
+
+        assert_eq!(*output[0].subpath(), FileSubPath::from("a/b"));
+        assert_eq!(*output[1].subpath(), FileSubPath::from("a/c"));
+
+        // Same root name after rename
+        let input = vec![
+            prot::File {
+                path: FileSubPath::from("</a"),
+                id: FileId::from("id1"),
+                size: 0,
+            },
+            prot::File {
+                path: FileSubPath::from("</b"),
+                id: FileId::from("id2"),
+                size: 0,
+            },
+            prot::File {
+                path: FileSubPath::from(">/c"),
+                id: FileId::from("id3"),
+                size: 0,
+            },
+            prot::File {
+                path: FileSubPath::from(">/d"),
+                id: FileId::from("id4"),
+                size: 0,
+            },
+        ];
+        let output = map_files(input).unwrap();
+
+        assert_eq!(*output[0].subpath(), FileSubPath::from("_/a"));
+        assert_eq!(*output[1].subpath(), FileSubPath::from("_/b"));
+        assert_eq!(*output[2].subpath(), FileSubPath::from("_(1)/c"));
+        assert_eq!(*output[3].subpath(), FileSubPath::from("_(1)/d"));
     }
 }
