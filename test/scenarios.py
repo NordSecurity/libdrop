@@ -7459,6 +7459,178 @@ scenarios = [
         },
     ),
     Scenario(
+        "scenario29-14",
+        "Send a bunch of files and wait until some of them arrive. Then stop the sender and cancel the transfer on receiver. Expect the file states match on both sides",
+        # TODO(msz): We should compare the results of `transfer_since()`
+        # for both peers. However we don't have such posibitlity in our test
+        # framework to test things across containers
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.ConfigureNetwork(rate="200mbit"),
+                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-14-ren.sqlite"),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY",
+                        [
+                            "/tmp/testfile-bulk-01",
+                            "/tmp/testfile-bulk-02",
+                            "/tmp/testfile-bulk-03",
+                            "/tmp/testfile-bulk-04",
+                        ],
+                    ),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            "DROP_PEER_STIMPY",
+                            {
+                                event.File(
+                                    FILES["testfile-bulk-01"].id,
+                                    "testfile-bulk-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-02"].id,
+                                    "testfile-bulk-02",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-03"].id,
+                                    "testfile-bulk-03",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-04"].id,
+                                    "testfile-bulk-04",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Start(0, FILES["testfile-bulk-01"].id),
+                            event.Start(0, FILES["testfile-bulk-02"].id),
+                            event.Start(0, FILES["testfile-bulk-03"].id),
+                            event.Start(0, FILES["testfile-bulk-04"].id),
+                        ]
+                    ),
+                    action.WaitForOneOf(
+                        [
+                            event.FinishFileUploaded(0, FILES["testfile-bulk-01"].id),
+                            event.FinishFileUploaded(0, FILES["testfile-bulk-02"].id),
+                            event.FinishFileUploaded(0, FILES["testfile-bulk-03"].id),
+                            event.FinishFileUploaded(0, FILES["testfile-bulk-04"].id),
+                        ]
+                    ),
+                    action.Stop(),
+                    action.Sleep(2),
+                    # restart
+                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-14-ren.sqlite"),
+                    action.NetworkRefresh(),
+                    action.WaitAndIgnoreExcept(
+                        [
+                            event.FinishTransferCanceled(0, True),
+                        ]
+                    ),
+                    action.NoEvent(),
+                    # action.AssertTransfers([]),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.ConfigureNetwork(rate="200mbit"),
+                    action.Start(
+                        "DROP_PEER_STIMPY", dbpath="/tmp/db/29-14-stimpy.sqlite"
+                    ),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            {
+                                event.File(
+                                    FILES["testfile-bulk-01"].id,
+                                    "testfile-bulk-01",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-02"].id,
+                                    "testfile-bulk-02",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-03"].id,
+                                    "testfile-bulk-03",
+                                    10485760,
+                                ),
+                                event.File(
+                                    FILES["testfile-bulk-04"].id,
+                                    "testfile-bulk-04",
+                                    10485760,
+                                ),
+                            },
+                        )
+                    ),
+                    action.Download(
+                        0, FILES["testfile-bulk-01"].id, "/tmp/received/29-14/"
+                    ),
+                    action.Download(
+                        0, FILES["testfile-bulk-02"].id, "/tmp/received/29-14/"
+                    ),
+                    action.Download(
+                        0, FILES["testfile-bulk-03"].id, "/tmp/received/29-14/"
+                    ),
+                    action.Download(
+                        0, FILES["testfile-bulk-04"].id, "/tmp/received/29-14/"
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Pending(0, FILES["testfile-bulk-01"].id),
+                            event.Pending(0, FILES["testfile-bulk-02"].id),
+                            event.Pending(0, FILES["testfile-bulk-03"].id),
+                            event.Pending(0, FILES["testfile-bulk-04"].id),
+                            event.Start(0, FILES["testfile-bulk-01"].id),
+                            event.Start(0, FILES["testfile-bulk-02"].id),
+                            event.Start(0, FILES["testfile-bulk-03"].id),
+                            event.Start(0, FILES["testfile-bulk-04"].id),
+                        ]
+                    ),
+                    action.WaitAndIgnoreExcept(
+                        [
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["testfile-bulk-01"].id,
+                                "/tmp/received/29-14/testfile-bulk-01",
+                            ),
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["testfile-bulk-02"].id,
+                                "/tmp/received/29-14/testfile-bulk-02",
+                            ),
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["testfile-bulk-03"].id,
+                                "/tmp/received/29-14/testfile-bulk-03",
+                            ),
+                            event.FinishFileDownloaded(
+                                0,
+                                FILES["testfile-bulk-04"].id,
+                                "/tmp/received/29-14/testfile-bulk-04",
+                            ),
+                        ]
+                    ),
+                    action.Sleep(0.5),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    # action.AssertTransfers([]),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
         "scenario30",
         "Trigger DDoS protection. Expect HTTP error returned",
         {
