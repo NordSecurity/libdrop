@@ -7460,7 +7460,7 @@ scenarios = [
     ),
     Scenario(
         "scenario29-14",
-        "Send a bunch of files and wait until some of them arrive. Then stop the sender and cancel the transfer on receiver. Expect the file states match on both sides",
+        "Send a bunch of files and wait until some of them arrive. Stop the sender and cancel the transfer on the receiver. Then, start the sender again and wait for the state to sync. Expect the file states to match on both sides",
         # TODO(msz): We should compare the results of `transfer_since()`
         # for both peers. However we don't have such posibitlity in our test
         # framework to test things across containers
