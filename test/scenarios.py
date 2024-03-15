@@ -7229,16 +7229,16 @@ scenarios = [
     ),
     Scenario(
         "scenario30",
-        "Trigger DDoS protection. Expect some transfers to fail",
+        "Trigger DDoS protection. Expect HTTP error returned",
         {
             "DROP_PEER_REN": ActionList(
                 [
-                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.Start("DROP_PEER_REN"),
                     action.ExpectAnyError(
                         action.Parallel(
                             [
                                 action.MakeHttpGetRequest(
-                                    "DROP_PEER_STIMPY",
+                                    "DROP_PEER_REN",
                                     "/non-existing-path",
                                     HTTPStatus.NOT_FOUND,
                                 )
@@ -7247,21 +7247,15 @@ scenarios = [
                         ),
                     ),
                     action.MakeHttpGetRequest(
-                        "DROP_PEER_STIMPY",
+                        "DROP_PEER_REN",
                         "/non-existing-path",
                         HTTPStatus.TOO_MANY_REQUESTS,
                     ),
                     action.Sleep(10),
                     # check if it's all good again
                     action.MakeHttpGetRequest(
-                        "DROP_PEER_STIMPY", "/non-existing-path", HTTPStatus.NOT_FOUND
+                        "DROP_PEER_REN", "/non-existing-path", HTTPStatus.NOT_FOUND
                     ),
-                ]
-            ),
-            "DROP_PEER_STIMPY": ActionList(
-                [
-                    action.Start("DROP_PEER_STIMPY"),
-                    action.Sleep(30),
                     action.Stop(),
                 ]
             ),
