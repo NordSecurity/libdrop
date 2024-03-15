@@ -63,7 +63,7 @@ pub struct IncomingState {
     pub dir_mappings: DirMapping,
     xfer_sync: sync::TransferState,
     file_sync: HashMap<FileId, IncomingLocalFileState>,
-    pub file_events: HashMap<FileId, Arc<IncomingFileEventTx>>,
+    file_events: HashMap<FileId, Arc<IncomingFileEventTx>>,
     pub xfer_events: Arc<IncomingTransferEventTx>,
 }
 
@@ -72,7 +72,7 @@ pub struct OutgoingState {
     conn: Option<UnboundedSender<ClientReq>>,
     xfer_sync: sync::TransferState,
     file_sync: HashMap<FileId, OutgoingLocalFileState>,
-    pub file_events: HashMap<FileId, Arc<OutgoingFileEventTx>>,
+    file_events: HashMap<FileId, Arc<OutgoingFileEventTx>>,
     pub xfer_events: Arc<OutgoingTransferEventTx>,
 }
 
@@ -164,6 +164,7 @@ impl TransferManager {
                     .await;
 
                 let state = vacc.insert(IncomingState {
+                    xfer: xfer.clone(),
                     conn: Some(conn),
                     dir_mappings: Default::default(),
                     xfer_sync: sync::TransferState::Active,
@@ -172,8 +173,16 @@ impl TransferManager {
                         .keys()
                         .map(|file_id| (file_id.clone(), IncomingLocalFileState::Idle))
                         .collect(),
-                    xfer: xfer.clone(),
-                    file_events: HashMap::new(),
+                    file_events: xfer
+                        .files()
+                        .keys()
+                        .map(|file_id| {
+                            (
+                                file_id.clone(),
+                                Arc::new(self.event_factory.file(xfer.clone(), file_id.clone())),
+                            )
+                        })
+                        .collect(),
                     xfer_events: Arc::new(self.event_factory.transfer(xfer, false)),
                 });
 
@@ -244,6 +253,7 @@ impl TransferManager {
                 self.storage.insert_transfer(&xfer.storage_info()).await;
 
                 entry.insert(OutgoingState {
+                    xfer: xfer.clone(),
                     conn: None,
                     xfer_sync: sync::TransferState::New,
                     file_sync: xfer
@@ -251,8 +261,16 @@ impl TransferManager {
                         .keys()
                         .map(|file_id| (file_id.clone(), OutgoingLocalFileState::Alive))
                         .collect(),
-                    xfer: xfer.clone(),
-                    file_events: HashMap::new(),
+                    file_events: xfer
+                        .files()
+                        .keys()
+                        .map(|file_id| {
+                            (
+                                file_id.clone(),
+                                Arc::new(self.event_factory.file(xfer.clone(), file_id.clone())),
+                            )
+                        })
+                        .collect(),
                     xfer_events: Arc::new(self.event_factory.transfer(xfer, false)),
                 })
             }
@@ -274,7 +292,7 @@ impl TransferManager {
 
         state.ensure_not_cancelled()?;
 
-        Ok(state.file_events(&self.event_factory, file_id))
+        Ok(state.file_events(file_id)?.clone())
     }
 
     pub async fn outgoing_file_events(
@@ -290,7 +308,7 @@ impl TransferManager {
 
         state.ensure_not_cancelled()?;
 
-        Ok(state.file_events(&self.event_factory, file_id))
+        Ok(state.file_events(file_id)?.clone())
     }
 
     pub async fn outgoing_rejection_post(
@@ -333,7 +351,7 @@ impl TransferManager {
 
         Ok(FinishResult {
             xfer: state.xfer.clone(),
-            events: state.file_events(&self.event_factory, file_id),
+            events: state.file_events(file_id)?.clone(),
         })
     }
 
@@ -362,7 +380,7 @@ impl TransferManager {
 
             Some(FinishResult {
                 xfer: state.xfer.clone(),
-                events: state.file_events(&self.event_factory, file_id),
+                events: state.file_events(file_id)?.clone(),
             })
         } else {
             None
@@ -414,7 +432,7 @@ impl TransferManager {
 
         Ok(FinishResult {
             xfer: state.xfer.clone(),
-            events: state.file_events(&self.event_factory, file_id),
+            events: state.file_events(file_id)?.clone(),
         })
     }
 
@@ -504,7 +522,7 @@ impl TransferManager {
 
             Some(FinishResult {
                 xfer: state.xfer.clone(),
-                events: state.file_events(&self.event_factory, file_id),
+                events: state.file_events(file_id)?.clone(),
             })
         } else {
             None
@@ -539,7 +557,7 @@ impl TransferManager {
 
         Ok(FinishResult {
             xfer: state.xfer.clone(),
-            events: state.file_events(&self.event_factory, file_id),
+            events: state.file_events(file_id)?.clone(),
         })
     }
 
@@ -726,17 +744,8 @@ impl OutgoingState {
         Ok(())
     }
 
-    fn file_events(
-        &mut self,
-        factory: &EventTxFactory,
-        file_id: &FileId,
-    ) -> Arc<OutgoingFileEventTx> {
-        self.file_events
-            .entry(file_id.clone())
-            .or_insert_with_key(|file_id| {
-                Arc::new(factory.file(self.xfer.clone(), file_id.clone()))
-            })
-            .clone()
+    fn file_events(&self, file_id: &FileId) -> crate::Result<&Arc<OutgoingFileEventTx>> {
+        self.file_events.get(file_id).ok_or(crate::Error::BadFileId)
     }
 
     fn file_sync_mut(&mut self, file_id: &FileId) -> crate::Result<&mut OutgoingLocalFileState> {
@@ -803,17 +812,8 @@ impl IncomingState {
         Ok(())
     }
 
-    fn file_events(
-        &mut self,
-        factory: &EventTxFactory,
-        file_id: &FileId,
-    ) -> Arc<IncomingFileEventTx> {
-        self.file_events
-            .entry(file_id.clone())
-            .or_insert_with_key(|file_id| {
-                Arc::new(factory.file(self.xfer.clone(), file_id.clone()))
-            })
-            .clone()
+    pub fn file_events(&self, file_id: &FileId) -> crate::Result<&Arc<IncomingFileEventTx>> {
+        self.file_events.get(file_id).ok_or(crate::Error::BadFileId)
     }
 
     fn ensure_not_cancelled(&self) -> crate::Result<()> {
@@ -1123,7 +1123,16 @@ async fn restore_incoming(
                 dir_mappings: Default::default(),
                 xfer_sync: sync.local_state,
                 file_sync,
-                file_events: HashMap::new(),
+                file_events: xfer
+                    .files()
+                    .keys()
+                    .map(|file_id| {
+                        (
+                            file_id.clone(),
+                            Arc::new(factory.file(xfer.clone(), file_id.clone())),
+                        )
+                    })
+                    .collect(),
                 xfer_events: Arc::new(factory.transfer(
                     xfer,
                     matches!(sync.local_state, sync::TransferState::Canceled),
@@ -1222,7 +1231,21 @@ async fn restore_outgoing(state: &Arc<State>, logger: &Logger) -> HashMap<Uuid, 
                 conn: None,
                 xfer_sync: sync.local_state,
                 file_sync,
-                file_events: HashMap::new(),
+                file_events: xfer
+                    .files()
+                    .keys()
+                    .map(|file_id| {
+                        (
+                            file_id.clone(),
+                            Arc::new(
+                                state
+                                    .transfer_manager
+                                    .event_factory
+                                    .file(xfer.clone(), file_id.clone()),
+                            ),
+                        )
+                    })
+                    .collect(),
                 xfer_events: Arc::new(state.transfer_manager.event_factory.transfer(
                     xfer,
                     matches!(sync.local_state, sync::TransferState::Canceled),
