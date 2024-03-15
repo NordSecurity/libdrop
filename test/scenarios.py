@@ -103,6 +103,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -306,6 +307,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -330,6 +332,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(1, FILES["testfile-big"].id)),
                     action.Wait(event.Start(1, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -510,6 +513,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.Start(
                             0,
@@ -540,6 +544,10 @@ scenarios = [
                                 0,
                                 FILES["testfile-big"].id,
                                 "/tmp/received/testfile-big",
+                            ),
+                            event.Pending(
+                                1,
+                                FILES["testfile-small"].id,
                             ),
                             event.Start(
                                 1,
@@ -616,6 +624,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.FinishTransferCanceled(0, True)),
                     action.NoEvent(),
@@ -727,6 +736,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.CancelTransferRequest([0]),
                     action.Wait(
@@ -873,6 +883,14 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
+                            event.Pending(
+                                0,
+                                FILES["nested/big/testfile-01"].id,
+                            ),
+                            event.Pending(
+                                0,
+                                FILES["nested/big/testfile-02"].id,
+                            ),
                             event.Start(
                                 0,
                                 FILES["nested/big/testfile-01"].id,
@@ -1099,6 +1117,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -1247,6 +1266,12 @@ scenarios = [
                         "/tmp/received",
                     ),
                     action.Wait(
+                        event.Pending(
+                            0,
+                            FILES["deep/path/file1.ext1"].id,
+                        )
+                    ),
+                    action.Wait(
                         event.Start(
                             0,
                             FILES["deep/path/file1.ext1"].id,
@@ -1263,6 +1288,12 @@ scenarios = [
                         0,
                         FILES["deep/path/file2.ext2"].id,
                         "/tmp/received",
+                    ),
+                    action.Wait(
+                        event.Pending(
+                            0,
+                            FILES["deep/path/file2.ext2"].id,
+                        )
                     ),
                     action.Wait(
                         event.Start(
@@ -1283,6 +1314,12 @@ scenarios = [
                         "/tmp/received",
                     ),
                     action.Wait(
+                        event.Pending(
+                            0,
+                            FILES["deep/another-path/file3.ext3"].id,
+                        )
+                    ),
+                    action.Wait(
                         event.Start(
                             0,
                             FILES["deep/another-path/file3.ext3"].id,
@@ -1299,6 +1336,12 @@ scenarios = [
                         0,
                         FILES["deep/another-path/file4.ext4"].id,
                         "/tmp/received",
+                    ),
+                    action.Wait(
+                        event.Pending(
+                            0,
+                            FILES["deep/another-path/file4.ext4"].id,
+                        )
                     ),
                     action.Wait(
                         event.Start(
@@ -1461,6 +1504,12 @@ scenarios = [
                         "/tmp/received1",
                     ),
                     action.Wait(
+                        event.Pending(
+                            0,
+                            FILES["deep/path/file1.ext1"].id,
+                        )
+                    ),
+                    action.Wait(
                         event.Start(
                             0,
                             FILES["deep/path/file1.ext1"].id,
@@ -1477,6 +1526,12 @@ scenarios = [
                         0,
                         FILES["deep/path/file2.ext2"].id,
                         "/tmp/received2",
+                    ),
+                    action.Wait(
+                        event.Pending(
+                            0,
+                            FILES["deep/path/file2.ext2"].id,
+                        )
                     ),
                     action.Wait(
                         event.Start(
@@ -1497,6 +1552,12 @@ scenarios = [
                         "/tmp/received1",
                     ),
                     action.Wait(
+                        event.Pending(
+                            0,
+                            FILES["deep/another-path/file3.ext3"].id,
+                        )
+                    ),
+                    action.Wait(
                         event.Start(
                             0,
                             FILES["deep/another-path/file3.ext3"].id,
@@ -1513,6 +1574,12 @@ scenarios = [
                         0,
                         FILES["deep/another-path/file4.ext4"].id,
                         "/tmp/received2",
+                    ),
+                    action.Wait(
+                        event.Pending(
+                            0,
+                            FILES["deep/another-path/file4.ext4"].id,
+                        )
                     ),
                     action.Wait(
                         event.Start(
@@ -1606,6 +1673,9 @@ scenarios = [
                         0,
                         "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                         "/tmp/received",
+                    ),
+                    action.Wait(
+                        event.Pending(0, "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI"),
                     ),
                     action.Wait(
                         event.Start(0, "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI"),
@@ -1705,6 +1775,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -1731,6 +1802,7 @@ scenarios = [
                         FILES["duplicate/testfile-small"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(1, FILES["duplicate/testfile-small"].id)),
                     action.Wait(event.Start(1, FILES["duplicate/testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -1857,6 +1929,11 @@ scenarios = [
                         "/tmp/received",
                     ),
                     action.Wait(
+                        event.Pending(
+                            0, FILES["testfile.small.with.complicated.extension"].id
+                        )
+                    ),
+                    action.Wait(
                         event.Start(
                             0, FILES["testfile.small.with.complicated.extension"].id
                         )
@@ -1887,6 +1964,14 @@ scenarios = [
                         1,
                         FILES["duplicate/testfile.small.with.complicated.extension"].id,
                         "/tmp/received",
+                    ),
+                    action.Wait(
+                        event.Pending(
+                            1,
+                            FILES[
+                                "duplicate/testfile.small.with.complicated.extension"
+                            ].id,
+                        )
                     ),
                     action.Wait(
                         event.Start(
@@ -1984,6 +2069,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received/8-3",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -2101,6 +2187,16 @@ scenarios = [
                     # fmt: off
                     action.WaitRacy(
                         [
+                            event.Pending(0, FILES["testfile-bulk-01"].id),
+                            event.Pending(1, FILES["testfile-bulk-01"].id),
+                            event.Pending(2, FILES["testfile-bulk-01"].id),
+                            event.Pending(3, FILES["testfile-bulk-01"].id),
+                            event.Pending(4, FILES["testfile-bulk-01"].id),
+                            event.Pending(5, FILES["testfile-bulk-01"].id),
+                            event.Pending(6, FILES["testfile-bulk-01"].id),
+                            event.Pending(7, FILES["testfile-bulk-01"].id),
+                            event.Pending(8, FILES["testfile-bulk-01"].id),
+                            event.Pending(9, FILES["testfile-bulk-01"].id),
                             event.Start(0, FILES["testfile-bulk-01"].id),
                             event.Start(1, FILES["testfile-bulk-01"].id),
                             event.Start(2, FILES["testfile-bulk-01"].id),
@@ -2259,6 +2355,22 @@ scenarios = [
                     # fmt: on
                     # fmt: off
                     action.Repeated([action.WaitForOneOf([
+                        event.Pending(0, FILES["testfile-bulk-01"].id),
+                        event.Pending(0, FILES["testfile-bulk-02"].id),
+                        event.Pending(0, FILES["testfile-bulk-03"].id),
+                        event.Pending(0, FILES["testfile-bulk-04"].id),
+                        event.Pending(1, FILES["testfile-bulk-01"].id),
+                        event.Pending(1, FILES["testfile-bulk-02"].id),
+                        event.Pending(1, FILES["testfile-bulk-03"].id),
+                        event.Pending(1, FILES["testfile-bulk-04"].id),
+                        event.Pending(2, FILES["testfile-bulk-01"].id),
+                        event.Pending(2, FILES["testfile-bulk-02"].id),
+                        event.Pending(2, FILES["testfile-bulk-03"].id),
+                        event.Pending(2, FILES["testfile-bulk-04"].id),
+                        event.Pending(3, FILES["testfile-bulk-01"].id),
+                        event.Pending(3, FILES["testfile-bulk-02"].id),
+                        event.Pending(3, FILES["testfile-bulk-03"].id),
+                        event.Pending(3, FILES["testfile-bulk-04"].id),
                         event.Start(0, FILES["testfile-bulk-01"].id),
                         event.Start(0, FILES["testfile-bulk-02"].id),
                         event.Start(0, FILES["testfile-bulk-03"].id),
@@ -2441,6 +2553,22 @@ scenarios = [
                     # fmt: on
                     # fmt: off
                     action.Repeated([action.WaitForOneOf([
+                        event.Pending(0, FILES["testfile-bulk-01"].id),
+                        event.Pending(0, FILES["testfile-bulk-02"].id),
+                        event.Pending(0, FILES["testfile-bulk-03"].id),
+                        event.Pending(0, FILES["testfile-bulk-04"].id),
+                        event.Pending(1, FILES["testfile-bulk-01"].id),
+                        event.Pending(1, FILES["testfile-bulk-02"].id),
+                        event.Pending(1, FILES["testfile-bulk-03"].id),
+                        event.Pending(1, FILES["testfile-bulk-04"].id),
+                        event.Pending(2, FILES["testfile-bulk-01"].id),
+                        event.Pending(2, FILES["testfile-bulk-02"].id),
+                        event.Pending(2, FILES["testfile-bulk-03"].id),
+                        event.Pending(2, FILES["testfile-bulk-04"].id),
+                        event.Pending(3, FILES["testfile-bulk-01"].id),
+                        event.Pending(3, FILES["testfile-bulk-02"].id),
+                        event.Pending(3, FILES["testfile-bulk-03"].id),
+                        event.Pending(3, FILES["testfile-bulk-04"].id),
                         event.Start(0, FILES["testfile-bulk-01"].id),
                         event.Start(0, FILES["testfile-bulk-02"].id),
                         event.Start(0, FILES["testfile-bulk-03"].id),
@@ -2565,6 +2693,9 @@ scenarios = [
                         "/tmp/received/stimpy",
                     ),
                     action.Wait(
+                        event.Pending(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
+                    ),
+                    action.Wait(
                         event.Start(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
                     ),
                     action.Wait(
@@ -2605,6 +2736,9 @@ scenarios = [
                         0,
                         "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
                         "/tmp/received/george",
+                    ),
+                    action.Wait(
+                        event.Pending(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
                     ),
                     action.Wait(
                         event.Start(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
@@ -2712,6 +2846,9 @@ scenarios = [
                         "/tmp/received/stimpy",
                     ),
                     action.Wait(
+                        event.Pending(0, "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI")
+                    ),
+                    action.Wait(
                         event.Start(0, "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI")
                     ),
                     action.Wait(
@@ -2754,6 +2891,9 @@ scenarios = [
                         0,
                         "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                         "/tmp/received/george",
+                    ),
+                    action.Wait(
+                        event.Pending(0, "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI")
                     ),
                     action.Wait(
                         event.Start(0, "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI")
@@ -2838,6 +2978,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received/symtest-files",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -2999,6 +3140,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -3084,6 +3226,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -3163,6 +3306,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -3318,6 +3462,14 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
+                            event.Pending(
+                                0,
+                                FILES["deep/path/file1.ext1"].id,
+                            ),
+                            event.Pending(
+                                0,
+                                FILES["deep/path/file2.ext2"].id,
+                            ),
                             event.Start(
                                 0,
                                 FILES["deep/path/file1.ext1"].id,
@@ -3368,6 +3520,14 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
+                            event.Pending(
+                                1,
+                                FILES["deep/path/file1.ext1"].id,
+                            ),
+                            event.Pending(
+                                1,
+                                FILES["deep/path/file2.ext2"].id,
+                            ),
                             event.Start(
                                 1,
                                 FILES["deep/path/file1.ext1"].id,
@@ -3491,6 +3651,14 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
+                            event.Pending(
+                                0,
+                                FILES["name/file-01"].id,
+                            ),
+                            event.Pending(
+                                0,
+                                FILES["different/name/file-02"].id,
+                            ),
                             event.Start(
                                 0,
                                 FILES["name/file-01"].id,
@@ -3526,7 +3694,7 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario17",
+        "scenario17-1",
         "Modify the file during the transfer, expect error",
         {
             "DROP_PEER_REN": ActionList(
@@ -3615,6 +3783,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileFailed(
@@ -3671,7 +3840,7 @@ scenarios = [
         },
     ),
     Scenario(
-        "scenario17-1",
+        "scenario17-2",
         "Try to send an empty directory, expect error",
         {
             "DROP_PEER_REN": ActionList(
@@ -3746,6 +3915,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received/18",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -3908,6 +4078,14 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
+                            event.Pending(
+                                0,
+                                FILES["a" * 251 + ".txt"].id,
+                            ),
+                            event.Pending(
+                                1,
+                                FILES["a" * 251 + ".txt"].id,
+                            ),
                             event.FinishFileFailed(
                                 0,
                                 FILES["a" * 251 + ".txt"].id,
@@ -3967,6 +4145,14 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
+                            event.Pending(
+                                0,
+                                FILES["a" * 251 + ".txt"].id,
+                            ),
+                            event.Pending(
+                                1,
+                                FILES["a" * 251 + ".txt"].id,
+                            ),
                             event.FinishFileFailed(
                                 0,
                                 FILES["a" * 251 + ".txt"].id,
@@ -4046,6 +4232,7 @@ scenarios = [
                         FILES["with-illegal-char-\x0A-"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["with-illegal-char-\x0A-"].id)),
                     action.Wait(event.Start(0, FILES["with-illegal-char-\x0A-"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -4124,6 +4311,9 @@ scenarios = [
                         0,
                         FILES["utf8-testfile-\u5b81\u5BDF"].id,
                         "/tmp/received/19-3",
+                    ),
+                    action.Wait(
+                        event.Pending(0, FILES["utf8-testfile-\u5b81\u5BDF"].id)
                     ),
                     action.Wait(event.Start(0, FILES["utf8-testfile-\u5b81\u5BDF"].id)),
                     action.Wait(
@@ -4206,6 +4396,12 @@ scenarios = [
                         0,
                         FILES["a" * 251 + "/testfile.txt"].id,
                         "/tmp/received/19-4",
+                    ),
+                    action.Wait(
+                        event.Pending(
+                            0,
+                            FILES["a" * 251 + "/testfile.txt"].id,
+                        )
                     ),
                     action.Wait(
                         event.FinishFileFailed(
@@ -4320,6 +4516,9 @@ scenarios = [
                         "/tmp/received/19-5",
                     ),
                     action.Wait(
+                        event.Pending(0, FILES["dir-with-invalid_char-</file-01"].id)
+                    ),
+                    action.Wait(
                         event.Start(0, FILES["dir-with-invalid_char-</file-01"].id)
                     ),
                     action.WaitForOneOf(
@@ -4340,6 +4539,9 @@ scenarios = [
                         0,
                         FILES["dir-with-invalid_char->/file-01"].id,
                         "/tmp/received/19-5",
+                    ),
+                    action.Wait(
+                        event.Pending(0, FILES["dir-with-invalid_char->/file-01"].id)
                     ),
                     action.Wait(
                         event.Start(0, FILES["dir-with-invalid_char->/file-01"].id)
@@ -4514,6 +4716,12 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
+                            event.Pending(0, FILES["testfile-small"].id),
+                            event.Pending(0, FILES["testfile-big"].id),
+                            event.Pending(0, FILES["deep/path/file1.ext1"].id),
+                            event.Pending(0, FILES["deep/path/file2.ext2"].id),
+                            event.Pending(0, FILES["deep/another-path/file3.ext3"].id),
+                            event.Pending(0, FILES["deep/another-path/file4.ext4"].id),
                             event.Start(0, FILES["testfile-small"].id),
                             event.Start(0, FILES["testfile-big"].id),
                             event.Start(0, FILES["deep/path/file1.ext1"].id),
@@ -4635,6 +4843,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received/21-1",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     # wait for the initial progress indicating that we start from the beginning
                     action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
@@ -4741,6 +4950,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received/21-2",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     # wait for the initial progress indicating that we start from the beginning
                     action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
@@ -4880,6 +5090,8 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
+                            event.Pending(0, FILES["nested/big/testfile-01"].id),
+                            event.Pending(0, FILES["nested/big/testfile-02"].id),
                             event.Start(0, FILES["nested/big/testfile-01"].id),
                             event.Start(0, FILES["nested/big/testfile-02"].id),
                             # wait for the initial progress indicating that we start from the beginning
@@ -4990,6 +5202,7 @@ scenarios = [
                         FILES["zero-sized-file"].id,
                         "/tmp/received/22",
                     ),
+                    action.Wait(event.Pending(0, FILES["zero-sized-file"].id)),
                     action.Wait(event.Start(0, FILES["zero-sized-file"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -5086,6 +5299,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received/23-1",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -5099,6 +5313,7 @@ scenarios = [
                         FILES["duplicate/testfile-small"].id,
                         "/tmp/received/23-1",
                     ),
+                    action.Wait(event.Pending(0, FILES["duplicate/testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["duplicate/testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -5178,6 +5393,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/root",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileFailed(
@@ -5251,6 +5467,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received/25",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.DeleteFile("/tmp/received/25/*.dropdl-part"),
                     action.Wait(
@@ -5430,6 +5647,7 @@ scenarios = [
                         )
                     ),
                     action.Download(0, FILES["testfile-big"].id, "/tmp/received/27-3"),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-big"].id, True)
@@ -5489,6 +5707,7 @@ scenarios = [
                         )
                     ),
                     action.Download(0, FILES["testfile-big"].id, "/tmp/received/27-4"),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.RejectTransferFile(0, FILES["testfile-big"].id),
                     action.Wait(
@@ -5840,6 +6059,7 @@ scenarios = [
                     action.Download(
                         0, FILES["testfile-small"].id, "/tmp/received/27-9"
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -5955,6 +6175,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received/28",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -6131,6 +6352,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received/29-1",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     action.Wait(
@@ -6271,6 +6493,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received/29-2",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     # wait for the initial progress indicating that we start from the beginning
                     action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
@@ -6412,6 +6635,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received/29-3",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     action.Wait(
@@ -6539,6 +6763,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received/29-4",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     # wait for the initial progress indicating that we start from the beginning
                     action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
@@ -6661,6 +6886,9 @@ scenarios = [
                         0,
                         "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
                         "/tmp/received/29-5",
+                    ),
+                    action.Wait(
+                        event.Pending(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
                     ),
                     action.Wait(
                         event.Start(0, "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw")
@@ -6916,6 +7144,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -7004,6 +7233,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -7210,6 +7440,7 @@ scenarios = [
                     action.Download(
                         0, FILES["testfile-big"].id, "/tmp/received/29-13/"
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     action.WaitAndIgnoreExcept(
@@ -7813,6 +8044,7 @@ scenarios = [
                         )
                     ),
                     action.Download(0, FILES["testfile-small"].id, "/tmp/recv/31-5"),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -7940,6 +8172,7 @@ scenarios = [
                         )
                     ),
                     action.Download(0, FILES["testfile-small"].id, "/tmp/recv/31-6"),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -8212,6 +8445,7 @@ scenarios = [
                     action.Download(
                         0, FILES["deep/path/file1.ext1"].id, "/tmp/received/31-8/"
                     ),
+                    action.Wait(event.Pending(0, FILES["deep/path/file1.ext1"].id)),
                     action.Wait(event.Start(0, FILES["deep/path/file1.ext1"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -8227,6 +8461,7 @@ scenarios = [
                     action.Download(
                         0, FILES["deep/path/file2.ext2"].id, "/tmp/received/31-8/"
                     ),
+                    action.Wait(event.Pending(0, FILES["deep/path/file2.ext2"].id)),
                     action.Wait(event.Start(0, FILES["deep/path/file2.ext2"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -8338,6 +8573,18 @@ scenarios = [
                         1,
                         FILES["testfile-small"].id,
                         "/tmp/received/32/",
+                    ),
+                    action.WaitRacy(
+                        [
+                            event.Pending(
+                                0,
+                                FILES["testfile-small"].id,
+                            ),
+                            event.Pending(
+                                1,
+                                FILES["testfile-small"].id,
+                            ),
+                        ]
                     ),
                     # We cannot predict the final path of files from each transfer so we cannot wait for specific event
                     action.DrainEvents(4),
@@ -8988,6 +9235,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -9058,6 +9306,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received/38",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Sleep(0.4),
                     action.CancelTransferRequest([0]),
@@ -9514,6 +9763,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -9608,6 +9858,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -9641,6 +9892,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -9747,6 +9999,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -9781,6 +10034,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -10243,6 +10497,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received/46",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -10317,6 +10572,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received/47-1",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     # wait for the initial progress indicating that we start from the beginning
                     action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
@@ -10397,6 +10653,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received/47-2",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileRejected(
@@ -10466,6 +10723,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received/47-3",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(event.Paused(0, FILES["testfile-big"].id)),
                     action.RejectTransferFile(0, FILES["testfile-big"].id),
@@ -10573,6 +10831,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -10745,6 +11004,8 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
+                            event.Pending(0, FILES["tiny-jpeg.jpg"].id),
+                            event.Pending(0, FILES["tiny-gif.gif"].id),
                             event.Start(0, FILES["tiny-jpeg.jpg"].id),
                             event.Start(0, FILES["tiny-gif.gif"].id),
                             event.FinishFileDownloaded(
@@ -10901,6 +11162,7 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
+                            event.Pending(0, FILES["testfile-big"].id),
                             event.Start(0, FILES["testfile-big"].id),
                             event.FinishFileDownloaded(
                                 0,
@@ -11058,6 +11320,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received/21-1",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     # wait for the initial progress indicating that we start from the beginning
                     action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
@@ -11231,6 +11494,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileFailed(
@@ -11454,6 +11718,7 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received/26-2",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileDownloaded(
@@ -11539,6 +11804,11 @@ scenarios = [
                     action.Download(0, FILES["testfile-bulk-05"].id, "/tmp/received/48"),
                     action.WaitRacy(
                         [
+                            event.Pending(0, FILES["testfile-bulk-01"].id),
+                            event.Pending(0, FILES["testfile-bulk-02"].id),
+                            event.Pending(0, FILES["testfile-bulk-03"].id),
+                            event.Pending(0, FILES["testfile-bulk-04"].id),
+                            event.Pending(0, FILES["testfile-bulk-05"].id),
                             event.Start(0, FILES["testfile-bulk-01"].id),
                             event.Start(0, FILES["testfile-bulk-02"].id),
                             event.Start(0, FILES["testfile-bulk-03"].id),
@@ -11611,6 +11881,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received/49",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.ChecksumStarted(0, FILES["testfile-big"].id, 10485760)
@@ -11703,14 +11974,19 @@ scenarios = [
                         event.File(FILES["testfile-bulk-05"].id, "testfile-bulk-05", 10485760),
                     })),
                     action.Download(0, FILES["testfile-bulk-01"].id, "/tmp/received/50"),
+                    action.Wait(event.Pending(0, FILES["testfile-bulk-01"].id)),
                     action.Wait(event.Start(0, FILES["testfile-bulk-01"].id)),
                     action.Download(0, FILES["testfile-bulk-02"].id, "/tmp/received/50"),
+                    action.Wait(event.Pending(0, FILES["testfile-bulk-02"].id)),
                     action.Wait(event.Start(0, FILES["testfile-bulk-02"].id)),
                     action.Download(0, FILES["testfile-bulk-03"].id, "/tmp/received/50"),
+                    action.Wait(event.Pending(0, FILES["testfile-bulk-03"].id)),
                     action.Wait(event.Start(0, FILES["testfile-bulk-03"].id)),
                     action.Download(0, FILES["testfile-bulk-04"].id, "/tmp/received/50"),
+                    action.Wait(event.Pending(0, FILES["testfile-bulk-04"].id)),
                     action.Wait(event.Start(0, FILES["testfile-bulk-04"].id)),
                     action.Download(0, FILES["testfile-bulk-05"].id, "/tmp/received/50"),
+                    action.Wait(event.Pending(0, FILES["testfile-bulk-05"].id)),
                     action.Wait(event.Start(0, FILES["testfile-bulk-05"].id)),
                     action.WaitRacy([
                         event.FinishFileRejected(0, FILES["testfile-bulk-01"].id, True),
@@ -11827,6 +12103,7 @@ scenarios = [
                         FILES["testfile-big"].id,
                         "/tmp/received/50",
                     ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Repeated(
                         [
                             action.WaitForOneOf(

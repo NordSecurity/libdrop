@@ -663,6 +663,16 @@ def new_event(event_str: str) -> event.Event:
 
         return event.Start(trasnfer_slot, file, transfered)
 
+    elif event_type == "TransferPending":
+        transfer = event_data["transfer"]
+
+        with event.UUIDS_LOCK:
+            trasnfer_slot = event.UUIDS.index(transfer)
+
+        file = event_data["file"]
+
+        return event.Pending(trasnfer_slot, file)
+
     elif event_type == "TransferProgress":
         transfer = event_data["transfer"]
 

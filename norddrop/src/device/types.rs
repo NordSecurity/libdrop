@@ -121,6 +121,10 @@ pub enum Event {
         #[serde(flatten)]
         status: Status,
     },
+    TransferPending {
+        transfer: Uuid,
+        file: FileId,
+    },
 
     ChecksumStarted {
         transfer: Uuid,
@@ -355,6 +359,14 @@ impl From<(drop_transfer::Event, SystemTime)> for Event {
                     status: Status::from(&error),
                 }
             }
+            drop_transfer::Event::FileDownloadPending {
+                transfer_id,
+                file_id,
+                ..
+            } => Self::TransferPending {
+                transfer: transfer_id,
+                file: file_id,
+            },
         }
     }
 }
