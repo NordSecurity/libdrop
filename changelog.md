@@ -6,6 +6,7 @@
 * Fix a Windows bug where a permissions error is reported when there exists a folder with the same name as one of the transfer files in the destination
 * Fix directories contents being merged in case their normalized name is the same
 * Add `TransferPending` event emitted after successful `norddrop_download()` call
+* Fix occasional sender's state is not completed and equal to the receiver's state when canceling the transfer
 
 ---
 <br>
