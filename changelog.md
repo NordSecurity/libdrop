@@ -1,4 +1,4 @@
-### v6.3.0
+### v6.3.0-old-moose
 ### **Old Moose**
 ---
 * Add `MOOSE_RELEASE_TAG` file
