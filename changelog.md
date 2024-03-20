@@ -1,4 +1,5 @@
-### UNRELEASED
+### v6.3.0
+### **New Moose**
 ---
 * Add `MOOSE_RELEASE_TAG` file
 * Broaden the set of illegal filename characters to encompass FAT and EXT filesystems
@@ -8,6 +9,7 @@
 * Add `TransferPending` event emitted after successful `norddrop_download()` call
 * Fix occasional sender's state is not completed and equal to the receiver's state when canceling the transfer
 * Unclutter transfer cleanup logs
+* Update moose tracker to v6.0.0
 
 ---
 <br>
