@@ -1,4 +1,5 @@
-### UNRELEASED
+### v6.3.0
+### **Old Moose**
 ---
 * Add `MOOSE_RELEASE_TAG` file
 * Broaden the set of illegal filename characters to encompass FAT and EXT filesystems
@@ -7,6 +8,7 @@
 * Fix directories contents being merged in case their normalized name is the same
 * Add `TransferPending` event emitted after successful `norddrop_download()` call
 * Fix occasional sender's state is not completed and equal to the receiver's state when canceling the transfer
+* Uses moose v4.0.1
 
 ---
 <br>
