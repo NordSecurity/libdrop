@@ -18,18 +18,8 @@
 #endif
 
 #if SWIGCSHARP
-/* XXX: This will break in some future release: https://github.com/swig/swig/issues/1806
- *
- * TL;DR: popen(3) invokes sh(1) to run the command, which is exactly what SWIG
- *        uses. However, Debian (and, in particular, derivatives) use dash as
- *        /bin/sh, where bash-isms (<<< here strings) don’t work:
- *
- *            sh: 1: Syntax error: redirection unexpected
- *
- * There is currently no good replacement other than writing unwieldy regular
- * expressions.
- */
-%rename("%(command:cs_rename<<<)s", %$isenumitem) "";
+// This maps NORDDROP_FOO to Foo and NORDDROP_FOO_BAR to FooBar
+%rename("%(regex:/^NORDDROP_(.)([^_]*)_?(.)?([^_]*)?_?(.)?([^_]*)?_?(.)?([^_]*)?_?(.)?([^_]*)?/\\1\\L\\2\\E\\3\\L\\4\\E\\5\\L\\6\\E\\7\\L\\8\\E/)s", %$isenumitem) "";
 #endif
 
 %include "norddrop_types.h";
