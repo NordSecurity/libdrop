@@ -436,17 +436,13 @@ impl TransferManager {
         })
     }
 
-    pub async fn incoming_remove(&self, transfer_id: Uuid) -> crate::Result<IncomingState> {
+    pub async fn incoming_remove(&self, transfer_id: Uuid) -> Option<IncomingState> {
         debug!(self.logger, "Removing incoming transfer: {transfer_id}");
         let mut lock = self.incoming.lock().await;
 
-        match lock.entry(transfer_id) {
-            Entry::Occupied(occ) => {
-                self.storage.transfer_sync_clear(transfer_id).await;
-                Ok(occ.remove())
-            }
-            Entry::Vacant(_) => Err(crate::Error::BadTransfer),
-        }
+        let state = lock.remove(&transfer_id)?;
+        self.storage.transfer_sync_clear(transfer_id).await;
+        Some(state)
     }
 
     pub async fn is_incoming_alive(&self, transfer_id: Uuid) -> bool {
@@ -663,17 +659,13 @@ impl TransferManager {
         state.ensure_not_terminated()
     }
 
-    pub async fn outgoing_remove(&self, transfer_id: Uuid) -> crate::Result<OutgoingState> {
+    pub async fn outgoing_remove(&self, transfer_id: Uuid) -> Option<OutgoingState> {
         debug!(self.logger, "Removing outgoing transfer: {transfer_id}");
         let mut lock = self.outgoing.lock().await;
 
-        match lock.entry(transfer_id) {
-            Entry::Occupied(occ) => {
-                self.storage.transfer_sync_clear(transfer_id).await;
-                Ok(occ.remove())
-            }
-            Entry::Vacant(_) => Err(crate::Error::BadTransfer),
-        }
+        let state = lock.remove(&transfer_id)?;
+        self.storage.transfer_sync_clear(transfer_id).await;
+        Some(state)
     }
 
     pub async fn outgoing_event_tx(
