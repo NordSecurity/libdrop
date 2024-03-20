@@ -7,6 +7,7 @@
 * Fix directories contents being merged in case their normalized name is the same
 * Add `TransferPending` event emitted after successful `norddrop_download()` call
 * Fix occasional sender's state is not completed and equal to the receiver's state when canceling the transfer
+* Unclutter transfer cleanup logs
 
 ---
 <br>
