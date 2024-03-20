@@ -5,7 +5,7 @@ use std::{
 };
 
 use hyper::StatusCode;
-use slog::{debug, info, warn, Logger};
+use slog::{debug, info, Logger};
 use tokio_util::sync::CancellationToken;
 
 use crate::{auth, protocol, service::State, tasks::AliveGuard, utils, IncomingTransfer, Transfer};
@@ -39,11 +39,8 @@ pub(crate) fn spawn(
                 if cf.is_break() {
                     info!(logger, "Transfer {} is gone. Clearing", xfer.id());
 
-                    match state.transfer_manager.incoming_remove(xfer.id()).await {
-                        Err(err) => {
-                            warn!(logger, "Failed to clear incoming transfer: {err:?}");
-                        }
-                        Ok(state) => state.xfer_events.cancel(true).await,
+                    if let Some(state) = state.transfer_manager.incoming_remove(xfer.id()).await {
+                        state.xfer_events.cancel(true).await
                     }
 
                     break;
