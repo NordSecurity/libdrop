@@ -698,6 +698,7 @@ class AssertTransfers(Action):
 
     async def run(self, drop: ffi.Drop):
         transfers = json.loads(drop.get_transfers_since(self._since_timestamp))
+        print(f"Transfers JSON:\n{json.dumps(transfers, indent=2)}")
 
         if len(transfers) != len(self._expected_outputs):
             raise Exception(
