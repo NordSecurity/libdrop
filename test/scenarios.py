@@ -10949,6 +10949,7 @@ scenarios = [
                             "result": 0,
                             "lib_version": "*",
                             "prod": false,
+                            "app_version": "test-framework",
                             "init_duration": ">0"
                         }""",
                             """{
@@ -11028,6 +11029,7 @@ scenarios = [
                             "result": 0,
                             "lib_version": "*",
                             "prod": false,
+                            "app_version": "test-framework",
                             "init_duration": ">0"
                         }""",
                             """{
@@ -11100,6 +11102,7 @@ scenarios = [
                             "result": 0,
                             "lib_version": "*",
                             "prod": false,
+                            "app_version": "test-framework",
                             "init_duration": ">0"
                         }""",
                             """{
@@ -11209,6 +11212,7 @@ scenarios = [
                             "result": 0,
                             "lib_version": "*",
                             "prod": false,
+                            "app_version": "test-framework",
                             "init_duration": ">0"
                         }""",
                             """{
@@ -11277,6 +11281,7 @@ scenarios = [
                             "result": 0,
                             "lib_version": "*",
                             "prod": false,
+                            "app_version": "test-framework",
                             "init_duration": ">0"
                         }""",
                             """{
@@ -11359,6 +11364,7 @@ scenarios = [
                             "result": 0,
                             "lib_version": "*",
                             "prod": false,
+                            "app_version": "test-framework",
                             "init_duration": ">0"
                         }""",
                             """{
@@ -11419,6 +11425,7 @@ scenarios = [
                             "result": 0,
                             "lib_version": "*",
                             "prod": false,
+                            "app_version": "test-framework",
                             "init_duration": ">0"
                         }""",
                             """{
@@ -11531,6 +11538,7 @@ scenarios = [
                             "result": 0,
                             "lib_version": "*",
                             "prod": false,
+                            "app_version": "test-framework",
                             "init_duration": ">0"
                         }""",
                             """{
@@ -11550,6 +11558,7 @@ scenarios = [
                             "result": 0,
                             "lib_version": "*",
                             "prod": false,
+                            "app_version": "test-framework",
                             "init_duration": ">0"
                         }""",
                             """{
@@ -11611,6 +11620,7 @@ scenarios = [
                             "result": 0,
                             "lib_version": "*",
                             "prod": false,
+                            "app_version": "test-framework",
                             "init_duration": ">0"
                         }""",
                             """{
@@ -11686,6 +11696,7 @@ scenarios = [
                             "result": 0,
                             "lib_version": "*",
                             "prod": false,
+                            "app_version": "test-framework",
                             "init_duration": ">0"
                         }""",
                             """{
@@ -11734,6 +11745,7 @@ scenarios = [
                             "result": 0,
                             "lib_version": "*",
                             "prod": false,
+                            "app_version": "test-framework",
                             "init_duration": ">0"
                         }""",
                         ]
@@ -11834,6 +11846,7 @@ scenarios = [
                             "result": 0,
                             "lib_version": "*",
                             "prod": false,
+                            "app_version": "test-framework",
                             "init_duration": ">0"
                         }""",
                             """{
