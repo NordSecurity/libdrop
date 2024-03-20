@@ -470,17 +470,12 @@ impl RunContext<'_> {
         let job = async {
             self.client_loop(socket, handler, xfer).await;
 
-            if let Err(e) = self
+            // The error indicates the transfer is already finished. That's fine
+            let _ = self
                 .state
                 .transfer_manager
                 .incoming_disconnect(xfer_id)
-                .await
-            {
-                warn!(
-                    self.logger,
-                    "transfer manager incoming_disconnect() failed: {:?}", e
-                );
-            };
+                .await;
         };
 
         tokio::select! {
@@ -619,15 +614,8 @@ impl RunContext<'_> {
 
             handler.on_close().await;
 
-            match self.state.transfer_manager.incoming_remove(xfer.id()).await {
-                Err(err) => {
-                    warn!(
-                        self.logger,
-                        "Failed to clear sync state (on message) for {}: {err}",
-                        xfer.id()
-                    );
-                }
-                Ok(state) => state.xfer_events.cancel(true).await,
+            if let Some(state) = self.state.transfer_manager.incoming_remove(xfer.id()).await {
+                state.xfer_events.cancel(true).await
             }
 
             return Ok(ControlFlow::Break(()));
@@ -675,14 +663,7 @@ impl RunContext<'_> {
                 handler.on_close().await;
                 socket.drain().await.context("Failed to drain the socket")?;
 
-                if let Err(err) = self.state.transfer_manager.incoming_remove(xfer.id()).await {
-                    warn!(
-                        self.logger,
-                        "Failed to clear sync state (on request) for {}: {err}",
-                        xfer.id()
-                    );
-                }
-
+                self.state.transfer_manager.incoming_remove(xfer.id()).await;
                 return Ok(ControlFlow::Break(()));
             }
         }

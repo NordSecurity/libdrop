@@ -128,15 +128,8 @@ async fn connect_to_peer(
         WsConnection::Unrecoverable(err) => {
             error!(logger, "Could not connect to peer {}: {}", xfer.id(), err);
 
-            match state.transfer_manager.outgoing_remove(xfer.id()).await {
-                Err(err) => {
-                    warn!(
-                        logger,
-                        "Failed to clear sync state (on conneciton failure) for {}: {err}",
-                        xfer.id()
-                    );
-                }
-                Ok(state) => state.xfer_events.failed(err, false).await,
+            if let Some(state) = state.transfer_manager.outgoing_remove(xfer.id()).await {
+                state.xfer_events.failed(err, false).await
             }
 
             return ControlFlow::Break(());
@@ -178,9 +171,8 @@ async fn connect_to_peer(
         }
     };
 
-    if let Err(e) = state.transfer_manager.outgoing_disconnect(xfer.id()).await {
-        warn!(logger, "Transfer manager outoing_disconnect() failed: {e}");
-    }
+    // The error indicates the transfer is already finished. That's fine
+    let _ = state.transfer_manager.outgoing_disconnect(xfer.id()).await;
     control
 }
 
@@ -473,20 +465,13 @@ impl RunContext<'_> {
                 debug!(self.logger, "Got CLOSE frame");
                 handler.on_close().await;
 
-                match self
+                if let Some(state) = self
                     .state
                     .transfer_manager
                     .outgoing_remove(self.xfer.id())
                     .await
                 {
-                    Err(err) => {
-                        warn!(
-                            self.logger,
-                            "Failed to clear sync state (on message) for {}: {err}",
-                            self.xfer.id()
-                        );
-                    }
-                    Ok(state) => state.xfer_events.cancel(true).await,
+                    state.xfer_events.cancel(true).await
                 }
 
                 return Ok(ControlFlow::Break(()));
@@ -521,18 +506,10 @@ impl RunContext<'_> {
                 socket.close().await?;
                 handler.on_close().await;
 
-                if let Err(err) = self
-                    .state
+                self.state
                     .transfer_manager
                     .outgoing_remove(self.xfer.id())
-                    .await
-                {
-                    warn!(
-                        self.logger,
-                        "Failed to clear sync state (on request) for {}: {err}",
-                        self.xfer.id()
-                    );
-                }
+                    .await;
 
                 return Ok(ControlFlow::Break(()));
             }
