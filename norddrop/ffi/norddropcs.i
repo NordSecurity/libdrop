@@ -73,6 +73,15 @@ int call_norddrop_pubkey_cb(void *ctx, const char* ip, char* privkey) {
 
 %apply unsigned char INPUT[] { char *privkey };
 
+%typemap(ctype) char *, char *&, char[ANY], char[]   "char *"
+%typemap(imtype) char *, char *&, char[ANY], char[]   "string"
+%typemap(cstype) char *, char *&, char[ANY], char[]   "string"
+
+%typemap(cstype, out = "byte[]",
+       outattributes="[return: global::System.Runtime.InteropServices.MarshalAs(global::System.Runtime.InteropServices.UnmanagedType.LPArray)]"
+       ) char * "string"
+
+
 %extend norddrop {
     %exception norddrop %{
         $action

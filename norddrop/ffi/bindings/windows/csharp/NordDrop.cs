@@ -107,7 +107,8 @@ public class Norddrop : global::System.IDisposable {
     return ret;
   }
 
-  public string NewTransfer(string peer, string descriptors) {
+  [return: global::System.Runtime.InteropServices.MarshalAs(global::System.Runtime.InteropServices.UnmanagedType.LPArray)]
+  public byte[] NewTransfer(string peer, string descriptors) {
     string ret = libnorddropPINVOKE.Norddrop_NewTransfer(swigCPtr, peer, descriptors);
     return ret;
   }
@@ -132,12 +133,14 @@ public class Norddrop : global::System.IDisposable {
     return ret;
   }
 
-  public string GetTransfersSince(long sinceTimestamp) {
+  [return: global::System.Runtime.InteropServices.MarshalAs(global::System.Runtime.InteropServices.UnmanagedType.LPArray)]
+  public byte[] GetTransfersSince(long sinceTimestamp) {
     string ret = libnorddropPINVOKE.Norddrop_GetTransfersSince(swigCPtr, sinceTimestamp);
     return ret;
   }
 
-  public static string Version() {
+  [return: global::System.Runtime.InteropServices.MarshalAs(global::System.Runtime.InteropServices.UnmanagedType.LPArray)]
+  public static byte[] Version() {
     string ret = libnorddropPINVOKE.Norddrop_Version();
     return ret;
   }
