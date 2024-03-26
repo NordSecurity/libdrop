@@ -60,6 +60,8 @@ fn create_winres(version: &str) -> Result<(), Box<dyn Error>> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    uniffi::generate_scaffolding("src/norddrop.udl")?;
+
     let langs: HashSet<&str> = HashSet::from_iter(["GO", "JAVA", "CS"].iter().copied());
     let ffis = env::var("FFI").unwrap_or_default();
 

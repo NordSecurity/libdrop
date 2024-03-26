@@ -1,4 +1,5 @@
 pub mod types;
+pub mod uni;
 mod version;
 
 use std::{
