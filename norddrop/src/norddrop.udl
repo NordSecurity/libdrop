@@ -1,0 +1,218 @@
+[Error]
+enum Error {
+    "NORDDROP_RES_OK",
+    "NORDDROP_RES_ERROR",
+    "NORDDROP_RES_INVALID_STRING",
+    "NORDDROP_RES_BAD_INPUT",
+    "NORDDROP_RES_JSON_PARSE",
+    "NORDDROP_RES_TRANSFER_CREATE",
+    "NORDDROP_RES_NOT_STARTED",
+    "NORDDROP_RES_ADDR_IN_USE",
+    "NORDDROP_RES_INSTANCE_START",
+    "NORDDROP_RES_INSTANCE_STOP",
+    "NORDDROP_RES_INVALID_PRIVKEY",
+    "NORDDROP_RES_DB_ERROR",
+};
+
+dictionary Config {
+    u64 dir_depth_limit;
+    u64 transfer_file_limit;
+    string moose_event_path;
+    boolean moose_prod;
+    string storage_path;
+    u64? checksum_events_size_threshold;
+    u32 connection_retries;
+};
+
+enum LogLevel {
+    "NORDDROP_LOG_CRITICAL",
+    "NORDDROP_LOG_ERROR",
+    "NORDDROP_LOG_WARNING",
+    "NORDDROP_LOG_INFO",
+    "NORDDROP_LOG_DEBUG",
+    "NORDDROP_LOG_TRACE",
+};
+
+callback interface Logger {
+	void on_log(LogLevel level, string msg);
+	LogLevel level();
+};
+
+callback interface KeyStore {
+	bytes? on_pubkey(string peer);
+	bytes privkey();
+};
+
+callback interface FdResolver {
+	i32? on_fd(string content_uri);
+};
+
+[Enum]
+interface TransferDescriptor {
+	Path(string path);
+	Fd(string filename, string content_uri, i32? fd);
+};
+
+dictionary Status {
+    u32 status;
+    i32? os_error_code;
+};
+
+dictionary File {
+	string id;
+	string path;
+	u64 size;
+};
+
+[Enum]
+interface FinishEvent {
+    TransferCanceled(boolean by_peer);
+    FileDownloaded(string file_id, string final_path);
+    FileUploaded(string file_id);
+    FileFailed(string file_id, Status status);
+    TransferFailed(Status status);
+    FileRejected(string file_id, boolean by_peer);
+};
+
+[Enum]
+interface Event {
+	RequestReceived(string peer, string transfer_id, sequence<File> files, i64 timestamp);
+	RequestQueued(string peer, string transfer_id, sequence<File> files, i64 timestamp);
+	TransferStarted(string transfer_id, string file_id, u64 transfered, i64 timestamp);
+	TransferProgress(string transfer_id, string file_id, u64 transfered, i64 timestamp);
+	TransferFinished(string transfer_id, FinishEvent data, i64 timestamp);
+	RuntimeError(u32 status, i64 timestamp);
+	TransferPaused(string transfer_id, string file_id, i64 timestamp);
+	TransferThrottled(string transfer_id, string file_id, u64 transfered, i64 timestamp);
+	TransferDeferred(string transfer_id, string peer, Status status);
+	TransferPending(string transfer_id, string file_id);
+	ChecksumStarted(string transfer_id, string file_id, u64 size, i64 timestamp);
+	ChecksumFinished(string transfer_id, string file_id, i64 timestamp);
+	ChecksumProgress(string transfer_id, string file_id, u64 bytes_checksummed, i64 timestamp);
+};
+
+callback interface EventCallback {
+	void on_event(Event event);
+};
+
+[Enum]
+interface TransferStateKind {
+	Cancel(boolean by_peer);
+	Failed(i64 status);
+};
+
+dictionary TransferState {
+	i64 created_at;
+	TransferStateKind kind;
+};
+
+[Enum]
+interface IncomingPathStateKind {
+    Pending(string base_dir);
+    Started(u64 bytes_received);
+    Failed(i64 status, u64 bytes_received);
+    Completed(string final_path);
+    Rejected(boolean by_peer, u64 bytes_received);
+    Paused(u64 bytes_received);
+};
+
+dictionary IncomingPathState {
+    i64 created_at;
+    IncomingPathStateKind kind;
+};
+
+dictionary IncomingPath {
+    string file_id;
+    string relative_path;
+    u64 bytes;
+    u64 bytes_received;
+    sequence<IncomingPathState> states;
+};
+
+[Enum]
+interface OutgoingPathStateKind {
+    Started(u64 bytes_sent);
+    Failed(i64 status, u64 bytes_sent);
+    Completed();
+    Rejected(boolean by_peer, u64 bytes_sent);
+    Paused(u64 bytes_sent);
+};
+
+dictionary OutgoingPathState {
+    i64 created_at;
+    OutgoingPathStateKind kind;
+};
+
+[Enum]
+interface OutgoingFileSource {
+    BasePath(string base_path);
+    ContentUri(string uri);
+};
+
+dictionary OutgoingPath {
+    string file_id;
+    string relative_path;
+    u64 bytes;
+    u64 bytes_sent;
+    OutgoingFileSource source;
+    sequence<OutgoingPathState> states;
+};
+
+[Enum]
+interface TransferKind {
+    Incoming(sequence<IncomingPath> paths);
+    Outgoing(sequence<OutgoingPath> paths);
+};
+
+dictionary TransferInfo {
+    string id;
+    i64 created_at;
+    string peer;
+    sequence<TransferState> states;
+    TransferKind kind;
+};
+
+interface NordDrop {
+	[Throws=Error]
+	constructor(EventCallback event_cb, KeyStore key_store, Logger logger);
+
+	[Throws=Error]
+	void start([ByRef] string addr, Config config);
+
+	[Throws=Error]
+	void stop();
+
+	[Throws=Error]
+	void purge_transfers([ByRef] sequence<string> transfer_ids);
+
+	[Throws=Error]
+	void purge_transfers_until(i64 until);
+
+	[Throws=Error]
+	sequence<TransferInfo> transfers_since(i64 since);
+
+	[Throws=Error]
+	string new_transfer([ByRef] string peer, [ByRef] sequence<TransferDescriptor> descriptors);
+
+	[Throws=Error]
+	void finish_transfer([ByRef] string transfer_id);
+
+	[Throws=Error]
+	void remove_file([ByRef] string transfer_id, [ByRef] string file_id);
+
+	[Throws=Error]
+	void download_file([ByRef] string transfer_id, [ByRef] string file_id, [ByRef] string destination);
+
+	[Throws=Error]
+	void reject_file([ByRef] string transfer_id, [ByRef] string file_id);
+
+	[Throws=Error]
+	void network_refresh();
+
+	[Throws=Error]
+	void set_fd_resolver(FdResolver resolver);
+};
+
+namespace norddrop {
+	string version();
+};
