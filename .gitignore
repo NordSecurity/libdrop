@@ -46,3 +46,4 @@ target/
 *.sqlite-wal
 /drop-storage/.env
 default*.profraw
+test/bindings

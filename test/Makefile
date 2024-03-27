@@ -10,7 +10,7 @@ SCENARIOS_AT_ONCE ?= 10
 TESTCASE_TIMEOUT ?= 100
 
 .DEFAULT_GOAL := test
-.PHONY: build build-coverage test coverage clean docker-prepare build-image
+.PHONY: build build-coverage test coverage clean docker-prepare build-image gen-bindings
 
 $(LIB): $(shell find ../ -type f \( -name '*.rs' -o -name '*.toml' -o -name '*.sql' -o -name '*.lock' \))
 	cargo build $(FEATURES)
@@ -28,8 +28,8 @@ docker-prepare:
 	docker container prune -f
 
 # Test the project
-test: $(LIB) build-image docker-prepare
-	LIB_PATH=$(LIB_DOCKER) ./runner.py --testcase-timeout=$(TESTCASE_TIMEOUT) --scenarios-at-once=$(SCENARIOS_AT_ONCE)
+test: $(LIB) build-image docker-prepare gen-bindings
+	./runner.py --testcase-timeout=$(TESTCASE_TIMEOUT) --scenarios-at-once=$(SCENARIOS_AT_ONCE)
 
 # Generate and view coverage report
 coverage: docker-prepare build-coverage
@@ -48,3 +48,9 @@ coverage: docker-prepare build-coverage
 clean:
 	cargo clean
 	git clean -fd
+
+gen-bindings:
+	mkdir -p bindings
+	cargo r -p uniffi-bindgen -- generate --library $(LIB) -l python -o bindings
+	cp $(LIB) bindings/
+
