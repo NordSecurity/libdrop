@@ -1,10 +1,10 @@
 import asyncio
-import ctypes
 import json
 import typing
 import logging
 from enum import IntEnum  # todo why two enums
 from enum import Enum
+import bindings.norddrop as norddrop  # type: ignore
 
 from threading import Lock
 
@@ -76,22 +76,13 @@ class LibResult(IntEnum):
     NORDDROP_RES_DB_ERROR = (11,)
 
 
-class LogLevel(IntEnum):
-    Critical = 1
-    Error = 2
-    Warning = 3
-    Info = 4
-    Debug = 5
-    Trace = 6
-
-
 LOG_LEVEL_MAP = {
-    LogLevel.Critical: logging.CRITICAL,
-    LogLevel.Error: logging.ERROR,
-    LogLevel.Warning: logging.WARNING,
-    LogLevel.Info: logging.INFO,
-    LogLevel.Debug: logging.DEBUG,
-    LogLevel.Trace: logging.DEBUG,
+    norddrop.LogLevel.NORDDROP_LOG_CRITICAL: logging.CRITICAL,
+    norddrop.LogLevel.NORDDROP_LOG_ERROR: logging.ERROR,
+    norddrop.LogLevel.NORDDROP_LOG_WARNING: logging.WARNING,
+    norddrop.LogLevel.NORDDROP_LOG_INFO: logging.INFO,
+    norddrop.LogLevel.NORDDROP_LOG_DEBUG: logging.DEBUG,
+    norddrop.LogLevel.NORDDROP_LOG_TRACE: logging.DEBUG,
 }
 
 
@@ -109,17 +100,17 @@ class EventsDontMatch(Exception):
         )
 
 
-class EventQueue:
+class EventQueue(norddrop.EventCallback):
     def __init__(self):
         self._events: typing.List[event.Event] = []
         self._lock = Lock()
 
-    def callback(self, ctx, s: str):
+    def on_event(self, event: str):
         if DEBUG_PRINT_EVENT:
-            tprint(bcolors.HEADER + "--- event: ", s, bcolors.ENDC, flush=True)
+            tprint(bcolors.HEADER + "--- event: ", event, bcolors.ENDC, flush=True)
 
         with self._lock:
-            self._events.append(new_event(s))
+            self._events.append(new_event(event))
 
     async def wait_for_any_event(self, duration: int, ignore_progress: bool = False):
         for _ in range(0, duration):
@@ -246,35 +237,43 @@ class EventQueue:
             self._events = []
 
 
-class KeysCtx:
+class KeysCtx(norddrop.KeyStore):
     def __init__(self, hostname: str):
         self.this = RUNNERS[hostname]
 
-    def callback(self, ctx, ip, pubkey):
-        ip = ip.decode("utf-8")
-        peer = peer_resolver.reverse_lookup(ip)
+    def on_pubkey(self, peer: str) -> typing.Optional[bytes]:
+        peer = peer_resolver.reverse_lookup(peer)
         if peer is None:
             return 1
 
-        found = RUNNERS[peer].pubkey
+        return RUNNERS[peer].pubkey
 
-        ctypes.memmove(pubkey, found, len(found))
-        return 0
-
-    def secret(self):
+    def privkey(self) -> bytes:
         return self.this.privkey
 
 
-class FdResolver:
+class LogCallback(norddrop.Logger):
+    def __init__(self):
+        pass
+
+    def level(
+        self,
+    ) -> norddrop.LogLevel:
+        return norddrop.LogLevel.NORDDROP_LOG_TRACE
+
+    def on_log(self, level: norddrop.LogLevel, msg: str):
+        logger.log(level=LOG_LEVEL_MAP[level], msg=msg)
+
+
+class FdResolver(norddrop.FdResolver):
     def __init__(self):
         self._files = []
         self._cached = {}
 
-    def callback(self, ctx, uri):
-        uri: str = uri.decode("utf-8")
+    def on_fd(self, uri) -> typing.Optional[int]:
         path = uri.removeprefix("content://")
 
-        fd: int = -1
+        fd: typing.Optional[int] = None
         if path.startswith("new"):
             path = path.removeprefix("new")
             fd = self.open(path)
@@ -300,315 +299,71 @@ class FdResolver:
 
 
 class Drop:
-    def __init__(self, path: str, keys: KeysCtx):
-        norddrop_lib = ctypes.cdll.LoadLibrary(path)
+    def __init__(self, keys: KeysCtx):
+        self._events = EventQueue()
+        self._instance = norddrop.NordDrop(self._events, keys, LogCallback())
+        self._instance.set_fd_resolver(FdResolver())
 
-        logger_cb_func = ctypes.CFUNCTYPE(
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_int),
-            ctypes.POINTER(ctypes.c_char_p),
-        )
+    def new_transfer(self, peer: str, paths: typing.List[str]) -> str:
+        descriptors = []
+        for descriptor in paths:
+            descriptors.append(norddrop.TransferDescriptor.PATH(descriptor))
 
-        event_cb_func = ctypes.CFUNCTYPE(
-            ctypes.c_void_p, ctypes.POINTER(ctypes.c_char_p)
-        )
-
-        pubkey_cb_func = ctypes.CFUNCTYPE(
-            ctypes.c_int,
-            ctypes.POINTER(ctypes.c_char_p),
-            ctypes.POINTER(ctypes.c_char_p),
-        )
-
-        fd_cb_func = ctypes.CFUNCTYPE(
-            ctypes.c_int,
-            ctypes.POINTER(ctypes.c_char_p),
-        )
-
-        ceventtype = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_char_p)
-        clogtype = ctypes.CFUNCTYPE(
-            None, ctypes.c_void_p, ctypes.c_int, ctypes.c_char_p
-        )
-        cpubkeytype = ctypes.CFUNCTYPE(
-            ctypes.c_int,
-            ctypes.c_void_p,
-            ctypes.c_char_p,
-            ctypes.POINTER(ctypes.c_char_p),
-        )
-
-        cfdresolvtype = ctypes.CFUNCTYPE(
-            ctypes.c_int,
-            ctypes.c_void_p,
-            ctypes.c_char_p,
-        )
-
-        norddrop_lib.norddrop_version.restype = ctypes.c_char_p
-        norddrop_lib.norddrop_new_transfer.restype = ctypes.c_char_p
-        norddrop_lib.norddrop_get_transfers_since.restype = ctypes.c_char_p
-
-        norddrop_lib.norddrop_start.argtypes = (
-            ctypes.c_void_p,
-            ctypes.c_char_p,
-            ctypes.c_char_p,
-        )
-        norddrop_lib.norddrop_new_transfer.argtypes = (
-            ctypes.c_void_p,
-            ctypes.c_char_p,
-            ctypes.c_char_p,
-        )
-
-        events = EventQueue()
-        fdresolv = FdResolver()
-
-        event_callback_wrapped = ceventtype(events.callback)
-        log_callback_wrapped = clogtype(log_callback)
-        pubkey_callback_wrapped = cpubkeytype(keys.callback)
-        fd_callback_wrapped = cfdresolvtype(fdresolv.callback)
-
-        class event_cb(ctypes.Structure):
-            _fields_ = [("ctx", ctypes.c_void_p), ("cb", event_cb_func)]
-
-            def __str__(self):
-                return f"Python Event callback: ctx={self.ctx}, cb={self.cb}"
-
-        class logger_cb(ctypes.Structure):
-            _fields_ = [("ctx", ctypes.c_void_p), ("cb", logger_cb_func)]
-
-            def __str__(self):
-                return f"Python Logger callback: ctx={self.ctx}, cb={self.cb}"
-
-        class pubkey_cb(ctypes.Structure):
-            _fields_ = [("ctx", ctypes.c_void_p), ("cb", pubkey_cb_func)]
-
-            def __str__(self):
-                return f"Python Pubkey callback: ctx={self.ctx}, cb={self.cb}"
-
-        class fdresolv_cb(ctypes.Structure):
-            _fields_ = [("ctx", ctypes.c_void_p), ("cb", fd_cb_func)]
-
-            def __str__(self):
-                return f"Python FD resolver callback: ctx={self.ctx}, cb={self.cb}"
-
-        logger_instance = logger_cb()
-        eventer_instance = event_cb()
-        pubkey_instance = pubkey_cb()
-        fd_instance = fdresolv_cb()
-
-        logger_instance.cb = ctypes.cast(log_callback_wrapped, logger_cb_func)
-        eventer_instance.cb = ctypes.cast(event_callback_wrapped, event_cb_func)
-        pubkey_instance.cb = ctypes.cast(pubkey_callback_wrapped, pubkey_cb_func)
-        fd_instance.cb = ctypes.cast(fd_callback_wrapped, fd_cb_func)
-
-        fake_instance = ctypes.pointer(ctypes.c_void_p())
-        norddrop_instance = ctypes.pointer(fake_instance)
-
-        norddrop_lib.norddrop_new(
-            ctypes.pointer(norddrop_instance),
-            eventer_instance,
-            LogLevel.Trace,
-            logger_instance,
-            pubkey_instance,
-            ctypes.create_string_buffer(keys.secret()),
-        )
-
-        norddrop_lib.norddrop_set_fd_resolver_callback(norddrop_instance, fd_instance)
-
-        self._instance = norddrop_instance
-        self._events = events
-        self._fdresolv = fdresolv
-        self._lib = norddrop_lib
-        self._retain = [logger_instance, eventer_instance, pubkey_instance, fd_instance]
-
-    def new_transfer(self, peer: str, descriptors: typing.List[str]) -> str:
-        descriptors_json = []
-        for descriptor in descriptors:
-            descriptors_json.append({"path": descriptor})
-
-        xfid = self._lib.norddrop_new_transfer(
-            self._instance,
-            ctypes.create_string_buffer(bytes(peer, "utf-8")),
-            ctypes.create_string_buffer(bytes(json.dumps(descriptors_json), "utf-8")),
-        )
-
-        if xfid is None:
-            raise DropException(
-                "norddrop_new_transfer has failed to return a transfer ID"
-            )
-
-        return xfid.decode("utf-8")
+        return self._instance.new_transfer(peer, descriptors)
 
     def new_transfer_with_fd(self, peer: str, path: str, uri: str) -> str:
-        descriptor = [{"path": path, "content_uri": uri}]
-
-        xfid = self._lib.norddrop_new_transfer(
-            self._instance,
-            ctypes.create_string_buffer(bytes(peer, "utf-8")),
-            ctypes.create_string_buffer(bytes(json.dumps(descriptor), "utf-8")),
-        )
-
-        if xfid is None:
-            raise DropException(
-                "norddrop_new_transfer_with_fd has failed to return a transfer ID"
-            )
-
-        return xfid.decode("utf-8")
+        descriptors = [
+            norddrop.TransferDescriptor.FD(filename=path, content_uri=uri, fd=None)
+        ]
+        return self._instance.new_transfer(peer, descriptors)
 
     def download(self, uuid: str, fid: str, dst: str):
-        err = self._lib.norddrop_download(
-            self._instance,
-            ctypes.create_string_buffer(bytes(uuid, "utf-8")),
-            ctypes.create_string_buffer(bytes(fid, "utf-8")),
-            ctypes.create_string_buffer(bytes(dst, "utf-8")),
-        )
-
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"norddrop_download has failed with code: {err}({err_type})", err
-            )
+        self._instance.download_file(uuid, fid, dst)
 
     def cancel_transfer_request(self, uuid: str):
-        err = self._lib.norddrop_cancel_transfer(
-            self._instance, ctypes.create_string_buffer(bytes(uuid, "utf-8"))
-        )
-
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"cancel_transfer_request has failed with code: {err}({err_type})", err
-            )
-
-    def cancel_transfer_file(self, uuid: str, fid: str):
-        err = self._lib.norddrop_cancel_file(
-            self._instance,
-            ctypes.create_string_buffer(bytes(uuid, "utf-8")),
-            ctypes.create_string_buffer(bytes(fid, "utf-8")),
-        )
-
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"cancel_file has failed with code: {err}({err_type})", err
-            )
+        self._instance.finish_transfer(uuid)
 
     def reject_transfer_file(self, uuid: str, fid: str):
-        err = self._lib.norddrop_reject_file(
-            self._instance,
-            ctypes.create_string_buffer(bytes(uuid, "utf-8")),
-            ctypes.create_string_buffer(bytes(fid, "utf-8")),
-        )
-
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"cancel_file has failed with code: {err}({err_type})", err
-            )
+        self._instance.reject_file(uuid, fid)
 
     def get_transfers_since(self, since_timestamp: int) -> str:
-        transfers = self._lib.norddrop_get_transfers_since(
-            self._instance,
-            ctypes.c_int64(since_timestamp),
+        return self._instance.transfers_since(
+            norddrop.Timestamp.fromtimestamp(since_timestamp, datetime.timezone.utc)
         )
-
-        if transfers is None:
-            raise DropException(f"get_transfers_since has failed)")
-
-        return transfers.decode("utf-8")
 
     def network_refresh(self):
-        err = self._lib.norddrop_network_refresh(
-            self._instance,
-        )
-
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"network_refresh has failed with code: {err}({err_type})", err
-            )
+        self._instance.network_refresh()
 
     def purge_transfers_until(self, until_timestamp: int):
-        err = self._lib.norddrop_purge_transfers_until(
-            self._instance,
-            ctypes.c_int64(until_timestamp),
+        self._instance.purge_transfers_until(
+            norddrop.Timestamp.fromtimestamp(until_timestamp, datetime.timezone.utc)
         )
-
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"purge_transfers_until has failed with code: {err}({err_type})", err
-            )
 
     def purge_transfers(self, xfids: typing.List[str]):
-        err = self._lib.norddrop_purge_transfers(
-            self._instance,
-            ctypes.create_string_buffer(bytes(json.dumps(xfids), "utf-8")),
-        )
-
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"purge_transfers has failed with code: {err}({err_type})", err
-            )
+        self._instance.purge_transfers(xfids)
 
     def remove_transfer_file(self, uuid: str, fid: str):
-        err = self._lib.norddrop_remove_transfer_file(
-            self._instance,
-            ctypes.create_string_buffer(bytes(uuid, "utf-8")),
-            ctypes.create_string_buffer(bytes(fid, "utf-8")),
-        )
-
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"remove_transfer_file has failed with code: {err}({err_type})", err
-            )
+        self._instance.remove_file(uuid, fid)
 
     def start(self, addr: str, dbpath: str, checksum_events_size_threshold=None):
-        cfg = {
-            "dir_depth_limit": 5,
-            "transfer_file_limit": 1000,
-            "moose_event_path": "/tmp/moose-events.json",
-            "moose_prod": False,
-            "storage_path": dbpath,
-            "connection_retries": 1,
-        }
-
-        if checksum_events_size_threshold is not None:
-            cfg["checksum_events_size_threshold_bytes"] = checksum_events_size_threshold
-
-        err = self._lib.norddrop_start(
-            self._instance,
-            ctypes.create_string_buffer(bytes(addr, "utf-8")),
-            ctypes.create_string_buffer(bytes(json.dumps(cfg), "utf-8")),
+        cfg = norddrop.Config(
+            dir_depth_limit=5,
+            transfer_file_limit=1000,
+            moose_event_path="/tmp/moose-events.json",
+            moose_prod=False,
+            storage_path=dbpath,
+            checksum_events_size_threshold=checksum_events_size_threshold,
+            connection_retries=1,
         )
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"norddrop_start has failed with code: {err}({err_type})", err
-            )
+
+        self._instance.start(addr, cfg)
 
     def stop(self):
-        err = self._lib.norddrop_stop(self._instance)
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"norddrop_stop has failed with code: {err}({err_type})", err
-            )
+        self._instance.stop()
 
     @property
     def version(self) -> str:
-        version = self._lib.norddrop_version(self._instance)
-        if not version:
-            raise DropException(f"norddrop_version has failed")
-
-        return ctypes.string_at(version).decode("utf-8")
-
-    def __del__(self):
-        err = self._lib.norddrop_destroy(self._instance)
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"norddrop_destory has failed with code: {err}({err_type})", err
-            )
+        return norddrop.version()
 
 
 class IncomingRequestEntry:

@@ -1,4 +1,7 @@
-use std::ffi::{c_int, c_void};
+use std::{
+    ffi::{c_int, c_void},
+    fmt,
+};
 
 use libc::c_char;
 use slog::Level;
@@ -48,6 +51,14 @@ pub enum norddrop_result {
     NORDDROP_RES_DB_ERROR = 11,
 }
 
+impl fmt::Display for norddrop_result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for norddrop_result {}
+
 pub use norddrop_result::*;
 
 #[allow(non_camel_case_types)]
@@ -73,9 +84,9 @@ pub type norddrop_event_fn = unsafe extern "C" fn(*mut c_void, *const c_char);
 pub struct norddrop_event_cb {
     /// Context to pass to callback.
     /// User must ensure safe access of this var from multitheaded context.
-    ctx: *mut c_void,
+    pub ctx: *mut c_void,
     /// Function to be called
-    cb: norddrop_event_fn,
+    pub cb: norddrop_event_fn,
 }
 
 impl norddrop_event_cb {

@@ -1,0 +1,103 @@
+[Error]
+enum Error {
+    "NORDDROP_RES_OK",
+    "NORDDROP_RES_ERROR",
+    "NORDDROP_RES_INVALID_STRING",
+    "NORDDROP_RES_BAD_INPUT",
+    "NORDDROP_RES_JSON_PARSE",
+    "NORDDROP_RES_TRANSFER_CREATE",
+    "NORDDROP_RES_NOT_STARTED",
+    "NORDDROP_RES_ADDR_IN_USE",
+    "NORDDROP_RES_INSTANCE_START",
+    "NORDDROP_RES_INSTANCE_STOP",
+    "NORDDROP_RES_INVALID_PRIVKEY",
+    "NORDDROP_RES_DB_ERROR",
+};
+
+dictionary Config {
+    u64 dir_depth_limit;
+    u64 transfer_file_limit;
+    string moose_event_path;
+    boolean moose_prod;
+    string storage_path;
+    u64? checksum_events_size_threshold;
+    u32 connection_retries;
+};
+
+enum LogLevel {
+    "NORDDROP_LOG_CRITICAL",
+    "NORDDROP_LOG_ERROR",
+    "NORDDROP_LOG_WARNING",
+    "NORDDROP_LOG_INFO",
+    "NORDDROP_LOG_DEBUG",
+    "NORDDROP_LOG_TRACE",
+};
+
+callback interface Logger {
+	void on_log(LogLevel level, string msg);
+	LogLevel level();
+};
+
+callback interface EventCallback {
+	void on_event(string event);
+};
+
+callback interface KeyStore {
+	bytes? on_pubkey(string peer);
+	bytes privkey();
+};
+
+callback interface FdResolver {
+	i32? on_fd(string content_uri);
+};
+
+[Enum]
+interface TransferDescriptor {
+	Path(string path);
+	Fd(string filename, string content_uri, i32? fd);
+};
+
+interface NordDrop {
+	[Throws=Error]
+	constructor(EventCallback event_cb, KeyStore key_store, Logger logger);
+
+	[Throws=Error]
+	void start([ByRef] string addr, Config config);
+
+	[Throws=Error]
+	void stop();
+
+	[Throws=Error]
+	void purge_transfers([ByRef] sequence<string> transfer_ids);
+
+	[Throws=Error]
+	void purge_transfers_until(timestamp until);
+
+	[Throws=Error]
+	string transfers_since(timestamp since);
+
+	[Throws=Error]
+	string new_transfer([ByRef] string peer, [ByRef] sequence<TransferDescriptor> descriptors);
+
+	[Throws=Error]
+	void finish_transfer([ByRef] string transfer_id);
+
+	[Throws=Error]
+	void remove_file([ByRef] string transfer_id, [ByRef] string file_id);
+
+	[Throws=Error]
+	void download_file([ByRef] string transfer_id, [ByRef] string file_id, [ByRef] string destination);
+
+	[Throws=Error]
+	void reject_file([ByRef] string transfer_id, [ByRef] string file_id);
+
+	[Throws=Error]
+	void network_refresh();
+
+	[Throws=Error]
+	void set_fd_resolver(FdResolver resolver);
+};
+
+namespace norddrop {
+	string version();
+};

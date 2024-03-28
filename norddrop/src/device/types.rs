@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use super::utils;
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct TransferDescriptor {
     pub path: Hidden<String>,
     pub content_uri: Option<url::Url>,
@@ -145,16 +145,16 @@ pub enum Event {
     },
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
-    pub dir_depth_limit: usize,
-    pub transfer_file_limit: usize,
+    pub dir_depth_limit: u64,
+    pub transfer_file_limit: u64,
     pub moose_event_path: String,
     pub moose_prod: bool,
     pub storage_path: String,
 
     #[serde(rename = "checksum_events_size_threshold_bytes")]
-    pub checksum_events_size_threshold: Option<usize>,
+    pub checksum_events_size_threshold: Option<u64>,
 
     #[serde(default = "Config::default_connection_retries")]
     pub connection_retries: u32,
@@ -418,10 +418,10 @@ impl From<Config> for drop_config::Config {
 
         drop_config::Config {
             drop: drop_config::DropConfig {
-                dir_depth_limit,
-                transfer_file_limit,
+                dir_depth_limit: dir_depth_limit as _,
+                transfer_file_limit: transfer_file_limit as _,
                 storage_path,
-                checksum_events_size_threshold,
+                checksum_events_size_threshold: checksum_events_size_threshold.map(|x| x as _),
                 connection_retries,
             },
             moose: drop_config::MooseConfig {
