@@ -10,6 +10,7 @@ use std::{
 use drop_analytics::DeveloperExceptionEventData;
 use drop_auth::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH};
 use drop_config::{Config, DropConfig, MooseConfig};
+use drop_storage::types::Transfer as TransferInfo;
 use drop_transfer::{auth, utils::Hidden, Event, FileToSend, OutgoingTransfer, Service, Transfer};
 use slog::{debug, error, trace, warn, Logger};
 use tokio::{
@@ -248,7 +249,7 @@ impl NordDropFFI {
         Ok(())
     }
 
-    pub(super) fn transfers_since(&mut self, since_timestamp: i64) -> Result<String> {
+    pub(super) fn transfers_since(&mut self, since_timestamp: i64) -> Result<Vec<TransferInfo>> {
         trace!(
             self.logger,
             "norddrop_get_transfers_since() since_timestamp: {:?}",
@@ -272,9 +273,6 @@ impl NordDropFFI {
             .storage();
 
         let result = self.rt.block_on(storage.transfers_since(since_timestamp));
-
-        let result =
-            serde_json::to_string(&result).map_err(|_| ffi::types::NORDDROP_RES_JSON_PARSE)?;
         Ok(result)
     }
 
@@ -413,9 +411,9 @@ impl NordDropFFI {
                 );
 
                 ed.dispatch(types::Event::TransferFinished {
-                    transfer: xfid.to_string(),
+                    transfer_id: xfid.to_string(),
                     data: FinishEvent::FileFailed {
-                        file: file_id,
+                        file_id,
                         status: From::from(&e),
                     },
                     timestamp: utils::current_timestamp(),
@@ -447,7 +445,7 @@ impl NordDropFFI {
                 );
 
                 ed.dispatch(types::Event::TransferFinished {
-                    transfer: xfid.to_string(),
+                    transfer_id: xfid.to_string(),
                     data: FinishEvent::TransferFailed {
                         status: From::from(&e),
                     },
@@ -484,9 +482,9 @@ impl NordDropFFI {
                 );
 
                 evdisp.dispatch(types::Event::TransferFinished {
-                    transfer: xfid.to_string(),
+                    transfer_id: xfid.to_string(),
                     data: FinishEvent::FileFailed {
-                        file,
+                        file_id: file,
                         status: From::from(&err),
                     },
                     timestamp: utils::current_timestamp(),
@@ -645,7 +643,7 @@ fn open_database(
                 } else {
                     // Inform app that we wiped the old DB file
                     events.dispatch(types::Event::RuntimeError {
-                        status: drop_core::Status::DbLost,
+                        status: drop_core::Status::DbLost as _,
                         timestamp: utils::current_timestamp(),
                     });
                 };
