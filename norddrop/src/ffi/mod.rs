@@ -1,4 +1,5 @@
 pub mod types;
+pub mod uni;
 mod version;
 
 use std::{
@@ -612,7 +613,10 @@ pub extern "C" fn norddrop_get_transfers_since(
 
         let transfers = dev.transfers_since(since_timestamp)?;
 
-        Ok::<Vec<u8>, norddrop_result>(transfers.into_bytes())
+        let json = serde_json::to_string(&transfers)
+            .map_err(|_| norddrop_result::NORDDROP_RES_JSON_PARSE)?;
+
+        Ok::<Vec<u8>, norddrop_result>(json.into_bytes())
     });
 
     match res {

@@ -1,10 +1,8 @@
 import asyncio
-import ctypes
-import json
 import typing
 import logging
-from enum import IntEnum  # todo why two enums
 from enum import Enum
+import bindings.norddrop as norddrop  # type: ignore
 
 from threading import Lock
 
@@ -38,60 +36,13 @@ class DropException(Exception):
         return self._errno
 
 
-class LibResult(IntEnum):
-    # Operation was success
-    NORDDROP_RES_OK = (0,)
-
-    # Operation resulted to unknown error.
-    NORDDROP_RES_ERROR = (1,)
-
-    # Failed to marshal C string to Rust
-    NORDDROP_RES_INVALID_STRING = (2,)
-
-    # Bad JSON input
-    NORDDROP_RES_BAD_INPUT = (3,)
-
-    # Bad JSON for API
-    NORDDROP_RES_JSON_PARSE = (4,)
-
-    # Failed to create a transfer
-    NORDDROP_RES_TRANSFER_CREATE = (5,)
-
-    # Instance not started
-    NORDDROP_NOT_STARTED = (6,)
-
-    # Address already in used
-    NORDDROP_RES_ADDR_IN_USE = (7,)
-
-    # Failed to start instance
-    NORDDROP_RES_INSTANCE_START = (8,)
-
-    # Failed to stop instance
-    NORDDROP_RES_INSTANCE_STOP = (9,)
-
-    # Invalid private key provided
-    NORDDROP_RES_INVALID_PRIVKEY = (10,)
-
-    # Database error
-    NORDDROP_RES_DB_ERROR = (11,)
-
-
-class LogLevel(IntEnum):
-    Critical = 1
-    Error = 2
-    Warning = 3
-    Info = 4
-    Debug = 5
-    Trace = 6
-
-
 LOG_LEVEL_MAP = {
-    LogLevel.Critical: logging.CRITICAL,
-    LogLevel.Error: logging.ERROR,
-    LogLevel.Warning: logging.WARNING,
-    LogLevel.Info: logging.INFO,
-    LogLevel.Debug: logging.DEBUG,
-    LogLevel.Trace: logging.DEBUG,
+    norddrop.LogLevel.NORDDROP_LOG_CRITICAL: logging.CRITICAL,
+    norddrop.LogLevel.NORDDROP_LOG_ERROR: logging.ERROR,
+    norddrop.LogLevel.NORDDROP_LOG_WARNING: logging.WARNING,
+    norddrop.LogLevel.NORDDROP_LOG_INFO: logging.INFO,
+    norddrop.LogLevel.NORDDROP_LOG_DEBUG: logging.DEBUG,
+    norddrop.LogLevel.NORDDROP_LOG_TRACE: logging.DEBUG,
 }
 
 
@@ -109,17 +60,17 @@ class EventsDontMatch(Exception):
         )
 
 
-class EventQueue:
+class EventQueue(norddrop.EventCallback):
     def __init__(self):
         self._events: typing.List[event.Event] = []
         self._lock = Lock()
 
-    def callback(self, ctx, s: str):
+    def on_event(self, event: norddrop.Event):
         if DEBUG_PRINT_EVENT:
-            tprint(bcolors.HEADER + "--- event: ", s, bcolors.ENDC, flush=True)
+            tprint(bcolors.HEADER + "--- event: ", event, bcolors.ENDC, flush=True)
 
         with self._lock:
-            self._events.append(new_event(s))
+            self._events.append(new_event(event))
 
     async def wait_for_any_event(self, duration: int, ignore_progress: bool = False):
         for _ in range(0, duration):
@@ -246,35 +197,43 @@ class EventQueue:
             self._events = []
 
 
-class KeysCtx:
+class KeysCtx(norddrop.KeyStore):
     def __init__(self, hostname: str):
         self.this = RUNNERS[hostname]
 
-    def callback(self, ctx, ip, pubkey):
-        ip = ip.decode("utf-8")
-        peer = peer_resolver.reverse_lookup(ip)
+    def on_pubkey(self, peer: str) -> typing.Optional[bytes]:
+        peer = peer_resolver.reverse_lookup(peer)
         if peer is None:
             return 1
 
-        found = RUNNERS[peer].pubkey
+        return RUNNERS[peer].pubkey
 
-        ctypes.memmove(pubkey, found, len(found))
-        return 0
-
-    def secret(self):
+    def privkey(self) -> bytes:
         return self.this.privkey
 
 
-class FdResolver:
+class LogCallback(norddrop.Logger):
+    def __init__(self):
+        pass
+
+    def level(
+        self,
+    ) -> norddrop.LogLevel:
+        return norddrop.LogLevel.NORDDROP_LOG_TRACE
+
+    def on_log(self, level: norddrop.LogLevel, msg: str):
+        logger.log(level=LOG_LEVEL_MAP[level], msg=msg)
+
+
+class FdResolver(norddrop.FdResolver):
     def __init__(self):
         self._files = []
         self._cached = {}
 
-    def callback(self, ctx, uri):
-        uri: str = uri.decode("utf-8")
+    def on_fd(self, uri) -> typing.Optional[int]:
         path = uri.removeprefix("content://")
 
-        fd: int = -1
+        fd: typing.Optional[int] = None
         if path.startswith("new"):
             path = path.removeprefix("new")
             fd = self.open(path)
@@ -300,315 +259,69 @@ class FdResolver:
 
 
 class Drop:
-    def __init__(self, path: str, keys: KeysCtx):
-        norddrop_lib = ctypes.cdll.LoadLibrary(path)
+    def __init__(self, keys: KeysCtx):
+        self._events = EventQueue()
+        self._instance = norddrop.NordDrop(self._events, keys, LogCallback())
+        self._instance.set_fd_resolver(FdResolver())
 
-        logger_cb_func = ctypes.CFUNCTYPE(
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_int),
-            ctypes.POINTER(ctypes.c_char_p),
-        )
+    def new_transfer(self, peer: str, paths: typing.List[str]) -> str:
+        descriptors = []
+        for descriptor in paths:
+            descriptors.append(norddrop.TransferDescriptor.PATH(descriptor))
 
-        event_cb_func = ctypes.CFUNCTYPE(
-            ctypes.c_void_p, ctypes.POINTER(ctypes.c_char_p)
-        )
-
-        pubkey_cb_func = ctypes.CFUNCTYPE(
-            ctypes.c_int,
-            ctypes.POINTER(ctypes.c_char_p),
-            ctypes.POINTER(ctypes.c_char_p),
-        )
-
-        fd_cb_func = ctypes.CFUNCTYPE(
-            ctypes.c_int,
-            ctypes.POINTER(ctypes.c_char_p),
-        )
-
-        ceventtype = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_char_p)
-        clogtype = ctypes.CFUNCTYPE(
-            None, ctypes.c_void_p, ctypes.c_int, ctypes.c_char_p
-        )
-        cpubkeytype = ctypes.CFUNCTYPE(
-            ctypes.c_int,
-            ctypes.c_void_p,
-            ctypes.c_char_p,
-            ctypes.POINTER(ctypes.c_char_p),
-        )
-
-        cfdresolvtype = ctypes.CFUNCTYPE(
-            ctypes.c_int,
-            ctypes.c_void_p,
-            ctypes.c_char_p,
-        )
-
-        norddrop_lib.norddrop_version.restype = ctypes.c_char_p
-        norddrop_lib.norddrop_new_transfer.restype = ctypes.c_char_p
-        norddrop_lib.norddrop_get_transfers_since.restype = ctypes.c_char_p
-
-        norddrop_lib.norddrop_start.argtypes = (
-            ctypes.c_void_p,
-            ctypes.c_char_p,
-            ctypes.c_char_p,
-        )
-        norddrop_lib.norddrop_new_transfer.argtypes = (
-            ctypes.c_void_p,
-            ctypes.c_char_p,
-            ctypes.c_char_p,
-        )
-
-        events = EventQueue()
-        fdresolv = FdResolver()
-
-        event_callback_wrapped = ceventtype(events.callback)
-        log_callback_wrapped = clogtype(log_callback)
-        pubkey_callback_wrapped = cpubkeytype(keys.callback)
-        fd_callback_wrapped = cfdresolvtype(fdresolv.callback)
-
-        class event_cb(ctypes.Structure):
-            _fields_ = [("ctx", ctypes.c_void_p), ("cb", event_cb_func)]
-
-            def __str__(self):
-                return f"Python Event callback: ctx={self.ctx}, cb={self.cb}"
-
-        class logger_cb(ctypes.Structure):
-            _fields_ = [("ctx", ctypes.c_void_p), ("cb", logger_cb_func)]
-
-            def __str__(self):
-                return f"Python Logger callback: ctx={self.ctx}, cb={self.cb}"
-
-        class pubkey_cb(ctypes.Structure):
-            _fields_ = [("ctx", ctypes.c_void_p), ("cb", pubkey_cb_func)]
-
-            def __str__(self):
-                return f"Python Pubkey callback: ctx={self.ctx}, cb={self.cb}"
-
-        class fdresolv_cb(ctypes.Structure):
-            _fields_ = [("ctx", ctypes.c_void_p), ("cb", fd_cb_func)]
-
-            def __str__(self):
-                return f"Python FD resolver callback: ctx={self.ctx}, cb={self.cb}"
-
-        logger_instance = logger_cb()
-        eventer_instance = event_cb()
-        pubkey_instance = pubkey_cb()
-        fd_instance = fdresolv_cb()
-
-        logger_instance.cb = ctypes.cast(log_callback_wrapped, logger_cb_func)
-        eventer_instance.cb = ctypes.cast(event_callback_wrapped, event_cb_func)
-        pubkey_instance.cb = ctypes.cast(pubkey_callback_wrapped, pubkey_cb_func)
-        fd_instance.cb = ctypes.cast(fd_callback_wrapped, fd_cb_func)
-
-        fake_instance = ctypes.pointer(ctypes.c_void_p())
-        norddrop_instance = ctypes.pointer(fake_instance)
-
-        norddrop_lib.norddrop_new(
-            ctypes.pointer(norddrop_instance),
-            eventer_instance,
-            LogLevel.Trace,
-            logger_instance,
-            pubkey_instance,
-            ctypes.create_string_buffer(keys.secret()),
-        )
-
-        norddrop_lib.norddrop_set_fd_resolver_callback(norddrop_instance, fd_instance)
-
-        self._instance = norddrop_instance
-        self._events = events
-        self._fdresolv = fdresolv
-        self._lib = norddrop_lib
-        self._retain = [logger_instance, eventer_instance, pubkey_instance, fd_instance]
-
-    def new_transfer(self, peer: str, descriptors: typing.List[str]) -> str:
-        descriptors_json = []
-        for descriptor in descriptors:
-            descriptors_json.append({"path": descriptor})
-
-        xfid = self._lib.norddrop_new_transfer(
-            self._instance,
-            ctypes.create_string_buffer(bytes(peer, "utf-8")),
-            ctypes.create_string_buffer(bytes(json.dumps(descriptors_json), "utf-8")),
-        )
-
-        if xfid is None:
-            raise DropException(
-                "norddrop_new_transfer has failed to return a transfer ID"
-            )
-
-        return xfid.decode("utf-8")
+        return self._instance.new_transfer(peer, descriptors)
 
     def new_transfer_with_fd(self, peer: str, path: str, uri: str) -> str:
-        descriptor = [{"path": path, "content_uri": uri}]
-
-        xfid = self._lib.norddrop_new_transfer(
-            self._instance,
-            ctypes.create_string_buffer(bytes(peer, "utf-8")),
-            ctypes.create_string_buffer(bytes(json.dumps(descriptor), "utf-8")),
-        )
-
-        if xfid is None:
-            raise DropException(
-                "norddrop_new_transfer_with_fd has failed to return a transfer ID"
-            )
-
-        return xfid.decode("utf-8")
+        descriptors = [
+            norddrop.TransferDescriptor.FD(filename=path, content_uri=uri, fd=None)
+        ]
+        return self._instance.new_transfer(peer, descriptors)
 
     def download(self, uuid: str, fid: str, dst: str):
-        err = self._lib.norddrop_download(
-            self._instance,
-            ctypes.create_string_buffer(bytes(uuid, "utf-8")),
-            ctypes.create_string_buffer(bytes(fid, "utf-8")),
-            ctypes.create_string_buffer(bytes(dst, "utf-8")),
-        )
-
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"norddrop_download has failed with code: {err}({err_type})", err
-            )
+        self._instance.download_file(uuid, fid, dst)
 
     def cancel_transfer_request(self, uuid: str):
-        err = self._lib.norddrop_cancel_transfer(
-            self._instance, ctypes.create_string_buffer(bytes(uuid, "utf-8"))
-        )
-
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"cancel_transfer_request has failed with code: {err}({err_type})", err
-            )
-
-    def cancel_transfer_file(self, uuid: str, fid: str):
-        err = self._lib.norddrop_cancel_file(
-            self._instance,
-            ctypes.create_string_buffer(bytes(uuid, "utf-8")),
-            ctypes.create_string_buffer(bytes(fid, "utf-8")),
-        )
-
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"cancel_file has failed with code: {err}({err_type})", err
-            )
+        self._instance.finish_transfer(uuid)
 
     def reject_transfer_file(self, uuid: str, fid: str):
-        err = self._lib.norddrop_reject_file(
-            self._instance,
-            ctypes.create_string_buffer(bytes(uuid, "utf-8")),
-            ctypes.create_string_buffer(bytes(fid, "utf-8")),
-        )
+        self._instance.reject_file(uuid, fid)
 
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"cancel_file has failed with code: {err}({err_type})", err
-            )
-
-    def get_transfers_since(self, since_timestamp: int) -> str:
-        transfers = self._lib.norddrop_get_transfers_since(
-            self._instance,
-            ctypes.c_int64(since_timestamp),
-        )
-
-        if transfers is None:
-            raise DropException(f"get_transfers_since has failed)")
-
-        return transfers.decode("utf-8")
+    def get_transfers_since(
+        self, since_timestamp: int
+    ) -> typing.List[norddrop.TransferInfo]:
+        return self._instance.transfers_since(since_timestamp * 100)
 
     def network_refresh(self):
-        err = self._lib.norddrop_network_refresh(
-            self._instance,
-        )
-
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"network_refresh has failed with code: {err}({err_type})", err
-            )
+        self._instance.network_refresh()
 
     def purge_transfers_until(self, until_timestamp: int):
-        err = self._lib.norddrop_purge_transfers_until(
-            self._instance,
-            ctypes.c_int64(until_timestamp),
-        )
-
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"purge_transfers_until has failed with code: {err}({err_type})", err
-            )
+        self._instance.purge_transfers_until(until_timestamp * 1000)
 
     def purge_transfers(self, xfids: typing.List[str]):
-        err = self._lib.norddrop_purge_transfers(
-            self._instance,
-            ctypes.create_string_buffer(bytes(json.dumps(xfids), "utf-8")),
-        )
-
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"purge_transfers has failed with code: {err}({err_type})", err
-            )
+        self._instance.purge_transfers(xfids)
 
     def remove_transfer_file(self, uuid: str, fid: str):
-        err = self._lib.norddrop_remove_transfer_file(
-            self._instance,
-            ctypes.create_string_buffer(bytes(uuid, "utf-8")),
-            ctypes.create_string_buffer(bytes(fid, "utf-8")),
-        )
-
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"remove_transfer_file has failed with code: {err}({err_type})", err
-            )
+        self._instance.remove_file(uuid, fid)
 
     def start(self, addr: str, dbpath: str, checksum_events_size_threshold=None):
-        cfg = {
-            "dir_depth_limit": 5,
-            "transfer_file_limit": 1000,
-            "moose_event_path": "/tmp/moose-events.json",
-            "moose_prod": False,
-            "storage_path": dbpath,
-            "connection_retries": 1,
-        }
-
-        if checksum_events_size_threshold is not None:
-            cfg["checksum_events_size_threshold_bytes"] = checksum_events_size_threshold
-
-        err = self._lib.norddrop_start(
-            self._instance,
-            ctypes.create_string_buffer(bytes(addr, "utf-8")),
-            ctypes.create_string_buffer(bytes(json.dumps(cfg), "utf-8")),
+        cfg = norddrop.Config(
+            dir_depth_limit=5,
+            transfer_file_limit=1000,
+            moose_event_path="/tmp/moose-events.json",
+            moose_prod=False,
+            storage_path=dbpath,
+            checksum_events_size_threshold=checksum_events_size_threshold,
+            connection_retries=1,
         )
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"norddrop_start has failed with code: {err}({err_type})", err
-            )
+
+        self._instance.start(addr, cfg)
 
     def stop(self):
-        err = self._lib.norddrop_stop(self._instance)
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"norddrop_stop has failed with code: {err}({err_type})", err
-            )
+        self._instance.stop()
 
     @property
     def version(self) -> str:
-        version = self._lib.norddrop_version(self._instance)
-        if not version:
-            raise DropException(f"norddrop_version has failed")
-
-        return ctypes.string_at(version).decode("utf-8")
-
-    def __del__(self):
-        err = self._lib.norddrop_destroy(self._instance)
-        if err != 0:
-            err_type = LibResult(err).name
-            raise DropException(
-                f"norddrop_destory has failed with code: {err}({err_type})", err
-            )
+        return norddrop.version()
 
 
 class IncomingRequestEntry:
@@ -633,175 +346,75 @@ class IncomingRequest:
         return f"IncomingRequest(txid={self._txid}, peer={self._peer}, sender={self._sender}, data={repr(self._data)})"
 
 
-def new_event(event_str: str) -> event.Event:
-    deserialized = json.loads(event_str)
-
-    event_type = deserialized["type"]
-    event_data = deserialized["data"]
-
-    if event_type == "RequestReceived":
-        transfer: str = event_data["transfer"]
-
+def new_event(ev: norddrop.Event) -> event.Event:
+    # Transfer slot correction
+    transfer_slot: int = 0
+    if ev.is_request_received():
         with event.UUIDS_LOCK:
-            transfer_slot: int = len(event.UUIDS)
-            event.UUIDS.append(transfer)
-
-        return event.Receive(
-            transfer_slot,
-            peer_resolver.reverse_lookup(event_data["peer"]),
-            {event.File(f["id"], f["path"], f["size"]) for f in event_data["files"]},
-        )
-
-    elif event_type == "TransferStarted":
-        transfer = event_data["transfer"]
-
+            transfer_slot = len(event.UUIDS)
+            event.UUIDS.append(ev.transfer_id)
+    elif hasattr(ev, "transfer_id"):
         with event.UUIDS_LOCK:
-            trasnfer_slot = event.UUIDS.index(transfer)
+            transfer_slot = event.UUIDS.index(ev.transfer_id)
 
-        file: str = event_data["file"]
-        transfered: int = event_data["transfered"]
+    # Peer correction
+    if hasattr(ev, "peer"):
+        ev.peer = peer_resolver.reverse_lookup(ev.peer)
 
-        return event.Start(trasnfer_slot, file, transfered)
-
-    elif event_type == "TransferPending":
-        transfer = event_data["transfer"]
-
-        with event.UUIDS_LOCK:
-            trasnfer_slot = event.UUIDS.index(transfer)
-
-        file = event_data["file"]
-
-        return event.Pending(trasnfer_slot, file)
-
-    elif event_type == "TransferProgress":
-        transfer = event_data["transfer"]
-
-        with event.UUIDS_LOCK:
-            transfer_slot = event.UUIDS.index(transfer)
-
-        file = event_data["file"]
-        progress: int = event_data["transfered"]
-
-        return event.Progress(transfer_slot, file, progress)
-
-    elif event_type == "TransferThrottled":
-        transfer = event_data["transfer"]
-
-        with event.UUIDS_LOCK:
-            transfer_slot = event.UUIDS.index(transfer)
-
-        file = event_data["file"]
-        progress = event_data["transfered"]
-
-        return event.Throttled(transfer_slot, file, progress)
-
-    elif event_type == "TransferFinished":
-        transfer = event_data["transfer"]
-
-        with event.UUIDS_LOCK:
-            transfer_slot = event.UUIDS.index(transfer)
-
-        reason = event_data["reason"]
-
-        data = event_data["data"]
-
-        if reason == "FileUploaded":
-            return event.FinishFileUploaded(transfer_slot, data["file"])
-        elif reason == "FileDownloaded":
+    if ev.is_request_received():
+        return event.Receive(transfer_slot, ev.peer, ev.files)
+    elif ev.is_transfer_started():
+        return event.Start(transfer_slot, ev.file_id, ev.transfered)
+    elif ev.is_transfer_pending():
+        return event.Pending(transfer_slot, ev.file_id)
+    elif ev.is_transfer_progress():
+        return event.Progress(transfer_slot, ev.file_id, ev.transfered)
+    elif ev.is_transfer_throttled():
+        return event.Throttled(transfer_slot, ev.file_id, ev.transfered)
+    elif ev.is_transfer_finished():
+        if ev.data.is_file_uploaded():
+            return event.FinishFileUploaded(transfer_slot, ev.data.file_id)
+        elif ev.data.is_file_downloaded():
             return event.FinishFileDownloaded(
-                transfer_slot, data["file"], data["final_path"]
+                transfer_slot, ev.data.file_id, ev.data.final_path
             )
-        elif reason == "TransferCanceled":
-            return event.FinishTransferCanceled(transfer_slot, data["by_peer"])
-        elif reason == "TransferFailed":
+        elif ev.data.is_transfer_canceled():
+            return event.FinishTransferCanceled(transfer_slot, ev.data.by_peer)
+        elif ev.data.is_transfer_failed():
             return event.FinishFailedTransfer(
-                transfer_slot, data["status"], data.get("os_error_code")
+                transfer_slot, ev.data.status.status, ev.data.status.os_error_code
             )
-        elif reason == "FileFailed":
+        elif ev.data.is_file_failed():
             return event.FinishFileFailed(
-                transfer_slot, data["file"], data["status"], data.get("os_error_code")
+                transfer_slot,
+                ev.data.file_id,
+                ev.data.status.status,
+                ev.data.status.os_error_code,
             )
-        elif reason == "FileRejected":
+        elif ev.data.is_file_rejected():
             return event.FinishFileRejected(
-                transfer_slot, data["file"], data["by_peer"]
+                transfer_slot, ev.data.file_id, ev.data.by_peer
             )
         else:
-            raise ValueError(f"Unexpected reason of {reason} for TransferFinished")
-
-    elif event_type == "RequestQueued":
-        transfer = event_data["transfer"]
-
-        with event.UUIDS_LOCK:
-            transfer_slot = event.UUIDS.index(transfer)
-
-        return event.Queued(
-            transfer_slot,
-            peer_resolver.reverse_lookup(event_data["peer"]),
-            {event.File(f["id"], f["path"], f["size"]) for f in event_data["files"]},
-        )
-
-    elif event_type == "TransferPaused":
-        transfer = event_data["transfer"]
-
-        with event.UUIDS_LOCK:
-            transfer_slot = event.UUIDS.index(transfer)
-
-        return event.Paused(transfer_slot, event_data["file"])
-
-    elif event_type == "RuntimeError":
-        status = event_data["status"]
-
-        return event.RuntimeError(status)
-
-    elif event_type == "ChecksumProgress":
-        transfer = event_data["transfer"]
-
-        with event.UUIDS_LOCK:
-            transfer_slot = event.UUIDS.index(transfer)
-
-        return event.ChecksumProgress(
-            transfer_slot,
-            event_data["file"],
-            event_data["bytes_checksummed"],
-        )
-
-    elif event_type == "ChecksumStarted":
-        transfer = event_data["transfer"]
-
-        with event.UUIDS_LOCK:
-            transfer_slot = event.UUIDS.index(transfer)
-
-        return event.ChecksumStarted(
-            transfer_slot,
-            event_data["file"],
-            event_data["size"],
-        )
-
-    elif event_type == "ChecksumFinished":
-        transfer = event_data["transfer"]
-
-        with event.UUIDS_LOCK:
-            transfer_slot = event.UUIDS.index(transfer)
-
-        return event.ChecksumFinished(
-            transfer_slot,
-            event_data["file"],
-        )
-
-    elif event_type == "TransferDeferred":
-        transfer = event_data["transfer"]
-
-        with event.UUIDS_LOCK:
-            transfer_slot = event.UUIDS.index(transfer)
-
+            raise Exception("Unknown Finish event type")
+    elif ev.is_request_queued():
+        return event.Queued(transfer_slot, ev.peer, ev.files)
+    elif ev.is_transfer_paused():
+        return event.Paused(transfer_slot, ev.file_id)
+    elif ev.is_runtime_error():
+        return event.RuntimeError(ev.status)
+    elif ev.is_checksum_progress():
+        return event.ChecksumProgress(transfer_slot, ev.file_id, ev.bytes_checksummed)
+    elif ev.is_checksum_started():
+        return event.ChecksumStarted(transfer_slot, ev.file_id, ev.size)
+    elif ev.is_checksum_finished():
+        return event.ChecksumFinished(transfer_slot, ev.file_id)
+    elif ev.is_transfer_deferred():
         return event.TransferDeferred(
-            transfer_slot,
-            peer_resolver.reverse_lookup(event_data["peer"]),
-            event_data["status"],
-            event_data.get("os_error_code"),
+            transfer_slot, ev.peer, ev.status.status, ev.status.os_error_code
         )
-
-    raise ValueError(f"Unhandled event received: {event_type}")
+    else:
+        raise Exception("Unknown event type")
 
 
 def log_callback(ctx, level, msg):

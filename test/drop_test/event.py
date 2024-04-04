@@ -1,7 +1,8 @@
 from __future__ import annotations
-from collections import Counter
 import typing
 from threading import Lock
+import bindings.norddrop as norddrop  # type: ignore
+
 
 UUIDS: typing.List[str] = []
 UUIDS_LOCK: Lock = Lock()
@@ -27,71 +28,56 @@ def get_uuid(slot: int) -> str:
     return uuid
 
 
+def is_equal(s, t):
+    t = list(t)  # make a mutable copy
+    try:
+        for elem in s:
+            t.remove(elem)
+    except ValueError:
+        return False
+    return not t
+
+
 class Event:
     def __init__(self):
         raise Exception("Base Event class should not be initialized")
 
 
-class File:
-    def __init__(self, id: str, path: str, size: int):
-        self._id = id
-        self._path = path
-        self._size = size
-
-    def __eq__(lhs, rhs):
-        if not isinstance(rhs, File):
-            return NotImplemented
-
-        return lhs._id == rhs._id and lhs._path == rhs._path and lhs._size == rhs._size
-
-    def __hash__(self):
-        return hash(str(self._id))
-
-    def __repr__(self):
-        return f"File(id={self._id}, path={self._path}, size={self._size})"
-
-
 class Queued(Event):
-    def __init__(self, uuid_slot: int, peer: str, files: typing.Set[File]):
+    def __init__(self, uuid_slot: int, peer: str, files: typing.List[norddrop.File]):
         self._uuid_slot = uuid_slot
         self._peer: str = peer
-        self._files: typing.Set[File] = files
+        self._files: typing.List[norddrop.File] = files
 
     def __eq__(self, rhs) -> bool:
         if not isinstance(rhs, Queued):
             return NotImplemented
 
-        if (
-            self._uuid_slot != rhs._uuid_slot
-            or self._peer != rhs._peer
-            or Counter(self._files) != Counter(rhs._files)
-        ):
-            return False
-
-        return True
+        return (
+            self._uuid_slot == rhs._uuid_slot
+            or self._peer == rhs._peer
+            or is_equal(self._files, rhs._files)
+        )
 
     def __str__(self):
         return f"Queued(peer={self._peer}, uuid={print_uuid(self._uuid_slot)}, files={self._files})"
 
 
 class Receive(Event):
-    def __init__(self, uuid_slot: int, peer: str, files: typing.Set[File]):
+    def __init__(self, uuid_slot: int, peer: str, files: typing.List[norddrop.File]):
         self._uuid_slot: int = uuid_slot
         self._peer: str = peer
-        self._files: typing.Set[File] = files
+        self._files: typing.List[norddrop.File] = files
 
     def __eq__(self, rhs) -> bool:
         if not isinstance(rhs, Receive):
             return NotImplemented
 
-        if (
-            self._uuid_slot != rhs._uuid_slot
-            or self._peer != rhs._peer
-            or Counter(self._files) != Counter(rhs._files)
-        ):
-            return False
-
-        return True
+        return (
+            self._uuid_slot == rhs._uuid_slot
+            or self._peer == rhs._peer
+            or is_equal(self._files, rhs._files)
+        )
 
     def __str__(self):
         return f"Receive(peer={self._peer}, uuid={print_uuid(self._uuid_slot)}, files={self._files})"
