@@ -172,6 +172,7 @@ impl HandlerLoop<'_> {
                     .checksum::<_, futures::future::Ready<()>>(
                         limit,
                         None::<fn(u64) -> futures::future::Ready<()>>,
+                        None,
                     )
                     .await?;
 
