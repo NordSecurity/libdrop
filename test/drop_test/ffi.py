@@ -37,12 +37,12 @@ class DropException(Exception):
 
 
 LOG_LEVEL_MAP = {
-    norddrop.LogLevel.NORDDROP_LOG_CRITICAL: logging.CRITICAL,
-    norddrop.LogLevel.NORDDROP_LOG_ERROR: logging.ERROR,
-    norddrop.LogLevel.NORDDROP_LOG_WARNING: logging.WARNING,
-    norddrop.LogLevel.NORDDROP_LOG_INFO: logging.INFO,
-    norddrop.LogLevel.NORDDROP_LOG_DEBUG: logging.DEBUG,
-    norddrop.LogLevel.NORDDROP_LOG_TRACE: logging.DEBUG,
+    norddrop.LogLevel.CRITICAL: logging.CRITICAL,
+    norddrop.LogLevel.ERROR: logging.ERROR,
+    norddrop.LogLevel.WARNING: logging.WARNING,
+    norddrop.LogLevel.INFO: logging.INFO,
+    norddrop.LogLevel.DEBUG: logging.DEBUG,
+    norddrop.LogLevel.TRACE: logging.DEBUG,
 }
 
 
@@ -219,7 +219,7 @@ class LogCallback(norddrop.Logger):
     def level(
         self,
     ) -> norddrop.LogLevel:
-        return norddrop.LogLevel.NORDDROP_LOG_TRACE
+        return norddrop.LogLevel.TRACE
 
     def on_log(self, level: norddrop.LogLevel, msg: str):
         logger.log(level=LOG_LEVEL_MAP[level], msg=msg)
@@ -348,6 +348,8 @@ class IncomingRequest:
 
 def new_event(ev: norddrop.Event) -> event.Event:
     # Transfer slot correction
+    ev = ev.kind
+
     transfer_slot: int = 0
     if ev.is_request_received():
         with event.UUIDS_LOCK:
@@ -363,56 +365,54 @@ def new_event(ev: norddrop.Event) -> event.Event:
 
     if ev.is_request_received():
         return event.Receive(transfer_slot, ev.peer, ev.files)
-    elif ev.is_transfer_started():
-        return event.Start(transfer_slot, ev.file_id, ev.transfered)
-    elif ev.is_transfer_pending():
-        return event.Pending(transfer_slot, ev.file_id)
-    elif ev.is_transfer_progress():
-        return event.Progress(transfer_slot, ev.file_id, ev.transfered)
-    elif ev.is_transfer_throttled():
-        return event.Throttled(transfer_slot, ev.file_id, ev.transfered)
-    elif ev.is_transfer_finished():
-        if ev.data.is_file_uploaded():
-            return event.FinishFileUploaded(transfer_slot, ev.data.file_id)
-        elif ev.data.is_file_downloaded():
-            return event.FinishFileDownloaded(
-                transfer_slot, ev.data.file_id, ev.data.final_path
-            )
-        elif ev.data.is_transfer_canceled():
-            return event.FinishTransferCanceled(transfer_slot, ev.data.by_peer)
-        elif ev.data.is_transfer_failed():
-            return event.FinishFailedTransfer(
-                transfer_slot, ev.data.status.status, ev.data.status.os_error_code
-            )
-        elif ev.data.is_file_failed():
-            return event.FinishFileFailed(
-                transfer_slot,
-                ev.data.file_id,
-                ev.data.status.status,
-                ev.data.status.os_error_code,
-            )
-        elif ev.data.is_file_rejected():
-            return event.FinishFileRejected(
-                transfer_slot, ev.data.file_id, ev.data.by_peer
-            )
-        else:
-            raise Exception("Unknown Finish event type")
     elif ev.is_request_queued():
         return event.Queued(transfer_slot, ev.peer, ev.files)
-    elif ev.is_transfer_paused():
+
+    elif ev.is_file_started():
+        return event.Start(transfer_slot, ev.file_id, ev.transfered)
+    elif ev.is_file_progress():
+        return event.Progress(transfer_slot, ev.file_id, ev.transfered)
+    elif ev.is_file_downloaded():
+        return event.FinishFileDownloaded(transfer_slot, ev.file_id, ev.final_path)
+    elif ev.is_file_uploaded():
+        return event.FinishFileUploaded(transfer_slot, ev.file_id)
+    elif ev.is_file_failed():
+        return event.FinishFileFailed(
+            transfer_slot,
+            ev.file_id,
+            ev.status.status,
+            ev.status.os_error_code,
+        )
+    elif ev.is_file_rejected():
+        return event.FinishFileRejected(transfer_slot, ev.file_id, ev.by_peer)
+    elif ev.is_file_paused():
         return event.Paused(transfer_slot, ev.file_id)
-    elif ev.is_runtime_error():
-        return event.RuntimeError(ev.status)
+    elif ev.is_file_throttled():
+        return event.Throttled(transfer_slot, ev.file_id, ev.transfered)
+    elif ev.is_file_pending():
+        return event.Pending(transfer_slot, ev.file_id)
+
+    elif ev.is_transfer_finalized():
+        return event.FinishTransferCanceled(transfer_slot, ev.by_peer)
+    elif ev.is_transfer_failed():
+        return event.FinishFailedTransfer(
+            transfer_slot, ev.status.status, ev.status.os_error_code
+        )
+    elif ev.is_transfer_deferred():
+        return event.TransferDeferred(
+            transfer_slot, ev.peer, ev.status.status, ev.status.os_error_code
+        )
+
     elif ev.is_checksum_progress():
         return event.ChecksumProgress(transfer_slot, ev.file_id, ev.bytes_checksummed)
     elif ev.is_checksum_started():
         return event.ChecksumStarted(transfer_slot, ev.file_id, ev.size)
     elif ev.is_checksum_finished():
         return event.ChecksumFinished(transfer_slot, ev.file_id)
-    elif ev.is_transfer_deferred():
-        return event.TransferDeferred(
-            transfer_slot, ev.peer, ev.status.status, ev.status.os_error_code
-        )
+
+    elif ev.is_runtime_error():
+        return event.RuntimeError(ev.status)
+
     else:
         raise Exception("Unknown event type")
 

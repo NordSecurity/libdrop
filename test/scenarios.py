@@ -1,6 +1,5 @@
 from drop_test import action, event
 from drop_test.scenario import Scenario, ActionList
-from drop_test.error import Error
 from drop_test.config import FILES
 from drop_test.action import PeerState
 
@@ -966,7 +965,9 @@ scenarios = [
                     ),
                     action.Wait(
                         event.FinishFileFailed(
-                            0, FILES["testfile-big"].id, Error.BAD_TRANSFER
+                            0,
+                            FILES["testfile-big"].id,
+                            norddrop.StatusCode.BAD_TRANSFER,
                         )
                     ),
                     action.NoEvent(),
@@ -999,7 +1000,10 @@ scenarios = [
                     ),
                     action.Wait(
                         event.TransferDeferred(
-                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                            0,
+                            "DROP_PEER_STIMPY",
+                            norddrop.StatusCode.IO_ERROR,
+                            ignore_os=True,
                         )
                     ),
                     action.CancelTransferRequest([0]),
@@ -1043,7 +1047,10 @@ scenarios = [
                     ),
                     action.Wait(
                         event.TransferDeferred(
-                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                            0,
+                            "DROP_PEER_STIMPY",
+                            norddrop.StatusCode.IO_ERROR,
+                            ignore_os=True,
                         )
                     ),
                     action.NoEvent(),
@@ -1077,7 +1084,10 @@ scenarios = [
                     ),
                     action.Wait(
                         event.TransferDeferred(
-                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                            0,
+                            "DROP_PEER_STIMPY",
+                            norddrop.StatusCode.IO_ERROR,
+                            ignore_os=True,
                         )
                     ),
                     action.Sleep(8),
@@ -3056,7 +3066,7 @@ scenarios = [
                         event.FinishFileFailed(
                             0,
                             FILES["testfile-small"].id,
-                            Error.BAD_PATH,
+                            norddrop.StatusCode.BAD_PATH,
                         )
                     ),
                     action.CheckFileDoesNotExist(
@@ -3133,7 +3143,7 @@ scenarios = [
                         event.FinishFileFailed(
                             0,
                             "testfile-small-xd",
-                            Error.BAD_FILE_ID,
+                            norddrop.StatusCode.BAD_FILE_ID,
                         )
                     ),
                     action.Download(
@@ -3323,7 +3333,9 @@ scenarios = [
                     ),
                     action.Wait(
                         event.FinishFileFailed(
-                            0, FILES["testfile-small"].id, Error.FILE_FINISHED
+                            0,
+                            FILES["testfile-small"].id,
+                            norddrop.StatusCode.FILE_FINISHED,
                         )
                     ),
                     action.CheckDownloadedFiles(
@@ -3721,7 +3733,7 @@ scenarios = [
                         event.FinishFileFailed(
                             0,
                             FILES["testfile-big"].id,
-                            Error.FILE_MODIFIED,
+                            norddrop.StatusCode.FILE_MODIFIED,
                         )
                     ),
                     action.ExpectCancel([0], True),
@@ -3790,7 +3802,7 @@ scenarios = [
                         event.FinishFileFailed(
                             0,
                             FILES["testfile-big"].id,
-                            Error.BAD_TRANSFER_STATE,
+                            norddrop.StatusCode.BAD_TRANSFER_STATE,
                         )
                     ),
                     action.CancelTransferRequest([0]),
@@ -4011,22 +4023,22 @@ scenarios = [
                             event.FinishFileFailed(
                                 0,
                                 FILES["a" * 251 + ".txt"].id,
-                                Error.BAD_TRANSFER_STATE,
+                                norddrop.StatusCode.BAD_TRANSFER_STATE,
                             ),
                             event.FinishFileFailed(
                                 1,
                                 FILES["a" * 251 + ".txt"].id,
-                                Error.BAD_TRANSFER_STATE,
+                                norddrop.StatusCode.BAD_TRANSFER_STATE,
                             ),
                             event.FinishFileFailed(
                                 2,
                                 FILES["a" * 251 + ".txt"].id,
-                                Error.BAD_TRANSFER_STATE,
+                                norddrop.StatusCode.BAD_TRANSFER_STATE,
                             ),
                             event.FinishFileFailed(
                                 3,
                                 FILES["a" * 251 + ".txt"].id,
-                                Error.BAD_TRANSFER_STATE,
+                                norddrop.StatusCode.BAD_TRANSFER_STATE,
                             ),
                             event.FinishTransferCanceled(0, True),
                             event.FinishTransferCanceled(1, True),
@@ -4090,12 +4102,12 @@ scenarios = [
                             event.FinishFileFailed(
                                 0,
                                 FILES["a" * 251 + ".txt"].id,
-                                Error.FILENAME_TOO_LONG,
+                                norddrop.StatusCode.FILENAME_TOO_LONG,
                             ),
                             event.FinishFileFailed(
                                 1,
                                 FILES["a" * 251 + ".txt"].id,
-                                Error.FILENAME_TOO_LONG,
+                                norddrop.StatusCode.FILENAME_TOO_LONG,
                             ),
                         ]
                     ),
@@ -4157,12 +4169,12 @@ scenarios = [
                             event.FinishFileFailed(
                                 0,
                                 FILES["a" * 251 + ".txt"].id,
-                                Error.FILENAME_TOO_LONG,
+                                norddrop.StatusCode.FILENAME_TOO_LONG,
                             ),
                             event.FinishFileFailed(
                                 1,
                                 FILES["a" * 251 + ".txt"].id,
-                                Error.FILENAME_TOO_LONG,
+                                norddrop.StatusCode.FILENAME_TOO_LONG,
                             ),
                         ]
                     ),
@@ -4369,7 +4381,7 @@ scenarios = [
                         event.FinishFileFailed(
                             0,
                             FILES["a" * 251 + "/testfile.txt"].id,
-                            Error.BAD_TRANSFER_STATE,
+                            norddrop.StatusCode.BAD_TRANSFER_STATE,
                         )
                     ),
                     action.ExpectCancel([0], True),
@@ -4408,7 +4420,7 @@ scenarios = [
                         event.FinishFileFailed(
                             0,
                             FILES["a" * 251 + "/testfile.txt"].id,
-                            Error.FILENAME_TOO_LONG,
+                            norddrop.StatusCode.FILENAME_TOO_LONG,
                         )
                     ),
                     action.CancelTransferRequest([0]),
@@ -5364,7 +5376,9 @@ scenarios = [
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
                         event.FinishFileFailed(
-                            0, FILES["testfile-small"].id, Error.BAD_TRANSFER_STATE
+                            0,
+                            FILES["testfile-small"].id,
+                            norddrop.StatusCode.BAD_TRANSFER_STATE,
                         )
                     ),
                     action.ExpectCancel([0], True),
@@ -5400,7 +5414,7 @@ scenarios = [
                         event.FinishFileFailed(
                             0,
                             FILES["testfile-small"].id,
-                            Error.PERMISSION_DENIED,
+                            norddrop.StatusCode.PERMISSION_DENIED,
                             13,
                         )
                     ),
@@ -5438,7 +5452,9 @@ scenarios = [
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
                         event.FinishFileFailed(
-                            0, FILES["testfile-big"].id, Error.BAD_TRANSFER_STATE
+                            0,
+                            FILES["testfile-big"].id,
+                            norddrop.StatusCode.BAD_TRANSFER_STATE,
                         )
                     ),
                     action.ExpectCancel([0], True),
@@ -5472,7 +5488,9 @@ scenarios = [
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.DeleteFile("/tmp/received/25/*.dropdl-part"),
                     action.Wait(
-                        event.FinishFileFailed(0, FILES["testfile-big"].id, Error.IO, 2)
+                        event.FinishFileFailed(
+                            0, FILES["testfile-big"].id, norddrop.StatusCode.IO_ERROR, 2
+                        )
                     ),
                     action.CompareTrees(Path("/tmp/received/25"), []),
                     action.CancelTransferRequest([0]),
@@ -5778,7 +5796,9 @@ scenarios = [
                     ),
                     action.Wait(
                         event.FinishFileFailed(
-                            0, FILES["testfile-small"].id, Error.FILE_REJECTED
+                            0,
+                            FILES["testfile-small"].id,
+                            norddrop.StatusCode.FILE_REJECTED,
                         )
                     ),
                     action.CancelTransferRequest([0]),
@@ -5845,7 +5865,9 @@ scenarios = [
                     ),
                     action.Wait(
                         event.FinishFileFailed(
-                            0, FILES["testfile-small"].id, Error.FILE_REJECTED
+                            0,
+                            FILES["testfile-small"].id,
+                            norddrop.StatusCode.FILE_REJECTED,
                         )
                     ),
                     action.CancelTransferRequest([0]),
@@ -5887,7 +5909,9 @@ scenarios = [
                     action.RejectTransferFile(0, FILES["testfile-small"].id),
                     action.Wait(
                         event.FinishFileFailed(
-                            0, FILES["testfile-small"].id, Error.FILE_REJECTED
+                            0,
+                            FILES["testfile-small"].id,
+                            norddrop.StatusCode.FILE_REJECTED,
                         ),
                     ),
                     action.Sleep(2),
@@ -5918,7 +5942,9 @@ scenarios = [
                     action.RejectTransferFile(0, FILES["testfile-small"].id),
                     action.Wait(
                         event.FinishFileFailed(
-                            0, FILES["testfile-small"].id, Error.FILE_REJECTED
+                            0,
+                            FILES["testfile-small"].id,
+                            norddrop.StatusCode.FILE_REJECTED,
                         ),
                     ),
                     action.NoEvent(),
@@ -5959,7 +5985,9 @@ scenarios = [
                     action.RejectTransferFile(0, FILES["testfile-small"].id),
                     action.Wait(
                         event.FinishFileFailed(
-                            0, FILES["testfile-small"].id, Error.FILE_REJECTED
+                            0,
+                            FILES["testfile-small"].id,
+                            norddrop.StatusCode.FILE_REJECTED,
                         ),
                     ),
                     action.ExpectCancel([0], True),
@@ -5990,7 +6018,9 @@ scenarios = [
                     action.RejectTransferFile(0, FILES["testfile-small"].id),
                     action.Wait(
                         event.FinishFileFailed(
-                            0, FILES["testfile-small"].id, Error.FILE_REJECTED
+                            0,
+                            FILES["testfile-small"].id,
+                            norddrop.StatusCode.FILE_REJECTED,
                         ),
                     ),
                     # Canceling the transfer is actually emiting CLOSE frame which is not enqueued, meaning we need to give some time in order for the reject message to go back to the sender
@@ -6033,7 +6063,9 @@ scenarios = [
                     action.RejectTransferFile(0, FILES["testfile-small"].id),
                     action.Wait(
                         event.FinishFileFailed(
-                            0, FILES["testfile-small"].id, Error.FILE_FINISHED
+                            0,
+                            FILES["testfile-small"].id,
+                            norddrop.StatusCode.FILE_FINISHED,
                         )
                     ),
                     action.ExpectCancel([0], True),
@@ -6072,7 +6104,9 @@ scenarios = [
                     action.RejectTransferFile(0, FILES["testfile-small"].id),
                     action.Wait(
                         event.FinishFileFailed(
-                            0, FILES["testfile-small"].id, Error.FILE_FINISHED
+                            0,
+                            FILES["testfile-small"].id,
+                            norddrop.StatusCode.FILE_FINISHED,
                         )
                     ),
                     action.Sleep(2),
@@ -6946,7 +6980,10 @@ scenarios = [
                     ),
                     action.Wait(
                         event.TransferDeferred(
-                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                            0,
+                            "DROP_PEER_STIMPY",
+                            norddrop.StatusCode.IO_ERROR,
+                            ignore_os=True,
                         )
                     ),
                     action.Stop(),
@@ -6999,7 +7036,10 @@ scenarios = [
                     ),
                     action.Wait(
                         event.TransferDeferred(
-                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                            0,
+                            "DROP_PEER_STIMPY",
+                            norddrop.StatusCode.IO_ERROR,
+                            ignore_os=True,
                         )
                     ),
                     action.RejectTransferFile(0, FILES["testfile-big"].id),
@@ -7061,7 +7101,10 @@ scenarios = [
                     ),
                     action.Wait(
                         event.TransferDeferred(
-                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                            0,
+                            "DROP_PEER_STIMPY",
+                            norddrop.StatusCode.IO_ERROR,
+                            ignore_os=True,
                         )
                     ),
                     action.CancelTransferRequest([0]),
@@ -7411,7 +7454,10 @@ scenarios = [
                     action.WaitAndIgnoreExcept(
                         [
                             event.FinishFileFailed(
-                                0, FILES["testfile-big"].id, Error.IO, os_err=2
+                                0,
+                                FILES["testfile-big"].id,
+                                norddrop.StatusCode.IO_ERROR,
+                                os_err=2,
                             ),
                             event.FinishTransferCanceled(0, True),
                         ]
@@ -7447,7 +7493,9 @@ scenarios = [
                     action.WaitAndIgnoreExcept(
                         [
                             event.FinishFileFailed(
-                                0, FILES["testfile-big"].id, Error.BAD_TRANSFER_STATE
+                                0,
+                                FILES["testfile-big"].id,
+                                norddrop.StatusCode.BAD_TRANSFER_STATE,
                             )
                         ]
                     ),
@@ -7945,7 +7993,7 @@ scenarios = [
                     ),
                     action.ExpectError(
                         action.RemoveTransferFile(0, FILES["testfile-small"].id),
-                        norddrop.Error.NorddropResBadInput,
+                        norddrop.Error.BadInput,
                     ),
                     action.AssertTransfers(
                         [
@@ -8100,7 +8148,7 @@ scenarios = [
                     ),
                     action.ExpectError(
                         action.RemoveTransferFile(0, FILES["testfile-small"].id),
-                        norddrop.Error.NorddropResBadInput,
+                        norddrop.Error.BadInput,
                     ),
                     action.AssertTransfers(
                         [
@@ -8450,7 +8498,7 @@ scenarios = [
                     ),
                     action.ExpectError(
                         action.RemoveTransferFile(0, FILES["testfile-small"].id),
-                        norddrop.Error.NorddropResBadInput,
+                        norddrop.Error.BadInput,
                     ),
                     action.AssertTransfers(
                         [
@@ -8514,7 +8562,7 @@ scenarios = [
                     ),
                     action.ExpectError(
                         action.RemoveTransferFile(0, FILES["testfile-small"].id),
-                        norddrop.Error.NorddropResBadInput,
+                        norddrop.Error.BadInput,
                     ),
                     action.AssertTransfers(
                         [
@@ -8800,7 +8848,10 @@ scenarios = [
                     ),
                     action.Wait(
                         event.TransferDeferred(
-                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                            0,
+                            "DROP_PEER_STIMPY",
+                            norddrop.StatusCode.IO_ERROR,
+                            ignore_os=True,
                         )
                     ),
                     action.CancelTransferRequest([0]),
@@ -9326,7 +9377,10 @@ scenarios = [
                     ),
                     action.Wait(
                         event.TransferDeferred(
-                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                            0,
+                            "DROP_PEER_STIMPY",
+                            norddrop.StatusCode.IO_ERROR,
+                            ignore_os=True,
                         )
                     ),
                     action.Stop(),
@@ -9335,12 +9389,12 @@ scenarios = [
                     # try again and expect no events and no activity
                     action.ExpectError(
                         action.Start("DROP_PEER_REN", "/tmp/data.base"),
-                        norddrop.Error.NorddropResAddrInUse,
+                        norddrop.Error.AddrInUse,
                     ),
                     action.NoEvent(),
                     action.ExpectError(
                         action.Stop(),
-                        norddrop.Error.NorddropResNotStarted,
+                        norddrop.Error.NotStarted,
                     ),
                 ]
             ),
@@ -10108,7 +10162,10 @@ scenarios = [
                     ),
                     action.Wait(
                         event.TransferDeferred(
-                            0, "DROP_PEER_STIMPY", Error.IO, ignore_os=True
+                            0,
+                            "DROP_PEER_STIMPY",
+                            norddrop.StatusCode.IO_ERROR,
+                            ignore_os=True,
                         )
                     ),
                     action.NewTransfer("DROP_PEER_GEORGE", ["/tmp/testfile-big"]),
@@ -10127,7 +10184,10 @@ scenarios = [
                     ),
                     action.Wait(
                         event.TransferDeferred(
-                            1, "DROP_PEER_GEORGE", Error.IO, ignore_os=True
+                            1,
+                            "DROP_PEER_GEORGE",
+                            norddrop.StatusCode.IO_ERROR,
+                            ignore_os=True,
                         )
                     ),
                     action.NoEvent(),
@@ -10622,7 +10682,7 @@ scenarios = [
                     action.Start("DROP_PEER_REN"),
                     action.ExpectError(
                         action.Start("DROP_PEER_REN"),
-                        norddrop.Error.NorddropResInstanceStart,
+                        norddrop.Error.InstanceStart,
                     ),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -10655,7 +10715,7 @@ scenarios = [
                     action.Start("DROP_PEER_STIMPY"),
                     action.ExpectError(
                         action.Start("DROP_PEER_STIMPY"),
-                        norddrop.Error.NorddropResInstanceStart,
+                        norddrop.Error.InstanceStart,
                     ),
                     action.Wait(
                         event.Receive(
@@ -11604,7 +11664,7 @@ scenarios = [
                         event.FinishFileFailed(
                             0,
                             FILES["testfile-big"].id,
-                            Error.FILE_MODIFIED,
+                            norddrop.StatusCode.FILE_MODIFIED,
                         )
                     ),
                     action.ExpectCancel([0], True),
@@ -11678,7 +11738,7 @@ scenarios = [
                         event.FinishFileFailed(
                             0,
                             FILES["testfile-big"].id,
-                            Error.BAD_TRANSFER_STATE,
+                            norddrop.StatusCode.BAD_TRANSFER_STATE,
                         )
                     ),
                     action.CancelTransferRequest([0]),
@@ -11723,7 +11783,7 @@ scenarios = [
                         "DROP_PEER_REN",
                         dbpath="/tmp/db/26-1-corrupted.sqlite",
                     ),
-                    action.Wait(event.RuntimeError(Error.DB_LOST)),
+                    action.Wait(event.RuntimeError(norddrop.StatusCode.DB_LOST)),
                     action.NoEvent(),
                     action.Stop(),
                     action.AssertMooseEvents(
@@ -12203,7 +12263,10 @@ scenarios = [
                     ),
                     action.Wait(
                         event.TransferDeferred(
-                            0, "DROP_PEER_STIMPY", Error.IO, 111  # not connected
+                            0,
+                            "DROP_PEER_STIMPY",
+                            norddrop.StatusCode.IO_ERROR,
+                            111,  # not connected
                         )
                     ),
                     action.NoEvent(),
