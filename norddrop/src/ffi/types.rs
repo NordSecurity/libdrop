@@ -154,16 +154,6 @@ pub struct norddrop_fd_cb {
     pub cb: norddrop_fd_fn,
 }
 
-#[no_mangle]
-pub extern "C" fn __norddrop_force_export(
-    _: norddrop_result,
-    _: norddrop_event_cb,
-    _: norddrop_logger_cb,
-    _: norddrop_pubkey_cb,
-    #[cfg(unix)] _: norddrop_fd_cb,
-) {
-}
-
 impl From<std::str::Utf8Error> for norddrop_result {
     fn from(_: std::str::Utf8Error) -> Self {
         NORDDROP_RES_INVALID_STRING
