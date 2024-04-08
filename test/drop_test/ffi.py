@@ -281,7 +281,7 @@ class Drop:
         self._instance.download_file(uuid, fid, dst)
 
     def cancel_transfer_request(self, uuid: str):
-        self._instance.finish_transfer(uuid)
+        self._instance.finalize_transfer(uuid)
 
     def reject_transfer_file(self, uuid: str, fid: str):
         self._instance.reject_file(uuid, fid)
