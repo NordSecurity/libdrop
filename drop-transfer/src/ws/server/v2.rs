@@ -329,7 +329,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         debug!(self.logger, "ServerHandler::on_close(), stopping silently",);
 
         let tasks = self.jobs.drain().map(|(_, task)| async move {
-            task.events.stop_silent(Status::Canceled).await;
+            task.events.stop_silent(Status::Finalized).await;
         });
 
         futures::future::join_all(tasks).await;

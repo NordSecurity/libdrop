@@ -278,7 +278,7 @@ impl Service {
                     futures::future::join_all(
                         res.file_events
                             .iter()
-                            .map(|ev| ev.stop_silent(Status::Canceled)),
+                            .map(|ev| ev.stop_silent(Status::Finalized)),
                     )
                     .await;
 
@@ -300,7 +300,7 @@ impl Service {
                     futures::future::join_all(
                         res.file_events
                             .iter()
-                            .map(|ev| ev.stop_silent(Status::Canceled)),
+                            .map(|ev| ev.stop_silent(Status::Finalized)),
                     )
                     .await;
 
