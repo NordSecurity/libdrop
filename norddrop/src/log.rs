@@ -1,14 +1,23 @@
-pub mod types;
-pub mod uni;
+use std::{
+    collections::HashMap,
+    fmt,
+    panic::{RefUnwindSafe, UnwindSafe},
+};
 
-use std::{collections::HashMap, ffi::CString, fmt};
+use slog::{o, Drain, KV};
 
-use slog::KV;
+pub fn create(callback: Box<dyn crate::Logger>) -> slog::Logger {
+    let level = callback.level();
+    slog::Logger::root(
+        super::log::Log(callback).filter_level(level.into()).fuse(),
+        o!(),
+    )
+}
 
-use self::types::{norddrop_event_cb, norddrop_logger_cb, norddrop_pubkey_cb};
+struct Log(pub Box<dyn crate::Logger>);
 
-/// Check if res is ok, else return early by converting Error into
-/// norddrop_result
+impl UnwindSafe for Log {}
+impl RefUnwindSafe for Log {}
 
 struct KeyValueSerializer<'a> {
     rec: &'a slog::Record<'a>,
@@ -49,9 +58,9 @@ impl<'a> KeyValueSerializer<'a> {
     }
 }
 
-impl slog::Drain for norddrop_logger_cb {
+impl Drain for Log {
     type Ok = ();
-    type Err = ();
+    type Err = slog::Never;
 
     /// Log a record.
     /// record.kv() contains key:value pairs inside of macro calls for logging
@@ -65,13 +74,9 @@ impl slog::Drain for norddrop_logger_cb {
         let kv = record.kv();
 
         let mut serializer = KeyValueSerializer::new(record);
-
         let _ = kv.serialize(record, &mut serializer);
 
-        if let Ok(cstr) = CString::new(serializer.msg()) {
-            unsafe { (self.cb)(self.ctx, record.level().into(), cstr.as_ptr()) };
-        }
-
+        self.0.on_log(record.level().into(), serializer.msg());
         Ok(())
     }
 }
