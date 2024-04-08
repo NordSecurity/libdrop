@@ -420,7 +420,7 @@ impl NordDrop {
         Ok(transfer_id.to_string())
     }
 
-    pub fn finish_transfer(&self, transfer_id: &str) -> Result<()> {
+    pub fn finalize_transfer(&self, transfer_id: &str) -> Result<()> {
         // TODO(msz): remove indirection
 
         self.dev.lock().expect("Poisoned lock").cancel_transfer(
