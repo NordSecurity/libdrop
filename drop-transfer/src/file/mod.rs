@@ -299,13 +299,14 @@ impl FileToSend {
         &self,
         limit: u64,
         progress_cb: Option<F>,
+        event_granularity: Option<u64>,
     ) -> crate::Result<[u8; 32]>
     where
         F: FnMut(u64) -> Fut + Send + Sync,
         Fut: Future<Output = ()>,
     {
         let reader = reader::open(&self.source)?.take(limit);
-        let csum = checksum(reader, progress_cb).await?;
+        let csum = checksum(reader, progress_cb, event_granularity).await?;
         Ok(csum)
     }
 }
@@ -315,6 +316,7 @@ impl FileToSend {
 pub async fn checksum<F, Fut>(
     reader: impl io::Read,
     mut progress_cb: Option<F>,
+    event_granularity: Option<u64>,
 ) -> io::Result<[u8; 32]>
 where
     F: FnMut(u64) -> Fut + Send + Sync,
@@ -325,6 +327,7 @@ where
     let mut reader = io::BufReader::with_capacity(CHECKSUM_CHUNK_SIZE, reader);
 
     let mut total_n: u64 = 0;
+    let mut from_last_event: u64 = 0;
     loop {
         let buf = reader.fill_buf()?;
         if buf.is_empty() {
@@ -337,9 +340,15 @@ where
         reader.consume(n);
 
         total_n += n as u64;
-        if let Some(progress_cb) = progress_cb.as_mut() {
-            progress_cb(total_n).await;
+
+        if let (Some(progress_cb), Some(granularity)) = (progress_cb.as_mut(), event_granularity) {
+            from_last_event += n as u64;
+            while from_last_event >= granularity {
+                progress_cb(total_n).await;
+                from_last_event -= granularity;
+            }
         }
+
         // Since these are all blocking operation we need to give tokio runtime a
         // timeslice
         tokio::task::yield_now().await;
@@ -375,6 +384,7 @@ mod tests {
         let csum = super::checksum(
             &mut &TEST[..],
             None::<fn(u64) -> futures::future::Ready<()>>,
+            None,
         )
         .await
         .unwrap();
@@ -391,7 +401,7 @@ mod tests {
 
             let size = TEST.len() as _;
             let file = super::FileToSend::from_path(tmp.path(), size).unwrap();
-            file.checksum(size, None::<fn(u64) -> futures::future::Ready<()>>)
+            file.checksum(size, None::<fn(u64) -> futures::future::Ready<()>>, None)
                 .await
                 .unwrap()
         };
@@ -421,8 +431,11 @@ mod tests {
         let mut cx = Context::from_waker(&waker);
 
         let mut cursor = io::Cursor::new(&buf);
-        let mut future =
-            super::checksum(&mut cursor, None::<fn(u64) -> futures::future::Ready<()>>);
+        let mut future = super::checksum(
+            &mut cursor,
+            None::<fn(u64) -> futures::future::Ready<()>>,
+            None,
+        );
         let mut future = unsafe { Pin::new_unchecked(&mut future) };
 
         // expect it to yield 3 times (one at the very end)
