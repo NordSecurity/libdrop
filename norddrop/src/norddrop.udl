@@ -1,111 +1,104 @@
-/// The commmon error type
+/// The commmon error type thrown from functions
 [Error]
 enum Error {
-    /// Operation was success
-    "NORDDROP_RES_OK",
-
     /// Operation resulted to unknown error.
-    "NORDDROP_RES_ERROR",
+    "Unknown",
 
-    /// Failed to parse C string, meaning the string provided is not valid UTF8
-    /// or is a null pointer
-    "NORDDROP_RES_INVALID_STRING",
+    /// The string provided is not valid UTF8
+    "InvalidString",
 
     /// One of the arguments provided is invalid
-    "NORDDROP_RES_BAD_INPUT",
-
-    /// Failed to parse JSON argument
-    "NORDDROP_RES_JSON_PARSE",
+    "BadInput",
 
     /// Failed to create transfer based on arguments provided
-    "NORDDROP_RES_TRANSFER_CREATE",
+    "TransferCreate",
 
     /// The libdrop instance is not started yet
-    "NORDDROP_RES_NOT_STARTED",
+    "NotStarted",
 
     /// Address already in use
-    "NORDDROP_RES_ADDR_IN_USE",
+    "AddrInUse",
 
     /// Failed to start the libdrop instance
-    "NORDDROP_RES_INSTANCE_START",
-	
+    "InstanceStart",
+
     /// Failed to stop the libdrop instance
-    "NORDDROP_RES_INSTANCE_STOP",
-	
+    "InstanceStop",
+
     /// Invalid private key provided
-    "NORDDROP_RES_INVALID_PRIVKEY",
-	
+    "InvalidPrivkey",
+
     /// Database error
-    "NORDDROP_RES_DB_ERROR",
+    "DbError",
 };
 
 /// The configuration structure
 dictionary Config {
-	/// If the transfer directory tree contains more levels then the error is
-	/// returned.
+    /// If the transfer directory tree contains more levels then the error is
+    /// returned.
     u64 dir_depth_limit;
 
-	/// When aggregating files from the path, if this limit is reached, an error
-	/// is returned.
+    /// When aggregating files from the path, if this limit is reached, an error
+    /// is returned.
     u64 transfer_file_limit;
 
-	/// Moose database path
+    /// Moose database path
     string moose_event_path;
 
-	/// Moose production flag
+    /// Moose production flag
     boolean moose_prod;
 
-	/// Storage path for persistence engine
+    /// Storage path for persistence engine
     string storage_path;
 
-	/// Emit checksum events only if file is equal or greater than this size. 
-	/// If omited, no checksumming events are emited.
+    /// Emit checksum events only if file is equal or greater than this size. 
+    /// If omited, no checksumming events are emited.
     u64? checksum_events_size_threshold;
 
-	/// Limits the number of connection retries afer the `network_refresh()` call.
-    u32 connection_retries;
+    /// Limits the number of connection retries afer the `network_refresh()` call.
+    u32? connection_retries;
 };
 
 /// Posible log levels.
 enum LogLevel {
-    "NORDDROP_LOG_CRITICAL",
-    "NORDDROP_LOG_ERROR",
-    "NORDDROP_LOG_WARNING",
-    "NORDDROP_LOG_INFO",
-    "NORDDROP_LOG_DEBUG",
-    "NORDDROP_LOG_TRACE",
+    "Critical",
+    "Error",
+    "Warning",
+    "Info",
+    "Debug",
+    "Trace",
 };
 
 /// The logger callback interface
 callback interface Logger {
     /// Function called when log message occurs
-	void on_log(LogLevel level, string msg);
+    void on_log(LogLevel level, string msg);
 
-	/// Maximum log level
-	LogLevel level();
+    /// Maximum log level
+    LogLevel level();
 };
 
 /// The interface for providing crypto keys
 callback interface KeyStore {
-	/// It is used to request
-	/// the app to provide the peer’s public key or the node itself. 
-	///
-	/// # Arguments
-	/// * `peer` - peer's IP address
-	///
-	/// # Returns
-	/// 32bytes private key. Note that it’s not BASE64, it must
-	/// be decoded if it is beforehand.
-	/// The `null` value is used to indicate that the key could not be
-	/// provided.
-	bytes? on_pubkey(string peer);
+    /// It is used to request
+    /// the app to provide the peer’s public key or the node itself. 
+    ///
+    /// # Arguments
+    /// * `peer` - peer's IP address
+    ///
+    /// # Returns
+    /// 32bytes private key. Note that it’s not BASE64, it must
+    /// be decoded if it is beforehand.
+    /// The `null` value is used to indicate that the key could not be
+    /// provided.
+    bytes? on_pubkey(string peer);
 
-	/// 32bytes private key
-	///
-	/// # Warning
-	/// This it’s not BASE64, it must
-	/// be decoded if it is beforehand.
-	bytes privkey();
+    /// 32bytes private key
+    ///
+    /// # Warning
+    /// This it’s not BASE64, it must
+    /// be decoded if it is beforehand.
+    bytes privkey();
 };
 
 /// Profides the file descriptor based on the content URI
@@ -113,92 +106,238 @@ callback interface KeyStore {
 /// # Warning
 /// Can be used only on UNIX systems
 callback interface FdResolver {
-	i32? on_fd(string content_uri);
+    i32? on_fd(string content_uri);
 };
 
 /// The transfer file description
 [Enum]
 interface TransferDescriptor {
-	/// Disk file with the given path
-	Path(string path);
+    /// Disk file with the given path
+    Path(string path);
 
-	/// File descriptor with the given URI (used for the `FdResolver`)
-	Fd(string filename, string content_uri, i32? fd);
+    /// File descriptor with the given URI (used for the `FdResolver`)
+    Fd(string filename, string content_uri, i32? fd);
+};
+
+/// Status codes returend by the events
+enum StatusCode {
+    /// Not an error per se; indicates finalized transfers.
+    "Finalized",
+
+    /// An invalid path was provided.
+    /// File path contains invalid components (e.g. parent `..`).
+    "BadPath",
+
+    /// Failed to open the file or file doesn’t exist when asked to download. Might
+    /// indicate bad API usage. For Unix platforms using file descriptors, it might
+    /// indicate invalid FD being passed to libdrop.
+    "BadFile",
+
+    /// Invalid input transfer ID passed.
+    "BadTransfer",
+
+    /// An error occurred during the transfer and it cannot continue. The most probable
+    /// reason is the error occurred on the peer’s device or other error that cannot be
+    /// categorize elsewhere.
+    "BadTransferState",
+
+    /// Invalid input file ID passed when.
+    "BadFileId",
+
+    /// General IO error. Check the logs and contact libdrop team.
+    "IoError",
+
+    /// Transfer limits exceeded. Limit is in terms of depth and breadth for
+    /// directories.
+    "TransferLimitsExceeded",
+
+    /// The file size has changed since adding it to the transfer. The original file was
+    /// modified while not in flight in such a way that its size changed.
+    "MismatchedSize",
+
+    /// An invalid argument was provided either as a function argument or
+    /// invalid config value.
+    "InvalidArgument",
+
+    /// The WebSocket server failed to bind because of an address collision.
+    "AddrInUse",
+
+    /// The file was modified while being uploaded.
+    "FileModified",
+
+    /// The filename is too long which might be due to the fact the sender uses
+    /// a filesystem supporting longer filenames than the one which’s downloading the
+    /// file.
+    "FilenameTooLong",
+
+    /// A peer couldn’t validate our authentication request.
+    "AuthenticationFailed",
+
+    /// Persistence error.
+    "StorageError",
+
+    /// The persistence database is lost. A new database will be created.
+    "DbLost",
+
+    /// Downloaded file checksum differs from the advertised one. The downloaded
+    /// file is deleted by libdrop.
+    "FileChecksumMismatch",
+
+    /// Download is impossible of the rejected file.
+    "FileRejected",
+
+    /// Action is blocked because the failed condition has been reached.
+    "FileFailed",
+
+    /// Action is blocked because the file is already transferred.
+    "FileFinished",
+
+    /// Transfer requested with empty file list.
+    "EmptyTransfer",
+
+    /// Transfer resume attempt was closed by peer for no reason. It might indicate
+    /// temporary issues on the peer’s side. It is safe to continue to resume the
+    /// transfer.
+    "ConnectionClosedByPeer",
+
+    /// Peer’s DDoS protection kicked in.
+    /// Transfer should be resumed after some cooldown period.
+    "TooManyRequests",
+
+    /// This error code is intercepted from the OS errors. Indicate lack of
+    /// privileges to do certain operation.
+    "PermissionDenied",
 };
 
 /// The common state structure
 dictionary Status {
-	/// Status code
-    u32 status;
+    /// Status code
+    StatusCode status;
 
-	/// OS error number if available
+    /// OS error number if available
     i32? os_error_code;
 };
 
 /// The transfer file structure
 dictionary File {
-	/// File ID
-	string id;
+    /// File ID
+    string id;
 
-	/// File path
-	string path;
+    /// File path
+    string path;
 
-	/// File size
-	u64 size;
+    /// File size
+    u64 size;
 };
 
+
+/// Possible types of events
 [Enum]
-interface FinishEvent {
-    TransferCanceled(boolean by_peer);
-    FileDownloaded(string file_id, string final_path);
-    FileUploaded(string file_id);
-    FileFailed(string file_id, Status status);
-    TransferFailed(Status status);
-    FileRejected(string file_id, boolean by_peer);
+interface EventKind {
+    /// Emitted when the application receives a transfer request from the peer. It
+    /// contains the peer IP address, transfer ID, and file list.
+    RequestReceived (string peer, string transfer_id, sequence<File> files);
+
+    /// Emitted when the application creates a transfer.
+    RequestQueued   (string peer, string transfer_id, sequence<File> files);
+
+
+    /// Emitted when a file transfer is started. Valid for both sending and
+    /// receiving peers.
+    FileStarted    (string transfer_id, string file_id, u64 transfered);
+
+    /// Emitted whenever an amount of data for a single file is transferred between
+    /// peers. Valid for both sending and receiving peers.
+    FileProgress   (string transfer_id, string file_id, u64 transfered);
+
+    /// The file has been successfully downloaded.
+    FileDownloaded (string transfer_id, string file_id, string final_path);
+
+    /// The file has been successfully uploaded.
+    FileUploaded   (string transfer_id, string file_id);
+
+    /// File transfer has failed.
+    FileFailed     (string transfer_id, string file_id, Status status);
+
+    /// The file was rejected.
+    FileRejected   (string transfer_id, string file_id, boolean by_peer);
+
+    /// Emited automatically for each file in flight in case the peer goes offline
+    /// but the transfer will be resumed.
+    FilePaused     (string transfer_id, string file_id);
+
+    /// The event may be emitted before the outgoing file is started. It’s an indication
+    /// of a delayed transfer because of too many active outgoing files in flight.
+    /// Whenever the number of active files decreases the file will proceed with the
+    /// TransferStarted event. Valid for sending peers.
+    FileThrottled  (string transfer_id, string file_id, u64 transfered);
+
+    /// Indicates that the file transfer is registered and ready. It is emitted as a
+    /// response to the `download()` call.
+    FilePending    (string transfer_id, string file_id);
+
+
+    /// Transfer is finalized and no further action on the transfer are possible.
+    TransferFinalized(string transfer_id, boolean by_peer);
+
+    /// The whole transfer has failed.
+    TransferFailed   (string transfer_id, Status status);
+
+    /// Indicates that the connection made towards the peer was unsuccessful. It might
+    /// be emitted as a response to the `network_refresh()` call.
+    TransferDeferred (string transfer_id, string peer, Status status);
+
+
+    /// On the downloader side is emitted when the checksum calculation starts. It
+    /// happens both when resuming and and after the download.
+    ChecksumStarted  (string transfer_id, string file_id, u64 size);
+
+    /// Reports checksum finished(downloader side only).
+    ChecksumFinished (string transfer_id, string file_id);
+
+    /// Reports checksumming progress(downloader side only).
+    ChecksumProgress (string transfer_id, string file_id, u64 bytes_checksummed);
+
+
+    /// This event is used to indicate some runtime error that is not related to the
+    /// transfer. For example database errors due to automatic retries.
+    RuntimeError (StatusCode status);
 };
 
-[Enum]
-interface Event {
-	RequestReceived(string peer, string transfer_id, sequence<File> files, i64 timestamp);
-	RequestQueued(string peer, string transfer_id, sequence<File> files, i64 timestamp);
-	TransferStarted(string transfer_id, string file_id, u64 transfered, i64 timestamp);
-	TransferProgress(string transfer_id, string file_id, u64 transfered, i64 timestamp);
-	TransferFinished(string transfer_id, FinishEvent data, i64 timestamp);
-	RuntimeError(u32 status, i64 timestamp);
-	TransferPaused(string transfer_id, string file_id, i64 timestamp);
-	TransferThrottled(string transfer_id, string file_id, u64 transfered, i64 timestamp);
-	TransferDeferred(string transfer_id, string peer, Status status);
-	TransferPending(string transfer_id, string file_id);
-	ChecksumStarted(string transfer_id, string file_id, u64 size, i64 timestamp);
-	ChecksumFinished(string transfer_id, string file_id, i64 timestamp);
-	ChecksumProgress(string transfer_id, string file_id, u64 bytes_checksummed, i64 timestamp);
+/// The event type emited by the library
+dictionary Event {
+    /// Creation timestamp
+    i64 timestamp;
+
+    /// A type of event
+    EventKind kind;
 };
 
 /// The event callback
 callback interface EventCallback {
-	/// Method called whenever event occurs
-	void on_event(Event event);
+    /// Method called whenever event occurs
+    void on_event(Event event);
 };
 
 /// Description of the transfer state
 [Enum]
 interface TransferStateKind {
-	/// The transfer was successfully canceled by either peer.
-	/// Contains indicator of who canceled the transfer.
-	Cancel(boolean by_peer);
+    /// The transfer was successfully canceled by either peer.
+    /// Contains indicator of who canceled the transfer.
+    Cancel(boolean by_peer);
 
-	/// Contains status code of failure. Regular error table should be
-	/// consulted for errors.
-	Failed(i64 status);
+    /// Contains status code of failure. Regular error table should be
+    /// consulted for errors.
+    Failed(i64 status);
 };
 
 /// A single change in the transfer state
 dictionary TransferState {
-	/// The creation time as a UNIX timestamp in milliseconds.
-	i64 created_at;
+    /// The creation time as a UNIX timestamp in milliseconds.
+    i64 created_at;
 
-	/// The type of the state change.
-	TransferStateKind kind;
+    /// The type of the state change.
+    TransferStateKind kind;
 };
 
 /// Description of incoming file states.
@@ -206,58 +345,58 @@ dictionary TransferState {
 /// once and it is the final state. Other states might appear multiple times.
 [Enum]
 interface IncomingPathStateKind {
-	/// The download was issued for this file and it will proceed when
-	/// possible.
+    /// The download was issued for this file and it will proceed when
+    /// possible.
     Pending(string base_dir);
 
-	/// The file was started to be received. Contains the base
-	/// directory of the file.
+    /// The file was started to be received. Contains the base
+    /// directory of the file.
     Started(u64 bytes_received);
 
-	/// Contains status code of failure. Regular error table should be
-	/// consulted for errors.
-	/// This is a **terminal** state.
+    /// Contains status code of failure. Regular error table should be
+    /// consulted for errors.
+    /// This is a **terminal** state.
     Failed(i64 status, u64 bytes_received);
 
-	/// The file was successfully received and saved to the disk.
-	/// Contains the final path of the file.
-	/// This is a **terminal** state.
+    /// The file was successfully received and saved to the disk.
+    /// Contains the final path of the file.
+    /// This is a **terminal** state.
     Completed(string final_path);
 
-	/// The file was rejected by the receiver. Contains indicator of
-	/// who rejected the file.
-	/// This is a **terminal** state.
+    /// The file was rejected by the receiver. Contains indicator of
+    /// who rejected the file.
+    /// This is a **terminal** state.
     Rejected(boolean by_peer, u64 bytes_received);
 
-	/// The file was paused due to recoverable errors. Most probably
-	/// due to network availability.
+    /// The file was paused due to recoverable errors. Most probably
+    /// due to network availability.
     Paused(u64 bytes_received);
 };
 
 /// A single change in the incoming file state
 dictionary IncomingPathState {
-	/// The creation time as a UNIX timestamp in milliseconds.
+    /// The creation time as a UNIX timestamp in milliseconds.
     i64 created_at;
 
-	/// The type of the state change.
+    /// The type of the state change.
     IncomingPathStateKind kind;
 };
 
 /// The description and history of a signle incoming file
 dictionary IncomingPath {
-	/// File ID
+    /// File ID
     string file_id;
 
-	/// File path relative to the transfer's root directory
+    /// File path relative to the transfer's root directory
     string relative_path;
 
-	/// File size
+    /// File size
     u64 bytes;
 
-	/// Curently received file bytes
+    /// Curently received file bytes
     u64 bytes_received;
 
-	/// History of the file state chagnes
+    /// History of the file state chagnes
     sequence<IncomingPathState> states;
 };
 
@@ -266,80 +405,80 @@ dictionary IncomingPath {
 /// once and it is the final state. Other states might appear multiple times.
 [Enum]
 interface OutgoingPathStateKind {
-	/// The file was started to be received. Contains the base
-	/// directory of the file.
+    /// The file was started to be received. Contains the base
+    /// directory of the file.
     Started(u64 bytes_sent);
 
-	/// Contains status code of failure. Regular error table should be
-	/// consulted for errors.
-	/// This is a **terminal** state.
+    /// Contains status code of failure. Regular error table should be
+    /// consulted for errors.
+    /// This is a **terminal** state.
     Failed(i64 status, u64 bytes_sent);
 
-	/// The file was successfully received and saved to the disk.
-	/// Contains the final path of the file.
-	/// This is a **terminal** state.
+    /// The file was successfully received and saved to the disk.
+    /// Contains the final path of the file.
+    /// This is a **terminal** state.
     Completed();
 
-	/// The file was rejected by the receiver. Contains indicator of
-	/// who rejected the file.
-	/// This is a **terminal** state.
+    /// The file was rejected by the receiver. Contains indicator of
+    /// who rejected the file.
+    /// This is a **terminal** state.
     Rejected(boolean by_peer, u64 bytes_sent);
 
-	/// The file was paused due to recoverable errors. Most probably
-	/// due to network availability.
+    /// The file was paused due to recoverable errors. Most probably
+    /// due to network availability.
     Paused(u64 bytes_sent);
 };
 
 /// The description and history of a signle outgoing file
 dictionary OutgoingPathState {
-	/// The creation time as a UNIX timestamp in milliseconds.
+    /// The creation time as a UNIX timestamp in milliseconds.
     i64 created_at;
 
-	/// The type of the state change.
+    /// The type of the state change.
     OutgoingPathStateKind kind;
 };
 
 /// The outgoing file data source
 [Enum]
 interface OutgoingFileSource {
-	/// The file is read from disk, from the given path
+    /// The file is read from disk, from the given path
     BasePath(string base_path);
 
-	/// The file descriptor is retrieved with the FD resolver
-	///
-	/// # Warning
-	/// This mechanism can only be used on UNIX systems
+    /// The file descriptor is retrieved with the FD resolver
+    ///
+    /// # Warning
+    /// This mechanism can only be used on UNIX systems
     ContentUri(string uri);
 };
 
 /// The description and history of a signle outgoing file
 dictionary OutgoingPath {
-	/// File ID
+    /// File ID
     string file_id;
 
-	/// File path relative to the transfer's root directory
+    /// File path relative to the transfer's root directory
     string relative_path;
 
-	/// File size
+    /// File size
     u64 bytes;
 
-	/// Curently transfered file bytes
+    /// Curently transfered file bytes
     u64 bytes_sent;
 
-	/// The source of the file data
+    /// The source of the file data
     OutgoingFileSource source;
 
-	/// History of the file state chagnes
+    /// History of the file state chagnes
     sequence<OutgoingPathState> states;
 };
 
 /// A type of the transfer
 [Enum]
 interface TransferKind {
-	/// The transfer is incoming, meaning we are the one who receives the files
+    /// The transfer is incoming, meaning we are the one who receives the files
     Incoming(sequence<IncomingPath> paths);
 
-	/// The transfer is incoming, meaning we are the one who sends the files
+    /// The transfer is incoming, meaning we are the one who sends the files
     Outgoing(sequence<OutgoingPath> paths);
 };
 
@@ -347,152 +486,152 @@ interface TransferKind {
 /// replay what happened and the last state denotes the current state of the
 /// transfer.
 dictionary TransferInfo {
-	/// Transfer UUID
+    /// Transfer UUID
     string id;
 
-	/// The creation time as a UNIX timestamp in milliseconds.
+    /// The creation time as a UNIX timestamp in milliseconds.
     i64 created_at;
 
-	/// Peer's IP address
+    /// Peer's IP address
     string peer;
 
-	/// History of transfer states
+    /// History of transfer states
     sequence<TransferState> states;
 
-	/// The transfer type description
+    /// The transfer type description
     TransferKind kind;
 };
 
 interface NordDrop {
-	/// Create a new instance of norddrop. This is a required step to work
-	/// with API further
-	///
-	/// # Arguments
-	/// * `event_cb` - Event callback
-	/// * `logger` - Logger callback
-	/// * `key_store` - Fetches peer's public key and provides own private key. 
-	[Throws=Error]
-	constructor(EventCallback event_cb, KeyStore key_store, Logger logger);
+    /// Create a new instance of norddrop. This is a required step to work
+    /// with API further
+    ///
+    /// # Arguments
+    /// * `event_cb` - Event callback
+    /// * `logger` - Logger callback
+    /// * `key_store` - Fetches peer's public key and provides own private key. 
+    [Throws=Error]
+    constructor(EventCallback event_cb, KeyStore key_store, Logger logger);
 
-	/// Starts libdrop
-	///
-	/// # Arguments
-	/// * `addr` - Address to listen on
-	/// * `config` - configuration
-	///
-	/// # Configuration Parameters
-	///
-	/// * `dir_depth_limit` - if the tree contains more levels then the error is
-	/// returned.
-	///
-	/// * `transfer_file_limit` - when aggregating files from the path, if this
-	/// limit is reached, an error is returned.
-	///
-	/// * `moose_event_path` - moose database path.
-	///
-	/// * `moose_prod` - moose production flag.
-	///
-	/// * `storage_path` - storage path for persistence engine.
-	///
-	/// * `checksum_events_size_threshold_bytes` - emit checksum events only if file
-	///   is equal or greater than this size. If omited, no checksumming events are
-	///   emited.
-	///
-	/// # Safety
-	/// The pointers provided must be valid
-	[Throws=Error]
-	void start([ByRef] string addr, Config config);
+    /// Starts libdrop
+    ///
+    /// # Arguments
+    /// * `addr` - Address to listen on
+    /// * `config` - configuration
+    ///
+    /// # Configuration Parameters
+    ///
+    /// * `dir_depth_limit` - if the tree contains more levels then the error is
+    /// returned.
+    ///
+    /// * `transfer_file_limit` - when aggregating files from the path, if this
+    /// limit is reached, an error is returned.
+    ///
+    /// * `moose_event_path` - moose database path.
+    ///
+    /// * `moose_prod` - moose production flag.
+    ///
+    /// * `storage_path` - storage path for persistence engine.
+    ///
+    /// * `checksum_events_size_threshold_bytes` - emit checksum events only if file
+    ///   is equal or greater than this size. If omited, no checksumming events are
+    ///   emited.
+    ///
+    /// # Safety
+    /// The pointers provided must be valid
+    [Throws=Error]
+    void start([ByRef] string addr, Config config);
 
-	/// Stop norddrop instance
-	[Throws=Error]
-	void stop();
+    /// Stop norddrop instance
+    [Throws=Error]
+    void stop();
 
-	/// Purge transfers from the database
-	///
-	/// # Arguments
-	/// * `transfer_ids` - array of transfer UUIDs
-	[Throws=Error]
-	void purge_transfers([ByRef] sequence<string> transfer_ids);
+    /// Purge transfers from the database
+    ///
+    /// # Arguments
+    /// * `transfer_ids` - array of transfer UUIDs
+    [Throws=Error]
+    void purge_transfers([ByRef] sequence<string> transfer_ids);
 
-	/// Purge transfers from the database until the given timestamp
-	///
-	/// # Arguments
-	/// * `until` - Unix timestamp in milliseconds
-	[Throws=Error]
-	void purge_transfers_until(i64 until);
+    /// Purge transfers from the database until the given timestamp
+    ///
+    /// # Arguments
+    /// * `until` - Unix timestamp in milliseconds
+    [Throws=Error]
+    void purge_transfers_until(i64 until);
 
-	/// Get transfers from the database
-	///
-	/// # Arguments
-	/// * `since_timestamp` - UNIX timestamp in milliseconds
-	[Throws=Error]
-	sequence<TransferInfo> transfers_since(i64 since);
+    /// Get transfers from the database
+    ///
+    /// # Arguments
+    /// * `since_timestamp` - UNIX timestamp in milliseconds
+    [Throws=Error]
+    sequence<TransferInfo> transfers_since(i64 since);
 
-	/// Initialize a new transfer with the provided peer and descriptors
-	///
-	/// # Arguments
-	/// * `peer` - Peer address.
-	/// * `descriptors` - transfer file descriptors.
-	///
-	/// # Returns
-	/// A String containing the transfer UUID.
-	[Throws=Error]
-	string new_transfer([ByRef] string peer, [ByRef] sequence<TransferDescriptor> descriptors);
+    /// Initialize a new transfer with the provided peer and descriptors
+    ///
+    /// # Arguments
+    /// * `peer` - Peer address.
+    /// * `descriptors` - transfer file descriptors.
+    ///
+    /// # Returns
+    /// A String containing the transfer UUID.
+    [Throws=Error]
+    string new_transfer([ByRef] string peer, [ByRef] sequence<TransferDescriptor> descriptors);
 
-	/// # Finalizes the transfer from either side
-	///
-	/// # Arguments
-	/// * `transfer_id`: Transfer UUID
-	[Throws=Error]
-	void finalize_transfer([ByRef] string transfer_id);
+    /// # Finalizes the transfer from either side
+    ///
+    /// # Arguments
+    /// * `transfer_id`: Transfer UUID
+    [Throws=Error]
+    void finalize_transfer([ByRef] string transfer_id);
 
-	/// Removes a single transfer file from the database. The file must be in
-	/// the **terminal** state beforehand, otherwise the error is returned.
-	///
-	///  # Arguments
-	/// * `transfer_id`: Transfer UUID
-	/// * `file_id`: File ID
-	[Throws=Error]
-	void remove_file([ByRef] string transfer_id, [ByRef] string file_id);
+    /// Removes a single transfer file from the database. The file must be in
+    /// the **terminal** state beforehand, otherwise the error is returned.
+    ///
+    ///  # Arguments
+    /// * `transfer_id`: Transfer UUID
+    /// * `file_id`: File ID
+    [Throws=Error]
+    void remove_file([ByRef] string transfer_id, [ByRef] string file_id);
 
-	/// # Download a file from the peer
-	///
-	/// # Arguments
-	/// * `transfer_id` - Transfer UUID
-	/// * `file_id` - File ID
-	/// * `destination` - Destination path
-	[Throws=Error]
-	void download_file([ByRef] string transfer_id, [ByRef] string file_id, [ByRef] string destination);
+    /// # Download a file from the peer
+    ///
+    /// # Arguments
+    /// * `transfer_id` - Transfer UUID
+    /// * `file_id` - File ID
+    /// * `destination` - Destination path
+    [Throws=Error]
+    void download_file([ByRef] string transfer_id, [ByRef] string file_id, [ByRef] string destination);
 
-	/// Reject a file from either side
-	///
-	/// # Arguments
-	/// * `transfer_id`: Transfer UUID
-	/// * `file_id`: File ID
-	[Throws=Error]
-	void reject_file([ByRef] string transfer_id, [ByRef] string file_id);
+    /// Reject a file from either side
+    ///
+    /// # Arguments
+    /// * `transfer_id`: Transfer UUID
+    /// * `file_id`: File ID
+    [Throws=Error]
+    void reject_file([ByRef] string transfer_id, [ByRef] string file_id);
 
-	/// Refresh connections. Should be called when anything about the network
-	/// changes that might affect connections. Also when peer availability has
-	/// changed. This will kick-start the automated retries for all transfers.
-	[Throws=Error]
-	void network_refresh();
+    /// Refresh connections. Should be called when anything about the network
+    /// changes that might affect connections. Also when peer availability has
+    /// changed. This will kick-start the automated retries for all transfers.
+    [Throws=Error]
+    void network_refresh();
 
-	/// Set a file descriptor (FD) resolver callback.
-	/// The callback provides FDs based on URI.
-	/// This function should be called before `start()`, otherwise it will
-	/// return an error.
-	///
-	/// # Arguments
-	/// * `resolver`: The resolver structure
-	///
-	/// # Warning
-	/// This function is intended to be called only on UNIX platforms
-	[Throws=Error]
-	void set_fd_resolver(FdResolver resolver);
+    /// Set a file descriptor (FD) resolver callback.
+    /// The callback provides FDs based on URI.
+    /// This function should be called before `start()`, otherwise it will
+    /// return an error.
+    ///
+    /// # Arguments
+    /// * `resolver`: The resolver structure
+    ///
+    /// # Warning
+    /// This function is intended to be called only on UNIX platforms
+    [Throws=Error]
+    void set_fd_resolver(FdResolver resolver);
 };
 
 namespace norddrop {
-	/// Returs the libdrop version
-	string version();
+    /// Returs the libdrop version
+    string version();
 };

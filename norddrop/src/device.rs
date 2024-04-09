@@ -1,6 +1,3 @@
-pub mod types;
-pub mod utils;
-
 use std::{
     net::{IpAddr, ToSocketAddrs},
     sync::Arc,
@@ -8,7 +5,7 @@ use std::{
 };
 
 use drop_analytics::DeveloperExceptionEventData;
-use drop_auth::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH};
+use drop_auth::{PublicKey, SecretKey};
 use drop_config::{Config, DropConfig, MooseConfig};
 use drop_storage::types::Transfer as TransferInfo;
 use drop_transfer::{auth, utils::Hidden, Event, FileToSend, OutgoingTransfer, Service, Transfer};
@@ -18,10 +15,9 @@ use tokio::{
     task::JoinHandle,
 };
 
-use self::types::TransferDescriptor;
-use crate::{device::types::FinishEvent, ffi, ffi::types as ffi_types};
+use crate::{event, TransferDescriptor};
 
-pub type Result<T = ()> = std::result::Result<T, ffi::types::norddrop_result>;
+pub type Result<T = ()> = std::result::Result<T, crate::Error>;
 
 const SQLITE_TIMESTAMP_MIN: i64 = -210866760000;
 const SQLITE_TIMESTAMP_MAX: i64 = 253402300799;
@@ -30,7 +26,7 @@ pub(super) struct NordDropFFI {
     rt: tokio::runtime::Runtime,
     pub logger: Logger,
     instance: Arc<Mutex<Option<ServiceData>>>,
-    event_dispatcher: Arc<EventDispatcher>,
+    event_dispatcher: EventDispatcher,
     keys: Arc<auth::Context>,
     config: DropConfig,
     #[cfg(unix)]
@@ -42,33 +38,21 @@ struct ServiceData {
     event_task: JoinHandle<()>,
 }
 
+#[derive(Clone)]
 struct EventDispatcher {
-    cb: ffi_types::norddrop_event_cb,
-    logger: Logger,
+    cb: Arc<dyn Fn(crate::Event) + Send + Sync>,
 }
 
 impl EventDispatcher {
-    pub fn dispatch(&self, e: types::Event) {
-        let res = std::ffi::CString::new(
-            serde_json::to_string(&e).unwrap_or_else(|_| String::from("event_to_json error")),
-        );
-
-        match res {
-            Ok(s) => unsafe {
-                let callback = self.cb.callback();
-                let callback_data = self.cb.callback_data();
-
-                (callback)(callback_data, s.as_ptr())
-            },
-            Err(e) => warn!(self.logger, "Failed to create CString: {}", e),
-        }
+    fn dispatch(&self, e: impl Into<crate::Event>) {
+        (self.cb)(e.into());
     }
 }
 
 impl NordDropFFI {
     pub(super) fn new(
-        event_cb: ffi_types::norddrop_event_cb,
-        pubkey_cb: ffi_types::norddrop_pubkey_cb,
+        event_cb: impl Fn(crate::Event) + Send + Sync + 'static,
+        pubkey_cb: impl Fn(IpAddr) -> Option<PublicKey> + Send + 'static,
         privkey: SecretKey,
         logger: Logger,
     ) -> Result<Self> {
@@ -80,11 +64,10 @@ impl NordDropFFI {
         Ok(NordDropFFI {
             instance: Arc::default(),
             logger: logger.clone(),
-            rt: tokio::runtime::Runtime::new().map_err(|_| ffi::types::NORDDROP_RES_ERROR)?,
-            event_dispatcher: Arc::new(EventDispatcher {
-                cb: event_cb,
-                logger: logger.clone(),
-            }),
+            rt: tokio::runtime::Runtime::new().map_err(|_| crate::Error::Unknown)?,
+            event_dispatcher: EventDispatcher {
+                cb: Arc::new(event_cb) as _,
+            },
             config: DropConfig::default(),
             keys: Arc::new(crate_key_context(logger, privkey, pubkey_cb)),
             #[cfg(unix)]
@@ -92,7 +75,7 @@ impl NordDropFFI {
         })
     }
 
-    pub(super) fn start(&mut self, listen_addr: &str, config_json: &str) -> Result<()> {
+    pub(super) fn start(&mut self, listen_addr: &str, config: Config) -> Result<()> {
         let init_time = std::time::Instant::now();
         trace!(
             self.logger,
@@ -101,18 +84,18 @@ impl NordDropFFI {
         );
 
         // Check preconditions first
-        let config = parse_and_validate_config(&self.logger, config_json)?;
+        validate_config(&self.logger, &config)?;
         let addr: IpAddr = match listen_addr.parse() {
             Ok(addr) => addr,
             Err(err) => {
                 error!(self.logger, "Failed to parse IP address: {err}");
-                return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
+                return Err(crate::Error::BadInput);
             }
         };
 
         let mut instance = self.instance.blocking_lock();
         if instance.is_some() {
-            return Err(ffi::types::NORDDROP_RES_INSTANCE_START);
+            return Err(crate::Error::InstanceStart);
         };
 
         // All good, let's proceed
@@ -144,7 +127,7 @@ impl NordDropFFI {
                 // The events where dispatched in different order than where emitted.
                 // To fix that we need to process the events sequentially.
                 // Also the callback may block the executor - we need to be resistant to that.
-                tokio::task::block_in_place(|| ed.dispatch(e.into()));
+                tokio::task::block_in_place(|| ed.dispatch(e));
             }
         });
 
@@ -168,8 +151,8 @@ impl NordDropFFI {
                 error!(self.logger, "Failed to start the service: {}", err);
 
                 let err = match err {
-                    drop_transfer::Error::AddrInUse => ffi::types::NORDDROP_RES_ADDR_IN_USE,
-                    _ => ffi::types::NORDDROP_RES_INSTANCE_START,
+                    drop_transfer::Error::AddrInUse => crate::Error::AddrInUse,
+                    _ => crate::Error::InstanceStart,
                 };
 
                 return Err(err);
@@ -188,7 +171,7 @@ impl NordDropFFI {
             .instance
             .blocking_lock()
             .take()
-            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?;
+            .ok_or(crate::Error::NotStarted)?;
 
         self.rt.block_on(async {
             instance.service.stop().await;
@@ -198,81 +181,77 @@ impl NordDropFFI {
         Ok(())
     }
 
-    pub(super) fn purge_transfers(&mut self, transfer_ids: &str) -> Result<()> {
+    pub(super) fn purge_transfers(&mut self, transfer_ids: &[String]) -> Result<()> {
         trace!(
             self.logger,
             "norddrop_purge_transfers() : {:?}",
             transfer_ids
         );
 
-        let transfer_ids: Vec<String> =
-            serde_json::from_str(transfer_ids).map_err(|_| ffi::types::NORDDROP_RES_JSON_PARSE)?;
-
         let mut instance = self.instance.blocking_lock();
         let storage = instance
             .as_mut()
-            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+            .ok_or(crate::Error::NotStarted)?
             .service
             .storage();
 
-        self.rt.block_on(storage.purge_transfers(&transfer_ids));
-
+        self.rt.block_on(storage.purge_transfers(transfer_ids));
         Ok(())
     }
 
-    pub(super) fn purge_transfers_until(&mut self, until_timestamp: i64) -> Result<()> {
+    pub(super) fn purge_transfers_until(&mut self, until_timestamp_s: i64) -> Result<()> {
         trace!(
             self.logger,
             "norddrop_purge_transfers_until() : {:?}",
-            until_timestamp
+            until_timestamp_s
         );
 
-        if !(SQLITE_TIMESTAMP_MIN..=SQLITE_TIMESTAMP_MAX).contains(&until_timestamp) {
+        if !(SQLITE_TIMESTAMP_MIN..=SQLITE_TIMESTAMP_MAX).contains(&until_timestamp_s) {
             error!(
                 self.logger,
-                "Invalid timestamp: {until_timestamp}, the value must be between \
+                "Invalid timestamp: {until_timestamp_s}, the value must be between \
                  {SQLITE_TIMESTAMP_MIN} and {SQLITE_TIMESTAMP_MAX}"
             );
-            return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
+            return Err(crate::Error::BadInput);
         }
 
         let mut instance = self.instance.blocking_lock();
         let storage = instance
             .as_mut()
-            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+            .ok_or(crate::Error::NotStarted)?
             .service
             .storage();
 
         self.rt
-            .block_on(storage.purge_transfers_until(until_timestamp));
+            .block_on(storage.purge_transfers_until(until_timestamp_s));
 
         Ok(())
     }
 
-    pub(super) fn transfers_since(&mut self, since_timestamp: i64) -> Result<Vec<TransferInfo>> {
+    pub(super) fn transfers_since(&mut self, since_timestamp_s: i64) -> Result<Vec<TransferInfo>> {
         trace!(
             self.logger,
             "norddrop_get_transfers_since() since_timestamp: {:?}",
-            since_timestamp
+            since_timestamp_s
         );
 
-        if !(SQLITE_TIMESTAMP_MIN..=SQLITE_TIMESTAMP_MAX).contains(&since_timestamp) {
+        if !(SQLITE_TIMESTAMP_MIN..=SQLITE_TIMESTAMP_MAX).contains(&since_timestamp_s) {
             error!(
                 self.logger,
-                "Invalid timestamp: {since_timestamp}, the value must be between \
+                "Invalid timestamp: {since_timestamp_s}, the value must be between \
                  {SQLITE_TIMESTAMP_MIN} and {SQLITE_TIMESTAMP_MAX}"
             );
-            return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
+            return Err(crate::Error::BadInput);
         }
 
         let mut instance = self.instance.blocking_lock();
         let storage = instance
             .as_mut()
-            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+            .ok_or(crate::Error::NotStarted)?
             .service
             .storage();
 
-        let result = self.rt.block_on(storage.transfers_since(since_timestamp));
+        let result = self.rt.block_on(storage.transfers_since(since_timestamp_s));
         Ok(result)
     }
 
@@ -289,7 +268,7 @@ impl NordDropFFI {
         let mut instance = self.instance.blocking_lock();
         let storage = instance
             .as_mut()
-            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?
+            .ok_or(crate::Error::NotStarted)?
             .service
             .storage();
 
@@ -297,46 +276,30 @@ impl NordDropFFI {
             .rt
             .block_on(storage.remove_transfer_file(transfer_id, file_id));
 
-        res.ok_or(ffi::types::NORDDROP_RES_BAD_INPUT)
+        res.ok_or(crate::Error::BadInput)
     }
 
-    pub(super) fn new_transfer(&mut self, peer: &str, descriptors: &str) -> Result<uuid::Uuid> {
-        trace!(
-            self.logger,
-            "norddrop_new_transfer() to peer {:?}: {:?}",
-            peer,
-            descriptors
-        );
-
-        let descriptors: Vec<TransferDescriptor> = match serde_json::from_str(descriptors) {
-            Ok(descriptors) => descriptors,
-            Err(e) => {
-                error!(
-                    self.logger,
-                    "Failed to parse new_transfer() descriptors: {}", e
-                );
-                return Err(ffi::types::NORDDROP_RES_JSON_PARSE);
-            }
-        };
+    pub(super) fn new_transfer(
+        &mut self,
+        peer: &str,
+        descriptors: &[TransferDescriptor],
+    ) -> Result<uuid::Uuid> {
+        trace!(self.logger, "norddrop_new_transfer() to peer {peer:?}",);
 
         let peer = (peer, drop_config::PORT)
             .to_socket_addrs()
             .map_err(|err| {
                 error!(self.logger, "Failed to perform lookup of address: {err}");
-                ffi::types::NORDDROP_RES_BAD_INPUT
+                crate::Error::BadInput
             })?
             .next()
-            .ok_or(ffi::types::NORDDROP_RES_BAD_INPUT)?;
+            .ok_or(crate::Error::BadInput)?;
 
         let xfer = {
-            let files = self.prepare_transfer_files(&descriptors)?;
+            let files = self.prepare_transfer_files(descriptors)?;
             OutgoingTransfer::new(peer.ip(), files, &self.config).map_err(|e| {
-                error!(
-                    self.logger,
-                    "Could not create transfer ({:?}): {}", descriptors, e
-                );
-
-                ffi::types::NORDDROP_RES_TRANSFER_CREATE
+                error!(self.logger, "Could not create transfer: {e}");
+                crate::Error::TransferCreate
             })?
         };
 
@@ -349,9 +312,7 @@ impl NordDropFFI {
         let xfid = xfer.id();
 
         let mut instance = self.instance.blocking_lock();
-        let instance = instance
-            .as_mut()
-            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?;
+        let instance = instance.as_mut().ok_or(crate::Error::NotStarted)?;
 
         self.rt.block_on(instance.service.send_request(xfer));
 
@@ -362,9 +323,7 @@ impl NordDropFFI {
         trace!(self.logger, "norddrop_network_refresh()");
 
         let mut instance = self.instance.blocking_lock();
-        let instance = instance
-            .as_mut()
-            .ok_or(ffi::types::NORDDROP_RES_NOT_STARTED)?;
+        let instance = instance.as_mut().ok_or(crate::Error::NotStarted)?;
 
         instance.service.network_refresh();
 
@@ -390,7 +349,7 @@ impl NordDropFFI {
 
         let mut inst = self.instance.clone().blocking_lock_owned();
         if inst.is_none() {
-            return Err(ffi::types::NORDDROP_RES_NOT_STARTED);
+            return Err(crate::Error::NotStarted);
         }
 
         self.rt.spawn(async move {
@@ -410,13 +369,10 @@ impl NordDropFFI {
                     e
                 );
 
-                ed.dispatch(types::Event::TransferFinished {
+                ed.dispatch(event::EventKind::FileFailed {
                     transfer_id: xfid.to_string(),
-                    data: FinishEvent::FileFailed {
-                        file_id,
-                        status: From::from(&e),
-                    },
-                    timestamp: utils::current_timestamp(),
+                    file_id,
+                    status: From::from(&e),
                 });
             }
         });
@@ -432,7 +388,7 @@ impl NordDropFFI {
 
         let mut inst = self.instance.clone().blocking_lock_owned();
         if inst.is_none() {
-            return Err(ffi::types::NORDDROP_RES_NOT_STARTED);
+            return Err(crate::Error::NotStarted);
         }
 
         self.rt.spawn(async move {
@@ -444,14 +400,10 @@ impl NordDropFFI {
                     "Failed to cancel a transfer with xfid: {:?}, error: {:?}", xfid, e
                 );
 
-                ed.dispatch(types::Event::TransferFinished {
+                ed.dispatch(crate::EventKind::TransferFailed {
                     transfer_id: xfid.to_string(),
-                    data: FinishEvent::TransferFailed {
-                        status: From::from(&e),
-                    },
-
-                    timestamp: utils::current_timestamp(),
-                })
+                    status: From::from(&e),
+                });
             }
         });
 
@@ -469,7 +421,7 @@ impl NordDropFFI {
 
         let inst = self.instance.clone().blocking_lock_owned();
         if inst.is_none() {
-            return Err(ffi::types::NORDDROP_RES_NOT_STARTED);
+            return Err(crate::Error::NotStarted);
         }
 
         self.rt.spawn(async move {
@@ -481,13 +433,10 @@ impl NordDropFFI {
                     "Failed to reject a file with xfid: {xfid}, file: {file}, error: {err:?}"
                 );
 
-                evdisp.dispatch(types::Event::TransferFinished {
+                evdisp.dispatch(crate::EventKind::FileFailed {
                     transfer_id: xfid.to_string(),
-                    data: FinishEvent::FileFailed {
-                        file_id: file,
-                        status: From::from(&err),
-                    },
-                    timestamp: utils::current_timestamp(),
+                    file_id: file,
+                    status: From::from(&err),
                 });
             }
         });
@@ -498,7 +447,7 @@ impl NordDropFFI {
     #[cfg(unix)]
     pub(super) fn set_fd_resolver_callback(
         &mut self,
-        callback: ffi_types::norddrop_fd_cb,
+        callback: impl Fn(&str) -> Option<std::os::fd::RawFd> + Send + 'static,
     ) -> Result<()> {
         trace!(self.logger, "norddrop_set_fd_resolver_callback()",);
 
@@ -508,7 +457,7 @@ impl NordDropFFI {
                 self.logger,
                 "Failed to set FD resolver callback. Instance is already started"
             );
-            return Err(ffi::types::NORDDROP_RES_ERROR);
+            return Err(crate::Error::Unknown);
         }
         drop(inst);
 
@@ -528,39 +477,39 @@ impl NordDropFFI {
         }
 
         for desc in descriptors {
-            if let Some(content_uri) = &desc.content_uri {
-                #[cfg(target_os = "windows")]
-                {
-                    let _ = content_uri;
+            match desc {
+                #[cfg(unix)]
+                TransferDescriptor::Fd {
+                    filename,
+                    content_uri,
+                    fd,
+                } => {
+                    let uri = content_uri
+                        .parse()
+                        .map_err(|_| crate::Error::InvalidString)?;
 
-                    error!(
-                        self.logger,
-                        "Specifying file descriptors in transfers is not supported under Windows"
-                    );
-                    return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
-                }
-
-                #[cfg(not(target_os = "windows"))]
-                {
                     gather
-                        .gather_from_content_uri(&desc.path.0, content_uri.clone(), desc.fd)
+                        .gather_from_content_uri(filename, uri, *fd)
                         .map_err(|err| {
                             error!(
                                 self.logger,
-                                "Could not open file {desc:?} for transfer ({descriptors:?}): \
-                                 {err}",
+                                "Could not open file {:?} ({:?}) for transfer: {err}",
+                                Hidden(filename),
+                                Hidden(content_uri)
                             );
-                            ffi::types::NORDDROP_RES_TRANSFER_CREATE
+                            crate::Error::TransferCreate
                         })?;
                 }
-            } else {
-                gather.gather_from_path(&desc.path.0).map_err(|e| {
-                    error!(
-                        self.logger,
-                        "Could not open file {desc:?} for transfer ({descriptors:?}): {e}",
-                    );
-                    ffi::types::NORDDROP_RES_TRANSFER_CREATE
-                })?;
+                TransferDescriptor::Path { path } => {
+                    gather.gather_from_path(path).map_err(|e| {
+                        error!(
+                            self.logger,
+                            "Could not open file {:?} for transfer: {e}",
+                            Hidden(path)
+                        );
+                        crate::Error::TransferCreate
+                    })?;
+                }
             }
         }
 
@@ -571,25 +520,16 @@ impl NordDropFFI {
 fn crate_key_context(
     logger: slog::Logger,
     privkey: SecretKey,
-    pubkey_cb: ffi_types::norddrop_pubkey_cb,
+    pubkey_cb: impl Fn(IpAddr) -> Option<PublicKey> + Send + 'static,
 ) -> auth::Context {
     let pubkey_cb = std::sync::Mutex::new(pubkey_cb);
     let public = move |ip: IpAddr| {
-        let mut buf = [0u8; PUBLIC_KEY_LENGTH];
-
-        // Insert the trailing null byte
-        let cstr_ip = format!("{ip}\0").into_bytes();
-
         let guard = pubkey_cb.lock().expect("Failed to lock pubkey callback");
-        let res = unsafe { (guard.cb)(guard.ctx, cstr_ip.as_ptr() as _, buf.as_mut_ptr() as _) };
+        let key = guard(ip)?;
         drop(guard);
 
-        if res == 0 {
-            debug!(logger, "Public key for {ip:?}: {buf:02X?}");
-            Some(PublicKey::from(buf))
-        } else {
-            None
-        }
+        debug!(logger, "Public key for {ip:?}: {key:?}");
+        Some(key)
     };
 
     auth::Context::new(privkey, public)
@@ -609,7 +549,7 @@ fn open_database(
             // If we can't even open the DB in memory, there is nothing else left to do,
             // throw an error
             if dbpath == ":memory:" {
-                let error = ffi::types::NORDDROP_RES_DB_ERROR;
+                let error = crate::Error::DbError;
                 moose.developer_exception(DeveloperExceptionEventData {
                     code: error as i32,
                     note: err.to_string(),
@@ -620,7 +560,7 @@ fn open_database(
                 Err(error)
             } else {
                 moose.developer_exception(DeveloperExceptionEventData {
-                    code: ffi::types::NORDDROP_RES_DB_ERROR as i32,
+                    code: crate::Error::DbError as i32,
                     note: "Initial DB open failed, recreating".to_string(),
                     message: "Failed to open DB file".to_string(),
                     name: "DB Error".to_string(),
@@ -629,7 +569,7 @@ fn open_database(
                 warn!(logger, "Removing old DB file");
                 if let Err(err) = std::fs::remove_file(dbpath) {
                     moose.developer_exception(DeveloperExceptionEventData {
-                        code: ffi::types::NORDDROP_RES_DB_ERROR as i32,
+                        code: crate::Error::DbError as i32,
                         note: err.to_string(),
                         message: "Failed to remove old DB file".to_string(),
                         name: "DB Error".to_string(),
@@ -642,9 +582,8 @@ fn open_database(
                     return open_database(":memory:", events, logger, moose);
                 } else {
                     // Inform app that we wiped the old DB file
-                    events.dispatch(types::Event::RuntimeError {
+                    events.dispatch(crate::EventKind::RuntimeError {
                         status: drop_core::Status::DbLost as _,
-                        timestamp: utils::current_timestamp(),
                     });
                 };
 
@@ -652,7 +591,7 @@ fn open_database(
                 match drop_storage::Storage::new(logger.clone(), dbpath) {
                     Ok(storage) => Ok(storage),
                     Err(err) => {
-                        let error = ffi::types::NORDDROP_RES_DB_ERROR;
+                        let error = crate::Error::DbError;
                         moose.developer_exception(DeveloperExceptionEventData {
                             code: error as i32,
                             note: err.to_string(),
@@ -674,31 +613,19 @@ fn open_database(
 #[cfg(unix)]
 fn crate_fd_callback(
     logger: slog::Logger,
-    fd_cb: ffi_types::norddrop_fd_cb,
+    fd_cb: impl Fn(&str) -> Option<std::os::fd::RawFd> + Send + 'static,
 ) -> Arc<drop_transfer::file::FdResolver> {
-    use std::ffi::CString;
-
     let fd_cb = std::sync::Mutex::new(fd_cb);
 
     let func = move |uri: &str| {
-        let cstr_uri = match CString::new(uri) {
-            Ok(uri) => uri,
-            Err(err) => {
-                warn!(logger, "URI {uri} is invalid: {err}");
-                return None;
-            }
-        };
-
         let guard = fd_cb.lock().expect("Failed to lock fd callback");
-        let res = unsafe { (guard.cb)(guard.ctx, cstr_uri.as_ptr() as _) };
+        let res = guard(uri);
         drop(guard);
 
-        if res < 0 {
+        if res.is_none() {
             warn!(logger, "FD callback failed for {uri:?}");
-            None
-        } else {
-            Some(res)
         }
+        res
     };
 
     // The callback may block the executor
@@ -707,24 +634,13 @@ fn crate_fd_callback(
     Arc::new(func)
 }
 
-fn parse_and_validate_config(logger: &slog::Logger, config_json: &str) -> Result<Config> {
-    let config: Config = match serde_json::from_str::<types::Config>(config_json) {
-        Ok(cfg) => {
-            debug!(logger, "start() called with config:\n{cfg:#?}");
-            cfg.into()
-        }
-        Err(err) => {
-            error!(logger, "Failed to parse config: {err}");
-            return Err(ffi::types::NORDDROP_RES_JSON_PARSE);
-        }
-    };
-
+fn validate_config(logger: &slog::Logger, config: &Config) -> Result<()> {
     if config.moose.event_path.is_empty() {
         error!(logger, "Moose path cannot be empty");
-        return Err(ffi::types::NORDDROP_RES_BAD_INPUT);
+        return Err(crate::Error::BadInput);
     }
 
-    Ok(config)
+    Ok(())
 }
 
 fn initialize_moose(
@@ -747,7 +663,7 @@ fn initialize_moose(
                     "Moose is in debug mode and failed to initialize. Bailing initialization"
                 );
 
-                return Err(ffi::types::NORDDROP_RES_ERROR);
+                return Err(crate::Error::Unknown);
             }
 
             warn!(logger, "Falling back to mock moose implementation");

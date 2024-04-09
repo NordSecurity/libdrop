@@ -1240,8 +1240,6 @@ dependencies = [
  "drop-storage",
  "drop-transfer",
  "libc",
- "serde",
- "serde_json",
  "slog",
  "tokio",
  "uniffi",
