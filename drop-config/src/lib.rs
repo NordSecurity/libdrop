@@ -13,6 +13,9 @@ pub struct DropConfig {
     pub storage_path: String,
     // If set the checksum events will be emited for every file of this or bigger size
     pub checksum_events_size_threshold: Option<usize>,
+    // If set the checksum events will be emited for every checksum_events_granularity bytes
+    // Default value is 256KB.
+    pub checksum_events_granularity: u64,
     pub connection_retries: u32,
 }
 
@@ -23,6 +26,7 @@ impl Default for DropConfig {
             transfer_file_limit: 1000,
             storage_path: "libdrop.sqlite".to_string(),
             checksum_events_size_threshold: None,
+            checksum_events_granularity: 256 * 1024,
             connection_retries: 5,
         }
     }

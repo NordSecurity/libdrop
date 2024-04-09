@@ -82,6 +82,7 @@ pub trait Downloader {
         &mut self,
         location: &Hidden<PathBuf>,
         progress_cb: Option<F>,
+        event_granularity: Option<u64>,
     ) -> crate::Result<()>
     where
         F: FnMut(u64) -> Fut + Send + Sync,

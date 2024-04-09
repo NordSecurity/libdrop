@@ -157,6 +157,12 @@ pub struct Config {
     #[serde(rename = "checksum_events_size_threshold_bytes")]
     pub checksum_events_size_threshold: Option<usize>,
 
+    #[serde(
+        rename = "checksum_events_granularity_bytes",
+        default = "Config::default_checksum_events_granularity"
+    )]
+    pub checksum_events_granularity: u64,
+
     #[serde(default = "Config::default_connection_retries")]
     pub connection_retries: u32,
 }
@@ -164,6 +170,10 @@ pub struct Config {
 impl Config {
     const fn default_connection_retries() -> u32 {
         5
+    }
+
+    const fn default_checksum_events_granularity() -> u64 {
+        256 * 1024
     }
 }
 
@@ -415,6 +425,7 @@ impl From<Config> for drop_config::Config {
             storage_path,
             moose_app_version,
             checksum_events_size_threshold,
+            checksum_events_granularity,
             connection_retries,
         } = val;
 
@@ -425,6 +436,7 @@ impl From<Config> for drop_config::Config {
                 storage_path,
                 checksum_events_size_threshold,
                 connection_retries,
+                checksum_events_granularity,
             },
             moose: drop_config::MooseConfig {
                 app_version: moose_app_version,
@@ -453,7 +465,8 @@ mod tests {
           "storage_path": ":memory:",
           "max_uploads_in_flight": 16,
           "max_requests_per_sec": 15,
-          "checksum_events_size_threshold_bytes": 1234
+          "checksum_events_size_threshold_bytes": 1234,
+          "checksum_events_granularity_bytes": 1024
         }
         "#;
 
@@ -466,6 +479,7 @@ mod tests {
                     transfer_file_limit,
                     storage_path,
                     checksum_events_size_threshold: checksum_events_size_threshold_bytes,
+                    checksum_events_granularity: checksum_events_granularity_bytes,
                     connection_retries,
                 },
             moose:
@@ -483,6 +497,7 @@ mod tests {
         assert_eq!(app_version, "1.2.5");
         assert!(prod);
         assert_eq!(checksum_events_size_threshold_bytes, Some(1234));
+        assert_eq!(checksum_events_granularity_bytes, 1024);
         assert_eq!(connection_retries, 5);
     }
 }

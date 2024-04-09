@@ -712,6 +712,7 @@ impl FileXferTask {
         downloader: &mut impl Downloader,
         offset: u64,
         emit_checksum_events: bool,
+        checksum_events_granularity: u64,
     ) -> crate::Result<PathBuf> {
         let mut out_file = match downloader.open(tmp_loc).await {
             Ok(out_file) => out_file,
@@ -763,14 +764,19 @@ impl FileXferTask {
 
             if emit_checksum_events {
                 events.checksum_start(self.file.size()).await;
-
                 let progress_cb = {
-                    move |progress: u64| async move {
-                        events.checksum_progress(progress).await;
+                    move |progress_bytes: u64| async move {
+                        events.checksum_progress(progress_bytes).await;
                     }
                 };
 
-                downloader.validate(tmp_loc, Some(progress_cb)).await?;
+                downloader
+                    .validate(
+                        tmp_loc,
+                        Some(progress_cb),
+                        Some(checksum_events_granularity),
+                    )
+                    .await?;
 
                 events.checksum_finish().await;
             } else {
@@ -778,6 +784,7 @@ impl FileXferTask {
                     .validate::<_, futures::future::Ready<()>>(
                         tmp_loc,
                         None::<fn(u64) -> futures::future::Ready<()>>,
+                        None,
                     )
                     .await?;
             }
@@ -865,6 +872,7 @@ impl FileXferTask {
         events: &FileEventTx<IncomingTransfer>,
         tmp_location: &Hidden<PathBuf>,
         emit_checksum_events: bool,
+        checksum_events_granularity: u64,
     ) -> Option<TmpFileState> {
         // TODO: we load the file's metadata to check if we should emit checksum events
         // based on size threshold. However TmpFileState::load also does the
@@ -880,13 +888,19 @@ impl FileXferTask {
             let size = tmp_size.unwrap_or(0);
             events.checksum_start(size).await;
 
-            Some(|progress| events.checksum_progress(progress))
+            Some(|progress_bytes| events.checksum_progress(progress_bytes))
         } else {
             None
         };
 
         // Check if we can resume the temporary file
-        let tmp_file_state = match TmpFileState::load(&tmp_location.0, cb).await {
+        let tmp_file_state = match TmpFileState::load(
+            &tmp_location.0,
+            cb,
+            Some(checksum_events_granularity),
+        )
+        .await
+        {
             Ok(tmp_file_state) => {
                 debug!(
                     logger,
@@ -930,6 +944,7 @@ impl FileXferTask {
                     false
                 }
             };
+            let checksum_events_granularity = state.config.checksum_events_granularity;
 
             events.preflight().await;
 
@@ -939,7 +954,13 @@ impl FileXferTask {
             );
 
             let tmp_file_state = self
-                .handle_tmp_file(&logger, &events, &tmp_location, emit_checksum_events)
+                .handle_tmp_file(
+                    &logger,
+                    &events,
+                    &tmp_location,
+                    emit_checksum_events,
+                    checksum_events_granularity,
+                )
                 .await;
 
             let init_res = downloader.init(&self, tmp_file_state).await?;
@@ -970,6 +991,7 @@ impl FileXferTask {
                         &mut downloader,
                         offset,
                         emit_checksum_events,
+                        checksum_events_granularity,
                     )
                     .await
                 }
@@ -1043,7 +1065,11 @@ impl FileXferTask {
 
 impl TmpFileState {
     // Blocking operation
-    async fn load<F, Fut>(path: &Path, progress_cb: Option<F>) -> io::Result<Self>
+    async fn load<F, Fut>(
+        path: &Path,
+        progress_cb: Option<F>,
+        event_granularity: Option<u64>,
+    ) -> io::Result<Self>
     where
         F: Fn(u64) -> Fut + Sync + Send,
         Fut: Future<Output = ()>,
@@ -1052,7 +1078,7 @@ impl TmpFileState {
 
         let meta = file.metadata()?;
 
-        let csum = file::checksum(file, progress_cb).await?;
+        let csum = file::checksum(file, progress_cb, event_granularity).await?;
         Ok(TmpFileState { meta, csum })
     }
 }
