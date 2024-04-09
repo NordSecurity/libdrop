@@ -562,7 +562,13 @@ class Drop:
                 f"remove_transfer_file has failed with code: {err}({err_type})", err
             )
 
-    def start(self, addr: str, dbpath: str, checksum_events_size_threshold=None):
+    def start(
+        self,
+        addr: str,
+        dbpath: str,
+        checksum_events_size_threshold=None,
+        checksum_events_granularity=None,
+    ):
         cfg = {
             "dir_depth_limit": 5,
             "transfer_file_limit": 1000,
@@ -575,6 +581,9 @@ class Drop:
 
         if checksum_events_size_threshold is not None:
             cfg["checksum_events_size_threshold_bytes"] = checksum_events_size_threshold
+
+        if checksum_events_granularity is not None:
+            cfg["checksum_events_granularity_bytes"] = checksum_events_granularity
 
         err = self._lib.norddrop_start(
             self._instance,
