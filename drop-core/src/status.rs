@@ -1,7 +1,7 @@
 #[derive(Debug, Clone, Copy)]
 #[repr(u32)]
 pub enum Status {
-    Canceled = 1,
+    Finalized = 1,
     BadPath = 2,
     BadFile = 3,
     BadTransfer = 7,

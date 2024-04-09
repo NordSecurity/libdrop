@@ -312,7 +312,7 @@ impl<const PING: bool> handler::HandlerLoop for HandlerLoop<'_, PING> {
         debug!(self.logger, "Waiting for background jobs to finish");
 
         let tasks = self.tasks.drain().map(|(_, task)| async move {
-            task.events.stop_silent(Status::Canceled).await;
+            task.events.stop_silent(Status::Finalized).await;
         });
 
         futures::future::join_all(tasks).await;
