@@ -8,7 +8,7 @@ resolver = "2"
 name = "udrop"
 
 [dev-dependencies]
-clap = { version = "4.2", features = ["cargo"] }
+clap = { version = "=4.2", features = ["cargo"] }
 tokio = { version = "1", features = ["signal"] }
 slog-async = "2.8.0"
 slog-scope = "4.4.0"
