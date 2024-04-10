@@ -1,3 +1,11 @@
+### v6.4.0-moose-no-context
+### **New Moose***
+---
+* `checksum_events_granularity` in the config added
+
+---
+<br>
+
 ### v6.3.1-old-moose
 ### **Old Moose**
 ---
