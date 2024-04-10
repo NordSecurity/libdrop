@@ -12,7 +12,7 @@ fn serialize_datetime<S>(timestamp: &NaiveDateTime, serializer: S) -> Result<S::
 where
     S: serde::ser::Serializer,
 {
-    serializer.serialize_i64(timestamp.timestamp_millis())
+    serializer.serialize_i64(timestamp.and_utc().timestamp_millis())
 }
 
 #[derive(Serialize)]
