@@ -1,7 +1,10 @@
-### UNRELEASED
+### v6.4.0-moose-with-context
 ### **New Moose***
 ---
-`checksum_events_granularity` in the config added
+* `checksum_events_granularity` in the config added
+
+---
+<br>
 
 ### v6.3.0
 ### **New Moose**
