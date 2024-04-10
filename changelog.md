@@ -1,7 +1,11 @@
-### UNRELEASED
+### 6.4.0
 ### **New Moose***
 ---
-`checksum_events_granularity` in the config added
+
+* `checksum_events_granularity` in the config added
+
+---
+<br >
 
 ### v6.3.0
 ### **New Moose**
