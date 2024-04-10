@@ -102,10 +102,10 @@ impl MooseImpl {
 
         moose!(
             logger,
-            set_context_application_name,
+            set_context_application_libdropapp_name,
             DROP_MOOSE_APP_NAME.to_owned()
         );
-        moose!(logger, set_context_application_version, lib_version);
+        moose!(logger, set_context_application_libdropapp_version, lib_version);
 
         Ok(Self { logger })
     }
