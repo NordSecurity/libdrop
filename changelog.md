@@ -1,7 +1,7 @@
 ### v6.4.0-moose-with-context
 ### **New Moose***
 ---
-* `checksum_events_granularity` in the config added
+* Add `checksum_events_granularity_bytes` in the config
 
 ---
 <br >
