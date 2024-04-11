@@ -18,6 +18,7 @@
 * Fix occasional sender's state is not completed and equal to the receiver's state when canceling the transfer
 * Unclutter transfer cleanup logs
 * Update moose tracker to v6.0.0
+* Windows ARM build
 
 ---
 <br>
@@ -34,7 +35,6 @@
 * Disallow downloading file for which any path component is larger than 250 characters
 * Fix ocassional missing of `TransferPaused` event when toggling libdrop on and off quickly
 * Report file transfer error in case file subpath contains perent directory `..`
-* Add checksum_events_granularity config
 
 ---
 <br>
