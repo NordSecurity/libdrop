@@ -1,7 +1,7 @@
 ### v6.4.0-moose-no-context
 ### **New Moose***
 ---
-* `checksum_events_granularity` in the config added
+* Add `checksum_events_granularity_bytes` in the config
 
 ---
 <br>
@@ -41,7 +41,6 @@
 * Disallow downloading file for which any path component is larger than 250 characters
 * Fix ocassional missing of `TransferPaused` event when toggling libdrop on and off quickly
 * Report file transfer error in case file subpath contains perent directory `..`
-* Add checksum_events_granularity config
 
 ---
 <br>
