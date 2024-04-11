@@ -2,12 +2,43 @@
 libdrop is a library for sending/receiving files, primarily over meshnet, but
 WAN is also an option.
 
-# Releasing
+# Releases
+## Technical
 - The version must be set in `LIBDROP_RELEASE_NAME` env variable before compiling the code. The value is embedded inside the binary as the release
-version. The format is `v{semver}`. An API call to `norddrop_version()` should be made to ensure that.
-- Before releasing `changelog.md` must be updated with the version name being released. Best if the tag is pointing to the commit updating `changelog.md`.
+version. API call  `norddrop_version()` returns this string.
+
+## Versions and Branches
+Branches used for development:
+- `dev` - development, faster moving branch
+- `main` - release branch, contains latest release.
+- `release/v5` - maintenance branch
+- `release/v6` - compatible with `main`
+
+As of 6.4 and 5.5 versions libdrop needs to maintain two versions of Moose tracker. One with
+context sharing and the other with not. Both are not backwards compatible(in API and in between), thus Libdrop 
+must maintain two release branches for a while.
+
+Branches and releases must contain `moose-no-context` or `moose-with-context` in the name to
+indicate which moose tracker is being used. *This should be a temporary nuisance, a constant re-evaluation is needed*.
+
+# Release Procedure
 - After the release the `main` branch must be merged into the `dev` branch.
 - After changes are introduced it might need an appsec review. This is especially true if the major semver component is increased.
+
+1. Check the `changelog.md` file and make appropriate missing changes if any. Enter new version in there at the top if not there.
+Preferrably there should be no version before the release happens because it's easy to assume it's an already released version.
+Prefer to have *UNRELEASED* as a placeholder.
+
+2. Tag the commit with changelog modifications.
+3. Enjoy as Gitlab pipeline is triggered and produces builds for various platforms.
+
+## Tips & Problems 
+- if `changelog.md` was forgotten to be updated before tagging - do not modify the existing tags or releases, just commit changes and go on.
+- If there are some problems with the release and there's a need to redo it:
+    -   Delete the tag
+    -   Re-create the release tag
+    -   Manually delete artifacts in maven, swift bridge, libdrop-build as build artifacts will be already stored
+    -   Proceed as usual
 
 # Tests
 ## Whole testsuite
