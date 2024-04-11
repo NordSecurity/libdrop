@@ -4,7 +4,7 @@
 * `checksum_events_granularity` in the config added
 
 ---
-<br>
+<br >
 
 ### v6.3.0
 ### **New Moose**
