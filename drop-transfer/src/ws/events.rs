@@ -573,7 +573,7 @@ impl<T: Transfer> Drop for FileEventTx<T> {
                     path_id: file_info.path_id,
                     direction: file_info.direction,
                     transferred: utils::to_kb(transferred),
-                    result: Status::Canceled as _,
+                    result: Status::Finalized as _,
                 });
         }
     }

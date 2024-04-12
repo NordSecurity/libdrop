@@ -74,51 +74,53 @@ impl Error {
     }
 }
 
-impl From<&Error> for u32 {
+impl From<&Error> for drop_core::Status {
     fn from(err: &Error) -> Self {
         use drop_core::Status;
 
         match err {
-            Error::Canceled => Status::Canceled as _,
-            Error::BadPath(_) => Status::BadPath as _,
-            Error::BadFile => Status::BadFile as _,
-            Error::BadTransfer => Status::BadTransfer as _,
-            Error::BadTransferState(_) => Status::BadTransferState as _,
-            Error::BadFileId => Status::BadFileId as _,
-            Error::Io(io) => {
-                let status = match io.kind() {
-                    ErrorKind::PermissionDenied => Status::PermissionDenied,
-                    _ => Status::IoError,
-                };
-
-                status as _
-            }
-            Error::DirectoryNotExpected => Status::BadFile as _,
-            Error::TransferLimitsExceeded => Status::TransferLimitsExceeded as _,
-            Error::MismatchedSize => Status::MismatchedSize as _,
-            Error::UnexpectedData => Status::MismatchedSize as _,
-            Error::InvalidArgument => Status::InvalidArgument as _,
-            Error::WsServer(_) => Status::IoError as _,
-            Error::WsClient(_) => Status::IoError as _,
-            Error::AddrInUse => Status::AddrInUse as _,
-            Error::FileModified => Status::FileModified as _,
-            Error::FilenameTooLong => Status::FilenameTooLong as _,
-            Error::AuthenticationFailed => Status::AuthenticationFailed as _,
-            Error::StorageError(_) => Status::StorageError as _,
-            Error::ChecksumMismatch => Status::FileChecksumMismatch as _,
-            Error::FileStateMismatch(FileTerminalState::Rejected) => Status::FileRejected as _,
-            Error::FileStateMismatch(FileTerminalState::Completed) => Status::FileFinished as _,
-            Error::FileStateMismatch(FileTerminalState::Failed) => Status::FileFailed as _,
-            Error::EmptyTransfer => Status::EmptyTransfer as _,
-            Error::ConnectionClosedByPeer => Status::ConnectionClosedByPeer as _,
-            Error::TooManyRequests => Status::TooManyRequests as _,
+            Error::Canceled => Status::Finalized,
+            Error::BadPath(_) => Status::BadPath,
+            Error::BadFile => Status::BadFile,
+            Error::BadTransfer => Status::BadTransfer,
+            Error::BadTransferState(_) => Status::BadTransferState,
+            Error::BadFileId => Status::BadFileId,
+            Error::Io(io) => match io.kind() {
+                ErrorKind::PermissionDenied => Status::PermissionDenied,
+                _ => Status::IoError,
+            },
+            Error::DirectoryNotExpected => Status::BadFile,
+            Error::TransferLimitsExceeded => Status::TransferLimitsExceeded,
+            Error::MismatchedSize => Status::MismatchedSize,
+            Error::UnexpectedData => Status::MismatchedSize,
+            Error::InvalidArgument => Status::InvalidArgument,
+            Error::WsServer(_) => Status::IoError,
+            Error::WsClient(_) => Status::IoError,
+            Error::AddrInUse => Status::AddrInUse,
+            Error::FileModified => Status::FileModified,
+            Error::FilenameTooLong => Status::FilenameTooLong,
+            Error::AuthenticationFailed => Status::AuthenticationFailed,
+            Error::StorageError(_) => Status::StorageError,
+            Error::ChecksumMismatch => Status::FileChecksumMismatch,
+            Error::FileStateMismatch(FileTerminalState::Rejected) => Status::FileRejected,
+            Error::FileStateMismatch(FileTerminalState::Completed) => Status::FileFinished,
+            Error::FileStateMismatch(FileTerminalState::Failed) => Status::FileFailed,
+            Error::EmptyTransfer => Status::EmptyTransfer,
+            Error::ConnectionClosedByPeer => Status::ConnectionClosedByPeer,
+            Error::TooManyRequests => Status::TooManyRequests,
         }
+    }
+}
+
+impl From<&Error> for u32 {
+    fn from(value: &Error) -> Self {
+        drop_core::Status::from(value) as u32
     }
 }
 
 impl From<&Error> for i32 {
     fn from(value: &Error) -> Self {
-        u32::from(value) as _
+        u32::from(value) as i32
     }
 }
 
@@ -130,7 +132,7 @@ impl<T> ResultExt for super::Result<T> {
     fn to_moose_status(&self) -> i32 {
         match self {
             Ok(_) => MOOSE_STATUS_SUCCESS,
-            Err(err) => u32::from(err) as _,
+            Err(err) => i32::from(err) as _,
         }
     }
 }

@@ -20,6 +20,8 @@ from .peer_resolver import peer_resolver
 
 from .ffi import PeerState
 
+import bindings.norddrop as norddrop  # type: ignore
+
 
 def to_num(s: str):
     if s.isnumeric():
@@ -76,6 +78,215 @@ def compare_json_struct(expected: dict, actual: dict):
                     )
 
 
+def compare_value(expected: dict, typename: str, key: str, aval):
+    if not key in expected:
+        return
+
+    eval = expected[key]
+    if eval == "*":
+        return
+
+    if aval != eval:
+        raise Exception(f"{typename} `{key}` mismatch. Expected: {eval}, actual {aval}")
+
+
+def compare_json_to_incoming_path_state(
+    expected: dict, actual: norddrop.IncomingPathState
+):
+    keys = ["created_at", "state"]
+
+    compare_value(expected, "incomingPathState", "created_at", actual.created_at)
+
+    if actual.kind.is_pending():
+        compare_value(expected, "IncomingPathState", "state", "pending")
+        keys.append("base_dir")
+        compare_value(expected, "IncomingPathState", "base_dir", actual.kind.base_dir)
+    elif actual.kind.is_started():
+        compare_value(expected, "IncomingPathState", "state", "started")
+        keys.append("bytes_received")
+        compare_value(
+            expected, "IncomingPathState", "bytes_received", actual.kind.bytes_received
+        )
+    elif actual.kind.is_failed():
+        compare_value(expected, "IncomingPathState", "state", "failed")
+        keys.append("bytes_received")
+        compare_value(
+            expected, "IncomingPathState", "bytes_received", actual.kind.bytes_received
+        )
+        keys.append("status_code")
+        compare_value(expected, "IncomingPathState", "status_code", actual.kind.status)
+    elif actual.kind.is_completed():
+        compare_value(expected, "IncomingPathState", "state", "completed")
+        keys.append("final_path")
+        compare_value(
+            expected, "IncomingPathState", "final_path", actual.kind.final_path
+        )
+    elif actual.kind.is_rejected():
+        compare_value(expected, "IncomingPathState", "state", "rejected")
+        keys.append("bytes_received")
+        compare_value(
+            expected, "IncomingPathState", "bytes_received", actual.kind.bytes_received
+        )
+        keys.append("by_peer")
+        compare_value(expected, "IncomingPathState", "by_peer", actual.kind.by_peer)
+    elif actual.kind.is_paused():
+        compare_value(expected, "IncomingPathState", "state", "paused")
+        keys.append("bytes_received")
+        compare_value(
+            expected, "IncomingPathState", "bytes_received", actual.kind.bytes_received
+        )
+
+    for key in expected:
+        if key not in keys:
+            raise Exception(f"Unknown JSON key: {key} for incomingPath")
+
+
+def compare_json_to_incoming_path(expected: dict, actual: norddrop.IncomingPath):
+    keys = ["file_id", "relative_path", "bytes", "bytes_received", "states"]
+    for key in expected:
+        if key not in keys:
+            raise Exception(f"Unknown JSON key: {key} for IncomingPath")
+
+    compare_value(expected, "IncomingPath", "file_id", actual.file_id)
+    compare_value(expected, "IncomingPath", "relative_path", actual.relative_path)
+    compare_value(expected, "IncomingPath", "bytes", actual.bytes)
+    compare_value(expected, "IncomingPath", "bytes_received", actual.bytes_received)
+
+    if "states" in expected:
+        eval = expected["states"]
+        if eval != "*":
+            for i in range(len(eval)):
+                compare_json_to_incoming_path_state(eval[i], actual.states[i])
+
+
+def compare_json_to_outgoing_path_state(
+    expected: dict, actual: norddrop.OutgoingPathState
+):
+    keys = ["created_at", "state"]
+
+    compare_value(expected, "OutgoingPathState", "created_at", actual.created_at)
+
+    if actual.kind.is_started():
+        compare_value(expected, "OutgoingPathState", "state", "started")
+        keys.append("bytes_sent")
+        compare_value(
+            expected, "OutgoingPathState", "bytes_sent", actual.kind.bytes_sent
+        )
+    elif actual.kind.is_failed():
+        compare_value(expected, "OutgoingPathState", "state", "failed")
+        keys.append("bytes_sent")
+        compare_value(
+            expected, "OutgoingPathState", "bytes_sent", actual.kind.bytes_sent
+        )
+        keys.append("status_code")
+        compare_value(expected, "OutgoingPathState", "status_code", actual.kind.status)
+    elif actual.kind.is_completed():
+        compare_value(expected, "OutgoingPathState", "state", "completed")
+    elif actual.kind.is_rejected():
+        compare_value(expected, "OutgoingPathState", "state", "rejected")
+        keys.append("bytes_sent")
+        compare_value(
+            expected, "OutgoingPathState", "bytes_sent", actual.kind.bytes_sent
+        )
+        keys.append("by_peer")
+        compare_value(expected, "OutgoingPathState", "by_peer", actual.kind.by_peer)
+    elif actual.kind.is_paused():
+        compare_value(expected, "OutgoingPathState", "state", "paused")
+        keys.append("bytes_sent")
+        compare_value(
+            expected, "OutgoingPathState", "bytes_sent", actual.kind.bytes_sent
+        )
+
+    for key in expected:
+        if key not in keys:
+            raise Exception(f"Unknown JSON key: {key} for OutgoingPath")
+
+
+def compare_json_to_outgoing_path(expected: dict, actual: norddrop.OutgoingPath):
+    keys = ["file_id", "relative_path", "bytes", "bytes_sent", "states"]
+
+    compare_value(expected, "OutgoingPath", "file_id", actual.file_id)
+    compare_value(expected, "OutgoingPath", "relative_path", actual.relative_path)
+    compare_value(expected, "OutgoingPath", "bytes", actual.bytes)
+    compare_value(expected, "OutgoingPath", "bytes_sent", actual.bytes_sent)
+
+    if actual.source.is_base_path():
+        keys.append("base_path")
+        compare_value(expected, "OutgoingPath", "base_path", actual.source.base_path)
+    else:
+        keys.append("uri")
+        compare_value(expected, "OutgoingPath", "uri", actual.source.uri)
+
+    for key in expected:
+        if key not in keys:
+            raise Exception(f"Unknown JSON key: {key} for OutgoingPath")
+
+    if "states" in expected:
+        eval = expected["states"]
+        if eval != "*":
+            for i in range(len(eval)):
+                compare_json_to_outgoing_path_state(eval[i], actual.states[i])
+
+
+def compare_json_to_transfer_state(expected: dict, actual: norddrop.TransferState):
+    keys = ["created_at", "state"]
+
+    compare_value(expected, "TranfserState", "created_at", actual.created_at)
+
+    if actual.kind.is_cancel():
+        compare_value(expected, "TranfserState", "state", "cancel")
+        keys.append("by_peer")
+        compare_value(expected, "TranfserState", "by_peer", actual.kind.by_peer)
+    else:
+        compare_value(expected, "TranfserState", "state", "failed")
+        keys.append("status_code")
+        compare_value(expected, "TranfserState", "status_code", actual.kind.status)
+
+    for key in expected:
+        if key not in keys:
+            raise Exception(f"Unknown JSON key: {key} for TransferState")
+
+
+def compare_json_to_transfer_info(expected: dict, actual: norddrop.TransferInfo):
+    keys = ["id", "created_at", "peer_id", "type", "states", "paths"]
+
+    compare_value(expected, "TransferInfo", "id", actual.id)
+    compare_value(expected, "TransferInfo", "created_at", actual.created_at)
+
+    if "peer_id" in expected:
+        eval = expected["peer_id"]
+        if eval != "*":
+            if peer_resolver.resolve(eval) != actual.peer:
+                raise Exception("TransferInfo 'peer' mismatch")
+
+    if "states" in expected:
+        eval = expected["states"]
+        if eval != "*":
+            for i in range(len(eval)):
+                compare_json_to_transfer_state(eval[i], actual.states[i])
+
+    if actual.kind.is_incoming():
+        compare_value(expected, "TransferInfo", "type", "incoming")
+
+        if "paths" in expected:
+            eval = expected["paths"]
+            if eval != "*":
+                for i in range(len(eval)):
+                    compare_json_to_incoming_path(eval[i], actual.kind.paths[i])
+    else:
+        compare_value(expected, "TransferInfo", "type", "outgoing")
+
+        if "paths" in expected:
+            eval = expected["paths"]
+            if eval != "*":
+                for i in range(len(eval)):
+                    compare_json_to_outgoing_path(eval[i], actual.kind.paths[i])
+
+    for key in expected:
+        if key not in keys:
+            raise Exception(f"Unknown JSON key: {key} for TransferInfo")
+
+
 class File:
     def __init__(self, path: str, size: int):
         self._path = path
@@ -127,22 +338,17 @@ class ListenOnPort(Action):
 
 
 class ExpectError(Action):
-    def __init__(self, action: Action, err: int):
+    def __init__(self, action: Action, err: norddrop.Error):
         self._action = action
         self._err = err
 
     async def run(self, drop: ffi.Drop):
         try:
             await self._action.run(drop)
-        except ffi.DropException as e:
-            if self._err != e.error():
-                raise Exception(
-                    f"Received DropException with error: {self._err}, expected {e.error()} instead"
-                )
-            else:
-                return
+        except self._err:
+            return
 
-        raise Exception(f"Action must have thrown DropException")
+        raise Exception("Action must have thrown norddrop.Error")
 
 
 class ExpectAnyError(Action):
@@ -260,19 +466,6 @@ class CancelTransferRequest(Action):
     def __str__(self):
         uuid_strings = ", ".join(map(print_uuid, self._uuid_slots))
         return f"CancelTransferRequest({uuid_strings})"
-
-
-class CancelTransferFile(Action):
-    def __init__(self, uuid_slot: int, fid):
-        self._uuid_slot = uuid_slot
-        self._fid = fid
-
-    async def run(self, drop: ffi.Drop):
-        with UUIDS_LOCK:
-            drop.cancel_transfer_file(UUIDS[self._uuid_slot], self._fid)
-
-    def __str__(self):
-        return f"CancelTransferFile({print_uuid(self._uuid_slot)}, {self._fid})"
 
 
 class RejectTransferFile(Action):
@@ -697,15 +890,16 @@ class AssertTransfers(Action):
         self._expected_outputs = expected_outputs
 
     async def run(self, drop: ffi.Drop):
-        transfers = json.loads(drop.get_transfers_since(self._since_timestamp))
-        print(f"Transfers JSON:\n{json.dumps(transfers, indent=2)}")
+        transfers = drop.get_transfers_since(self._since_timestamp)
 
         if len(transfers) != len(self._expected_outputs):
             raise Exception(
                 f"Expected {len(self._expected_outputs)} transfer(s), got {len(transfers)}"
             )
         for i in range(len(self._expected_outputs)):
-            compare_json_struct(json.loads(self._expected_outputs[i]), transfers[i])
+            compare_json_to_transfer_info(
+                json.loads(self._expected_outputs[i]), transfers[i]
+            )
 
     def __str__(self):
         return f"AssertTransfers({self._since_timestamp}, {','.join(self._expected_outputs)})"

@@ -8,10 +8,10 @@ edition = "2021"
 crate-type = ["staticlib", "cdylib", "lib"]
 
 [dependencies]
+uniffi = { git = "https://github.com/NordSecurity/uniffi-rs", tag = "v0.3.1+v0.25.0" }
+
 uuid = { workspace = true }
 libc = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 slog = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
@@ -27,6 +27,7 @@ drop-storage = { version = "1.0", path = "../drop-storage" }
 [build-dependencies]
 cc = "1.0.83"
 winresource = "0.1.17"
+uniffi = { git = "https://github.com/NordSecurity/uniffi-rs", tag = "v0.3.1+v0.25.0", features = ["build"] }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["netioapi", "ntdef", "winerror", "ws2def"] }
