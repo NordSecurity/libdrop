@@ -303,7 +303,6 @@ class Drop:
     def remove_transfer_file(self, uuid: str, fid: str):
         self._instance.remove_file(uuid, fid)
 
-<<<<<<< HEAD
     def start(
         self,
         addr: str,
@@ -311,27 +310,6 @@ class Drop:
         checksum_events_size_threshold=None,
         checksum_events_granularity=None,
     ):
-        cfg = {
-            "dir_depth_limit": 5,
-            "transfer_file_limit": 1000,
-            "moose_event_path": "/tmp/moose-events.json",
-            "moose_prod": False,
-            "storage_path": dbpath,
-            "connection_retries": 1,
-        }
-
-        if checksum_events_size_threshold is not None:
-            cfg["checksum_events_size_threshold_bytes"] = checksum_events_size_threshold
-
-        if checksum_events_granularity is not None:
-            cfg["checksum_events_granularity_bytes"] = checksum_events_granularity
-
-        err = self._lib.norddrop_start(
-            self._instance,
-            ctypes.create_string_buffer(bytes(addr, "utf-8")),
-            ctypes.create_string_buffer(bytes(json.dumps(cfg), "utf-8")),
-=======
-    def start(self, addr: str, dbpath: str, checksum_events_size_threshold=None):
         cfg = norddrop.Config(
             dir_depth_limit=5,
             transfer_file_limit=1000,
@@ -339,8 +317,8 @@ class Drop:
             moose_prod=False,
             storage_path=dbpath,
             checksum_events_size_threshold=checksum_events_size_threshold,
+            checksum_events_granularity=checksum_events_granularity,
             connection_retries=1,
->>>>>>> dev
         )
 
         self._instance.start(addr, cfg)

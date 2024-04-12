@@ -12399,13 +12399,13 @@ scenarios = [
                         event.Queued(
                             0,
                             "DROP_PEER_STIMPY",
-                            {
-                                event.File(
+                            [
+                                norddrop.File(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
                                 ),
-                            },
+                            ],
                         )
                     ),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
@@ -12427,13 +12427,13 @@ scenarios = [
                         event.Receive(
                             0,
                             "DROP_PEER_REN",
-                            {
-                                event.File(
+                            [
+                                norddrop.File(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
                                 ),
-                            },
+                            ],
                         )
                     ),
                     action.Download(
@@ -12500,13 +12500,13 @@ scenarios = [
                         event.Queued(
                             0,
                             "DROP_PEER_STIMPY",
-                            {
-                                event.File(
+                            [
+                                norddrop.File(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
                                 ),
-                            },
+                            ],
                         )
                     ),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
@@ -12532,13 +12532,13 @@ scenarios = [
                         event.Receive(
                             0,
                             "DROP_PEER_REN",
-                            {
-                                event.File(
+                            [
+                                norddrop.File(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
                                 ),
-                            },
+                            ],
                         )
                     ),
                     action.Download(
@@ -12595,13 +12595,13 @@ scenarios = [
                         event.Queued(
                             0,
                             "DROP_PEER_STIMPY",
-                            {
-                                event.File(
+                            [
+                                norddrop.File(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
                                 ),
-                            },
+                            ],
                         )
                     ),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
@@ -12627,13 +12627,13 @@ scenarios = [
                         event.Receive(
                             0,
                             "DROP_PEER_REN",
-                            {
-                                event.File(
+                            [
+                                norddrop.File(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
                                 ),
-                            },
+                            ],
                         )
                     ),
                     action.Download(
@@ -12720,13 +12720,13 @@ scenarios = [
                         event.Queued(
                             0,
                             "DROP_PEER_STIMPY",
-                            {
-                                event.File(
+                            [
+                                norddrop.File(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
                                 ),
-                            },
+                            ],
                         )
                     ),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
@@ -12752,13 +12752,13 @@ scenarios = [
                         event.Receive(
                             0,
                             "DROP_PEER_REN",
-                            {
-                                event.File(
+                            [
+                                norddrop.File(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
                                 ),
-                            },
+                            ],
                         )
                     ),
                     action.Download(
@@ -12826,11 +12826,11 @@ scenarios = [
                         event.Queued(
                             0,
                             "DROP_PEER_STIMPY",
-                            {
-                                event.File(
+                            [
+                                norddrop.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
-                            },
+                            ],
                         )
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
@@ -12857,11 +12857,11 @@ scenarios = [
                         event.Receive(
                             0,
                             "DROP_PEER_REN",
-                            {
-                                event.File(
+                            [
+                                norddrop.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
-                            },
+                            ],
                         )
                     ),
                     action.Download(
@@ -12947,11 +12947,11 @@ scenarios = [
                         event.Queued(
                             0,
                             "DROP_PEER_STIMPY",
-                            {
-                                event.File(
+                            [
+                                norddrop.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
-                            },
+                            ],
                         )
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
@@ -12979,11 +12979,11 @@ scenarios = [
                         event.Receive(
                             0,
                             "DROP_PEER_REN",
-                            {
-                                event.File(
+                            [
+                                norddrop.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
-                            },
+                            ],
                         )
                     ),
                     action.Download(
@@ -13089,11 +13089,11 @@ scenarios = [
                         event.Queued(
                             0,
                             "DROP_PEER_STIMPY",
-                            {
-                                event.File(
+                            [
+                                norddrop.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
-                            },
+                            ],
                         )
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
@@ -13121,11 +13121,11 @@ scenarios = [
                         event.Receive(
                             0,
                             "DROP_PEER_REN",
-                            {
-                                event.File(
+                            [
+                                norddrop.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
-                            },
+                            ],
                         )
                     ),
                     action.Download(
@@ -13217,11 +13217,11 @@ scenarios = [
                         event.Queued(
                             0,
                             "DROP_PEER_STIMPY",
-                            {
-                                event.File(
+                            [
+                                norddrop.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
-                            },
+                            ],
                         )
                     ),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
@@ -13249,11 +13249,11 @@ scenarios = [
                         event.Receive(
                             0,
                             "DROP_PEER_REN",
-                            {
-                                event.File(
+                            [
+                                norddrop.File(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
-                            },
+                            ],
                         )
                     ),
                     action.Download(

@@ -478,7 +478,7 @@ impl NordDropFFI {
 
         #[cfg(unix)]
         for desc in descriptors {
-            match desc {             
+            match desc {
                 TransferDescriptor::Fd {
                     filename,
                     content_uri,
