@@ -1,14 +1,10 @@
 #!/usr/bin/python3
 import argparse
-import json
 import math
 import os
 import re
-import subprocess
-import sys
 import time
-import typing
-from threading import Semaphore, Thread
+from threading import Semaphore
 from typing import Tuple
 
 import docker
@@ -176,9 +172,8 @@ def run():
 
                     hostname = f"{runner}-{scenario.id()}"
                     print(f"Starting {hostname}...")
-                    LIB_PATH = os.environ["LIB_PATH"]
                     # TODO: would be great to notify each container that all of their peers are online and DNS resolving now works instead of sleeping
-                    cmd = f"sh -c 'sleep 5 && ./run.py --runner={runner} --scenario={scenario.id()} --lib={LIB_PATH}'"
+                    cmd = f"sh -c 'sleep 5 && ./run.py --runner={runner} --scenario={scenario.id()}'"
 
                     env = [
                         "RUST_BACKTRACE=1",
