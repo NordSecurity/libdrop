@@ -327,10 +327,19 @@ where
     let mut reader = io::BufReader::with_capacity(CHECKSUM_CHUNK_SIZE, reader);
 
     let mut total_n: u64 = 0;
-    let mut from_last_event: u64 = 0;
+    let mut announced_bytes: u64 = 0;
     loop {
         let buf = reader.fill_buf()?;
         if buf.is_empty() {
+            // If we reached the end of file and the already announced_bytes are different
+            // than the total file size, we announce the total file size
+            // It simply means that the file size is not a multiple of granularity
+            if let Some(progress_cb) = progress_cb.as_mut() {
+                if announced_bytes != total_n {
+                    progress_cb(total_n).await;
+                }
+            }
+
             break;
         }
 
@@ -342,10 +351,9 @@ where
         total_n += n as u64;
 
         if let (Some(progress_cb), Some(granularity)) = (progress_cb.as_mut(), event_granularity) {
-            from_last_event += n as u64;
-            while from_last_event >= granularity {
-                progress_cb(total_n).await;
-                from_last_event -= granularity;
+            while announced_bytes + granularity <= total_n {
+                announced_bytes += granularity;
+                progress_cb(announced_bytes).await;
             }
         }
 
