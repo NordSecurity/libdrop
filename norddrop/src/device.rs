@@ -476,9 +476,9 @@ impl NordDropFFI {
             gather.with_fd_resover(fdresolv.as_ref());
         }
 
+        #[cfg(unix)]
         for desc in descriptors {
-            match desc {
-                #[cfg(unix)]
+            match desc {             
                 TransferDescriptor::Fd {
                     filename,
                     content_uri,
