@@ -476,9 +476,14 @@ impl NordDropFFI {
             gather.with_fd_resover(fdresolv.as_ref());
         }
 
-        #[cfg(unix)]
         for desc in descriptors {
             match desc {
+                #[cfg(windows)]
+                TransferDescriptor::Fd { .. } => {
+                    error!(self.logger, "FD transfers are not supported on Windows");
+                    return Err(crate::Error::TransferCreate);
+                }
+                #[cfg(unix)]
                 TransferDescriptor::Fd {
                     filename,
                     content_uri,
