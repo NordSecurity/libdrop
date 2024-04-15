@@ -1,3 +1,13 @@
+### 7.0.0
+### **The United States of FFI***
+---
+* This release switches to UniFFI.
+This means the whole API has changed. Even though semantics are the same
+the mechanism is now different and requires new implementation to use properly.
+
+---
+<br >
+
 ### 6.4.0
 ### **New Moose***
 ---
