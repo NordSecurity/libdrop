@@ -55,6 +55,9 @@ dictionary Config {
     /// If omited, no checksumming events are emited.
     u64? checksum_events_size_threshold;
 
+    /// Emit checksum events at set granularity
+    u64? checksum_events_granularity;
+
     /// Limits the number of connection retries afer the `network_refresh()` call.
     u32? connection_retries;
 };

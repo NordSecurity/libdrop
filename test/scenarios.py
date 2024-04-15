@@ -12386,4 +12386,956 @@ scenarios = [
             ),
         },
     ),
+    Scenario(
+        "scenario53-1",
+        "Send one file to a peer, expect it to be transferred, checksum events should be present on receiver side with the expected granularity (default)",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN", checksum_events_size_threshold=0),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            "DROP_PEER_STIMPY",
+                            [
+                                norddrop.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-small"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY", checksum_events_size_threshold=0),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            [
+                                norddrop.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-small"].id,
+                        "/tmp/received/53-1",
+                    ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.ChecksumStarted(0, FILES["testfile-small"].id, 1048576)
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=256 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=512 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=768 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=1024 * 1024
+                        )
+                    ),
+                    action.Wait(event.ChecksumFinished(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-small"].id,
+                            "/tmp/received/53-1/testfile-small",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/53-1/testfile-small", 1048576),
+                        ],
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario53-2",
+        "Send one file to a peer, expect it to be transferred, checksum events should be present on receiver side with the expected granularity (bigger than default)",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN", checksum_events_size_threshold=0),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            "DROP_PEER_STIMPY",
+                            [
+                                norddrop.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-small"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start(
+                        "DROP_PEER_STIMPY",
+                        checksum_events_size_threshold=0,
+                        checksum_events_granularity=512 * 1024,  # 512KB
+                    ),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            [
+                                norddrop.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-small"].id,
+                        "/tmp/received/53-2",
+                    ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.ChecksumStarted(0, FILES["testfile-small"].id, 1048576)
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=512 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=1024 * 1024
+                        )
+                    ),
+                    action.Wait(event.ChecksumFinished(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-small"].id,
+                            "/tmp/received/53-2/testfile-small",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/53-2/testfile-small", 1048576),
+                        ],
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario53-3",
+        "Send one file to a peer, expect it to be transferred, checksum events should be present on receiver side with the expected granularity (smaller than default)",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN", checksum_events_size_threshold=0),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            "DROP_PEER_STIMPY",
+                            [
+                                norddrop.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-small"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start(
+                        "DROP_PEER_STIMPY",
+                        checksum_events_size_threshold=0,
+                        checksum_events_granularity=128 * 1024,  # 128KB
+                    ),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            [
+                                norddrop.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-small"].id,
+                        "/tmp/received/53-3",
+                    ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.ChecksumStarted(0, FILES["testfile-small"].id, 1048576)
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=128 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=256 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=384 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=512 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=640 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=768 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=896 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=1024 * 1024
+                        )
+                    ),
+                    action.Wait(event.ChecksumFinished(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-small"].id,
+                            "/tmp/received/53-3/testfile-small",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/53-3/testfile-small", 1048576),
+                        ],
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario53-4",
+        "Send one file to a peer, expect it to be transferred, checksum events should be present on receiver side with the expected granularity (bigger than default but not a divisor of file size)",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN", checksum_events_size_threshold=0),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            "DROP_PEER_STIMPY",
+                            [
+                                norddrop.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-small"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start(
+                        "DROP_PEER_STIMPY",
+                        checksum_events_size_threshold=0,
+                        checksum_events_granularity=333 * 1024,  # 333KB
+                    ),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            [
+                                norddrop.File(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-small"].id,
+                        "/tmp/received/53-4",
+                    ),
+                    action.Wait(event.Pending(0, FILES["testfile-small"].id)),
+                    action.Wait(event.Start(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.ChecksumStarted(0, FILES["testfile-small"].id, 1048576)
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=333 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=666 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=999 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-small"].id, checksummed_bytes=1024 * 1024
+                        )
+                    ),
+                    action.Wait(event.ChecksumFinished(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-small"].id,
+                            "/tmp/received/53-4/testfile-small",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/53-4/testfile-small", 1048576),
+                        ],
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario53-5",
+        "Stop the file transfer in flight from the receiver side by going offline, then download it again. Expect to resume using the temporary file with specified checksum events granularity (default)",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN"),
+                    action.ConfigureNetwork(latency="0.5s"),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            "DROP_PEER_STIMPY",
+                            [
+                                norddrop.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
+                    action.Sleep(0.3),
+                    action.NetworkRefresh(),
+                    action.Wait(
+                        event.Start(0, FILES["testfile-big"].id, transferred=None)
+                    ),
+                    action.Wait(event.FinishFileUploaded(0, FILES["testfile-big"].id)),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start(
+                        "DROP_PEER_STIMPY",
+                        dbpath="/tmp/db/53-5-stimpy.sqlite",
+                        checksum_events_size_threshold=0,
+                    ),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            [
+                                norddrop.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/53-5",
+                    ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Stop(),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
+                    action.Start(
+                        "DROP_PEER_STIMPY",
+                        dbpath="/tmp/db/53-5-stimpy.sqlite",
+                        checksum_events_size_threshold=0,
+                    ),
+                    action.WaitForResume(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/53-5/*.dropdl-part",
+                        True,
+                    ),
+                    action.Wait(
+                        event.ChecksumStarted(0, FILES["testfile-big"].id, 10485760)
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-big"].id, checksummed_bytes=256 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-big"].id, checksummed_bytes=512 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-big"].id, checksummed_bytes=768 * 1024
+                        )
+                    ),
+                    # ... The file is big
+                    action.Wait(
+                        event.ChecksumFinished(
+                            0,
+                            FILES["testfile-big"].id,
+                        )
+                    ),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-big"].id,
+                            "/tmp/received/53-5/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/53-5/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario53-6",
+        "Stop the file transfer in flight from the receiver side by going offline, then download it again. Expect to resume using the temporary file with specified checksum events granularity (bigger than default)",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN"),
+                    action.ConfigureNetwork(latency="0.5s"),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            "DROP_PEER_STIMPY",
+                            [
+                                norddrop.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
+                    action.Sleep(0.3),
+                    action.NetworkRefresh(),
+                    action.Wait(
+                        event.Start(0, FILES["testfile-big"].id, transferred=None)
+                    ),
+                    action.Wait(event.FinishFileUploaded(0, FILES["testfile-big"].id)),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start(
+                        "DROP_PEER_STIMPY",
+                        dbpath="/tmp/db/53-6-stimpy.sqlite",
+                        checksum_events_size_threshold=0,
+                        checksum_events_granularity=2 * 1024 * 1024,  # 2MB
+                    ),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            [
+                                norddrop.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/53-6",
+                    ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Stop(),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
+                    action.Start(
+                        "DROP_PEER_STIMPY",
+                        dbpath="/tmp/db/53-6-stimpy.sqlite",
+                        checksum_events_size_threshold=0,
+                        checksum_events_granularity=2 * 1024 * 1024,  # 2MB
+                    ),
+                    action.WaitForResume(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/53-6/*.dropdl-part",
+                        True,
+                    ),
+                    action.Wait(
+                        event.ChecksumStarted(0, FILES["testfile-big"].id, 10485760)
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0,
+                            FILES["testfile-big"].id,
+                            checksummed_bytes=2 * 1024 * 1024,
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0,
+                            FILES["testfile-big"].id,
+                            checksummed_bytes=4 * 1024 * 1024,
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0,
+                            FILES["testfile-big"].id,
+                            checksummed_bytes=6 * 1024 * 1024,
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0,
+                            FILES["testfile-big"].id,
+                            checksummed_bytes=8 * 1024 * 1024,
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0,
+                            FILES["testfile-big"].id,
+                            checksummed_bytes=10 * 1024 * 1024,
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumFinished(
+                            0,
+                            FILES["testfile-big"].id,
+                        )
+                    ),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-big"].id,
+                            "/tmp/received/53-6/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/53-6/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario53-7",
+        "Stop the file transfer in flight from the receiver side by going offline, then download it again. Expect to resume using the temporary file with specified checksum events granularity (smaller than default)",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN"),
+                    action.ConfigureNetwork(latency="0.5s"),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            "DROP_PEER_STIMPY",
+                            [
+                                norddrop.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
+                    action.Sleep(0.3),
+                    action.NetworkRefresh(),
+                    action.Wait(
+                        event.Start(0, FILES["testfile-big"].id, transferred=None)
+                    ),
+                    action.Wait(event.FinishFileUploaded(0, FILES["testfile-big"].id)),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start(
+                        "DROP_PEER_STIMPY",
+                        dbpath="/tmp/db/53-7-stimpy.sqlite",
+                        checksum_events_size_threshold=0,
+                        checksum_events_granularity=128 * 1024,  # 128KB
+                    ),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            [
+                                norddrop.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/53-7",
+                    ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Stop(),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
+                    action.Start(
+                        "DROP_PEER_STIMPY",
+                        dbpath="/tmp/db/53-7-stimpy.sqlite",
+                        checksum_events_size_threshold=0,
+                        checksum_events_granularity=128 * 1024,  # 128KB
+                    ),
+                    action.WaitForResume(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/53-7/*.dropdl-part",
+                        True,
+                    ),
+                    action.Wait(
+                        event.ChecksumStarted(0, FILES["testfile-big"].id, 10485760)
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-big"].id, checksummed_bytes=128 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-big"].id, checksummed_bytes=256 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-big"].id, checksummed_bytes=384 * 1024
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0, FILES["testfile-big"].id, checksummed_bytes=512 * 1024
+                        )
+                    ),
+                    # ... The file is big
+                    action.Wait(
+                        event.ChecksumFinished(
+                            0,
+                            FILES["testfile-big"].id,
+                        )
+                    ),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-big"].id,
+                            "/tmp/received/53-7/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/53-7/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
+        "scenario53-8",
+        "Stop the file transfer in flight from the receiver side by going offline, then download it again. Expect to resume using the temporary file with specified checksum events granularity (bigger than default but not a divisor of file size)",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN"),
+                    action.ConfigureNetwork(latency="0.5s"),
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            "DROP_PEER_STIMPY",
+                            [
+                                norddrop.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
+                    action.Sleep(0.3),
+                    action.NetworkRefresh(),
+                    action.Wait(
+                        event.Start(0, FILES["testfile-big"].id, transferred=None)
+                    ),
+                    action.Wait(event.FinishFileUploaded(0, FILES["testfile-big"].id)),
+                    action.ExpectCancel([0], True),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start(
+                        "DROP_PEER_STIMPY",
+                        dbpath="/tmp/db/53-8-stimpy.sqlite",
+                        checksum_events_size_threshold=0,
+                        checksum_events_granularity=3 * 1024 * 1024,  # 3MB
+                    ),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            [
+                                norddrop.File(
+                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/53-8",
+                    ),
+                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    # wait for the initial progress indicating that we start from the beginning
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id, 0)),
+                    # make sure we have received something, so that we have non-empty tmp file
+                    action.Wait(event.Progress(0, FILES["testfile-big"].id)),
+                    action.Stop(),
+                    action.Wait(event.Paused(0, FILES["testfile-big"].id)),
+                    action.Start(
+                        "DROP_PEER_STIMPY",
+                        dbpath="/tmp/db/53-8-stimpy.sqlite",
+                        checksum_events_size_threshold=0,
+                        checksum_events_granularity=3 * 1024 * 1024,  # 3MB
+                    ),
+                    action.WaitForResume(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/53-8/*.dropdl-part",
+                        True,
+                    ),
+                    action.Wait(
+                        event.ChecksumStarted(0, FILES["testfile-big"].id, 10485760)
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0,
+                            FILES["testfile-big"].id,
+                            checksummed_bytes=3 * 1024 * 1024,
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0,
+                            FILES["testfile-big"].id,
+                            checksummed_bytes=6 * 1024 * 1024,
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0,
+                            FILES["testfile-big"].id,
+                            checksummed_bytes=9 * 1024 * 1024,
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumProgress(
+                            0,
+                            FILES["testfile-big"].id,
+                            checksummed_bytes=10 * 1024 * 1024,
+                        )
+                    ),
+                    action.Wait(
+                        event.ChecksumFinished(
+                            0,
+                            FILES["testfile-big"].id,
+                        )
+                    ),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-big"].id,
+                            "/tmp/received/53-8/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/53-8/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
 ]

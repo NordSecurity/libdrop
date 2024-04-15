@@ -594,13 +594,14 @@ impl handler::Downloader for Downloader {
         &mut self,
         path: &Hidden<PathBuf>,
         progress_cb: Option<F>,
+        event_granularity: Option<u64>,
     ) -> crate::Result<()>
     where
         F: FnMut(u64) -> Fut + Send + Sync,
         Fut: Future<Output = ()> + Send + Sync,
     {
         let file = std::fs::File::open(&path.0)?;
-        let csum = file::checksum(file, progress_cb).await?;
+        let csum = file::checksum(file, progress_cb, event_granularity).await?;
 
         if self.full_csum.get().await != csum {
             return Err(crate::Error::ChecksumMismatch);

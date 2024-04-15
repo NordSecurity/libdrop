@@ -303,7 +303,13 @@ class Drop:
     def remove_transfer_file(self, uuid: str, fid: str):
         self._instance.remove_file(uuid, fid)
 
-    def start(self, addr: str, dbpath: str, checksum_events_size_threshold=None):
+    def start(
+        self,
+        addr: str,
+        dbpath: str,
+        checksum_events_size_threshold=None,
+        checksum_events_granularity=None,
+    ):
         cfg = norddrop.Config(
             dir_depth_limit=5,
             transfer_file_limit=1000,
@@ -311,6 +317,7 @@ class Drop:
             moose_prod=False,
             storage_path=dbpath,
             checksum_events_size_threshold=checksum_events_size_threshold,
+            checksum_events_granularity=checksum_events_granularity,
             connection_retries=1,
         )
 

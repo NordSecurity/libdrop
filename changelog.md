@@ -1,3 +1,11 @@
+### 6.4.0
+### **New Moose***
+---
+* Add `checksum_events_granularity_bytes` in the config
+
+---
+<br >
+
 ### v6.3.0
 ### **New Moose**
 ---
@@ -10,6 +18,7 @@
 * Fix occasional sender's state is not completed and equal to the receiver's state when canceling the transfer
 * Unclutter transfer cleanup logs
 * Update moose tracker to v6.0.0
+* Windows ARM build
 
 ---
 <br>

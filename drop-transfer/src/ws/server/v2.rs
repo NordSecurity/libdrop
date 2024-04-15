@@ -455,7 +455,12 @@ impl handler::Downloader for Downloader {
         .await
     }
 
-    async fn validate<F, Fut>(&mut self, _path: &Hidden<PathBuf>, _: Option<F>) -> crate::Result<()>
+    async fn validate<F, Fut>(
+        &mut self,
+        _path: &Hidden<PathBuf>,
+        _: Option<F>,
+        _: Option<u64>,
+    ) -> crate::Result<()>
     where
         F: FnMut(u64) -> Fut + Send + Sync,
         Fut: Future<Output = ()>,

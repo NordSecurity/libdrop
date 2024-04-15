@@ -934,16 +934,19 @@ class Start(Action):
         addr: str,
         dbpath: str = ":memory:",
         checksum_events_size_threshold=2**32,  # don't emit events for existing tests
+        checksum_events_granularity=None,
     ):
         self._addr = addr
         self._dbpath = dbpath
         self._checksum_events_size_threshold = checksum_events_size_threshold
+        self._checksum_events_granularity = checksum_events_granularity
 
     async def run(self, drop: ffi.Drop):
         drop.start(
             peer_resolver.resolve(self._addr),
             self._dbpath,
             self._checksum_events_size_threshold,
+            self._checksum_events_granularity,
         )
 
     def __str__(self):

@@ -6,12 +6,17 @@ pub struct Config {
     pub moose_prod: bool,
     pub storage_path: String,
     pub checksum_events_size_threshold: Option<u64>,
+    pub checksum_events_granularity: Option<u64>,
     pub connection_retries: Option<u32>,
 }
 
 impl Config {
     const fn default_connection_retries() -> u32 {
         5
+    }
+
+    const fn default_checksum_granularity() -> u32 {
+        256 * 1024
     }
 }
 
@@ -24,6 +29,7 @@ impl From<Config> for drop_config::Config {
             moose_prod,
             storage_path,
             checksum_events_size_threshold,
+            checksum_events_granularity,
             connection_retries,
         } = val;
 
@@ -33,6 +39,8 @@ impl From<Config> for drop_config::Config {
                 transfer_file_limit: transfer_file_limit as _,
                 storage_path,
                 checksum_events_size_threshold: checksum_events_size_threshold.map(|x| x as _),
+                checksum_events_granularity: checksum_events_granularity
+                    .unwrap_or(Config::default_checksum_granularity() as _),
                 connection_retries: connection_retries
                     .unwrap_or(Config::default_connection_retries()),
             },
