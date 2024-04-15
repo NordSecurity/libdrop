@@ -5,6 +5,7 @@ pub struct Config {
     pub moose_event_path: String,
     pub moose_prod: bool,
     pub storage_path: String,
+    pub moose_app_version: String,
     pub checksum_events_size_threshold: Option<u64>,
     pub checksum_events_granularity: Option<u64>,
     pub connection_retries: Option<u32>,
@@ -28,6 +29,7 @@ impl From<Config> for drop_config::Config {
             moose_event_path,
             moose_prod,
             storage_path,
+            moose_app_version,
             checksum_events_size_threshold,
             checksum_events_granularity,
             connection_retries,
@@ -45,6 +47,7 @@ impl From<Config> for drop_config::Config {
                     .unwrap_or(Config::default_connection_retries()),
             },
             moose: drop_config::MooseConfig {
+                app_version: moose_app_version,
                 event_path: moose_event_path,
                 prod: moose_prod,
             },

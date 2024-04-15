@@ -34,6 +34,7 @@ impl Default for DropConfig {
 
 #[derive(Debug, Clone, Default)]
 pub struct MooseConfig {
+    pub app_version: String,
     pub event_path: String,
     pub prod: bool,
 }

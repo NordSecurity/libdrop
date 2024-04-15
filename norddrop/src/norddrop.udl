@@ -45,6 +45,9 @@ dictionary Config {
     /// Moose database path
     string moose_event_path;
 
+    /// App version(context)
+    string moose_app_version;
+
     /// Moose production flag
     boolean moose_prod;
 
