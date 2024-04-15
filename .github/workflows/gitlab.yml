@@ -20,4 +20,4 @@ jobs:
           trigger-token: ${{ secrets.TOKEN }}
           project-id: ${{ secrets.PROJECT_ID }}
           cancel-outdated-pipelines: ${{ github.ref_name != 'main' && github.ref_name != 'dev' }}
-          triggered-ref: ${{ secrets.REF_UNIFFI }}
+          triggered-ref: ${{ secrets.REF }}
