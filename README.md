@@ -9,12 +9,15 @@ version. API call  `norddrop_version()` returns this string.
 
 ## Versions and Branches
 Branches used for development:
-- `dev` - development, faster moving branch
-- `main` - release branch, contains latest release.
-- `release/v5` - maintenance branch
-- `release/v6` - compatible with `main`
+- `dev` - development, faster moving branch. Moose tracker latest with context sharing.
+- `main` - release branch, contains latest release. Moose tracker latest with context sharing.
 
-As of 6.4 and 5.5 versions libdrop needs to maintain two versions of Moose tracker. One with
+Maintained release branches:
+- `release/v5` - Maintenance, for Linux, Apple.
+- `release/v6` - Pre UniFFI. Android, Windows.
+- `release/v7` - UniFFI. Android, Windows.
+
+As of 6.4.0, 5.5.0, 7.0.0 versions libdrop needs to maintain two versions of Moose tracker. One with
 context sharing and the other with not. Both are not backwards compatible(in API and in between), thus Libdrop 
 must maintain two release branches for a while.
 
