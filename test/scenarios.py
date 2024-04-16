@@ -4876,10 +4876,12 @@ scenarios = [
                         True,
                     ),
                     action.Wait(
-                        event.ChecksumStarted(0, FILES["testfile-big"].id, 10485760)
+                        event.FinalizeChecksumStarted(
+                            0, FILES["testfile-big"].id, 10485760
+                        )
                     ),
                     action.Wait(
-                        event.ChecksumFinished(
+                        event.FinalizeChecksumFinished(
                             0,
                             FILES["testfile-big"].id,
                         )
@@ -12122,11 +12124,19 @@ scenarios = [
                     action.Wait(event.Pending(0, FILES["testfile-big"].id)),
                     action.Wait(event.Start(0, FILES["testfile-big"].id)),
                     action.Wait(
-                        event.ChecksumStarted(0, FILES["testfile-big"].id, 10485760)
+                        event.FinalizeChecksumStarted(
+                            0, FILES["testfile-big"].id, 10485760
+                        )
                     ),
-                    action.Wait(event.ChecksumProgress(0, FILES["testfile-big"].id)),
-                    action.Wait(event.ChecksumProgress(0, FILES["testfile-big"].id)),
-                    action.Wait(event.ChecksumFinished(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinalizeChecksumProgress(0, FILES["testfile-big"].id)
+                    ),
+                    action.Wait(
+                        event.FinalizeChecksumProgress(0, FILES["testfile-big"].id)
+                    ),
+                    action.Wait(
+                        event.FinalizeChecksumFinished(0, FILES["testfile-big"].id)
+                    ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
@@ -12350,7 +12360,9 @@ scenarios = [
                             action.WaitForOneOf(
                                 [
                                     event.Start(0, FILES["testfile-big"].id, None),
-                                    event.ChecksumStarted(0, FILES["testfile-big"].id),
+                                    event.FinalizeChecksumStarted(
+                                        0, FILES["testfile-big"].id
+                                    ),
                                 ]
                             ),
                             action.Stop(),
@@ -12444,29 +12456,33 @@ scenarios = [
                     action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
-                        event.ChecksumStarted(0, FILES["testfile-small"].id, 1048576)
+                        event.FinalizeChecksumStarted(
+                            0, FILES["testfile-small"].id, 1048576
+                        )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=256 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=512 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=768 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=1024 * 1024
                         )
                     ),
-                    action.Wait(event.ChecksumFinished(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinalizeChecksumFinished(0, FILES["testfile-small"].id)
+                    ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
@@ -12549,19 +12565,23 @@ scenarios = [
                     action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
-                        event.ChecksumStarted(0, FILES["testfile-small"].id, 1048576)
+                        event.FinalizeChecksumStarted(
+                            0, FILES["testfile-small"].id, 1048576
+                        )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=512 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=1024 * 1024
                         )
                     ),
-                    action.Wait(event.ChecksumFinished(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinalizeChecksumFinished(0, FILES["testfile-small"].id)
+                    ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
@@ -12644,49 +12664,53 @@ scenarios = [
                     action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
-                        event.ChecksumStarted(0, FILES["testfile-small"].id, 1048576)
+                        event.FinalizeChecksumStarted(
+                            0, FILES["testfile-small"].id, 1048576
+                        )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=128 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=256 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=384 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=512 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=640 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=768 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=896 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=1024 * 1024
                         )
                     ),
-                    action.Wait(event.ChecksumFinished(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinalizeChecksumFinished(0, FILES["testfile-small"].id)
+                    ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
@@ -12769,29 +12793,33 @@ scenarios = [
                     action.Wait(event.Pending(0, FILES["testfile-small"].id)),
                     action.Wait(event.Start(0, FILES["testfile-small"].id)),
                     action.Wait(
-                        event.ChecksumStarted(0, FILES["testfile-small"].id, 1048576)
+                        event.FinalizeChecksumStarted(
+                            0, FILES["testfile-small"].id, 1048576
+                        )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=333 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=666 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=999 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-small"].id, checksummed_bytes=1024 * 1024
                         )
                     ),
-                    action.Wait(event.ChecksumFinished(0, FILES["testfile-small"].id)),
+                    action.Wait(
+                        event.FinalizeChecksumFinished(0, FILES["testfile-small"].id)
+                    ),
                     action.Wait(
                         event.FinishFileDownloaded(
                             0,
@@ -12886,29 +12914,31 @@ scenarios = [
                         0,
                         FILES["testfile-big"].id,
                         "/tmp/received/53-5/*.dropdl-part",
-                        True,
+                        True,  # Wait for verify checksum events
                     ),
                     action.Wait(
-                        event.ChecksumStarted(0, FILES["testfile-big"].id, 10485760)
+                        event.FinalizeChecksumStarted(
+                            0, FILES["testfile-big"].id, 10485760
+                        )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-big"].id, checksummed_bytes=256 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-big"].id, checksummed_bytes=512 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-big"].id, checksummed_bytes=768 * 1024
                         )
                     ),
                     # ... The file is big
                     action.Wait(
-                        event.ChecksumFinished(
+                        event.FinalizeChecksumFinished(
                             0,
                             FILES["testfile-big"].id,
                         )
@@ -13009,48 +13039,50 @@ scenarios = [
                         0,
                         FILES["testfile-big"].id,
                         "/tmp/received/53-6/*.dropdl-part",
-                        True,
+                        True,  # Wait for verify checksum events
                     ),
                     action.Wait(
-                        event.ChecksumStarted(0, FILES["testfile-big"].id, 10485760)
+                        event.FinalizeChecksumStarted(
+                            0, FILES["testfile-big"].id, 10485760
+                        )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0,
                             FILES["testfile-big"].id,
                             checksummed_bytes=2 * 1024 * 1024,
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0,
                             FILES["testfile-big"].id,
                             checksummed_bytes=4 * 1024 * 1024,
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0,
                             FILES["testfile-big"].id,
                             checksummed_bytes=6 * 1024 * 1024,
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0,
                             FILES["testfile-big"].id,
                             checksummed_bytes=8 * 1024 * 1024,
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0,
                             FILES["testfile-big"].id,
                             checksummed_bytes=10 * 1024 * 1024,
                         )
                     ),
                     action.Wait(
-                        event.ChecksumFinished(
+                        event.FinalizeChecksumFinished(
                             0,
                             FILES["testfile-big"].id,
                         )
@@ -13151,34 +13183,36 @@ scenarios = [
                         0,
                         FILES["testfile-big"].id,
                         "/tmp/received/53-7/*.dropdl-part",
-                        True,
+                        True,  # Wait for verify checksum events
                     ),
                     action.Wait(
-                        event.ChecksumStarted(0, FILES["testfile-big"].id, 10485760)
+                        event.FinalizeChecksumStarted(
+                            0, FILES["testfile-big"].id, 10485760
+                        )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-big"].id, checksummed_bytes=128 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-big"].id, checksummed_bytes=256 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-big"].id, checksummed_bytes=384 * 1024
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0, FILES["testfile-big"].id, checksummed_bytes=512 * 1024
                         )
                     ),
                     # ... The file is big
                     action.Wait(
-                        event.ChecksumFinished(
+                        event.FinalizeChecksumFinished(
                             0,
                             FILES["testfile-big"].id,
                         )
@@ -13279,41 +13313,43 @@ scenarios = [
                         0,
                         FILES["testfile-big"].id,
                         "/tmp/received/53-8/*.dropdl-part",
-                        True,
+                        True,  # Wait for verify checksum events
                     ),
                     action.Wait(
-                        event.ChecksumStarted(0, FILES["testfile-big"].id, 10485760)
+                        event.FinalizeChecksumStarted(
+                            0, FILES["testfile-big"].id, 10485760
+                        )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0,
                             FILES["testfile-big"].id,
                             checksummed_bytes=3 * 1024 * 1024,
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0,
                             FILES["testfile-big"].id,
                             checksummed_bytes=6 * 1024 * 1024,
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0,
                             FILES["testfile-big"].id,
                             checksummed_bytes=9 * 1024 * 1024,
                         )
                     ),
                     action.Wait(
-                        event.ChecksumProgress(
+                        event.FinalizeChecksumProgress(
                             0,
                             FILES["testfile-big"].id,
                             checksummed_bytes=10 * 1024 * 1024,
                         )
                     ),
                     action.Wait(
-                        event.ChecksumFinished(
+                        event.FinalizeChecksumFinished(
                             0,
                             FILES["testfile-big"].id,
                         )

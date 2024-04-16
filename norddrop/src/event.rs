@@ -87,16 +87,31 @@ pub enum EventKind {
         status: Status,
     },
 
-    ChecksumStarted {
+    FinalizeChecksumStarted {
         transfer_id: String,
         file_id: String,
         size: u64,
     },
-    ChecksumFinished {
+    FinalizeChecksumFinished {
         transfer_id: String,
         file_id: String,
     },
-    ChecksumProgress {
+    FinalizeChecksumProgress {
+        transfer_id: String,
+        file_id: String,
+        bytes_checksummed: u64,
+    },
+
+    VerifyChecksumStarted {
+        transfer_id: String,
+        file_id: String,
+        size: u64,
+    },
+    VerifyChecksumFinished {
+        transfer_id: String,
+        file_id: String,
+    },
+    VerifyChecksumProgress {
         transfer_id: String,
         file_id: String,
         bytes_checksummed: u64,
@@ -248,33 +263,59 @@ impl From<drop_transfer::Event> for EventKind {
                 file_id: file_id.to_string(),
                 transfered,
             },
-            ChecksumStarted {
+
+            FinalizeChecksumStarted {
                 transfer_id,
                 file_id,
                 size,
-            } => Self::ChecksumStarted {
+            } => Self::FinalizeChecksumStarted {
                 transfer_id: transfer_id.to_string(),
                 file_id: file_id.to_string(),
                 size,
             },
-
-            ChecksumFinished {
+            FinalizeChecksumFinished {
                 transfer_id,
                 file_id,
-            } => Self::ChecksumFinished {
+            } => Self::FinalizeChecksumFinished {
                 transfer_id: transfer_id.to_string(),
                 file_id: file_id.to_string(),
             },
-
-            ChecksumProgress {
+            FinalizeChecksumProgress {
                 transfer_id,
                 file_id,
                 progress,
-            } => Self::ChecksumProgress {
+            } => Self::FinalizeChecksumProgress {
                 transfer_id: transfer_id.to_string(),
                 file_id: file_id.to_string(),
                 bytes_checksummed: progress,
             },
+
+            VerifyChecksumStarted {
+                transfer_id,
+                file_id,
+                size,
+            } => Self::VerifyChecksumStarted {
+                transfer_id: transfer_id.to_string(),
+                file_id: file_id.to_string(),
+                size,
+            },
+            VerifyChecksumFinished {
+                transfer_id,
+                file_id,
+            } => Self::VerifyChecksumFinished {
+                transfer_id: transfer_id.to_string(),
+                file_id: file_id.to_string(),
+            },
+            VerifyChecksumProgress {
+                transfer_id,
+                file_id,
+                progress,
+            } => Self::VerifyChecksumProgress {
+                transfer_id: transfer_id.to_string(),
+                file_id: file_id.to_string(),
+                bytes_checksummed: progress,
+            },
+
             OutgoingTransferDeferred { transfer, error } => Self::TransferDeferred {
                 transfer_id: transfer.id().to_string(),
                 peer: transfer.peer().to_string(),

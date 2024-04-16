@@ -105,7 +105,8 @@ class EventQueue(norddrop.EventCallback):
         self,
         target_event: event.Event,
         ignore_progress: bool = True,
-        ignore_checksum_progress: bool = True,
+        ignore_finalize_checksum_progress: bool = True,
+        ignore_verify_checksum_progress: bool = True,
     ) -> None:
         # TODO: a better solution would be to have infinite loop with a timeout check for all wait commands
         for _ in range(100):
@@ -117,8 +118,13 @@ class EventQueue(norddrop.EventCallback):
                     if ignore_progress and isinstance(e, event.Progress):
                         continue
 
-                    if ignore_checksum_progress and isinstance(
-                        e, event.ChecksumProgress
+                    if ignore_finalize_checksum_progress and isinstance(
+                        e, event.FinalizeChecksumProgress
+                    ):
+                        continue
+
+                    if ignore_verify_checksum_progress and isinstance(
+                        e, event.VerifyChecksumProgress
                     ):
                         continue
 
@@ -140,7 +146,8 @@ class EventQueue(norddrop.EventCallback):
         target_events: typing.List[event.Event],
         ignore_progress: bool = True,
         ignore_throttled: bool = True,
-        ignore_checksum_progress: bool = True,
+        ignore_finalize_checksum_progress: bool = True,
+        ignore_verify_checksum_progress: bool = True,
     ) -> None:
         success = []
 
@@ -161,8 +168,13 @@ class EventQueue(norddrop.EventCallback):
                     if ignore_throttled and isinstance(e, event.Throttled):
                         continue
 
-                    if ignore_checksum_progress and isinstance(
-                        e, event.ChecksumProgress
+                    if ignore_finalize_checksum_progress and isinstance(
+                        e, event.FinalizeChecksumProgress
+                    ):
+                        continue
+
+                    if ignore_verify_checksum_progress and isinstance(
+                        e, event.VerifyChecksumProgress
                     ):
                         continue
 
@@ -410,12 +422,23 @@ def new_event(ev: norddrop.Event) -> event.Event:
             transfer_slot, ev.peer, ev.status.status, ev.status.os_error_code
         )
 
-    elif ev.is_checksum_progress():
-        return event.ChecksumProgress(transfer_slot, ev.file_id, ev.bytes_checksummed)
-    elif ev.is_checksum_started():
-        return event.ChecksumStarted(transfer_slot, ev.file_id, ev.size)
-    elif ev.is_checksum_finished():
-        return event.ChecksumFinished(transfer_slot, ev.file_id)
+    elif ev.is_finalize_checksum_progress():
+        return event.FinalizeChecksumProgress(
+            transfer_slot, ev.file_id, ev.bytes_checksummed
+        )
+    elif ev.is_finalize_checksum_started():
+        return event.FinalizeChecksumStarted(transfer_slot, ev.file_id, ev.size)
+    elif ev.is_finalize_checksum_finished():
+        return event.FinalizeChecksumFinished(transfer_slot, ev.file_id)
+
+    elif ev.is_verify_checksum_progress():
+        return event.VerifyChecksumProgress(
+            transfer_slot, ev.file_id, ev.bytes_checksummed
+        )
+    elif ev.is_verify_checksum_started():
+        return event.VerifyChecksumStarted(transfer_slot, ev.file_id, ev.size)
+    elif ev.is_verify_checksum_finished():
+        return event.VerifyChecksumFinished(transfer_slot, ev.file_id)
 
     elif ev.is_runtime_error():
         return event.RuntimeError(ev.status)

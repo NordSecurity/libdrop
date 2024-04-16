@@ -4,6 +4,7 @@
 * This release switches to UniFFI.
 This means the whole API has changed. Even though semantics are the same
 the mechanism is now different and requires new implementation to use properly.
+* Split checksum events into finalize and verify
 
 ---
 <br >

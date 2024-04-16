@@ -281,7 +281,7 @@ class Paused(Event):
         return f"Paused(transfer={print_uuid(self._uuid_slot)}, file={self._file})"
 
 
-class ChecksumProgress(Event):
+class FinalizeChecksumProgress(Event):
     def __init__(
         self, uuid_slot: int, file: str, checksummed_bytes: typing.Optional[int] = None
     ):
@@ -290,7 +290,7 @@ class ChecksumProgress(Event):
         self._checksummed_bytes = checksummed_bytes
 
     def __eq__(self, rhs):
-        if not isinstance(rhs, ChecksumProgress):
+        if not isinstance(rhs, FinalizeChecksumProgress):
             return False
         if self._uuid_slot != rhs._uuid_slot:
             return False
@@ -304,17 +304,17 @@ class ChecksumProgress(Event):
         return True
 
     def __str__(self):
-        return f"ChecksumProgress(transfer={print_uuid(self._uuid_slot)}, file={self._file}, checksummed_bytes={self._checksummed_bytes})"
+        return f"FinalizeChecksumProgress(transfer={print_uuid(self._uuid_slot)}, file={self._file}, checksummed_bytes={self._checksummed_bytes})"
 
 
-class ChecksumStarted(Event):
+class FinalizeChecksumStarted(Event):
     def __init__(self, uuid_slot: int, file: str, size: typing.Optional[int] = None):
         self._uuid_slot = uuid_slot
         self._file = file
         self._size = size
 
     def __eq__(self, rhs):
-        if not isinstance(rhs, ChecksumStarted):
+        if not isinstance(rhs, FinalizeChecksumStarted):
             return False
         if self._uuid_slot != rhs._uuid_slot:
             return False
@@ -327,16 +327,16 @@ class ChecksumStarted(Event):
         return True
 
     def __str__(self):
-        return f"ChecksumStarted(transfer={print_uuid(self._uuid_slot)}, file={self._file}), size={self._size}"
+        return f"FinalizeChecksumStarted(transfer={print_uuid(self._uuid_slot)}, file={self._file}), size={self._size}"
 
 
-class ChecksumFinished(Event):
+class FinalizeChecksumFinished(Event):
     def __init__(self, uuid_slot: int, file: str):
         self._uuid_slot = uuid_slot
         self._file = file
 
     def __eq__(self, rhs):
-        if not isinstance(rhs, ChecksumFinished):
+        if not isinstance(rhs, FinalizeChecksumFinished):
             return False
         if self._uuid_slot != rhs._uuid_slot:
             return False
@@ -346,7 +346,75 @@ class ChecksumFinished(Event):
         return True
 
     def __str__(self):
-        return f"ChecksumFinished(transfer={print_uuid(self._uuid_slot)}, file={self._file})"
+        return f"FinalizeChecksumFinished(transfer={print_uuid(self._uuid_slot)}, file={self._file})"
+
+
+class VerifyChecksumProgress(Event):
+    def __init__(
+        self, uuid_slot: int, file: str, checksummed_bytes: typing.Optional[int] = None
+    ):
+        self._uuid_slot = uuid_slot
+        self._file = file
+        self._checksummed_bytes = checksummed_bytes
+
+    def __eq__(self, rhs):
+        if not isinstance(rhs, VerifyChecksumProgress):
+            return False
+        if self._uuid_slot != rhs._uuid_slot:
+            return False
+        if self._file != rhs._file:
+            return False
+
+        if self._checksummed_bytes is not None and rhs._checksummed_bytes is not None:
+            if self._checksummed_bytes != rhs._checksummed_bytes:
+                return False
+
+        return True
+
+    def __str__(self):
+        return f"VerifyChecksumProgress(transfer={print_uuid(self._uuid_slot)}, file={self._file}, checksummed_bytes={self._checksummed_bytes})"
+
+
+class VerifyChecksumStarted(Event):
+    def __init__(self, uuid_slot: int, file: str, size: typing.Optional[int] = None):
+        self._uuid_slot = uuid_slot
+        self._file = file
+        self._size = size
+
+    def __eq__(self, rhs):
+        if not isinstance(rhs, VerifyChecksumStarted):
+            return False
+        if self._uuid_slot != rhs._uuid_slot:
+            return False
+        if self._file != rhs._file:
+            return False
+        if self._size is not None and rhs._size is not None:
+            if self._size != rhs._size:
+                return False
+
+        return True
+
+    def __str__(self):
+        return f"VerifyChecksumStarted(transfer={print_uuid(self._uuid_slot)}, file={self._file}), size={self._size}"
+
+
+class VerifyChecksumFinished(Event):
+    def __init__(self, uuid_slot: int, file: str):
+        self._uuid_slot = uuid_slot
+        self._file = file
+
+    def __eq__(self, rhs):
+        if not isinstance(rhs, VerifyChecksumFinished):
+            return False
+        if self._uuid_slot != rhs._uuid_slot:
+            return False
+        if self._file != rhs._file:
+            return False
+
+        return True
+
+    def __str__(self):
+        return f"VerifyChecksumFinished(transfer={print_uuid(self._uuid_slot)}, file={self._file})"
 
 
 class FinishFileFailed(Event):
