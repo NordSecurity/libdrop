@@ -148,22 +148,40 @@ fn print_event(ev: &Event) {
             file_id,
             transfered,
         } => info!("[EVENT] FileUploadThrottled {transfer_id}: {file_id}, progress: {transfered}"),
-        Event::ChecksumStarted {
+        Event::FinalizeChecksumStarted {
             transfer_id,
             file_id,
             size,
-        } => info!("[EVENT] ChecksumStarted {transfer_id}: {file_id}: {size}"),
+        } => info!("[EVENT] FinalizeChecksumStarted {transfer_id}: {file_id}: {size}"),
 
-        Event::ChecksumFinished {
+        Event::FinalizeChecksumFinished {
             transfer_id,
             file_id,
-        } => info!("[EVENT] ChecksumFinished {transfer_id}: {file_id}"),
+        } => info!("[EVENT] FinalizeChecksumFinished {transfer_id}: {file_id}"),
 
-        Event::ChecksumProgress {
+        Event::FinalizeChecksumProgress {
             transfer_id,
             file_id,
             progress,
-        } => info!("[EVENT] ChecksumProgress {transfer_id}: {file_id}, progress: {progress}"),
+        } => {
+            info!("[EVENT] FinalizeChecksumProgress {transfer_id}: {file_id}, progress: {progress}")
+        }
+        Event::VerifyChecksumStarted {
+            transfer_id,
+            file_id,
+            size,
+        } => info!("[EVENT] VerifyChecksumStarted {transfer_id}: {file_id}: {size}"),
+
+        Event::VerifyChecksumFinished {
+            transfer_id,
+            file_id,
+        } => info!("[EVENT] VerifyChecksumFinished {transfer_id}: {file_id}"),
+
+        Event::VerifyChecksumProgress {
+            transfer_id,
+            file_id,
+            progress,
+        } => info!("[EVENT] VerifyChecksumProgress {transfer_id}: {file_id}, progress: {progress}"),
         Event::OutgoingTransferDeferred { transfer, error } => info!(
             "[EVENT] OutgoingTransferDeferred {}: error: {error}",
             transfer.id()

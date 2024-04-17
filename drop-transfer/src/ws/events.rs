@@ -269,8 +269,8 @@ impl FileEventTx<IncomingTransfer> {
         });
     }
 
-    pub async fn checksum_start(&self, size: u64) {
-        self.emit_in_flight(crate::Event::ChecksumStarted {
+    pub async fn finalize_checksum_start(&self, size: u64) {
+        self.emit_in_flight(crate::Event::FinalizeChecksumStarted {
             transfer_id: self.xfer.id(),
             file_id: self.file_id.clone(),
             size,
@@ -278,16 +278,42 @@ impl FileEventTx<IncomingTransfer> {
         .await
     }
 
-    pub async fn checksum_finish(&self) {
-        self.emit_in_flight(crate::Event::ChecksumFinished {
+    pub async fn finalize_checksum_finish(&self) {
+        self.emit_in_flight(crate::Event::FinalizeChecksumFinished {
             transfer_id: self.xfer.id(),
             file_id: self.file_id.clone(),
         })
         .await
     }
 
-    pub async fn checksum_progress(&self, progress: u64) {
-        self.emit_in_flight(crate::Event::ChecksumProgress {
+    pub async fn finalize_checksum_progress(&self, progress: u64) {
+        self.emit_in_flight(crate::Event::FinalizeChecksumProgress {
+            transfer_id: self.xfer.id(),
+            file_id: self.file_id.clone(),
+            progress,
+        })
+        .await
+    }
+
+    pub async fn verify_checksum_start(&self, size: u64) {
+        self.emit_in_flight(crate::Event::VerifyChecksumStarted {
+            transfer_id: self.xfer.id(),
+            file_id: self.file_id.clone(),
+            size,
+        })
+        .await
+    }
+
+    pub async fn verify_checksum_finish(&self) {
+        self.emit_in_flight(crate::Event::VerifyChecksumFinished {
+            transfer_id: self.xfer.id(),
+            file_id: self.file_id.clone(),
+        })
+        .await
+    }
+
+    pub async fn verify_checksum_progress(&self, progress: u64) {
+        self.emit_in_flight(crate::Event::VerifyChecksumProgress {
             transfer_id: self.xfer.id(),
             file_id: self.file_id.clone(),
             progress,
