@@ -5,7 +5,7 @@ authors = ["Lukas Pukenis"]
 edition = "2021"
 
 [lib]
-crate-type = ["staticlib", "cdylib", "lib"]
+crate-type = ["cdylib", "lib"]
 
 [dependencies]
 uniffi = { git = "https://github.com/NordSecurity/uniffi-rs", tag = "v0.3.1+v0.25.0" }
