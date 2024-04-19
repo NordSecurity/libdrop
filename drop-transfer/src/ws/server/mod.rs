@@ -744,10 +744,10 @@ impl FileXferTask {
             }
 
             if emit_checksum_events {
-                events.checksum_start(self.file.size()).await;
+                events.finalize_checksum_start(self.file.size()).await;
                 let progress_cb = {
                     move |progress_bytes: u64| async move {
-                        events.checksum_progress(progress_bytes).await;
+                        events.finalize_checksum_progress(progress_bytes).await;
                     }
                 };
 
@@ -759,7 +759,7 @@ impl FileXferTask {
                     )
                     .await?;
 
-                events.checksum_finish().await;
+                events.finalize_checksum_finish().await;
             } else {
                 downloader
                     .validate::<_, futures::future::Ready<()>>(
@@ -867,9 +867,9 @@ impl FileXferTask {
 
         let cb = if will_emit_checksum_events {
             let size = tmp_size.unwrap_or(0);
-            events.checksum_start(size).await;
+            events.verify_checksum_start(size).await;
 
-            Some(|progress_bytes| events.checksum_progress(progress_bytes))
+            Some(|progress_bytes| events.verify_checksum_progress(progress_bytes))
         } else {
             None
         };
@@ -898,7 +898,7 @@ impl FileXferTask {
         };
 
         if will_emit_checksum_events {
-            events.checksum_finish().await;
+            events.verify_checksum_finish().await;
         }
 
         tmp_file_state

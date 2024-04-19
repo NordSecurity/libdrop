@@ -295,14 +295,25 @@ interface EventKind {
 
 
     /// On the downloader side is emitted when the checksum calculation starts. It
-    /// happens both when resuming and and after the download.
-    ChecksumStarted  (string transfer_id, string file_id, u64 size);
+    /// happens after the download.
+    FinalizeChecksumStarted  (string transfer_id, string file_id, u64 size);
 
-    /// Reports checksum finished(downloader side only).
-    ChecksumFinished (string transfer_id, string file_id);
+    /// Reports finalize checksum finished(downloader side only).
+    FinalizeChecksumFinished (string transfer_id, string file_id);
 
-    /// Reports checksumming progress(downloader side only).
-    ChecksumProgress (string transfer_id, string file_id, u64 bytes_checksummed);
+    /// Reports finalize checksumming progress(downloader side only).
+    FinalizeChecksumProgress (string transfer_id, string file_id, u64 bytes_checksummed);
+
+
+    /// On the downloader side is emitted when the checksum calculation starts. It
+    /// happens when resuming the download.
+    VerifyChecksumStarted  (string transfer_id, string file_id, u64 size);
+
+    /// Reports verify checksum finished(downloader side only).
+    VerifyChecksumFinished (string transfer_id, string file_id);
+
+    /// Reports verify checksumming progress(downloader side only).
+    VerifyChecksumProgress (string transfer_id, string file_id, u64 bytes_checksummed);
 
 
     /// This event is used to indicate some runtime error that is not related to the
