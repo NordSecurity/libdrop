@@ -1,4 +1,4 @@
-module libdropFFI {
+module norddropFFI {
   umbrella "."
   export *
 }
