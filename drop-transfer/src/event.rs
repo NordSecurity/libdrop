@@ -74,16 +74,31 @@ pub enum Event {
         error: Error,
     },
 
-    ChecksumStarted {
+    FinalizeChecksumStarted {
         transfer_id: Uuid,
         file_id: FileId,
         size: u64,
     },
-    ChecksumFinished {
+    FinalizeChecksumFinished {
         transfer_id: Uuid,
         file_id: FileId,
     },
-    ChecksumProgress {
+    FinalizeChecksumProgress {
+        transfer_id: Uuid,
+        file_id: FileId,
+        progress: u64,
+    },
+
+    VerifyChecksumStarted {
+        transfer_id: Uuid,
+        file_id: FileId,
+        size: u64,
+    },
+    VerifyChecksumFinished {
+        transfer_id: Uuid,
+        file_id: FileId,
+    },
+    VerifyChecksumProgress {
         transfer_id: Uuid,
         file_id: FileId,
         progress: u64,

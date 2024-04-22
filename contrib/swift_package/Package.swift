@@ -13,19 +13,19 @@ let package = Package(
     products: [
         .library(
             name: "LibdropSwift",
-            targets: ["LibdropSwift", "libdropFFI"]),
+            targets: ["LibdropSwift", "norddropFFI"]),
     ],
     targets: [
         .target(
             name: "LibdropSwift",
             dependencies: [
-                "libdropFFI"
+                "norddropFFI"
             ],
             path: "Sources",
             linkerSettings: [.linkedFramework("CoreServices")]
             ),
         .binaryTarget(
-            name: "libdropFFI",
+            name: "norddropFFI",
             url: "$XCFRAMEWORK_URL",
             checksum: "$XCFRAMEWORK_CHECKSUM"
         )
