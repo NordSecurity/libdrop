@@ -7995,7 +7995,7 @@ scenarios = [
                     ),
                     action.ExpectError(
                         action.RemoveTransferFile(0, FILES["testfile-small"].id),
-                        norddrop.Error.BadInput,
+                        norddrop.LibdropError.BadInput,
                     ),
                     action.AssertTransfers(
                         [
@@ -8150,7 +8150,7 @@ scenarios = [
                     ),
                     action.ExpectError(
                         action.RemoveTransferFile(0, FILES["testfile-small"].id),
-                        norddrop.Error.BadInput,
+                        norddrop.LibdropError.BadInput,
                     ),
                     action.AssertTransfers(
                         [
@@ -8500,7 +8500,7 @@ scenarios = [
                     ),
                     action.ExpectError(
                         action.RemoveTransferFile(0, FILES["testfile-small"].id),
-                        norddrop.Error.BadInput,
+                        norddrop.LibdropError.BadInput,
                     ),
                     action.AssertTransfers(
                         [
@@ -8564,7 +8564,7 @@ scenarios = [
                     ),
                     action.ExpectError(
                         action.RemoveTransferFile(0, FILES["testfile-small"].id),
-                        norddrop.Error.BadInput,
+                        norddrop.LibdropError.BadInput,
                     ),
                     action.AssertTransfers(
                         [
@@ -9391,12 +9391,12 @@ scenarios = [
                     # try again and expect no events and no activity
                     action.ExpectError(
                         action.Start("DROP_PEER_REN", "/tmp/data.base"),
-                        norddrop.Error.AddrInUse,
+                        norddrop.LibdropError.AddrInUse,
                     ),
                     action.NoEvent(),
                     action.ExpectError(
                         action.Stop(),
-                        norddrop.Error.NotStarted,
+                        norddrop.LibdropError.NotStarted,
                     ),
                 ]
             ),
@@ -10684,7 +10684,7 @@ scenarios = [
                     action.Start("DROP_PEER_REN"),
                     action.ExpectError(
                         action.Start("DROP_PEER_REN"),
-                        norddrop.Error.InstanceStart,
+                        norddrop.LibdropError.InstanceStart,
                     ),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
                     action.Wait(
@@ -10717,7 +10717,7 @@ scenarios = [
                     action.Start("DROP_PEER_STIMPY"),
                     action.ExpectError(
                         action.Start("DROP_PEER_STIMPY"),
-                        norddrop.Error.InstanceStart,
+                        norddrop.LibdropError.InstanceStart,
                     ),
                     action.Wait(
                         event.Receive(
