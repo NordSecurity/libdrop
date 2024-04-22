@@ -131,7 +131,6 @@ fn create(
             logger,
             event_path,
             lib_version,
-            app_version,
             prod,
         )))
     }
