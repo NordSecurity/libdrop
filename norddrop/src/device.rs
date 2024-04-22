@@ -650,7 +650,11 @@ fn validate_config(logger: &slog::Logger, config: &Config) -> Result<()> {
 
 fn initialize_moose(
     logger: &slog::Logger,
-    MooseConfig { event_path, prod, app_version }: MooseConfig,
+    MooseConfig {
+        event_path,
+        prod,
+        app_version,
+    }: MooseConfig,
 ) -> Result<Arc<dyn drop_analytics::Moose>> {
     let moose = match drop_analytics::init_moose(
         logger.clone(),
