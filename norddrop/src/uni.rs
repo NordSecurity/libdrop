@@ -4,7 +4,7 @@ use drop_auth::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH};
 
 use crate::{device::NordDropFFI, Event, TransferDescriptor, TransferInfo};
 
-pub type Result<T> = std::result::Result<T, crate::Error>;
+pub type Result<T> = std::result::Result<T, crate::LibdropError>;
 
 pub trait EventCallback: Send + Sync {
     fn on_event(&self, event: Event);
@@ -39,7 +39,7 @@ impl NordDrop {
         let privkey = key_store.privkey();
         let privkey: [u8; PUBLIC_KEY_LENGTH] = privkey
             .try_into()
-            .map_err(|_| crate::Error::InvalidPrivkey)?;
+            .map_err(|_| crate::LibdropError::InvalidPrivkey)?;
         let privkey = SecretKey::from(privkey);
 
         let dev = NordDropFFI::new(
@@ -60,7 +60,7 @@ impl NordDrop {
 
     #[cfg(not(unix))]
     pub fn set_fd_resolver(&self, resolver: Box<dyn FdResolver>) -> Result<()> {
-        Err(crate::Error::Unknown)
+        Err(crate::LibdropError::Unknown)
     }
 
     #[cfg(unix)]
@@ -127,7 +127,7 @@ impl NordDrop {
         self.dev.lock().expect("Poisoned lock").cancel_transfer(
             transfer_id
                 .parse()
-                .map_err(|_| crate::Error::InvalidString)?,
+                .map_err(|_| crate::LibdropError::InvalidString)?,
         )
     }
 
@@ -138,7 +138,7 @@ impl NordDrop {
             .remove_transfer_file(
                 transfer_id
                     .parse()
-                    .map_err(|_| crate::Error::InvalidString)?,
+                    .map_err(|_| crate::LibdropError::InvalidString)?,
                 file_id,
             )
     }
@@ -147,7 +147,7 @@ impl NordDrop {
         self.dev.lock().expect("Poisoned lock").download(
             transfer_id
                 .parse()
-                .map_err(|_| crate::Error::InvalidString)?,
+                .map_err(|_| crate::LibdropError::InvalidString)?,
             file_id.to_string(),
             destination.to_string(),
         )
@@ -157,7 +157,7 @@ impl NordDrop {
         self.dev.lock().expect("Poisoned lock").reject_file(
             transfer_id
                 .parse()
-                .map_err(|_| crate::Error::InvalidString)?,
+                .map_err(|_| crate::LibdropError::InvalidString)?,
             file_id.to_string(),
         )
     }
