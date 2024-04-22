@@ -338,7 +338,7 @@ class ListenOnPort(Action):
 
 
 class ExpectError(Action):
-    def __init__(self, action: Action, err: norddrop.Error):
+    def __init__(self, action: Action, err: norddrop.LibdropError):
         self._action = action
         self._err = err
 
@@ -348,7 +348,7 @@ class ExpectError(Action):
         except self._err:
             return
 
-        raise Exception("Action must have thrown norddrop.Error")
+        raise Exception("Action must have thrown norddrop.LibdropError")
 
 
 class ExpectAnyError(Action):
