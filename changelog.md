@@ -6,7 +6,7 @@ This means the whole API has changed. Even though semantics are the same
 the mechanism is now different and requires new implementation to use properly.
 
 ---
-<br >
+<br>
 
 ### 6.4.0
 ### **New Moose***
@@ -14,7 +14,7 @@ the mechanism is now different and requires new implementation to use properly.
 * Add `checksum_events_granularity_bytes` in the config
 
 ---
-<br >
+<br>
 
 ### v6.3.0
 ### **New Moose**
