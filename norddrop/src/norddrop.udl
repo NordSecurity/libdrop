@@ -1,6 +1,6 @@
 /// The commmon error type thrown from functions
 [Error]
-enum Error {
+enum LibdropError {
     /// Operation resulted to unknown error.
     "Unknown",
 
@@ -527,7 +527,7 @@ interface NordDrop {
     /// * `event_cb` - Event callback
     /// * `logger` - Logger callback
     /// * `key_store` - Fetches peer's public key and provides own private key. 
-    [Throws=Error]
+    [Throws=LibdropError]
     constructor(EventCallback event_cb, KeyStore key_store, Logger logger);
 
     /// Starts libdrop
@@ -556,32 +556,32 @@ interface NordDrop {
     ///
     /// # Safety
     /// The pointers provided must be valid
-    [Throws=Error]
+    [Throws=LibdropError]
     void start([ByRef] string addr, Config config);
 
     /// Stop norddrop instance
-    [Throws=Error]
+    [Throws=LibdropError]
     void stop();
 
     /// Purge transfers from the database
     ///
     /// # Arguments
     /// * `transfer_ids` - array of transfer UUIDs
-    [Throws=Error]
+    [Throws=LibdropError]
     void purge_transfers([ByRef] sequence<string> transfer_ids);
 
     /// Purge transfers from the database until the given timestamp
     ///
     /// # Arguments
     /// * `until` - Unix timestamp in milliseconds
-    [Throws=Error]
+    [Throws=LibdropError]
     void purge_transfers_until(i64 until);
 
     /// Get transfers from the database
     ///
     /// # Arguments
     /// * `since_timestamp` - UNIX timestamp in milliseconds
-    [Throws=Error]
+    [Throws=LibdropError]
     sequence<TransferInfo> transfers_since(i64 since);
 
     /// Initialize a new transfer with the provided peer and descriptors
@@ -592,14 +592,14 @@ interface NordDrop {
     ///
     /// # Returns
     /// A String containing the transfer UUID.
-    [Throws=Error]
+    [Throws=LibdropError]
     string new_transfer([ByRef] string peer, [ByRef] sequence<TransferDescriptor> descriptors);
 
     /// # Finalizes the transfer from either side
     ///
     /// # Arguments
     /// * `transfer_id`: Transfer UUID
-    [Throws=Error]
+    [Throws=LibdropError]
     void finalize_transfer([ByRef] string transfer_id);
 
     /// Removes a single transfer file from the database. The file must be in
@@ -608,7 +608,7 @@ interface NordDrop {
     ///  # Arguments
     /// * `transfer_id`: Transfer UUID
     /// * `file_id`: File ID
-    [Throws=Error]
+    [Throws=LibdropError]
     void remove_file([ByRef] string transfer_id, [ByRef] string file_id);
 
     /// # Download a file from the peer
@@ -617,7 +617,7 @@ interface NordDrop {
     /// * `transfer_id` - Transfer UUID
     /// * `file_id` - File ID
     /// * `destination` - Destination path
-    [Throws=Error]
+    [Throws=LibdropError]
     void download_file([ByRef] string transfer_id, [ByRef] string file_id, [ByRef] string destination);
 
     /// Reject a file from either side
@@ -625,13 +625,13 @@ interface NordDrop {
     /// # Arguments
     /// * `transfer_id`: Transfer UUID
     /// * `file_id`: File ID
-    [Throws=Error]
+    [Throws=LibdropError]
     void reject_file([ByRef] string transfer_id, [ByRef] string file_id);
 
     /// Refresh connections. Should be called when anything about the network
     /// changes that might affect connections. Also when peer availability has
     /// changed. This will kick-start the automated retries for all transfers.
-    [Throws=Error]
+    [Throws=LibdropError]
     void network_refresh();
 
     /// Set a file descriptor (FD) resolver callback.
@@ -644,7 +644,7 @@ interface NordDrop {
     ///
     /// # Warning
     /// This function is intended to be called only on UNIX platforms
-    [Throws=Error]
+    [Throws=LibdropError]
     void set_fd_resolver(FdResolver resolver);
 };
 

@@ -17,7 +17,7 @@ use tokio::{
 
 use crate::{event, TransferDescriptor};
 
-pub type Result<T = ()> = std::result::Result<T, crate::Error>;
+pub type Result<T = ()> = std::result::Result<T, crate::LibdropError>;
 
 const SQLITE_TIMESTAMP_MIN: i64 = -210866760000;
 const SQLITE_TIMESTAMP_MAX: i64 = 253402300799;
@@ -64,7 +64,7 @@ impl NordDropFFI {
         Ok(NordDropFFI {
             instance: Arc::default(),
             logger: logger.clone(),
-            rt: tokio::runtime::Runtime::new().map_err(|_| crate::Error::Unknown)?,
+            rt: tokio::runtime::Runtime::new().map_err(|_| crate::LibdropError::Unknown)?,
             event_dispatcher: EventDispatcher {
                 cb: Arc::new(event_cb) as _,
             },
@@ -89,13 +89,13 @@ impl NordDropFFI {
             Ok(addr) => addr,
             Err(err) => {
                 error!(self.logger, "Failed to parse IP address: {err}");
-                return Err(crate::Error::BadInput);
+                return Err(crate::LibdropError::BadInput);
             }
         };
 
         let mut instance = self.instance.blocking_lock();
         if instance.is_some() {
-            return Err(crate::Error::InstanceStart);
+            return Err(crate::LibdropError::InstanceStart);
         };
 
         // All good, let's proceed
@@ -151,8 +151,8 @@ impl NordDropFFI {
                 error!(self.logger, "Failed to start the service: {}", err);
 
                 let err = match err {
-                    drop_transfer::Error::AddrInUse => crate::Error::AddrInUse,
-                    _ => crate::Error::InstanceStart,
+                    drop_transfer::Error::AddrInUse => crate::LibdropError::AddrInUse,
+                    _ => crate::LibdropError::InstanceStart,
                 };
 
                 return Err(err);
@@ -171,7 +171,7 @@ impl NordDropFFI {
             .instance
             .blocking_lock()
             .take()
-            .ok_or(crate::Error::NotStarted)?;
+            .ok_or(crate::LibdropError::NotStarted)?;
 
         self.rt.block_on(async {
             instance.service.stop().await;
@@ -191,7 +191,7 @@ impl NordDropFFI {
         let mut instance = self.instance.blocking_lock();
         let storage = instance
             .as_mut()
-            .ok_or(crate::Error::NotStarted)?
+            .ok_or(crate::LibdropError::NotStarted)?
             .service
             .storage();
 
@@ -212,13 +212,13 @@ impl NordDropFFI {
                 "Invalid timestamp: {until_timestamp_s}, the value must be between \
                  {SQLITE_TIMESTAMP_MIN} and {SQLITE_TIMESTAMP_MAX}"
             );
-            return Err(crate::Error::BadInput);
+            return Err(crate::LibdropError::BadInput);
         }
 
         let mut instance = self.instance.blocking_lock();
         let storage = instance
             .as_mut()
-            .ok_or(crate::Error::NotStarted)?
+            .ok_or(crate::LibdropError::NotStarted)?
             .service
             .storage();
 
@@ -241,13 +241,13 @@ impl NordDropFFI {
                 "Invalid timestamp: {since_timestamp_s}, the value must be between \
                  {SQLITE_TIMESTAMP_MIN} and {SQLITE_TIMESTAMP_MAX}"
             );
-            return Err(crate::Error::BadInput);
+            return Err(crate::LibdropError::BadInput);
         }
 
         let mut instance = self.instance.blocking_lock();
         let storage = instance
             .as_mut()
-            .ok_or(crate::Error::NotStarted)?
+            .ok_or(crate::LibdropError::NotStarted)?
             .service
             .storage();
 
@@ -268,7 +268,7 @@ impl NordDropFFI {
         let mut instance = self.instance.blocking_lock();
         let storage = instance
             .as_mut()
-            .ok_or(crate::Error::NotStarted)?
+            .ok_or(crate::LibdropError::NotStarted)?
             .service
             .storage();
 
@@ -276,7 +276,7 @@ impl NordDropFFI {
             .rt
             .block_on(storage.remove_transfer_file(transfer_id, file_id));
 
-        res.ok_or(crate::Error::BadInput)
+        res.ok_or(crate::LibdropError::BadInput)
     }
 
     pub(super) fn new_transfer(
@@ -290,16 +290,16 @@ impl NordDropFFI {
             .to_socket_addrs()
             .map_err(|err| {
                 error!(self.logger, "Failed to perform lookup of address: {err}");
-                crate::Error::BadInput
+                crate::LibdropError::BadInput
             })?
             .next()
-            .ok_or(crate::Error::BadInput)?;
+            .ok_or(crate::LibdropError::BadInput)?;
 
         let xfer = {
             let files = self.prepare_transfer_files(descriptors)?;
             OutgoingTransfer::new(peer.ip(), files, &self.config).map_err(|e| {
                 error!(self.logger, "Could not create transfer: {e}");
-                crate::Error::TransferCreate
+                crate::LibdropError::TransferCreate
             })?
         };
 
@@ -312,7 +312,7 @@ impl NordDropFFI {
         let xfid = xfer.id();
 
         let mut instance = self.instance.blocking_lock();
-        let instance = instance.as_mut().ok_or(crate::Error::NotStarted)?;
+        let instance = instance.as_mut().ok_or(crate::LibdropError::NotStarted)?;
 
         self.rt.block_on(instance.service.send_request(xfer));
 
@@ -323,7 +323,7 @@ impl NordDropFFI {
         trace!(self.logger, "norddrop_network_refresh()");
 
         let mut instance = self.instance.blocking_lock();
-        let instance = instance.as_mut().ok_or(crate::Error::NotStarted)?;
+        let instance = instance.as_mut().ok_or(crate::LibdropError::NotStarted)?;
 
         instance.service.network_refresh();
 
@@ -349,7 +349,7 @@ impl NordDropFFI {
 
         let mut inst = self.instance.clone().blocking_lock_owned();
         if inst.is_none() {
-            return Err(crate::Error::NotStarted);
+            return Err(crate::LibdropError::NotStarted);
         }
 
         self.rt.spawn(async move {
@@ -388,7 +388,7 @@ impl NordDropFFI {
 
         let mut inst = self.instance.clone().blocking_lock_owned();
         if inst.is_none() {
-            return Err(crate::Error::NotStarted);
+            return Err(crate::LibdropError::NotStarted);
         }
 
         self.rt.spawn(async move {
@@ -421,7 +421,7 @@ impl NordDropFFI {
 
         let inst = self.instance.clone().blocking_lock_owned();
         if inst.is_none() {
-            return Err(crate::Error::NotStarted);
+            return Err(crate::LibdropError::NotStarted);
         }
 
         self.rt.spawn(async move {
@@ -457,7 +457,7 @@ impl NordDropFFI {
                 self.logger,
                 "Failed to set FD resolver callback. Instance is already started"
             );
-            return Err(crate::Error::Unknown);
+            return Err(crate::LibdropError::Unknown);
         }
         drop(inst);
 
@@ -481,7 +481,7 @@ impl NordDropFFI {
                 #[cfg(windows)]
                 TransferDescriptor::Fd { .. } => {
                     error!(self.logger, "FD transfers are not supported on Windows");
-                    return Err(crate::Error::TransferCreate);
+                    return Err(crate::LibdropError::TransferCreate);
                 }
                 #[cfg(unix)]
                 TransferDescriptor::Fd {
@@ -491,7 +491,7 @@ impl NordDropFFI {
                 } => {
                     let uri = content_uri
                         .parse()
-                        .map_err(|_| crate::Error::InvalidString)?;
+                        .map_err(|_| crate::LibdropError::InvalidString)?;
 
                     gather
                         .gather_from_content_uri(filename, uri, *fd)
@@ -502,7 +502,7 @@ impl NordDropFFI {
                                 Hidden(filename),
                                 Hidden(content_uri)
                             );
-                            crate::Error::TransferCreate
+                            crate::LibdropError::TransferCreate
                         })?;
                 }
                 TransferDescriptor::Path { path } => {
@@ -512,7 +512,7 @@ impl NordDropFFI {
                             "Could not open file {:?} for transfer: {e}",
                             Hidden(path)
                         );
-                        crate::Error::TransferCreate
+                        crate::LibdropError::TransferCreate
                     })?;
                 }
             }
@@ -554,7 +554,7 @@ fn open_database(
             // If we can't even open the DB in memory, there is nothing else left to do,
             // throw an error
             if dbpath == ":memory:" {
-                let error = crate::Error::DbError;
+                let error = crate::LibdropError::DbError;
                 moose.developer_exception(DeveloperExceptionEventData {
                     code: error as i32,
                     note: err.to_string(),
@@ -565,7 +565,7 @@ fn open_database(
                 Err(error)
             } else {
                 moose.developer_exception(DeveloperExceptionEventData {
-                    code: crate::Error::DbError as i32,
+                    code: crate::LibdropError::DbError as i32,
                     note: "Initial DB open failed, recreating".to_string(),
                     message: "Failed to open DB file".to_string(),
                     name: "DB Error".to_string(),
@@ -574,7 +574,7 @@ fn open_database(
                 warn!(logger, "Removing old DB file");
                 if let Err(err) = std::fs::remove_file(dbpath) {
                     moose.developer_exception(DeveloperExceptionEventData {
-                        code: crate::Error::DbError as i32,
+                        code: crate::LibdropError::DbError as i32,
                         note: err.to_string(),
                         message: "Failed to remove old DB file".to_string(),
                         name: "DB Error".to_string(),
@@ -596,7 +596,7 @@ fn open_database(
                 match drop_storage::Storage::new(logger.clone(), dbpath) {
                     Ok(storage) => Ok(storage),
                     Err(err) => {
-                        let error = crate::Error::DbError;
+                        let error = crate::LibdropError::DbError;
                         moose.developer_exception(DeveloperExceptionEventData {
                             code: error as i32,
                             note: err.to_string(),
@@ -642,7 +642,7 @@ fn crate_fd_callback(
 fn validate_config(logger: &slog::Logger, config: &Config) -> Result<()> {
     if config.moose.event_path.is_empty() {
         error!(logger, "Moose path cannot be empty");
-        return Err(crate::Error::BadInput);
+        return Err(crate::LibdropError::BadInput);
     }
 
     Ok(())
@@ -673,7 +673,7 @@ fn initialize_moose(
                     "Moose is in debug mode and failed to initialize. Bailing initialization"
                 );
 
-                return Err(crate::Error::Unknown);
+                return Err(crate::LibdropError::Unknown);
             }
 
             warn!(logger, "Falling back to mock moose implementation");

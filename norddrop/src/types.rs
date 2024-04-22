@@ -14,7 +14,7 @@ pub enum TransferDescriptor {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum Error {
+pub enum LibdropError {
     /// Operation resulted to unknown error.
     Unknown = 1,
 
@@ -47,13 +47,13 @@ pub enum Error {
     DbError = 11,
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for LibdropError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for LibdropError {}
 
 #[derive(Copy, Clone)]
 /// Posible log levels.
