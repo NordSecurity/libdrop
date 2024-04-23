@@ -1,2 +1,7 @@
 [bindings.csharp]
 cdylib_name = "norddrop"
+
+[bindings.kotlin]
+cdylib_name = "norddrop"
+package_name = "com.nordsec.norddrop"
+
