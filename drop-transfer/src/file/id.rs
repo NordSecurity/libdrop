@@ -123,6 +123,11 @@ impl FileSubPath {
             .extension()
             .and_then(|os| os.to_str())
     }
+
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 impl<T> From<T> for FileSubPath

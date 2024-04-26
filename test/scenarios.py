@@ -29,8 +29,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -92,7 +95,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -181,10 +184,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -202,8 +206,11 @@ scenarios = [
                             1,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -294,7 +301,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -321,7 +328,7 @@ scenarios = [
                             1,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -445,8 +452,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         ),
@@ -463,10 +473,11 @@ scenarios = [
                             1,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         ),
@@ -500,7 +511,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
@@ -525,7 +536,7 @@ scenarios = [
                             1,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -591,8 +602,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -613,7 +627,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -649,8 +663,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -670,7 +687,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -702,8 +719,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -725,7 +745,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -765,8 +785,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -785,7 +808,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -817,15 +840,17 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["nested/big/testfile-01"].id,
                                     "big/testfile-01",
                                     10485760,
+                                    "/tmp/nested",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["nested/big/testfile-02"].id,
                                     "big/testfile-02",
                                     10485760,
+                                    "/tmp/nested",
                                 ),
                             ],
                         )
@@ -858,12 +883,12 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["nested/big/testfile-01"].id,
                                     "big/testfile-01",
                                     10485760,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["nested/big/testfile-02"].id,
                                     "big/testfile-02",
                                     10485760,
@@ -930,8 +955,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -951,7 +979,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -990,10 +1018,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -1037,10 +1066,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -1074,10 +1104,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -1115,7 +1146,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
@@ -1164,25 +1195,29 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/path/file1.ext1"].id,
                                     "deep/path/file1.ext1",
                                     1048576,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/path/file2.ext2"].id,
                                     "deep/path/file2.ext2",
                                     1048576,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/another-path/file3.ext3"].id,
                                     "deep/another-path/file3.ext3",
                                     1048576,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/another-path/file4.ext4"].id,
                                     "deep/another-path/file4.ext4",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -1248,22 +1283,22 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/path/file1.ext1"].id,
                                     "deep/path/file1.ext1",
                                     1048576,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/path/file2.ext2"].id,
                                     "deep/path/file2.ext2",
                                     1048576,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/another-path/file3.ext3"].id,
                                     "deep/another-path/file3.ext3",
                                     1048576,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/another-path/file4.ext4"].id,
                                     "deep/another-path/file4.ext4",
                                     1048576,
@@ -1402,25 +1437,29 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/path/file1.ext1"].id,
                                     "deep/path/file1.ext1",
                                     1048576,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/path/file2.ext2"].id,
                                     "deep/path/file2.ext2",
                                     1048576,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/another-path/file3.ext3"].id,
                                     "deep/another-path/file3.ext3",
                                     1048576,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/another-path/file4.ext4"].id,
                                     "deep/another-path/file4.ext4",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -1486,22 +1525,22 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/path/file1.ext1"].id,
                                     "deep/path/file1.ext1",
                                     1048576,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/path/file2.ext2"].id,
                                     "deep/path/file2.ext2",
                                     1048576,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/another-path/file3.ext3"].id,
                                     "deep/another-path/file3.ext3",
                                     1048576,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/another-path/file4.ext4"].id,
                                     "deep/another-path/file4.ext4",
                                     1048576,
@@ -1643,10 +1682,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                                     "testfile-small",
                                     1048576,
+                                    None,
                                 ),
                             ],
                         )
@@ -1672,7 +1712,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                                     "testfile-small",
                                     1048576,
@@ -1726,10 +1766,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -1746,10 +1787,11 @@ scenarios = [
                             1,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["duplicate/testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp/duplicate",
                                 ),
                             ],
                         )
@@ -1773,7 +1815,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -1800,7 +1842,7 @@ scenarios = [
                             1,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["duplicate/testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -1854,12 +1896,13 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES[
                                         "testfile.small.with.complicated.extension"
                                     ].id,
                                     "testfile.small.with.complicated.extension",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -1885,12 +1928,13 @@ scenarios = [
                             1,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES[
                                         "duplicate/testfile.small.with.complicated.extension"
                                     ].id,
                                     "testfile.small.with.complicated.extension",
                                     1048576,
+                                    "/tmp/duplicate",
                                 ),
                             ],
                         )
@@ -1924,7 +1968,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES[
                                         "testfile.small.with.complicated.extension"
                                     ].id,
@@ -1961,7 +2005,7 @@ scenarios = [
                             1,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES[
                                         "duplicate/testfile.small.with.complicated.extension"
                                     ].id,
@@ -2036,10 +2080,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -2067,7 +2112,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -2113,25 +2158,25 @@ scenarios = [
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     # fmt: off
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(0, "DROP_PEER_STIMPY", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ])),
+                    action.Wait(event.Queued(0, "DROP_PEER_STIMPY", [ norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"), ])),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(1, "DROP_PEER_STIMPY", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ])),
+                    action.Wait(event.Queued(1, "DROP_PEER_STIMPY", [ norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"), ])),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(2, "DROP_PEER_STIMPY", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ])),
+                    action.Wait(event.Queued(2, "DROP_PEER_STIMPY", [ norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"), ])),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(3, "DROP_PEER_STIMPY", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ])),
+                    action.Wait(event.Queued(3, "DROP_PEER_STIMPY", [ norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"), ])),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(4, "DROP_PEER_STIMPY", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ])),
+                    action.Wait(event.Queued(4, "DROP_PEER_STIMPY", [ norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"), ])),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(5, "DROP_PEER_STIMPY", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ])),
+                    action.Wait(event.Queued(5, "DROP_PEER_STIMPY", [ norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"), ])),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(6, "DROP_PEER_STIMPY", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ])),
+                    action.Wait(event.Queued(6, "DROP_PEER_STIMPY", [ norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"), ])),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(7, "DROP_PEER_STIMPY", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ])),
+                    action.Wait(event.Queued(7, "DROP_PEER_STIMPY", [ norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"), ])),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(8, "DROP_PEER_STIMPY", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ])),
+                    action.Wait(event.Queued(8, "DROP_PEER_STIMPY", [ norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"), ])),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-bulk-01"]),
-                    action.Wait(event.Queued(9, "DROP_PEER_STIMPY", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ])),
+                    action.Wait(event.Queued(9, "DROP_PEER_STIMPY", [ norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"), ])),
                     # fmt: on
                     # fmt: off
                     action.WaitRacy(
@@ -2170,16 +2215,16 @@ scenarios = [
                     # fmt: off
                     action.WaitRacy(
                         [
-                            event.Receive(0, "DROP_PEER_REN", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
-                            event.Receive(1, "DROP_PEER_REN", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
-                            event.Receive(2, "DROP_PEER_REN", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
-                            event.Receive(3, "DROP_PEER_REN", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
-                            event.Receive(4, "DROP_PEER_REN", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
-                            event.Receive(5, "DROP_PEER_REN", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
-                            event.Receive(6, "DROP_PEER_REN", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
-                            event.Receive(7, "DROP_PEER_REN", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
-                            event.Receive(8, "DROP_PEER_REN", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
-                            event.Receive(9, "DROP_PEER_REN", [ norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
+                            event.Receive(0, "DROP_PEER_REN", [ norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
+                            event.Receive(1, "DROP_PEER_REN", [ norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
+                            event.Receive(2, "DROP_PEER_REN", [ norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
+                            event.Receive(3, "DROP_PEER_REN", [ norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
+                            event.Receive(4, "DROP_PEER_REN", [ norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
+                            event.Receive(5, "DROP_PEER_REN", [ norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
+                            event.Receive(6, "DROP_PEER_REN", [ norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
+                            event.Receive(7, "DROP_PEER_REN", [ norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
+                            event.Receive(8, "DROP_PEER_REN", [ norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
+                            event.Receive(9, "DROP_PEER_REN", [ norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760), ]),
                         ]
                     ),
                     # fmt: on
@@ -2264,28 +2309,28 @@ scenarios = [
                     # fmt: off
                     action.WaitRacy([
                         event.Queued(0, "DROP_PEER_STIMPY", [
-                            norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                            norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                            norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                            norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                            norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760, "/tmp"),
                         ]),
                         event.Queued(1, "DROP_PEER_STIMPY", [
-                            norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                            norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                            norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                            norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                            norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760, "/tmp"),
                         ]),
                         event.Queued(2, "DROP_PEER_STIMPY", [
-                            norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                            norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                            norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                            norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                            norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760, "/tmp"),
                         ]),
                         event.Queued(3, "DROP_PEER_STIMPY", [
-                            norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                            norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                            norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                            norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                            norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760, "/tmp"),
                         ]),
                     ]),
                     # fmt: on
@@ -2320,28 +2365,28 @@ scenarios = [
                     action.WaitRacy(
                         [
                             event.Receive(0, "DROP_PEER_REN", [ 
-                                norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                                norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                                norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                                norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
                             ]),
                             event.Receive(1, "DROP_PEER_REN", [ 
-                                norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                                norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                                norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                                norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
                             ]),
                             event.Receive(2, "DROP_PEER_REN", [ 
-                                norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                                norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                                norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                                norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
                             ]),
                             event.Receive(3, "DROP_PEER_REN", [ 
-                                norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                                norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                                norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                                norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
                             ]),
                         ]
                     ),
@@ -2446,28 +2491,28 @@ scenarios = [
                     # fmt: off
                     action.WaitRacy([
                         event.Queued(0, "DROP_PEER_STIMPY", [
-                            norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                            norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                            norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                            norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                            norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760, "/tmp"),
                         ]),
                         event.Queued(1, "DROP_PEER_STIMPY", [
-                            norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                            norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                            norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                            norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                            norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760, "/tmp"),
                         ]),
                         event.Queued(2, "DROP_PEER_STIMPY", [
-                            norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                            norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                            norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                            norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                            norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760, "/tmp"),
                         ]),
                         event.Queued(3, "DROP_PEER_STIMPY", [
-                            norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                            norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                            norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                            norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                            norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760, "/tmp"),
                         ]),
                     ]),
                     # fmt: on
@@ -2518,28 +2563,28 @@ scenarios = [
                     action.WaitRacy(
                         [
                             event.Receive(0, "DROP_PEER_REN", [ 
-                                norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                                norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                                norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                                norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
                             ]),
                             event.Receive(1, "DROP_PEER_REN", [ 
-                                norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                                norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                                norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                                norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
                             ]),
                             event.Receive(2, "DROP_PEER_REN", [ 
-                                norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                                norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                                norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                                norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
                             ]),
                             event.Receive(3, "DROP_PEER_REN", [ 
-                                norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                                norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                                norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                                norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
+                                norddrop.ReceivedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
                             ]),
                         ]
                     ),
@@ -2642,10 +2687,11 @@ scenarios = [
                                 0,
                                 "DROP_PEER_STIMPY",
                                 [
-                                    norddrop.File(
+                                    norddrop.QueuedFile(
                                         "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
                                         "testfile-big",
                                         10485760,
+                                        None,
                                     ),
                                 ],
                             ),
@@ -2653,10 +2699,11 @@ scenarios = [
                                 1,
                                 "DROP_PEER_GEORGE",
                                 [
-                                    norddrop.File(
+                                    norddrop.QueuedFile(
                                         "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
                                         "testfile-big",
                                         10485760,
+                                        None,
                                     ),
                                 ],
                             ),
@@ -2690,7 +2737,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
                                     "testfile-big",
                                     10485760,
@@ -2735,7 +2782,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
                                     "testfile-big",
                                     10485760,
@@ -2795,10 +2842,11 @@ scenarios = [
                                 0,
                                 "DROP_PEER_STIMPY",
                                 [
-                                    norddrop.File(
+                                    norddrop.QueuedFile(
                                         "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                                         "testfile-small",
                                         1024 * 1024,
+                                        None,
                                     ),
                                 ],
                             ),
@@ -2806,10 +2854,11 @@ scenarios = [
                                 1,
                                 "DROP_PEER_GEORGE",
                                 [
-                                    norddrop.File(
+                                    norddrop.QueuedFile(
                                         "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                                         "testfile-small",
                                         1024 * 1024,
+                                        None,
                                     ),
                                 ],
                             ),
@@ -2843,7 +2892,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                                     "testfile-small",
                                     1024 * 1024,
@@ -2890,7 +2939,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     "btveSO3-H7_lCgrUDAdTHFyY8oxDGed4j8VWaaQLnTI",
                                     "testfile-small",
                                     1024 * 1024,
@@ -2946,10 +2995,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1 * 1024 * 1024,
+                                    "/tmp",
                                 ),
                             ],
                         ),
@@ -2976,7 +3026,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1 * 1024 * 1024,
@@ -3028,10 +3078,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1 * 1024 * 1024,
+                                    "/tmp",
                                 ),
                             ],
                         ),
@@ -3049,7 +3100,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1 * 1024 * 1024,
@@ -3096,10 +3147,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1 * 1024 * 1024,
+                                    "/tmp",
                                 ),
                             ],
                         ),
@@ -3126,7 +3178,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1 * 1024 * 1024,
@@ -3194,10 +3246,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1 * 1024 * 1024,
+                                    "/tmp",
                                 ),
                             ],
                         ),
@@ -3224,7 +3277,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1 * 1024 * 1024,
@@ -3276,10 +3329,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -3304,7 +3358,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -3365,15 +3419,17 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/path/file1.ext1"].id,
                                     "path/file1.ext1",
                                     1048576,
+                                    "/tmp/deep",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/path/file2.ext2"].id,
                                     "path/file2.ext2",
                                     1048576,
+                                    "/tmp/deep",
                                 ),
                             ],
                         )
@@ -3404,15 +3460,17 @@ scenarios = [
                             1,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/path/file1.ext1"].id,
                                     "path/file1.ext1",
                                     1048576,
+                                    "/tmp/deep",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/path/file2.ext2"].id,
                                     "path/file2.ext2",
                                     1048576,
+                                    "/tmp/deep",
                                 ),
                             ],
                         )
@@ -3450,12 +3508,12 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/path/file1.ext1"].id,
                                     "path/file1.ext1",
                                     1048576,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/path/file2.ext2"].id,
                                     "path/file2.ext2",
                                     1048576,
@@ -3508,12 +3566,12 @@ scenarios = [
                             1,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/path/file1.ext1"].id,
                                     "path/file1.ext1",
                                     1048576,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/path/file2.ext2"].id,
                                     "path/file2.ext2",
                                     1048576,
@@ -3593,15 +3651,17 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["name/file-01"].id,
                                     "name/file-01",
                                     1048576,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["different/name/file-02"].id,
                                     "name(1)/file-02",
                                     1048576,
+                                    "/tmp/different",
                                 ),
                             ],
                         )
@@ -3639,12 +3699,12 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["name/file-01"].id,
                                     "name/file-01",
                                     1048576,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["different/name/file-02"].id,
                                     "name(1)/file-02",
                                     1048576,
@@ -3721,8 +3781,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -3785,7 +3848,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -3888,10 +3951,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -3915,7 +3979,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -3980,10 +4044,11 @@ scenarios = [
                                 0,
                                 "DROP_PEER_STIMPY",
                                 [
-                                    norddrop.File(
+                                    norddrop.QueuedFile(
                                         FILES["a" * 251 + ".txt"].id,
                                         "a" * 251 + ".txt",
                                         1048576,
+                                        "/tmp",
                                     ),
                                 ],
                             ),
@@ -3991,10 +4056,11 @@ scenarios = [
                                 1,
                                 "DROP_PEER_STIMPY",
                                 [
-                                    norddrop.File(
+                                    norddrop.QueuedFile(
                                         FILES["a" * 251 + ".txt"].id,
                                         "a" * 251 + ".txt",
                                         1048576,
+                                        "/tmp",
                                     ),
                                 ],
                             ),
@@ -4002,10 +4068,11 @@ scenarios = [
                                 2,
                                 "DROP_PEER_GEORGE",
                                 [
-                                    norddrop.File(
+                                    norddrop.QueuedFile(
                                         FILES["a" * 251 + ".txt"].id,
                                         "a" * 251 + ".txt",
                                         1048576,
+                                        "/tmp",
                                     ),
                                 ],
                             ),
@@ -4013,10 +4080,11 @@ scenarios = [
                                 3,
                                 "DROP_PEER_GEORGE",
                                 [
-                                    norddrop.File(
+                                    norddrop.QueuedFile(
                                         FILES["a" * 251 + ".txt"].id,
                                         "a" * 251 + ".txt",
                                         1048576,
+                                        "/tmp",
                                     ),
                                 ],
                             ),
@@ -4059,7 +4127,7 @@ scenarios = [
                                 0,
                                 "DROP_PEER_REN",
                                 [
-                                    norddrop.File(
+                                    norddrop.ReceivedFile(
                                         FILES["a" * 251 + ".txt"].id,
                                         "a" * 251 + ".txt",
                                         1048576,
@@ -4070,7 +4138,7 @@ scenarios = [
                                 1,
                                 "DROP_PEER_REN",
                                 [
-                                    norddrop.File(
+                                    norddrop.ReceivedFile(
                                         FILES["a" * 251 + ".txt"].id,
                                         "a" * 251 + ".txt",
                                         1048576,
@@ -4126,7 +4194,7 @@ scenarios = [
                                 0,
                                 "DROP_PEER_REN",
                                 [
-                                    norddrop.File(
+                                    norddrop.ReceivedFile(
                                         FILES["a" * 251 + ".txt"].id,
                                         "a" * 251 + ".txt",
                                         1048576,
@@ -4137,7 +4205,7 @@ scenarios = [
                                 1,
                                 "DROP_PEER_REN",
                                 [
-                                    norddrop.File(
+                                    norddrop.ReceivedFile(
                                         FILES["a" * 251 + ".txt"].id,
                                         "a" * 251 + ".txt",
                                         1048576,
@@ -4204,10 +4272,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["with-illegal-char-\x0A-"].id,
                                     "with-illegal-char-\x0A-",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -4232,7 +4301,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["with-illegal-char-\x0A-"].id,
                                     "with-illegal-char-_-",
                                     1048576,
@@ -4284,10 +4353,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["utf8-testfile-\u5b81\u5BDF"].id,
                                     "utf8-testfile-\u5b81\u5BDF",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -4312,7 +4382,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["utf8-testfile-\u5b81\u5BDF"].id,
                                     "utf8-testfile-\u5b81\u5BDF",
                                     1048576,
@@ -4369,10 +4439,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["a" * 251 + "/testfile.txt"].id,
                                     "a" * 251 + "/testfile.txt",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -4397,7 +4468,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["a" * 251 + "/testfile.txt"].id,
                                     "a" * 251 + "/testfile.txt",
                                     1048576,
@@ -4452,15 +4523,17 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["dir-with-invalid_char-</file-01"].id,
                                     "dir-with-invalid_char-</file-01",
                                     1048576,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["dir-with-invalid_char->/file-01"].id,
                                     "dir-with-invalid_char->/file-01",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -4493,12 +4566,12 @@ scenarios = [
                                 0,
                                 "DROP_PEER_REN",
                                 [
-                                    norddrop.File(
+                                    norddrop.ReceivedFile(
                                         FILES["dir-with-invalid_char-</file-01"].id,
                                         "dir-with-invalid_char-_/file-01",
                                         1048576,
                                     ),
-                                    norddrop.File(
+                                    norddrop.ReceivedFile(
                                         FILES["dir-with-invalid_char->/file-01"].id,
                                         "dir-with-invalid_char-_(1)/file-01",
                                         1048576,
@@ -4509,12 +4582,12 @@ scenarios = [
                                 0,
                                 "DROP_PEER_REN",
                                 [
-                                    norddrop.File(
+                                    norddrop.ReceivedFile(
                                         FILES["dir-with-invalid_char-</file-01"].id,
                                         "dir-with-invalid_char-_(1)/file-01",
                                         1048576,
                                     ),
-                                    norddrop.File(
+                                    norddrop.ReceivedFile(
                                         FILES["dir-with-invalid_char->/file-01"].id,
                                         "dir-with-invalid_char-_/file-01",
                                         1048576,
@@ -4614,33 +4687,41 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/path/file1.ext1"].id,
                                     "deep/path/file1.ext1",
                                     1048576,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/path/file2.ext2"].id,
                                     "deep/path/file2.ext2",
                                     1048576,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/another-path/file3.ext3"].id,
                                     "deep/another-path/file3.ext3",
                                     1048576,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/another-path/file4.ext4"].id,
                                     "deep/another-path/file4.ext4",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -4682,30 +4763,30 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/path/file1.ext1"].id,
                                     "deep/path/file1.ext1",
                                     1048576,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/path/file2.ext2"].id,
                                     "deep/path/file2.ext2",
                                     1048576,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/another-path/file3.ext3"].id,
                                     "deep/another-path/file3.ext3",
                                     1048576,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/another-path/file4.ext4"].id,
                                     "deep/another-path/file4.ext4",
                                     1048576,
@@ -4814,8 +4895,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -4845,7 +4929,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -4922,8 +5006,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -4954,7 +5041,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -5017,15 +5104,17 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["nested/big/testfile-01"].id,
                                     "nested/big/testfile-01",
                                     10485760,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["nested/big/testfile-02"].id,
                                     "nested/big/testfile-02",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -5080,12 +5169,12 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["nested/big/testfile-01"].id,
                                     "nested/big/testfile-01",
                                     10485760,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["nested/big/testfile-02"].id,
                                     "nested/big/testfile-02",
                                     10485760,
@@ -5180,8 +5269,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["zero-sized-file"].id, "zero-sized-file", 0
+                                norddrop.QueuedFile(
+                                    FILES["zero-sized-file"].id,
+                                    "zero-sized-file",
+                                    0,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -5206,7 +5298,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["zero-sized-file"].id, "zero-sized-file", 0
                                 ),
                             ],
@@ -5256,15 +5348,17 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["duplicate/testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp/duplicate",
                                 ),
                             ],
                         )
@@ -5296,12 +5390,12 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["duplicate/testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -5367,10 +5461,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -5396,7 +5491,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -5443,10 +5538,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -5473,7 +5569,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
@@ -5517,10 +5613,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -5542,7 +5639,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -5576,10 +5673,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -5600,7 +5698,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -5636,8 +5734,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -5661,7 +5762,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -5697,8 +5798,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -5721,7 +5825,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -5757,10 +5861,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -5782,7 +5887,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -5826,10 +5931,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -5850,7 +5956,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -5895,10 +6001,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -5930,7 +6037,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -5973,10 +6080,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -6005,7 +6113,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -6050,10 +6158,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -6083,7 +6192,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -6135,10 +6244,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY6",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -6199,7 +6309,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN6",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -6290,10 +6400,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -6376,7 +6487,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
@@ -6479,10 +6590,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -6517,7 +6629,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
@@ -6589,20 +6701,23 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-bulk-01"].id,
                                     "testfile-bulk-01",
                                     10485760,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-bulk-02"].id,
                                     "testfile-bulk-02",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -6645,17 +6760,17 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-bulk-01"].id,
                                     "testfile-bulk-01",
                                     10485760,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-bulk-02"].id,
                                     "testfile-bulk-02",
                                     10485760,
@@ -6722,20 +6837,23 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-bulk-01"].id,
                                     "testfile-bulk-01",
                                     10485760,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-bulk-02"].id,
                                     "testfile-bulk-02",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -6773,17 +6891,17 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-bulk-01"].id,
                                     "testfile-bulk-01",
                                     10485760,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-bulk-02"].id,
                                     "testfile-bulk-02",
                                     10485760,
@@ -6852,10 +6970,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
                                     "testfile-big",
                                     10485760,
+                                    None,
                                 ),
                             ],
                         )
@@ -6911,7 +7030,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     "jbKuIzVPNMpYyBXk0DGoiEFXi3HoJ3wnGrygOYgdoKw",
                                     "testfile-big",
                                     10485760,
@@ -6974,8 +7093,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -7005,7 +7127,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -7030,8 +7152,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -7066,7 +7191,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -7095,8 +7220,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -7144,10 +7272,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -7177,7 +7306,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -7230,10 +7359,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -7265,7 +7395,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -7314,10 +7444,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -7343,7 +7474,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -7375,10 +7506,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -7403,7 +7535,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -7434,10 +7566,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -7478,7 +7611,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
@@ -7535,25 +7668,29 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-bulk-01"].id,
                                     "testfile-bulk-01",
                                     10485760,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-bulk-02"].id,
                                     "testfile-bulk-02",
                                     10485760,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-bulk-03"].id,
                                     "testfile-bulk-03",
                                     10485760,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-bulk-04"].id,
                                     "testfile-bulk-04",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -7600,22 +7737,22 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-bulk-01"].id,
                                     "testfile-bulk-01",
                                     10485760,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-bulk-02"].id,
                                     "testfile-bulk-02",
                                     10485760,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-bulk-03"].id,
                                     "testfile-bulk-03",
                                     10485760,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-bulk-04"].id,
                                     "testfile-bulk-04",
                                     10485760,
@@ -7729,10 +7866,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -7793,7 +7931,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -7848,10 +7986,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -7898,7 +8037,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -7967,10 +8106,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -8032,7 +8172,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -8079,10 +8219,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -8122,7 +8263,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -8191,10 +8332,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -8258,7 +8400,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -8331,10 +8473,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -8386,7 +8529,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -8471,10 +8614,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -8536,7 +8680,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -8607,15 +8751,17 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/path/file1.ext1"].id,
                                     "path/file1.ext1",
                                     1048576,
+                                    "/tmp/deep",
                                 ),
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["deep/path/file2.ext2"].id,
                                     "path/file2.ext2",
                                     1048576,
+                                    "/tmp/deep",
                                 ),
                             ],
                         )
@@ -8652,12 +8798,12 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/path/file1.ext1"].id,
                                     "path/file1.ext1",
                                     1048576,
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["deep/path/file2.ext2"].id,
                                     "path/file2.ext2",
                                     1048576,
@@ -8717,10 +8863,11 @@ scenarios = [
                                 0,
                                 "DROP_PEER_STIMPY",
                                 [
-                                    norddrop.File(
+                                    norddrop.QueuedFile(
                                         FILES["testfile-small"].id,
                                         "testfile-small",
                                         1048576,
+                                        "/tmp",
                                     ),
                                 ],
                             ),
@@ -8728,10 +8875,11 @@ scenarios = [
                                 1,
                                 "DROP_PEER_STIMPY",
                                 [
-                                    norddrop.File(
+                                    norddrop.QueuedFile(
                                         FILES["testfile-small"].id,
                                         "testfile-small",
                                         1048576,
+                                        "/tmp",
                                     ),
                                 ],
                             ),
@@ -8767,7 +8915,7 @@ scenarios = [
                                 0,
                                 "DROP_PEER_REN",
                                 [
-                                    norddrop.File(
+                                    norddrop.ReceivedFile(
                                         FILES["testfile-small"].id,
                                         "testfile-small",
                                         1048576,
@@ -8778,7 +8926,7 @@ scenarios = [
                                 1,
                                 "DROP_PEER_REN",
                                 [
-                                    norddrop.File(
+                                    norddrop.ReceivedFile(
                                         FILES["testfile-small"].id,
                                         "testfile-small",
                                         1048576,
@@ -8840,10 +8988,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -8934,10 +9083,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -8983,10 +9133,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         ),
@@ -9021,7 +9172,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -9082,10 +9233,11 @@ scenarios = [
                                 0,
                                 "DROP_PEER_STIMPY",
                                 [
-                                    norddrop.File(
+                                    norddrop.QueuedFile(
                                         FILES["testfile-small"].id,
                                         "testfile-small",
                                         1048576,
+                                        "/tmp",
                                     ),
                                 ],
                             ),
@@ -9119,7 +9271,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -9170,10 +9322,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         ),
@@ -9184,10 +9337,11 @@ scenarios = [
                             1,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         ),
@@ -9236,7 +9390,7 @@ scenarios = [
                                 0,
                                 "DROP_PEER_REN",
                                 [
-                                    norddrop.File(
+                                    norddrop.ReceivedFile(
                                         FILES["testfile-big"].id,
                                         "testfile-big",
                                         10485760,
@@ -9247,7 +9401,7 @@ scenarios = [
                                 1,
                                 "DROP_PEER_REN",
                                 [
-                                    norddrop.File(
+                                    norddrop.ReceivedFile(
                                         FILES["testfile-small"].id,
                                         "testfile-small",
                                         1048576,
@@ -9318,10 +9472,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -9339,7 +9494,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -9369,10 +9524,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -9425,10 +9581,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -9454,7 +9611,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
@@ -9502,8 +9659,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -9527,7 +9687,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -9563,10 +9723,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -9589,7 +9750,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -9644,10 +9805,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -9686,7 +9848,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -9765,10 +9927,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -9802,7 +9965,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -9834,10 +9997,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -9859,7 +10023,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
@@ -9891,10 +10055,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -9920,7 +10085,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
@@ -9955,10 +10120,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -9982,7 +10148,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -10032,10 +10198,11 @@ scenarios = [
                                 0,
                                 "DROP_PEER_STIMPY",
                                 [
-                                    norddrop.File(
+                                    norddrop.QueuedFile(
                                         FILES["testfile-small"].id,
                                         "testfile-small",
                                         1048576,
+                                        "/tmp",
                                     ),
                                 ],
                             ),
@@ -10043,10 +10210,11 @@ scenarios = [
                                 1,
                                 "DROP_PEER_GEORGE",
                                 [
-                                    norddrop.File(
+                                    norddrop.QueuedFile(
                                         FILES["testfile-big"].id,
                                         "testfile-big",
                                         10485760,
+                                        "/tmp",
                                     ),
                                 ],
                             ),
@@ -10076,7 +10244,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -10111,7 +10279,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
@@ -10154,10 +10322,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         ),
@@ -10176,10 +10345,11 @@ scenarios = [
                             1,
                             "DROP_PEER_GEORGE",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         ),
@@ -10224,7 +10394,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -10259,7 +10429,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
@@ -10304,10 +10474,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         ),
@@ -10318,10 +10489,11 @@ scenarios = [
                             1,
                             "DROP_PEER_GEORGE",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         ),
@@ -10361,7 +10533,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -10413,7 +10585,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
@@ -10473,10 +10645,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         ),
@@ -10488,10 +10661,11 @@ scenarios = [
                             1,
                             "DROP_PEER_GEORGE",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         ),
@@ -10537,7 +10711,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -10590,7 +10764,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
@@ -10651,10 +10825,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -10692,10 +10867,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -10724,7 +10900,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -10774,10 +10950,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -10799,7 +10976,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
@@ -10850,10 +11027,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -10880,7 +11058,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
@@ -10925,10 +11103,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -10950,7 +11129,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
@@ -10994,8 +11173,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -11060,7 +11242,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -11133,13 +11315,14 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["tiny-jpeg.jpg"].id, "tiny-jpeg.jpg", 134
+                                norddrop.QueuedFile(
+                                    FILES["tiny-jpeg.jpg"].id,
+                                    "tiny-jpeg.jpg",
+                                    134,
+                                    "/tmp",
                                 ),
-                                norddrop.File(
-                                    FILES["tiny-gif.gif"].id,
-                                    "tiny-gif.gif",
-                                    26,
+                                norddrop.QueuedFile(
+                                    FILES["tiny-gif.gif"].id, "tiny-gif.gif", 26, "/tmp"
                                 ),
                             ],
                         )
@@ -11221,10 +11404,10 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["tiny-jpeg.jpg"].id, "tiny-jpeg.jpg", 134
                                 ),
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["tiny-gif.gif"].id,
                                     "tiny-gif.gif",
                                     26,
@@ -11320,8 +11503,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -11389,7 +11575,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -11463,8 +11649,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -11549,7 +11738,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -11654,8 +11843,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -11723,7 +11915,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -11829,10 +12021,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -11945,7 +12138,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -11997,11 +12190,11 @@ scenarios = [
                         "/tmp/testfile-bulk-05",
                     ]),
                     action.Wait(event.Queued(0, "DROP_PEER_STIMPY",[ 
-                        norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                        norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                        norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                        norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
-                        norddrop.File(FILES["testfile-bulk-05"].id, "testfile-bulk-05", 10485760),
+                        norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"),
+                        norddrop.QueuedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760, "/tmp"),
+                        norddrop.QueuedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760, "/tmp"),
+                        norddrop.QueuedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760, "/tmp"),
+                        norddrop.QueuedFile(FILES["testfile-bulk-05"].id, "testfile-bulk-05", 10485760, "/tmp"),
                     ])),
                     action.WaitRacy(
                         [
@@ -12030,11 +12223,11 @@ scenarios = [
                     action.Start("DROP_PEER_STIMPY"),
                     # fmt: off
                     action.Wait(event.Receive(0, "DROP_PEER_REN", [ 
-                        norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                        norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                        norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                        norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
-                        norddrop.File(FILES["testfile-bulk-05"].id, "testfile-bulk-05", 10485760),
+                        norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
+                        norddrop.ReceivedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
+                        norddrop.ReceivedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
+                        norddrop.ReceivedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                        norddrop.ReceivedFile(FILES["testfile-bulk-05"].id, "testfile-bulk-05", 10485760),
                     ])),
                     action.Download(0, FILES["testfile-bulk-01"].id, "/tmp/received/48"),
                     action.Download(0, FILES["testfile-bulk-02"].id, "/tmp/received/48"),
@@ -12084,8 +12277,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -12110,7 +12306,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -12179,11 +12375,11 @@ scenarios = [
                     ),
                     # fmt: off
                     action.Wait(event.Queued(0, "DROP_PEER_STIMPY", [
-                        norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                        norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                        norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                        norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
-                        norddrop.File(FILES["testfile-bulk-05"].id, "testfile-bulk-05", 10485760),
+                        norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"),
+                        norddrop.QueuedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760, "/tmp"),
+                        norddrop.QueuedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760, "/tmp"),
+                        norddrop.QueuedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760, "/tmp"),
+                        norddrop.QueuedFile(FILES["testfile-bulk-05"].id, "testfile-bulk-05", 10485760, "/tmp"),
                     ])),
                     action.WaitRacy([
                         event.Start(0,     FILES["testfile-bulk-01"].id),
@@ -12215,11 +12411,11 @@ scenarios = [
                     action.Start("DROP_PEER_STIMPY"),
                     # fmt: off
                     action.Wait(event.Receive(0, "DROP_PEER_REN", [ 
-                        norddrop.File(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
-                        norddrop.File(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
-                        norddrop.File(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
-                        norddrop.File(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
-                        norddrop.File(FILES["testfile-bulk-05"].id, "testfile-bulk-05", 10485760),
+                        norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
+                        norddrop.ReceivedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
+                        norddrop.ReceivedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
+                        norddrop.ReceivedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                        norddrop.ReceivedFile(FILES["testfile-bulk-05"].id, "testfile-bulk-05", 10485760),
                     ])),
                     action.Download(0, FILES["testfile-bulk-01"].id, "/tmp/received/50"),
                     action.Wait(event.Pending(0, FILES["testfile-bulk-01"].id)),
@@ -12263,10 +12459,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -12307,8 +12504,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -12343,7 +12543,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -12412,10 +12612,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -12440,7 +12641,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -12517,10 +12718,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -12549,7 +12751,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -12616,10 +12818,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -12648,7 +12851,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -12745,10 +12948,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
+                                norddrop.QueuedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -12777,7 +12981,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
@@ -12855,8 +13059,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -12886,7 +13093,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -12978,8 +13185,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -13010,7 +13220,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -13122,8 +13332,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -13154,7 +13367,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],
@@ -13252,8 +13465,11 @@ scenarios = [
                             0,
                             "DROP_PEER_STIMPY",
                             [
-                                norddrop.File(
-                                    FILES["testfile-big"].id, "testfile-big", 10485760
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
                                 ),
                             ],
                         )
@@ -13284,7 +13500,7 @@ scenarios = [
                             0,
                             "DROP_PEER_REN",
                             [
-                                norddrop.File(
+                                norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
                                 ),
                             ],

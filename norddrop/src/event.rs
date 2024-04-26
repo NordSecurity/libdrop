@@ -1,11 +1,18 @@
 use std::time::SystemTime;
 
-use drop_transfer::{File as _, Transfer};
+use drop_transfer::{File, Transfer};
 
-pub struct File {
+pub struct ReceivedFile {
     pub id: String,
     pub path: String,
     pub size: u64,
+}
+
+pub struct QueuedFile {
+    pub id: String,
+    pub path: String,
+    pub size: u64,
+    pub base_dir: Option<String>,
 }
 
 pub struct Status {
@@ -22,12 +29,12 @@ pub enum EventKind {
     RequestReceived {
         peer: String,
         transfer_id: String,
-        files: Vec<File>,
+        files: Vec<ReceivedFile>,
     },
     RequestQueued {
         peer: String,
         transfer_id: String,
-        files: Vec<File>,
+        files: Vec<QueuedFile>,
     },
 
     FileStarted {
@@ -163,12 +170,12 @@ impl From<drop_transfer::Event> for EventKind {
             RequestReceived(tx) => EventKind::RequestReceived {
                 peer: tx.peer().to_string(),
                 transfer_id: tx.id().to_string(),
-                files: extract_transfer_files(tx.as_ref()),
+                files: tx.files().values().map(From::from).collect(),
             },
             RequestQueued(tx) => Self::RequestQueued {
                 peer: tx.peer().to_string(),
                 transfer_id: tx.id().to_string(),
-                files: extract_transfer_files(tx.as_ref()),
+                files: tx.files().values().map(From::from).collect(),
             },
             FileUploadStarted(tx, fid, transfered) => Self::FileStarted {
                 transfer_id: tx.id().to_string(),
@@ -333,20 +340,30 @@ impl From<drop_transfer::Event> for EventKind {
     }
 }
 
-fn extract_transfer_files(t: &impl drop_transfer::Transfer) -> Vec<File> {
-    t.files()
-        .values()
-        .map(|f| File {
-            id: f.id().to_string(),
-            path: f.subpath().to_string(),
-            size: f.size(),
-        })
-        .collect()
-}
-
 fn current_timestamp() -> i64 {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as i64
+}
+
+impl From<&drop_transfer::FileToSend> for QueuedFile {
+    fn from(value: &drop_transfer::FileToSend) -> Self {
+        Self {
+            id: value.id().to_string(),
+            path: value.subpath().to_string(),
+            size: value.size(),
+            base_dir: value.base_dir().map(ToOwned::to_owned),
+        }
+    }
+}
+
+impl From<&drop_transfer::FileToRecv> for ReceivedFile {
+    fn from(value: &drop_transfer::FileToRecv) -> Self {
+        Self {
+            id: value.id().to_string(),
+            path: value.subpath().to_string(),
+            size: value.size(),
+        }
+    }
 }

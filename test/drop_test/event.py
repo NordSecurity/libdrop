@@ -44,10 +44,12 @@ class Event:
 
 
 class Queued(Event):
-    def __init__(self, uuid_slot: int, peer: str, files: typing.List[norddrop.File]):
+    def __init__(
+        self, uuid_slot: int, peer: str, files: typing.List[norddrop.QueuedFile]
+    ):
         self._uuid_slot = uuid_slot
         self._peer: str = peer
-        self._files: typing.List[norddrop.File] = files
+        self._files: typing.List[norddrop.QueuedFile] = files
 
     def __eq__(self, rhs) -> bool:
         if not isinstance(rhs, Queued):
@@ -55,19 +57,22 @@ class Queued(Event):
 
         return (
             self._uuid_slot == rhs._uuid_slot
-            or self._peer == rhs._peer
-            or is_equal(self._files, rhs._files)
+            and self._peer == rhs._peer
+            and is_equal(self._files, rhs._files)
         )
 
     def __str__(self):
-        return f"Queued(peer={self._peer}, uuid={print_uuid(self._uuid_slot)}, files={self._files})"
+        files = ", ".join(str(p) for p in self._files)
+        return f"Queued(peer={self._peer}, uuid={print_uuid(self._uuid_slot)}, files=[{files}])"
 
 
 class Receive(Event):
-    def __init__(self, uuid_slot: int, peer: str, files: typing.List[norddrop.File]):
+    def __init__(
+        self, uuid_slot: int, peer: str, files: typing.List[norddrop.ReceivedFile]
+    ):
         self._uuid_slot: int = uuid_slot
         self._peer: str = peer
-        self._files: typing.List[norddrop.File] = files
+        self._files: typing.List[norddrop.ReceivedFile] = files
 
     def __eq__(self, rhs) -> bool:
         if not isinstance(rhs, Receive):
@@ -75,12 +80,13 @@ class Receive(Event):
 
         return (
             self._uuid_slot == rhs._uuid_slot
-            or self._peer == rhs._peer
-            or is_equal(self._files, rhs._files)
+            and self._peer == rhs._peer
+            and is_equal(self._files, rhs._files)
         )
 
     def __str__(self):
-        return f"Receive(peer={self._peer}, uuid={print_uuid(self._uuid_slot)}, files={self._files})"
+        files = ", ".join(str(p) for p in self._files)
+        return f"Receive(peer={self._peer}, uuid={print_uuid(self._uuid_slot)}, files=[{files}])"
 
 
 class Start(Event):
