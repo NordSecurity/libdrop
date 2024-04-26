@@ -57,12 +57,13 @@ class Queued(Event):
 
         return (
             self._uuid_slot == rhs._uuid_slot
-            or self._peer == rhs._peer
-            or is_equal(self._files, rhs._files)
+            and self._peer == rhs._peer
+            and is_equal(self._files, rhs._files)
         )
 
     def __str__(self):
-        return f"Queued(peer={self._peer}, uuid={print_uuid(self._uuid_slot)}, files={self._files})"
+        files = ", ".join(str(p) for p in self._files)
+        return f"Queued(peer={self._peer}, uuid={print_uuid(self._uuid_slot)}, files=[{files}])"
 
 
 class Receive(Event):
@@ -79,12 +80,13 @@ class Receive(Event):
 
         return (
             self._uuid_slot == rhs._uuid_slot
-            or self._peer == rhs._peer
-            or is_equal(self._files, rhs._files)
+            and self._peer == rhs._peer
+            and is_equal(self._files, rhs._files)
         )
 
     def __str__(self):
-        return f"Receive(peer={self._peer}, uuid={print_uuid(self._uuid_slot)}, files={self._files})"
+        files = ", ".join(str(p) for p in self._files)
+        return f"Receive(peer={self._peer}, uuid={print_uuid(self._uuid_slot)}, files=[{files}])"
 
 
 class Start(Event):
