@@ -66,11 +66,12 @@ class EventQueue(norddrop.EventCallback):
         self._lock = Lock()
 
     def on_event(self, event: norddrop.Event):
+        event = new_event(event)
         if DEBUG_PRINT_EVENT:
             tprint(bcolors.HEADER + "--- event: ", event, bcolors.ENDC, flush=True)
 
         with self._lock:
-            self._events.append(new_event(event))
+            self._events.append(event)
 
     async def wait_for_any_event(self, duration: int, ignore_progress: bool = False):
         for _ in range(0, duration):
