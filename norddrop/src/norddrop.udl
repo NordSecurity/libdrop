@@ -224,8 +224,23 @@ dictionary Status {
     i32? os_error_code;
 };
 
-/// The transfer file structure
-dictionary File {
+/// The outgoing transfer file structure
+dictionary QueuedFile {
+    /// File ID
+    string id;
+
+    /// File path
+    string path;
+
+    /// File size
+    u64 size;
+
+    /// File base directory
+    string? base_dir;
+};
+
+/// The incoming transfer file structure
+dictionary ReceivedFile {
     /// File ID
     string id;
 
@@ -242,10 +257,10 @@ dictionary File {
 interface EventKind {
     /// Emitted when the application receives a transfer request from the peer. It
     /// contains the peer IP address, transfer ID, and file list.
-    RequestReceived (string peer, string transfer_id, sequence<File> files);
+    RequestReceived (string peer, string transfer_id, sequence<ReceivedFile> files);
 
     /// Emitted when the application creates a transfer.
-    RequestQueued   (string peer, string transfer_id, sequence<File> files);
+    RequestQueued   (string peer, string transfer_id, sequence<QueuedFile> files);
 
 
     /// Emitted when a file transfer is started. Valid for both sending and

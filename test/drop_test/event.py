@@ -44,10 +44,12 @@ class Event:
 
 
 class Queued(Event):
-    def __init__(self, uuid_slot: int, peer: str, files: typing.List[norddrop.File]):
+    def __init__(
+        self, uuid_slot: int, peer: str, files: typing.List[norddrop.QueuedFile]
+    ):
         self._uuid_slot = uuid_slot
         self._peer: str = peer
-        self._files: typing.List[norddrop.File] = files
+        self._files: typing.List[norddrop.QueuedFile] = files
 
     def __eq__(self, rhs) -> bool:
         if not isinstance(rhs, Queued):
@@ -64,10 +66,12 @@ class Queued(Event):
 
 
 class Receive(Event):
-    def __init__(self, uuid_slot: int, peer: str, files: typing.List[norddrop.File]):
+    def __init__(
+        self, uuid_slot: int, peer: str, files: typing.List[norddrop.ReceivedFile]
+    ):
         self._uuid_slot: int = uuid_slot
         self._peer: str = peer
-        self._files: typing.List[norddrop.File] = files
+        self._files: typing.List[norddrop.ReceivedFile] = files
 
     def __eq__(self, rhs) -> bool:
         if not isinstance(rhs, Receive):
