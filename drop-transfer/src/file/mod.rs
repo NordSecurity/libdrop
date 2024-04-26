@@ -155,6 +155,16 @@ impl FileToRecv {
 }
 
 impl FileToSend {
+    pub fn base_dir(&self) -> Option<&str> {
+        let fullpath = match &self.source {
+            FileSource::Path(fullpath) => fullpath,
+            FileSource::Fd { .. } => return None,
+        };
+
+        let base_dir = fullpath.ancestors().nth(self.subpath.len())?;
+        base_dir.to_str()
+    }
+
     fn from_path(path: impl AsRef<Path>, size: u64) -> crate::Result<Self> {
         let path = path.as_ref();
         let abspath = crate::utils::make_path_absolute(path)?;
