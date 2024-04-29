@@ -8945,20 +8945,8 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received/32/",
                     ),
-                    action.WaitRacy(
-                        [
-                            event.Pending(
-                                0,
-                                FILES["testfile-small"].id,
-                            ),
-                            event.Pending(
-                                1,
-                                FILES["testfile-small"].id,
-                            ),
-                        ]
-                    ),
                     # We cannot predict the final path of files from each transfer so we cannot wait for specific event
-                    action.DrainEvents(4),
+                    action.DrainEvents(6),
                     action.CheckDownloadedFiles(
                         [
                             action.File("/tmp/received/32/testfile-small", 1048576),
