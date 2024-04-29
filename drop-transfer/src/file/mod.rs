@@ -158,6 +158,7 @@ impl FileToSend {
     pub fn base_dir(&self) -> Option<&str> {
         let fullpath = match &self.source {
             FileSource::Path(fullpath) => fullpath,
+            #[cfg(unix)]
             FileSource::Fd { .. } => return None,
         };
 
