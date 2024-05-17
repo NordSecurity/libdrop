@@ -2,7 +2,7 @@ use drop_storage::types as db;
 
 pub enum TransferStateKind {
     Cancel { by_peer: bool },
-    Failed { status: i64 },
+    Failed { status: crate::StatusCode },
 }
 
 pub struct TransferState {
@@ -11,12 +11,26 @@ pub struct TransferState {
 }
 
 pub enum IncomingPathStateKind {
-    Pending { base_dir: String },
-    Started { bytes_received: u64 },
-    Failed { status: i64, bytes_received: u64 },
-    Completed { final_path: String },
-    Rejected { by_peer: bool, bytes_received: u64 },
-    Paused { bytes_received: u64 },
+    Pending {
+        base_dir: String,
+    },
+    Started {
+        bytes_received: u64,
+    },
+    Failed {
+        status: crate::StatusCode,
+        bytes_received: u64,
+    },
+    Completed {
+        final_path: String,
+    },
+    Rejected {
+        by_peer: bool,
+        bytes_received: u64,
+    },
+    Paused {
+        bytes_received: u64,
+    },
 }
 
 pub struct IncomingPathState {
@@ -33,11 +47,21 @@ pub struct IncomingPath {
 }
 
 pub enum OutgoingPathStateKind {
-    Started { bytes_sent: u64 },
-    Failed { status: i64, bytes_sent: u64 },
+    Started {
+        bytes_sent: u64,
+    },
+    Failed {
+        status: crate::StatusCode,
+        bytes_sent: u64,
+    },
     Completed,
-    Rejected { by_peer: bool, bytes_sent: u64 },
-    Paused { bytes_sent: u64 },
+    Rejected {
+        by_peer: bool,
+        bytes_sent: u64,
+    },
+    Paused {
+        bytes_sent: u64,
+    },
 }
 
 pub struct OutgoingPathState {
@@ -77,7 +101,7 @@ impl From<db::TransferStateEventData> for TransferStateKind {
         match value {
             db::TransferStateEventData::Cancel { by_peer } => Self::Cancel { by_peer },
             db::TransferStateEventData::Failed { status_code } => Self::Failed {
-                status: status_code,
+                status: crate::StatusCode::from(status_code as u32),
             },
         }
     }
@@ -119,7 +143,7 @@ impl From<db::IncomingPathStateEventData> for IncomingPathStateKind {
                 status_code,
                 bytes_received,
             } => IncomingPathStateKind::Failed {
-                status: status_code,
+                status: crate::StatusCode::from(status_code as u32),
                 bytes_received: bytes_received as _,
             },
             db::IncomingPathStateEventData::Completed { final_path } => {
@@ -178,7 +202,7 @@ impl From<db::OutgoingPathStateEventData> for OutgoingPathStateKind {
                 status_code,
                 bytes_sent,
             } => OutgoingPathStateKind::Failed {
-                status: status_code,
+                status: crate::StatusCode::from(status_code as u32),
                 bytes_sent: bytes_sent as _,
             },
             db::OutgoingPathStateEventData::Completed => OutgoingPathStateKind::Completed,

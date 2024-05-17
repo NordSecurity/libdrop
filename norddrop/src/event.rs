@@ -40,12 +40,12 @@ pub enum EventKind {
     FileStarted {
         transfer_id: String,
         file_id: String,
-        transfered: u64,
+        transferred: u64,
     },
     FileProgress {
         transfer_id: String,
         file_id: String,
-        transfered: u64,
+        transferred: u64,
     },
     FileDownloaded {
         transfer_id: String,
@@ -73,7 +73,7 @@ pub enum EventKind {
     FileThrottled {
         transfer_id: String,
         file_id: String,
-        transfered: u64,
+        transferred: u64,
     },
     FilePending {
         transfer_id: String,
@@ -177,25 +177,25 @@ impl From<drop_transfer::Event> for EventKind {
                 transfer_id: tx.id().to_string(),
                 files: tx.files().values().map(From::from).collect(),
             },
-            FileUploadStarted(tx, fid, transfered) => Self::FileStarted {
+            FileUploadStarted(tx, fid, transferred) => Self::FileStarted {
                 transfer_id: tx.id().to_string(),
                 file_id: fid.to_string(),
-                transfered,
+                transferred,
             },
-            FileDownloadStarted(tx, fid, _, transfered) => Self::FileStarted {
+            FileDownloadStarted(tx, fid, _, transferred) => Self::FileStarted {
                 transfer_id: tx.id().to_string(),
                 file_id: fid.to_string(),
-                transfered,
+                transferred,
             },
             FileUploadProgress(tx, fid, progress) => Self::FileProgress {
                 transfer_id: tx.id().to_string(),
                 file_id: fid.to_string(),
-                transfered: progress,
+                transferred: progress,
             },
             FileDownloadProgress(tx, fid, progress) => Self::FileProgress {
                 transfer_id: tx.id().to_string(),
                 file_id: fid.to_string(),
-                transfered: progress,
+                transferred: progress,
             },
             FileUploadSuccess(tx, fid) => Self::FileUploaded {
                 transfer_id: tx.id().to_string(),
@@ -264,11 +264,11 @@ impl From<drop_transfer::Event> for EventKind {
             FileUploadThrottled {
                 transfer_id,
                 file_id,
-                transfered,
+                transferred,
             } => Self::FileThrottled {
                 transfer_id: transfer_id.to_string(),
                 file_id: file_id.to_string(),
-                transfered,
+                transferred,
             },
 
             FinalizeChecksumStarted {

@@ -265,11 +265,11 @@ interface EventKind {
 
     /// Emitted when a file transfer is started. Valid for both sending and
     /// receiving peers.
-    FileStarted    (string transfer_id, string file_id, u64 transfered);
+    FileStarted    (string transfer_id, string file_id, u64 transferred);
 
     /// Emitted whenever an amount of data for a single file is transferred between
     /// peers. Valid for both sending and receiving peers.
-    FileProgress   (string transfer_id, string file_id, u64 transfered);
+    FileProgress   (string transfer_id, string file_id, u64 transferred);
 
     /// The file has been successfully downloaded.
     FileDownloaded (string transfer_id, string file_id, string final_path);
@@ -291,7 +291,7 @@ interface EventKind {
     /// of a delayed transfer because of too many active outgoing files in flight.
     /// Whenever the number of active files decreases the file will proceed with the
     /// TransferStarted event. Valid for sending peers.
-    FileThrottled  (string transfer_id, string file_id, u64 transfered);
+    FileThrottled  (string transfer_id, string file_id, u64 transferred);
 
     /// Indicates that the file transfer is registered and ready. It is emitted as a
     /// response to the `download()` call.
@@ -358,9 +358,8 @@ interface TransferStateKind {
     /// Contains indicator of who canceled the transfer.
     Cancel(boolean by_peer);
 
-    /// Contains status code of failure. Regular error table should be
-    /// consulted for errors.
-    Failed(i64 status);
+    /// Contains status code of failure.
+    Failed(StatusCode status);
 };
 
 /// A single change in the transfer state
@@ -385,10 +384,9 @@ interface IncomingPathStateKind {
     /// directory of the file.
     Started(u64 bytes_received);
 
-    /// Contains status code of failure. Regular error table should be
-    /// consulted for errors.
+    /// Contains status code of failure. 
     /// This is a **terminal** state.
-    Failed(i64 status, u64 bytes_received);
+    Failed(StatusCode status, u64 bytes_received);
 
     /// The file was successfully received and saved to the disk.
     /// Contains the final path of the file.
@@ -441,10 +439,9 @@ interface OutgoingPathStateKind {
     /// directory of the file.
     Started(u64 bytes_sent);
 
-    /// Contains status code of failure. Regular error table should be
-    /// consulted for errors.
+    /// Contains status code of failure.
     /// This is a **terminal** state.
-    Failed(i64 status, u64 bytes_sent);
+    Failed(StatusCode status, u64 bytes_sent);
 
     /// The file was successfully received and saved to the disk.
     /// Contains the final path of the file.
@@ -494,7 +491,7 @@ dictionary OutgoingPath {
     /// File size
     u64 bytes;
 
-    /// Curently transfered file bytes
+    /// Curently transferred file bytes
     u64 bytes_sent;
 
     /// The source of the file data

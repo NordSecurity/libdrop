@@ -389,9 +389,9 @@ def new_event(ev: norddrop.Event) -> event.Event:
         return event.Queued(transfer_slot, ev.peer, ev.files)
 
     elif ev.is_file_started():
-        return event.Start(transfer_slot, ev.file_id, ev.transfered)
+        return event.Start(transfer_slot, ev.file_id, ev.transferred)
     elif ev.is_file_progress():
-        return event.Progress(transfer_slot, ev.file_id, ev.transfered)
+        return event.Progress(transfer_slot, ev.file_id, ev.transferred)
     elif ev.is_file_downloaded():
         return event.FinishFileDownloaded(transfer_slot, ev.file_id, ev.final_path)
     elif ev.is_file_uploaded():
@@ -408,7 +408,7 @@ def new_event(ev: norddrop.Event) -> event.Event:
     elif ev.is_file_paused():
         return event.Paused(transfer_slot, ev.file_id)
     elif ev.is_file_throttled():
-        return event.Throttled(transfer_slot, ev.file_id, ev.transfered)
+        return event.Throttled(transfer_slot, ev.file_id, ev.transferred)
     elif ev.is_file_pending():
         return event.Pending(transfer_slot, ev.file_id)
 
