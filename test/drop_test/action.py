@@ -114,7 +114,9 @@ def compare_json_to_incoming_path_state(
             expected, "IncomingPathState", "bytes_received", actual.kind.bytes_received
         )
         keys.append("status_code")
-        compare_value(expected, "IncomingPathState", "status_code", actual.kind.status)
+        compare_value(
+            expected, "IncomingPathState", "status_code", str(actual.kind.status)
+        )
     elif actual.kind.is_completed():
         compare_value(expected, "IncomingPathState", "state", "completed")
         keys.append("final_path")
@@ -179,7 +181,9 @@ def compare_json_to_outgoing_path_state(
             expected, "OutgoingPathState", "bytes_sent", actual.kind.bytes_sent
         )
         keys.append("status_code")
-        compare_value(expected, "OutgoingPathState", "status_code", actual.kind.status)
+        compare_value(
+            expected, "OutgoingPathState", "status_code", str(actual.kind.status)
+        )
     elif actual.kind.is_completed():
         compare_value(expected, "OutgoingPathState", "state", "completed")
     elif actual.kind.is_rejected():
@@ -240,7 +244,7 @@ def compare_json_to_transfer_state(expected: dict, actual: norddrop.TransferStat
     else:
         compare_value(expected, "TranfserState", "state", "failed")
         keys.append("status_code")
-        compare_value(expected, "TranfserState", "status_code", actual.kind.status)
+        compare_value(expected, "TranfserState", "status_code", str(actual.kind.status))
 
     for key in expected:
         if key not in keys:

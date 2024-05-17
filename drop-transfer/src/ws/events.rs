@@ -421,7 +421,7 @@ impl FileEventTx<OutgoingTransfer> {
         .await
     }
 
-    pub async fn throttled(&self, transfered: u64) {
+    pub async fn throttled(&self, transferred: u64) {
         let mut lock = self.inner.lock().await;
 
         match lock.state {
@@ -429,7 +429,7 @@ impl FileEventTx<OutgoingTransfer> {
                 lock.tx.emit(crate::Event::FileUploadThrottled {
                     transfer_id: self.xfer.id(),
                     file_id: self.file_id.clone(),
-                    transfered,
+                    transferred,
                 });
 
                 lock.state = FileState::Throttled;
