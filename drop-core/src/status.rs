@@ -35,3 +35,38 @@ impl serde::Serialize for Status {
         (*self as u32).serialize(serializer)
     }
 }
+
+impl From<u32> for Status {
+    fn from(value: u32) -> Self {
+        use Status::*;
+
+        match value {
+            1 => Finalized,
+            2 => BadPath,
+            3 => BadFile,
+            7 => BadTransfer,
+            8 => BadTransferState,
+            9 => BadFileId,
+            15 => IoError,
+            20 => TransferLimitsExceeded,
+            21 => MismatchedSize,
+            23 => InvalidArgument,
+            27 => AddrInUse,
+            28 => FileModified,
+            29 => FilenameTooLong,
+            30 => AuthenticationFailed,
+            31 => StorageError,
+            32 => DbLost,
+            33 => FileChecksumMismatch,
+            34 => FileRejected,
+            35 => FileFailed,
+            36 => FileFinished,
+            37 => EmptyTransfer,
+            38 => ConnectionClosedByPeer,
+            39 => TooManyRequests,
+            40 => PermissionDenied,
+            _unknown => IoError, /* Use IO error because we have no clue what it is. This
+                                  * shouldn't happen */
+        }
+    }
+}

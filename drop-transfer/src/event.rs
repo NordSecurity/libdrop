@@ -61,7 +61,7 @@ pub enum Event {
     FileUploadThrottled {
         transfer_id: Uuid,
         file_id: FileId,
-        transfered: u64,
+        transferred: u64,
     },
 
     IncomingTransferCanceled(Arc<IncomingTransfer>, bool),

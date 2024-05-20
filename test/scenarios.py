@@ -3802,37 +3802,37 @@ scenarios = [
                     action.ExpectCancel([0], True),
                     action.AssertTransfers(
                         [
-                            """{
+                            f"""{{
                         "id": "*",
                         "created_at": "*",
                         "states": [
-                            {
+                            {{
                                 "created_at": "*",
                                 "state": "cancel",
                                 "by_peer": true
-                            }
+                            }}
                         ],
                         "type": "outgoing",
                         "paths": [
-                            {
+                            {{
                                 "relative_path": "testfile-big",
                                 "base_path": "/tmp",
                                 "bytes": 10485760,
                                 "states": [
-                                    {
+                                    {{
                                         "created_at": "*",
                                         "state": "started",
                                         "bytes_sent": 0
-                                    },
-                                    {
+                                    }},
+                                    {{
                                         "created_at": "*",
                                         "state": "failed",
-                                        "status_code": 28
-                                    }
+                                        "status_code": "{norddrop.StatusCode.FILE_MODIFIED}"
+                                    }}
                                 ]
-                            }
+                            }}
                         ]
-                    }"""
+                    }}"""
                         ]
                     ),
                     action.NoEvent(),
@@ -3872,41 +3872,41 @@ scenarios = [
                     action.ExpectCancel([0], False),
                     action.AssertTransfers(
                         [
-                            """{
+                            f"""{{
                         "id": "*",
                         "created_at": "*",
                         "states": [
-                            {
+                            {{
                                 "created_at": "*",
                                 "state": "cancel",
                                 "by_peer": false
-                            }
+                            }}
                         ],
                         "type": "incoming",
                         "paths": [
-                            {
+                            {{
                                 "relative_path": "testfile-big",
                                 "bytes": 10485760,
                                 "states": [
-                                    {
+                                    {{
                                         "created_at": "*",
                                         "state": "pending",
                                         "base_dir": "/tmp/received"
-                                    },
-                                    {
+                                    }},
+                                    {{
                                         "created_at": "*",
                                         "state": "started",
                                         "bytes_received": 0
-                                    },
-                                    {
+                                    }},
+                                    {{
                                         "created_at": "*",
                                         "state": "failed",
-                                        "status_code": 8
-                                    }
+                                        "status_code": "{norddrop.StatusCode.BAD_TRANSFER_STATE}"
+                                    }}
                                 ]
-                            }
+                            }}
                         ]
-                    }"""
+                    }}"""
                         ]
                     ),
                     action.NoEvent(),
