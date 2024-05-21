@@ -325,6 +325,18 @@ impl HandlerLoop<'_> {
             }
         }
     }
+
+    fn take_pause_futures(&mut self) -> impl Future<Output = ()> {
+        let jobs = std::mem::take(&mut self.jobs);
+
+        async move {
+            let tasks = jobs.into_values().map(|task| async move {
+                task.events.pause().await;
+            });
+
+            futures::future::join_all(tasks).await;
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -476,20 +488,18 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
                 .map(|tmp| (tmp.base_path, FileId::from(tmp.file_id))),
         );
     }
+
+    // While the destructor ensures the events are paused this function waits for
+    // the execution to be finished
+    async fn finalize_failure(mut self) {
+        self.take_pause_futures().await;
+    }
 }
 
 impl Drop for HandlerLoop<'_> {
     fn drop(&mut self) {
         debug!(self.logger, "Stopping server handler");
-
-        let jobs = std::mem::take(&mut self.jobs);
-        tokio::spawn(async move {
-            let tasks = jobs.into_values().map(|task| async move {
-                task.events.pause().await;
-            });
-
-            futures::future::join_all(tasks).await;
-        });
+        tokio::spawn(self.take_pause_futures());
     }
 }
 

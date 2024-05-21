@@ -60,6 +60,7 @@ pub trait HandlerLoop {
     async fn on_bin_msg(&mut self, ws: &mut WebSocket, bytes: Vec<u8>) -> anyhow::Result<()>;
 
     async fn finalize_success(self);
+    async fn finalize_failure(self);
 }
 
 pub trait Request {
