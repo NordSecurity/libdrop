@@ -15,7 +15,7 @@ jobs:
           default: true        
       - name: docker sdk
         run: |
-          pip3 install docker 
+          pip3 install -r test/requirements.txt 
       - name: Print docker version
         run: docker version
       - name: Build Docker image
