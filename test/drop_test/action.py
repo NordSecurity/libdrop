@@ -682,6 +682,17 @@ class DrainEvents(Action):
         return f"DrainEvents({self._count})"
 
 
+class ClearEventQueue(Action):
+    def __init__(self):
+        pass
+
+    async def run(self, drop: ffi.Drop):
+        _ = await drop._events.gather_all(0)
+
+    def __str__(self):
+        return "ClearEventQueue()"
+
+
 class NoEvent(Action):
     def __init__(self, duration: int = 3):
         self._duration = duration

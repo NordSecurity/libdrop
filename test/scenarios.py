@@ -2665,6 +2665,202 @@ scenarios = [
         },
     ),
     Scenario(
+        "scenario11-4",
+        "Initate a transfers with multiple files. Wait for them to start and then stop the sender. Then restart sender and expect transfer to finish successfuly",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
+                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/11-4-ren.sqlite"),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY",
+                        [
+                            "/tmp/testfile-bulk-01",
+                            "/tmp/testfile-bulk-02",
+                            "/tmp/testfile-bulk-03",
+                            "/tmp/testfile-bulk-04",
+                            "/tmp/testfile-bulk-05",
+                            "/tmp/testfile-bulk-06",
+                            "/tmp/testfile-bulk-07",
+                            "/tmp/testfile-bulk-08",
+                            "/tmp/testfile-bulk-09",
+                            "/tmp/testfile-bulk-10",
+                        ],
+                    ),
+                    # fmt: off
+                    action.Wait(
+                        event.Queued(0, "DROP_PEER_STIMPY", [
+                            norddrop.QueuedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-05"].id, "testfile-bulk-05", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-06"].id, "testfile-bulk-06", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-07"].id, "testfile-bulk-07", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-08"].id, "testfile-bulk-08", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-09"].id, "testfile-bulk-09", 10485760, "/tmp"),
+                            norddrop.QueuedFile(FILES["testfile-bulk-10"].id, "testfile-bulk-10", 10485760, "/tmp"),
+                        ]),
+                    ),
+                    # Wait for some of the files and the stop
+                    action.Repeated([action.WaitForOneOf([
+                        event.Start(0, FILES["testfile-bulk-01"].id),
+                        event.Start(0, FILES["testfile-bulk-02"].id),
+                        event.Start(0, FILES["testfile-bulk-03"].id),
+                        event.Start(0, FILES["testfile-bulk-04"].id),
+                        event.Start(0, FILES["testfile-bulk-05"].id),
+                        event.Start(0, FILES["testfile-bulk-06"].id),
+                        event.Start(0, FILES["testfile-bulk-07"].id),
+                        event.Start(0, FILES["testfile-bulk-08"].id),
+                        event.Start(0, FILES["testfile-bulk-09"].id),
+                        event.Start(0, FILES["testfile-bulk-10"].id),
+                    ])], 4),
+                    # fmt: on
+                    action.Stop(),
+                    # fmt: off
+                    # Wait of paused events
+                    action.WaitAndIgnoreExcept([
+                        event.Paused(0, FILES["testfile-bulk-01"].id),
+                        event.Paused(0, FILES["testfile-bulk-02"].id),
+                        event.Paused(0, FILES["testfile-bulk-03"].id),
+                        event.Paused(0, FILES["testfile-bulk-04"].id),
+                        event.Paused(0, FILES["testfile-bulk-05"].id),
+                        event.Paused(0, FILES["testfile-bulk-06"].id),
+                        event.Paused(0, FILES["testfile-bulk-07"].id),
+                        event.Paused(0, FILES["testfile-bulk-08"].id),
+                        event.Paused(0, FILES["testfile-bulk-09"].id),
+                        event.Paused(0, FILES["testfile-bulk-10"].id),
+                    ]),
+                    # fmt: on
+                    action.Sleep(2),
+                    action.ClearEventQueue(),
+                    action.Start("DROP_PEER_REN", dbpath="/tmp/db/11-4-ren.sqlite"),
+                    # fmt: off
+                    # Wait for some of the files and the stop
+                    action.WaitRacy([
+                        event.Start(0, FILES["testfile-bulk-01"].id, None),
+                        event.Start(0, FILES["testfile-bulk-02"].id, None),
+                        event.Start(0, FILES["testfile-bulk-03"].id, None),
+                        event.Start(0, FILES["testfile-bulk-04"].id, None),
+                        event.Start(0, FILES["testfile-bulk-05"].id, None),
+                        event.Start(0, FILES["testfile-bulk-06"].id, None),
+                        event.Start(0, FILES["testfile-bulk-07"].id, None),
+                        event.Start(0, FILES["testfile-bulk-08"].id, None),
+                        event.Start(0, FILES["testfile-bulk-09"].id, None),
+                        event.Start(0, FILES["testfile-bulk-10"].id, None),
+                        event.FinishFileUploaded(0, FILES["testfile-bulk-01"].id),
+                        event.FinishFileUploaded(0, FILES["testfile-bulk-02"].id),
+                        event.FinishFileUploaded(0, FILES["testfile-bulk-03"].id),
+                        event.FinishFileUploaded(0, FILES["testfile-bulk-04"].id),
+                        event.FinishFileUploaded(0, FILES["testfile-bulk-05"].id),
+                        event.FinishFileUploaded(0, FILES["testfile-bulk-06"].id),
+                        event.FinishFileUploaded(0, FILES["testfile-bulk-07"].id),
+                        event.FinishFileUploaded(0, FILES["testfile-bulk-08"].id),
+                        event.FinishFileUploaded(0, FILES["testfile-bulk-09"].id),
+                        event.FinishFileUploaded(0, FILES["testfile-bulk-10"].id),
+                    ]),
+                    # fmt: on
+                    action.ExpectCancel([0], True),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Start("DROP_PEER_STIMPY"),
+                    # fmt: off
+                    action.Wait(
+                        event.Receive(0, "DROP_PEER_REN", [ 
+                            norddrop.ReceivedFile(FILES["testfile-bulk-01"].id, "testfile-bulk-01", 10485760),
+                            norddrop.ReceivedFile(FILES["testfile-bulk-02"].id, "testfile-bulk-02", 10485760),
+                            norddrop.ReceivedFile(FILES["testfile-bulk-03"].id, "testfile-bulk-03", 10485760),
+                            norddrop.ReceivedFile(FILES["testfile-bulk-04"].id, "testfile-bulk-04", 10485760),
+                            norddrop.ReceivedFile(FILES["testfile-bulk-05"].id, "testfile-bulk-05", 10485760),
+                            norddrop.ReceivedFile(FILES["testfile-bulk-06"].id, "testfile-bulk-06", 10485760),
+                            norddrop.ReceivedFile(FILES["testfile-bulk-07"].id, "testfile-bulk-07", 10485760),
+                            norddrop.ReceivedFile(FILES["testfile-bulk-08"].id, "testfile-bulk-08", 10485760),
+                            norddrop.ReceivedFile(FILES["testfile-bulk-09"].id, "testfile-bulk-09", 10485760),
+                            norddrop.ReceivedFile(FILES["testfile-bulk-10"].id, "testfile-bulk-10", 10485760),
+                        ]),
+                    ),
+                    # fmt: on
+                    # fmt: off
+                    action.Download(0, FILES["testfile-bulk-01"].id, "/tmp/received/11-4"),
+                    action.Download(0, FILES["testfile-bulk-02"].id, "/tmp/received/11-4"),
+                    action.Download(0, FILES["testfile-bulk-03"].id, "/tmp/received/11-4"),
+                    action.Download(0, FILES["testfile-bulk-04"].id, "/tmp/received/11-4"),
+                    action.Download(0, FILES["testfile-bulk-05"].id, "/tmp/received/11-4"),
+                    action.Download(0, FILES["testfile-bulk-06"].id, "/tmp/received/11-4"),
+                    action.Download(0, FILES["testfile-bulk-07"].id, "/tmp/received/11-4"),
+                    action.Download(0, FILES["testfile-bulk-08"].id, "/tmp/received/11-4"),
+                    action.Download(0, FILES["testfile-bulk-09"].id, "/tmp/received/11-4"),
+                    action.Download(0, FILES["testfile-bulk-10"].id, "/tmp/received/11-4"),
+                    # Wait for all 10 pending events
+                    action.Repeated([action.WaitForOneOf([
+                        event.Pending(0, FILES["testfile-bulk-01"].id),
+                        event.Pending(0, FILES["testfile-bulk-02"].id),
+                        event.Pending(0, FILES["testfile-bulk-03"].id),
+                        event.Pending(0, FILES["testfile-bulk-04"].id),
+                        event.Pending(0, FILES["testfile-bulk-05"].id),
+                        event.Pending(0, FILES["testfile-bulk-06"].id),
+                        event.Pending(0, FILES["testfile-bulk-07"].id),
+                        event.Pending(0, FILES["testfile-bulk-08"].id),
+                        event.Pending(0, FILES["testfile-bulk-09"].id),
+                        event.Pending(0, FILES["testfile-bulk-10"].id),
+                        event.Start(0, FILES["testfile-bulk-01"].id),
+                        event.Start(0, FILES["testfile-bulk-02"].id),
+                        event.Start(0, FILES["testfile-bulk-03"].id),
+                        event.Start(0, FILES["testfile-bulk-04"].id),
+                        event.Start(0, FILES["testfile-bulk-05"].id),
+                        event.Start(0, FILES["testfile-bulk-06"].id),
+                        event.Start(0, FILES["testfile-bulk-07"].id),
+                        event.Start(0, FILES["testfile-bulk-08"].id),
+                        event.Start(0, FILES["testfile-bulk-09"].id),
+                        event.Start(0, FILES["testfile-bulk-10"].id),
+                        ]),
+                    ], 10),
+                    action.WaitAndIgnoreExcept([
+                        event.Paused(0, FILES["testfile-bulk-01"].id),
+                        event.Paused(0, FILES["testfile-bulk-02"].id),
+                        event.Paused(0, FILES["testfile-bulk-03"].id),
+                        event.Paused(0, FILES["testfile-bulk-04"].id),
+                        event.Paused(0, FILES["testfile-bulk-05"].id),
+                        event.Paused(0, FILES["testfile-bulk-06"].id),
+                        event.Paused(0, FILES["testfile-bulk-07"].id),
+                        event.Paused(0, FILES["testfile-bulk-08"].id),
+                        event.Paused(0, FILES["testfile-bulk-09"].id),
+                        event.Paused(0, FILES["testfile-bulk-10"].id),
+                    ]),
+                    # The sender is stopped
+                    action.WaitRacy([
+                        event.Start(0, FILES["testfile-bulk-01"].id, None),
+                        event.Start(0, FILES["testfile-bulk-02"].id, None),
+                        event.Start(0, FILES["testfile-bulk-03"].id, None),
+                        event.Start(0, FILES["testfile-bulk-04"].id, None),
+                        event.Start(0, FILES["testfile-bulk-05"].id, None),
+                        event.Start(0, FILES["testfile-bulk-06"].id, None),
+                        event.Start(0, FILES["testfile-bulk-07"].id, None),
+                        event.Start(0, FILES["testfile-bulk-08"].id, None),
+                        event.Start(0, FILES["testfile-bulk-09"].id, None),
+                        event.Start(0, FILES["testfile-bulk-10"].id, None),
+                        event.FinishFileDownloaded(0, FILES["testfile-bulk-01"].id, "/tmp/received/11-4/testfile-bulk-01"),
+                        event.FinishFileDownloaded(0, FILES["testfile-bulk-02"].id, "/tmp/received/11-4/testfile-bulk-02"),
+                        event.FinishFileDownloaded(0, FILES["testfile-bulk-03"].id, "/tmp/received/11-4/testfile-bulk-03"),
+                        event.FinishFileDownloaded(0, FILES["testfile-bulk-04"].id, "/tmp/received/11-4/testfile-bulk-04"),
+                        event.FinishFileDownloaded(0, FILES["testfile-bulk-05"].id, "/tmp/received/11-4/testfile-bulk-05"),
+                        event.FinishFileDownloaded(0, FILES["testfile-bulk-06"].id, "/tmp/received/11-4/testfile-bulk-06"),
+                        event.FinishFileDownloaded(0, FILES["testfile-bulk-07"].id, "/tmp/received/11-4/testfile-bulk-07"),
+                        event.FinishFileDownloaded(0, FILES["testfile-bulk-08"].id, "/tmp/received/11-4/testfile-bulk-08"),
+                        event.FinishFileDownloaded(0, FILES["testfile-bulk-09"].id, "/tmp/received/11-4/testfile-bulk-09"),
+                        event.FinishFileDownloaded(0, FILES["testfile-bulk-10"].id, "/tmp/received/11-4/testfile-bulk-10"),
+                    ]),
+                    # fmt: on
+                    action.CancelTransferRequest([0]),
+                    action.ExpectCancel([0], False),
+                    action.Stop(),
+                ]
+            ),
+        },
+    ),
+    Scenario(
         "scenario12-1",
         "Transfer file to two clients simultaneously",
         {
@@ -8945,20 +9141,8 @@ scenarios = [
                         FILES["testfile-small"].id,
                         "/tmp/received/32/",
                     ),
-                    action.WaitRacy(
-                        [
-                            event.Pending(
-                                0,
-                                FILES["testfile-small"].id,
-                            ),
-                            event.Pending(
-                                1,
-                                FILES["testfile-small"].id,
-                            ),
-                        ]
-                    ),
                     # We cannot predict the final path of files from each transfer so we cannot wait for specific event
-                    action.DrainEvents(4),
+                    action.DrainEvents(6),
                     action.CheckDownloadedFiles(
                         [
                             action.File("/tmp/received/32/testfile-small", 1048576),

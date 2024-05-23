@@ -564,6 +564,7 @@ impl RunContext<'_> {
                 "WS connection broke for {}: {err:?}",
                 xfer.id()
             );
+            handler.finalize_failure().await;
         } else {
             info!(self.logger, "Sucesfully finalizing transfer loop");
             handler.finalize_success().await;
