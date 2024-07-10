@@ -78,7 +78,7 @@ async fn ask_server(state: &State, xfer: &IncomingTransfer, logger: &Logger) -> 
 
     let client = hyper::Client::builder().build::<_, hyper::Body>(connector);
 
-    let versions_to_try = [protocol::Version::V6, protocol::Version::V5];
+    let versions_to_try = [protocol::Version::V6];
 
     for version in versions_to_try {
         match make_request(
@@ -131,22 +131,13 @@ async fn make_request(
 
     debug!(logger, "Making HTTP request: {url}");
 
-    let mut req = hyper::Request::get(url.clone());
+    let req = hyper::Request::get(url.clone());
 
-    use protocol::Version as Ver;
-    let server_auth_scheme = match version {
-        Ver::V1 | Ver::V2 | Ver::V4 | Ver::V5 => None,
-        _ => {
-            let nonce = drop_auth::Nonce::generate_as_client();
-
-            let (key, value) = auth::create_www_authentication_header(&nonce);
-            req = req.header(key, value);
-
-            Some(nonce)
-        }
-    };
+    let nonce = drop_auth::Nonce::generate_as_client();
+    let (key, value) = auth::create_www_authentication_header(&nonce);
 
     let req = req
+        .header(key, value)
         .body(hyper::Body::empty())
         .expect("Creating request should not fail");
 
@@ -156,12 +147,9 @@ async fn make_request(
         .context("Failed to perform HTTP request")?;
 
     let authorize = || {
-        if let Some(nonce) = &server_auth_scheme {
-            // Validate the server response
-            auth.authorize_server(&response, ip, nonce)
-                .context("Failed to authorize server. Closing connection")?;
-        }
-        anyhow::Ok(())
+        // Validate the server response
+        auth.authorize_server(&response, ip, &nonce)
+            .context("Failed to authorize server. Closing connection")
     };
 
     match response.status() {
