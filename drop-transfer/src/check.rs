@@ -135,7 +135,7 @@ async fn make_request(
 
     use protocol::Version as Ver;
     let server_auth_scheme = match version {
-        Ver::V1 | Ver::V2 | Ver::V4 | Ver::V5 => None,
+        Ver::V4 | Ver::V5 => None,
         _ => {
             let nonce = drop_auth::Nonce::generate_as_client();
 

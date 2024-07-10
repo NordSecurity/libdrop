@@ -1,7 +1,6 @@
 mod handler;
 mod socket;
 mod throttle;
-mod v2;
 mod v4;
 mod v6;
 
@@ -149,14 +148,6 @@ async fn connect_to_peer(
 
     use protocol::Version;
     let control = match ver {
-        Version::V1 => {
-            ctx.run(socket, v2::HandlerInit::<false>::new(state, logger, alive))
-                .await
-        }
-        Version::V2 => {
-            ctx.run(socket, v2::HandlerInit::<true>::new(state, logger, alive))
-                .await
-        }
         Version::V4 => {
             ctx.run(socket, v4::HandlerInit::new(state, logger, alive))
                 .await
@@ -196,8 +187,6 @@ async fn establish_ws_conn(
         protocol::Version::V6,
         protocol::Version::V5,
         protocol::Version::V4,
-        protocol::Version::V2,
-        protocol::Version::V1,
     ]
     .into_iter();
 
@@ -257,7 +246,7 @@ async fn make_request(
 
     use protocol::Version as Ver;
     let server_auth_scheme = match version {
-        Ver::V1 | Ver::V2 | Ver::V4 | Ver::V5 => None,
+        Ver::V4 | Ver::V5 => None,
         _ => {
             let nonce = drop_auth::Nonce::generate_as_client();
 

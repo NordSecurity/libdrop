@@ -1,7 +1,6 @@
 mod auth;
 mod handler;
 mod socket;
-mod v2;
 mod v4;
 mod v6;
 
@@ -186,7 +185,6 @@ pub(crate) fn spawn(
                             &state.auth,
                             &nonces,
                             peer,
-                            version,
                             auth_header,
                             www_auth,
                             &logger,
@@ -220,7 +218,7 @@ pub(crate) fn spawn(
 
             base.and(warp::path!("check" / String))
                 .and(warp::get())
-                .and_then(move |peer, version, auth_header, www_auth, uuid: String| {
+                .and_then(move |peer, _version, auth_header, www_auth, uuid: String| {
                     let state = Arc::clone(&state);
                     let nonces = nonces.clone();
                     let logger = logger.clone();
@@ -230,7 +228,6 @@ pub(crate) fn spawn(
                             &state.auth,
                             &nonces,
                             peer,
-                            version,
                             auth_header,
                             www_auth,
                             &logger,
@@ -311,20 +308,6 @@ async fn websocket_start(
     };
 
     match version {
-        protocol::Version::V1 => {
-            ctx.run(
-                socket,
-                v2::HandlerInit::<false>::new(peer.ip(), &state, &logger),
-            )
-            .await
-        }
-        protocol::Version::V2 => {
-            ctx.run(
-                socket,
-                v2::HandlerInit::<true>::new(peer.ip(), &state, &logger),
-            )
-            .await
-        }
         protocol::Version::V4 => {
             ctx.run(
                 socket,
@@ -353,7 +336,6 @@ async fn process_authentication(
     auth: &crate::auth::Context,
     nonces: &Mutex<HashMap<SocketAddr, Nonce>>,
     peer: SocketAddr,
-    version: protocol::Version,
     clients_authorization_header: Option<String>,
     www_auth: auth::WWWAuthenticate,
     logger: &Logger,
@@ -361,22 +343,17 @@ async fn process_authentication(
     // Uncache the peer nonce first
     let nonce = nonces.lock().await.remove(&peer);
 
-    match version {
-        protocol::Version::V1 | protocol::Version::V2 => (),
-        _ => {
-            let Some(auth_header) = clients_authorization_header else {
-                return Err(warp::reject::custom(MissingAuth {
-                    peer,
-                    authorization: www_auth.authorize(auth, peer, logger),
-                }));
-            };
+    let Some(auth_header) = clients_authorization_header else {
+        return Err(warp::reject::custom(MissingAuth {
+            peer,
+            authorization: www_auth.authorize(auth, peer, logger),
+        }));
+    };
 
-            let nonce = nonce.ok_or_else(|| warp::reject::custom(Unauthorized))?;
+    let nonce = nonce.ok_or_else(|| warp::reject::custom(Unauthorized))?;
 
-            if !auth.authorize(peer.ip(), &auth_header, &nonce) {
-                return Err(warp::reject::custom(Unauthorized));
-            }
-        }
+    if !auth.authorize(peer.ip(), &auth_header, &nonce) {
+        return Err(warp::reject::custom(Unauthorized));
     };
 
     Ok(www_auth.authorize(auth, peer, logger))
@@ -1063,19 +1040,6 @@ impl TmpFileState {
         let csum = file::checksum(file, progress_cb, event_granularity).await?;
         Ok(TmpFileState { meta, csum })
     }
-}
-
-fn validate_tmp_location_path(tmp_location: &Hidden<PathBuf>) -> crate::Result<()> {
-    let char_count = tmp_location
-        .file_name()
-        .expect("Cannot extract filename")
-        .len();
-
-    if char_count > MAX_FILENAME_LENGTH {
-        return Err(crate::Error::FilenameTooLong);
-    }
-
-    Ok(())
 }
 
 fn move_tmp_to_dst(

@@ -1,3 +1,11 @@
+### UNRELEASED
+### **Fresh air**
+---
+* Remove support for deprecated, unsecure protocols V1 and V2
+
+---
+<br>
+
 ### 7.0.0
 ### **The United States of FFI***
 ---
