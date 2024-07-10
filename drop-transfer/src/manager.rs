@@ -406,14 +406,6 @@ impl TransferManager {
         sync.try_terminate_local(FileTerminalState::Rejected)?;
 
         self.storage
-            .update_incoming_file_sync_states(
-                state.xfer.id(),
-                file_id.as_ref(),
-                sync::FileState::Terminal,
-            )
-            .await;
-
-        self.storage
             .stop_incoming_file(state.xfer.id(), file_id.as_ref())
             .await;
 
@@ -459,7 +451,7 @@ impl TransferManager {
         &self,
         transfer_id: Uuid,
         file_id: &FileId,
-        success: bool,
+        success: Result<(), String>,
     ) -> crate::Result<()> {
         let mut lock = self.incoming.lock().await;
 
@@ -469,23 +461,30 @@ impl TransferManager {
 
         state.ensure_not_cancelled()?;
 
-        let state = state.file_sync_mut(file_id)?;
-        state.try_terminate_local(if success {
+        let fstate = state.file_sync_mut(file_id)?;
+        fstate.try_terminate_local(if success.is_ok() {
             FileTerminalState::Completed
         } else {
             FileTerminalState::Failed
         })?;
 
         self.storage
-            .update_incoming_file_sync_states(
-                transfer_id,
-                file_id.as_ref(),
-                sync::FileState::Terminal,
-            )
-            .await;
-        self.storage
             .stop_incoming_file(transfer_id, file_id.as_ref())
             .await;
+
+        if let Some(conn) = &state.conn {
+            let file = file_id.clone();
+
+            let (name, serv_req) = match success {
+                Ok(()) => ("DONE", ServerReq::Done { file }),
+                Err(msg) => ("FAIL", ServerReq::Fail { file, msg }),
+            };
+
+            debug!(self.logger, "Pushing file {name} message");
+            if let Err(e) = conn.send(serv_req) {
+                warn!(self.logger, "Failed to send {name} message: {e}");
+            };
+        }
 
         Ok(())
     }
@@ -505,13 +504,6 @@ impl TransferManager {
         let sync = state.file_sync_mut(file_id)?;
 
         let res = if sync.try_terminate_local(file_state).is_ok() {
-            self.storage
-                .update_incoming_file_sync_states(
-                    transfer_id,
-                    file_id.as_ref(),
-                    sync::FileState::Terminal,
-                )
-                .await;
             self.storage
                 .stop_incoming_file(transfer_id, file_id.as_ref())
                 .await;
@@ -568,18 +560,7 @@ impl TransferManager {
             .ok_or(crate::Error::BadTransfer)?;
 
         state.ensure_not_cancelled()?;
-
-        self.storage
-            .update_transfer_sync_states(transfer_id, drop_storage::sync::TransferState::Canceled)
-            .await;
-        state.xfer_sync = sync::TransferState::Canceled;
-
-        if let Some(conn) = state.conn.take() {
-            debug!(self.logger, "Pushing outgoing close request");
-            if let Err(e) = conn.send(ServerReq::Close) {
-                warn!(self.logger, "Failed to send close request: {}", e);
-            }
-        }
+        state.cancel_transfer(&self.logger, &self.storage).await;
 
         for val in state.file_sync.values_mut() {
             if let IncomingLocalFileState::InFlight { .. } = &*val {
@@ -620,20 +601,7 @@ impl TransferManager {
                 Ok(res)
             }
             sync::TransferState::Active => {
-                self.storage
-                    .update_transfer_sync_states(
-                        transfer_id,
-                        drop_storage::sync::TransferState::Canceled,
-                    )
-                    .await;
-                state.xfer_sync = sync::TransferState::Canceled;
-
-                if let Some(conn) = state.conn.take() {
-                    debug!(self.logger, "Pushing incoming  close request");
-                    if let Err(e) = conn.send(ClientReq::Close) {
-                        warn!(self.logger, "Failed to send close request: {}", e);
-                    }
-                }
+                state.cancel_transfer(&self.logger, &self.storage).await;
 
                 Ok(CloseResult {
                     file_events: state.file_events.values().cloned().collect(),
@@ -744,6 +712,24 @@ impl OutgoingState {
         self.file_sync
             .get_mut(file_id)
             .ok_or(crate::Error::BadFileId)
+    }
+
+    async fn cancel_transfer(&mut self, logger: &Logger, storage: &Storage) {
+        storage
+            .update_transfer_sync_states(
+                self.xfer.id(),
+                drop_storage::sync::TransferState::Canceled,
+            )
+            .await;
+        self.xfer_sync = sync::TransferState::Canceled;
+
+        if let Some(conn) = self.conn.take() {
+            debug!(logger, "Pushing incoming  close request");
+
+            if let Err(e) = conn.send(ClientReq::Close) {
+                warn!(logger, "Failed to send close request: {}", e);
+            }
+        }
     }
 }
 
@@ -867,6 +853,22 @@ impl IncomingState {
         self.file_sync
             .get_mut(file_id)
             .ok_or(crate::Error::BadFileId)
+    }
+
+    async fn cancel_transfer(&mut self, logger: &Logger, storage: &Storage) {
+        storage
+            .update_transfer_sync_states(self.xfer.id(), sync::TransferState::Canceled)
+            .await;
+
+        self.xfer_sync = sync::TransferState::Canceled;
+
+        if let Some(conn) = self.conn.take() {
+            debug!(logger, "Pushing outgoing close request");
+
+            if let Err(e) = conn.send(ServerReq::Close) {
+                warn!(logger, "Failed to send close request: {}", e);
+            }
+        }
     }
 }
 

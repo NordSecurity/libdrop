@@ -953,25 +953,17 @@ impl FileXferTask {
             let _guard = guard;
 
             match result {
-                Err(crate::Error::Canceled) => {
-                    info!(logger, "File {} stopped", self.file.id())
-                }
+                Err(crate::Error::Canceled) => info!(logger, "File {} stopped", self.file.id()),
                 Ok(dst_location) => {
                     info!(logger, "File {} downloaded succesfully", self.file.id());
 
                     if let Err(err) = state
                         .transfer_manager
-                        .incoming_finish_post(self.xfer.id(), self.file.id(), true)
+                        .incoming_finish_post(self.xfer.id(), self.file.id(), Ok(()))
                         .await
                     {
                         warn!(logger, "Failed to post finish: {err}");
                     }
-
-                    if let Err(e) = req_send.send(ServerReq::Done {
-                        file: self.file.id().clone(),
-                    }) {
-                        warn!(logger, "Failed to send DONE message: {}", e);
-                    };
 
                     events.success(dst_location).await;
                 }
@@ -984,18 +976,11 @@ impl FileXferTask {
 
                     if let Err(err) = state
                         .transfer_manager
-                        .incoming_finish_post(self.xfer.id(), self.file.id(), false)
+                        .incoming_finish_post(self.xfer.id(), self.file.id(), Err(err.to_string()))
                         .await
                     {
                         warn!(logger, "Failed to post finish: {err}");
                     }
-
-                    if let Err(e) = req_send.send(ServerReq::Fail {
-                        file: self.file.id().clone(),
-                        msg: err.to_string(),
-                    }) {
-                        warn!(logger, "Failed to send FAIL message: {}", e);
-                    };
 
                     events.failed(err).await;
                 }
