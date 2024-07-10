@@ -1,7 +1,7 @@
 ### UNRELEASED
 ### **Fresh air**
 ---
-* Remove support for deprecated, unsecure protocols V1 and V2
+* Remove support for deprecated, unsecure protocols V1, V2, V4 and V5
 
 ---
 <br>

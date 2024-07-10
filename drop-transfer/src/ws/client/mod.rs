@@ -1,7 +1,6 @@
 mod handler;
 mod socket;
 mod throttle;
-mod v4;
 mod v6;
 
 use std::{
@@ -148,14 +147,6 @@ async fn connect_to_peer(
 
     use protocol::Version;
     let control = match ver {
-        Version::V4 => {
-            ctx.run(socket, v4::HandlerInit::new(state, logger, alive))
-                .await
-        }
-        Version::V5 => {
-            ctx.run(socket, v6::HandlerInit::new(state, logger, alive))
-                .await
-        }
         Version::V6 => {
             ctx.run(socket, v6::HandlerInit::new(state, logger, alive))
                 .await
@@ -183,12 +174,7 @@ async fn establish_ws_conn(
         }
     };
 
-    let mut versions_to_try = [
-        protocol::Version::V6,
-        protocol::Version::V5,
-        protocol::Version::V4,
-    ]
-    .into_iter();
+    let mut versions_to_try = [protocol::Version::V6].into_iter();
 
     let ver = loop {
         let ver = if let Some(ver) = versions_to_try.next() {
@@ -244,28 +230,17 @@ async fn make_request(
 
     let mut req = url.as_str().into_client_request().context("Invalid URL")?;
 
-    use protocol::Version as Ver;
-    let server_auth_scheme = match version {
-        Ver::V4 | Ver::V5 => None,
-        _ => {
-            let nonce = drop_auth::Nonce::generate_as_client();
+    let nonce = drop_auth::Nonce::generate_as_client();
 
-            let (key, value) = auth::create_www_authentication_header(&nonce);
-            req.headers_mut().insert(key, value);
-
-            Some(nonce)
-        }
-    };
+    let (key, value) = auth::create_www_authentication_header(&nonce);
+    req.headers_mut().insert(key, value);
 
     let resp = send_request_and_wait_for_respnse(socket, req).await?;
 
     let authorize = || {
-        if let Some(nonce) = &server_auth_scheme {
-            // Validate the server response
-            auth.authorize_server(&resp, ip, nonce)
-                .context("Failed to authorize server. Closing connection")?;
-        }
-        anyhow::Ok(())
+        // Validate the server response
+        auth.authorize_server(&resp, ip, &nonce)
+            .context("Failed to authorize server. Closing connection")
     };
 
     match resp.status() {
@@ -281,8 +256,7 @@ async fn make_request(
             debug!(logger, "Creating 'authorization' header");
 
             debug!(logger, "Extracting peers ({ip}) public key");
-            let (key, value) =
-                auth.create_clients_auth_header(&resp, ip, server_auth_scheme.is_some())?;
+            let (key, value) = auth.create_clients_auth_header(&resp, ip, true)?;
 
             debug!(logger, "Building 'authorization' request");
             let mut req = url.as_str().into_client_request().context("Invalid URL")?;

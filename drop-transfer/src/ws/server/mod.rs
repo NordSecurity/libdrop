@@ -1,7 +1,6 @@
 mod auth;
 mod handler;
 mod socket;
-mod v4;
 mod v6;
 
 use std::{
@@ -308,20 +307,6 @@ async fn websocket_start(
     };
 
     match version {
-        protocol::Version::V4 => {
-            ctx.run(
-                socket,
-                v4::HandlerInit::new(peer.ip(), state, &logger, &alive),
-            )
-            .await
-        }
-        protocol::Version::V5 => {
-            ctx.run(
-                socket,
-                v6::HandlerInit::new(peer.ip(), state, &logger, &alive),
-            )
-            .await
-        }
         protocol::Version::V6 => {
             ctx.run(
                 socket,
