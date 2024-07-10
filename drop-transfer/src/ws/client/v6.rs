@@ -45,7 +45,6 @@ struct Uploader {
     sink: Sender<MsgToSend>,
     file_id: FileId,
     offset: u64,
-    logger: slog::Logger,
 }
 
 impl<'a> HandlerInit<'a> {
@@ -119,7 +118,10 @@ impl HandlerLoop<'_> {
             .await
         {
             Err(err) => error!(self.logger, "Failed to handler file rejection: {err}"),
-            Ok(Some(res)) => res.events.rejected(true).await,
+            Ok(Some(res)) => {
+                res.file_events.rejected(true).await;
+                super::handle_finish_xfer_state(res.xfer_state, true).await;
+            }
             Ok(None) => (),
         }
 
@@ -195,31 +197,19 @@ impl HandlerLoop<'_> {
                 Err(err) => {
                     error!(logger, "Failed to report checksum: {:?}", err);
 
-                    let msg = err.to_string();
-
                     match state
                         .transfer_manager
-                        .outgoing_failure_post(xfer.id(), &file_id)
+                        .outgoing_failure_post(xfer.id(), &file_id, err.to_string())
                         .await
                     {
                         Err(err) => {
                             warn!(logger, "Failed to post failure {err:?}");
                         }
-                        Ok(res) => res.events.failed(err).await,
+                        Ok(res) => {
+                            res.file_events.failed(err).await;
+                            super::handle_finish_xfer_state(res.xfer_state, false).await;
+                        }
                     }
-
-                    let msg = prot::Error {
-                        file: Some(file_id.clone()),
-                        msg,
-                    };
-                    if let Err(e) = msg_tx
-                        .send(MsgToSend {
-                            msg: Message::from(&prot::ClientMsg::Error(msg)),
-                        })
-                        .await
-                    {
-                        warn!(logger, "Failed to send error message: {:?}", e);
-                    };
                 }
             }
         };
@@ -245,7 +235,6 @@ impl HandlerLoop<'_> {
                     sink: self.upload_tx.clone(),
                     file_id: file_id.clone(),
                     offset,
-                    logger: self.logger.clone(),
                 };
                 let state = self.state.clone();
                 let alive = self.alive.clone();
@@ -331,10 +320,11 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         &mut self,
         socket: &mut WebSocket,
         file_id: FileId,
+        msg: String,
     ) -> anyhow::Result<()> {
         let msg = prot::ClientMsg::Error(prot::Error {
             file: Some(file_id),
-            msg: String::from("File failed elsewhere"),
+            msg,
         });
         socket.send(Message::from(&msg)).await?;
 
@@ -418,23 +408,6 @@ impl handler::Uploader for Uploader {
             .map_err(|_| crate::Error::Canceled)?;
 
         Ok(())
-    }
-
-    async fn error(&mut self, msg: String) {
-        let msg = prot::ClientMsg::Error(prot::Error {
-            file: Some(self.file_id.clone()),
-            msg,
-        });
-
-        if let Err(e) = self
-            .sink
-            .send(MsgToSend {
-                msg: Message::from(&msg),
-            })
-            .await
-        {
-            warn!(self.logger, "Failed to send error message: {:?}", e);
-        };
     }
 
     fn offset(&self) -> u64 {

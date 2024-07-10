@@ -35,8 +35,30 @@ pub struct CloseResult<T: Transfer> {
 }
 
 pub struct FinishResult<T: Transfer> {
-    pub xfer: Arc<T>,
-    pub events: Arc<FileEventTx<T>>,
+    pub xfer_state: FinishTransferState<T>,
+    pub file_events: Arc<FileEventTx<T>>,
+}
+
+pub enum FinishTransferState<T: Transfer> {
+    Canceled { events: Arc<TransferEventTx<T>> },
+    Alive,
+}
+
+pub enum OutgoingConnected {
+    JustCancelled {
+        events: Arc<OutgoingTransferEventTx>,
+    },
+    Continue,
+}
+
+pub enum IncomingRegistered {
+    IsNew {
+        events: Arc<IncomingTransferEventTx>,
+    },
+    Continue,
+    JustCancelled {
+        events: Arc<IncomingTransferEventTx>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, strum::FromRepr)]
@@ -107,7 +129,7 @@ impl TransferManager {
         &self,
         xfer: Arc<IncomingTransfer>,
         conn: UnboundedSender<ServerReq>,
-    ) -> anyhow::Result<Option<Arc<IncomingTransferEventTx>>> {
+    ) -> anyhow::Result<IncomingRegistered> {
         let mut lock = self.incoming.lock().await;
 
         match lock.entry(xfer.id()) {
@@ -140,10 +162,23 @@ impl TransferManager {
                         }
                         drop(conn)
                     }
-                    _ => state.conn = Some(conn),
+                    _ => {
+                        state.conn = Some(conn);
+
+                        let was_cancelled = state
+                            .cancel_transfer_if_all_files_terminated(&self.logger, &self.storage)
+                            .await;
+
+                        match was_cancelled {
+                            FinishTransferState::Canceled { events } => {
+                                return Ok(IncomingRegistered::JustCancelled { events })
+                            }
+                            FinishTransferState::Alive => (),
+                        }
+                    }
                 }
 
-                Ok(None)
+                Ok(IncomingRegistered::Continue)
             }
             Entry::Vacant(vacc) => {
                 if self
@@ -156,7 +191,7 @@ impl TransferManager {
                     if let Err(e) = conn.send(ServerReq::Close) {
                         warn!(self.logger, "Failed to send close request: {}", e);
                     }
-                    return Ok(None);
+                    return Ok(IncomingRegistered::Continue);
                 }
 
                 self.storage
@@ -186,7 +221,9 @@ impl TransferManager {
                     xfer_events: Arc::new(self.event_factory.transfer(xfer, false)),
                 });
 
-                Ok(Some(state.xfer_events.clone()))
+                Ok(IncomingRegistered::IsNew {
+                    events: state.xfer_events.clone(),
+                })
             }
         }
     }
@@ -200,7 +237,7 @@ impl TransferManager {
         &self,
         transfer_id: Uuid,
         conn: UnboundedSender<ClientReq>,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<OutgoingConnected> {
         let mut lock = self.outgoing.lock().await;
         let state = lock
             .get_mut(&transfer_id)
@@ -225,10 +262,21 @@ impl TransferManager {
             _ => {
                 state.issue_pending_requests(&conn, &self.logger);
                 state.conn = Some(conn);
+
+                let was_cancelled = state
+                    .cancel_transfer_if_all_files_terminated(&self.logger, &self.storage)
+                    .await;
+
+                match was_cancelled {
+                    FinishTransferState::Canceled { events } => {
+                        return Ok(OutgoingConnected::JustCancelled { events })
+                    }
+                    FinishTransferState::Alive => (),
+                }
             }
         }
 
-        Ok(())
+        Ok(OutgoingConnected::Continue)
     }
 
     pub async fn insert_outgoing(
@@ -350,8 +398,10 @@ impl TransferManager {
         }
 
         Ok(FinishResult {
-            xfer: state.xfer.clone(),
-            events: state.file_events(file_id)?.clone(),
+            xfer_state: state
+                .cancel_transfer_if_all_files_terminated(&self.logger, &self.storage)
+                .await,
+            file_events: state.file_events(file_id)?.clone(),
         })
     }
 
@@ -378,9 +428,13 @@ impl TransferManager {
                 )
                 .await;
 
+            let xfer_state = state
+                .cancel_transfer_if_all_files_terminated(&self.logger, &self.storage)
+                .await;
+
             Some(FinishResult {
-                xfer: state.xfer.clone(),
-                events: state.file_events(file_id)?.clone(),
+                xfer_state,
+                file_events: state.file_events(file_id)?.clone(),
             })
         } else {
             None
@@ -422,9 +476,13 @@ impl TransferManager {
             };
         }
 
+        let xfer_state = state
+            .cancel_transfer_if_all_files_terminated(&self.logger, &self.storage)
+            .await;
+
         Ok(FinishResult {
-            xfer: state.xfer.clone(),
-            events: state.file_events(file_id)?.clone(),
+            xfer_state,
+            file_events: state.file_events(file_id)?.clone(),
         })
     }
 
@@ -439,12 +497,11 @@ impl TransferManager {
 
     pub async fn is_incoming_alive(&self, transfer_id: Uuid) -> bool {
         let lock = self.incoming.lock().await;
-        let state = match lock.get(&transfer_id) {
-            Some(state) => state,
-            None => return false,
-        };
 
-        !matches!(state.xfer_sync, sync::TransferState::Canceled)
+        match lock.get(&transfer_id) {
+            Some(state) => !matches!(state.xfer_sync, sync::TransferState::Canceled),
+            None => false,
+        }
     }
 
     pub async fn incoming_finish_post(
@@ -452,7 +509,7 @@ impl TransferManager {
         transfer_id: Uuid,
         file_id: &FileId,
         success: Result<(), String>,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<FinishTransferState<IncomingTransfer>> {
         let mut lock = self.incoming.lock().await;
 
         let state = lock
@@ -486,7 +543,11 @@ impl TransferManager {
             };
         }
 
-        Ok(())
+        let xfer_state = state
+            .cancel_transfer_if_all_files_terminated(&self.logger, &self.storage)
+            .await;
+
+        Ok(xfer_state)
     }
 
     pub async fn incoming_terminal_recv(
@@ -508,9 +569,13 @@ impl TransferManager {
                 .stop_incoming_file(transfer_id, file_id.as_ref())
                 .await;
 
+            let xfer_state = state
+                .cancel_transfer_if_all_files_terminated(&self.logger, &self.storage)
+                .await;
+
             Some(FinishResult {
-                xfer: state.xfer.clone(),
-                events: state.file_events(file_id)?.clone(),
+                xfer_state,
+                file_events: state.file_events(file_id)?.clone(),
             })
         } else {
             None
@@ -523,6 +588,7 @@ impl TransferManager {
         &self,
         transfer_id: Uuid,
         file_id: &FileId,
+        msg: String,
     ) -> crate::Result<FinishResult<OutgoingTransfer>> {
         let mut lock = self.outgoing.lock().await;
 
@@ -543,9 +609,23 @@ impl TransferManager {
             )
             .await;
 
+        if let Some(conn) = &state.conn {
+            debug!(self.logger, "Pushing file FAIL message");
+            if let Err(e) = conn.send(ClientReq::Fail {
+                file: file_id.clone(),
+                msg: msg.to_string(),
+            }) {
+                warn!(self.logger, "Failed to send FAIL message: {e}");
+            };
+        }
+
+        let xfer_state = state
+            .cancel_transfer_if_all_files_terminated(&self.logger, &self.storage)
+            .await;
+
         Ok(FinishResult {
-            xfer: state.xfer.clone(),
-            events: state.file_events(file_id)?.clone(),
+            xfer_state,
+            file_events: state.file_events(file_id)?.clone(),
         })
     }
 
@@ -685,6 +765,7 @@ impl OutgoingState {
 
                     Some(ClientReq::Fail {
                         file: file_id.clone(),
+                        msg: String::from("File failed elsewhere"),
                     })
                 }
                 _ => None,
@@ -714,6 +795,32 @@ impl OutgoingState {
             .ok_or(crate::Error::BadFileId)
     }
 
+    async fn cancel_transfer_if_all_files_terminated(
+        &mut self,
+        logger: &Logger,
+        storage: &Storage,
+    ) -> FinishTransferState<OutgoingTransfer> {
+        let all_terminated = self
+            .file_sync
+            .values()
+            .all(|file_state| matches!(file_state, OutgoingLocalFileState::Terminal(_)));
+
+        if all_terminated {
+            debug!(
+                logger,
+                "All outgoing files terminated, cancelling transfer: {}",
+                self.xfer.id()
+            );
+
+            self.cancel_transfer(logger, storage).await;
+            FinishTransferState::Canceled {
+                events: self.xfer_events.clone(),
+            }
+        } else {
+            FinishTransferState::Alive
+        }
+    }
+
     async fn cancel_transfer(&mut self, logger: &Logger, storage: &Storage) {
         storage
             .update_transfer_sync_states(
@@ -724,7 +831,7 @@ impl OutgoingState {
         self.xfer_sync = sync::TransferState::Canceled;
 
         if let Some(conn) = self.conn.take() {
-            debug!(logger, "Pushing incoming  close request");
+            debug!(logger, "Pushing outgoing  close request");
 
             if let Err(e) = conn.send(ClientReq::Close) {
                 warn!(logger, "Failed to send close request: {}", e);
@@ -855,6 +962,32 @@ impl IncomingState {
             .ok_or(crate::Error::BadFileId)
     }
 
+    async fn cancel_transfer_if_all_files_terminated(
+        &mut self,
+        logger: &Logger,
+        storage: &Storage,
+    ) -> FinishTransferState<IncomingTransfer> {
+        let all_terminated = self
+            .file_sync
+            .values()
+            .all(|file_state| matches!(file_state, IncomingLocalFileState::Terminal(_)));
+
+        if all_terminated {
+            debug!(
+                logger,
+                "All incoming files terminated, cancelling transfer: {}",
+                self.xfer.id()
+            );
+
+            self.cancel_transfer(logger, storage).await;
+            FinishTransferState::Canceled {
+                events: self.xfer_events.clone(),
+            }
+        } else {
+            FinishTransferState::Alive
+        }
+    }
+
     async fn cancel_transfer(&mut self, logger: &Logger, storage: &Storage) {
         storage
             .update_transfer_sync_states(self.xfer.id(), sync::TransferState::Canceled)
@@ -863,7 +996,7 @@ impl IncomingState {
         self.xfer_sync = sync::TransferState::Canceled;
 
         if let Some(conn) = self.conn.take() {
-            debug!(logger, "Pushing outgoing close request");
+            debug!(logger, "Pushing incoming close request");
 
             if let Err(e) = conn.send(ServerReq::Close) {
                 warn!(logger, "Failed to send close request: {}", e);

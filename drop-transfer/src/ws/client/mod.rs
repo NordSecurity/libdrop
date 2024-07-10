@@ -32,7 +32,7 @@ use super::OutgoingFileEventTx;
 use crate::{
     auth,
     file::FileId,
-    manager::FileTerminalState,
+    manager::{FileTerminalState, FinishTransferState, OutgoingConnected},
     protocol,
     service::State,
     tasks::AliveGuard,
@@ -44,7 +44,7 @@ use crate::{
 
 pub enum ClientReq {
     Reject { file: FileId },
-    Fail { file: FileId },
+    Fail { file: FileId, msg: String },
     Close,
 }
 
@@ -300,10 +300,13 @@ impl RunContext<'_> {
             .outgoing_connected(self.xfer.id(), tx)
             .await
         {
-            Ok(()) => handler.start(socket, self.xfer).await?,
+            Ok(OutgoingConnected::Continue) => (),
+            Ok(OutgoingConnected::JustCancelled { events }) => events.cancel(false).await,
             Err(crate::Error::BadTransfer) => return Ok(None),
             Err(err) => return Err(err),
         }
+
+        handler.start(socket, self.xfer).await?;
 
         Ok(Some(rx))
     }
@@ -459,10 +462,10 @@ impl RunContext<'_> {
     ) -> anyhow::Result<ControlFlow<()>> {
         match req.context("API channel broken")? {
             ClientReq::Reject { file } => {
-                handler.issue_reject(socket, file.clone()).await?;
+                handler.issue_reject(socket, file).await?;
             }
-            ClientReq::Fail { file } => {
-                handler.issue_failure(socket, file.clone()).await?;
+            ClientReq::Fail { file, msg } => {
+                handler.issue_failure(socket, file, msg).await?;
             }
             ClientReq::Close => {
                 debug!(self.logger, "Stopping client connection gracefuly");
@@ -537,19 +540,19 @@ async fn start_upload(
                     "Failed at service::download() while reading a file: {}", err
                 );
 
-                let msg = err.to_string();
-
                 match state
                     .transfer_manager
-                    .outgoing_failure_post(xfer.id(), &file_id)
+                    .outgoing_failure_post(xfer.id(), &file_id, err.to_string())
                     .await
                 {
                     Err(err) => {
                         warn!(logger, "Failed to post failure {err:?}");
                     }
-                    Ok(res) => res.events.failed(err).await,
+                    Ok(res) => {
+                        res.file_events.failed(err).await;
+                        handle_finish_xfer_state(res.xfer_state, false).await;
+                    }
                 }
-                uploader.error(msg).await;
             }
         };
     };
@@ -569,7 +572,10 @@ async fn on_upload_finished(
         .await
     {
         Err(err) => warn!(logger, "Failed to accept file as done: {err}"),
-        Ok(Some(res)) => res.events.success().await,
+        Ok(Some(res)) => {
+            res.file_events.success().await;
+            handle_finish_xfer_state(res.xfer_state, true).await;
+        }
         Ok(None) => (),
     }
 }
@@ -588,12 +594,20 @@ async fn on_upload_failure(
     {
         Err(err) => warn!(logger, "Failed to accept failure: {err}"),
         Ok(Some(res)) => {
-            res.events
+            res.file_events
                 .failed(crate::Error::BadTransferState(format!(
                     "Receiver reported an error: {msg}"
                 )))
                 .await;
+            handle_finish_xfer_state(res.xfer_state, true).await;
         }
         Ok(None) => (),
+    }
+}
+
+pub async fn handle_finish_xfer_state(state: FinishTransferState<OutgoingTransfer>, by_peer: bool) {
+    match state {
+        FinishTransferState::Canceled { events } => events.cancel(by_peer).await,
+        FinishTransferState::Alive => (),
     }
 }
