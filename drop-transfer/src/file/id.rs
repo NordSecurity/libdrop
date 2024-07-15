@@ -144,9 +144,9 @@ where
     }
 }
 
-impl ToString for FileSubPath {
-    fn to_string(&self) -> String {
-        self.0.join(SEPARATOR)
+impl fmt::Display for FileSubPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0.join(SEPARATOR))
     }
 }
 
