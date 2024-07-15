@@ -11,11 +11,8 @@ crate-type = ["cdylib"]
 uniffi = { git = "https://github.com/NordSecurity/uniffi-rs", tag = "v0.3.1+v0.25.0" }
 
 uuid = { workspace = true }
-libc = { workspace = true }
 slog = { workspace = true }
 tokio = { workspace = true }
-async-trait = { workspace = true }
-url = { workspace = true }
 
 drop-transfer = { version = "1.0", path = "../drop-transfer" }
 drop-config = { version = "1.0", path = "../drop-config" }
