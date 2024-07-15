@@ -29,7 +29,12 @@ pub trait HandlerInit {
 #[async_trait::async_trait]
 pub trait HandlerLoop {
     async fn issue_reject(&mut self, ws: &mut WebSocket, file_id: FileId) -> anyhow::Result<()>;
-    async fn issue_failure(&mut self, ws: &mut WebSocket, file_id: FileId) -> anyhow::Result<()>;
+    async fn issue_failure(
+        &mut self,
+        ws: &mut WebSocket,
+        file_id: FileId,
+        msg: String,
+    ) -> anyhow::Result<()>;
 
     async fn on_close(&mut self);
     async fn on_text_msg(
@@ -44,7 +49,6 @@ pub trait HandlerLoop {
 #[async_trait::async_trait]
 pub trait Uploader: Send + 'static {
     async fn chunk(&mut self, chunk: &[u8]) -> crate::Result<()>;
-    async fn error(&mut self, msg: String);
 
     // File stream offset
     fn offset(&self) -> u64;

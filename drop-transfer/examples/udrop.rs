@@ -1,5 +1,4 @@
 use std::{
-    collections::{btree_map::Entry, BTreeMap, HashSet},
     env,
     io::Write,
     net::IpAddr,
@@ -202,93 +201,19 @@ async fn listen(
 ) -> anyhow::Result<()> {
     info!("Awaiting events…");
 
-    let mut active_file_downloads = BTreeMap::new();
     let mut storage = drop_transfer::StorageDispatch::new(storage);
     while let Some((ev, _)) = rx.recv().await {
         storage.handle_event(&ev).await;
         print_event(&ev);
-        match ev {
-            Event::RequestReceived(xfer) => {
-                let xfid = xfer.id();
-                let files = xfer.files();
 
-                if files.is_empty() {
-                    service
-                        .cancel_all(xfid)
-                        .await
-                        .context("Failed to cancled transfer")?;
-                }
-
-                for file in xfer.files().values() {
-                    service
-                        .download(xfid, file.id(), &out_dir.to_string_lossy())
-                        .await
-                        .context("Cannot issue download call")?;
-                }
+        if let Event::RequestReceived(xfer) = ev {
+            let xfid = xfer.id();
+            for file in xfer.files().values() {
+                service
+                    .download(xfid, file.id(), &out_dir.to_string_lossy())
+                    .await
+                    .context("Cannot issue download call")?;
             }
-            Event::FileDownloadStarted(xfer, file, _, _) => {
-                active_file_downloads
-                    .entry(xfer.id())
-                    .or_insert_with(HashSet::new)
-                    .insert(file);
-            }
-
-            Event::FileDownloadProgress(xfer, file, _) => {
-                active_file_downloads
-                    .entry(xfer.id())
-                    .or_insert_with(HashSet::new)
-                    .insert(file);
-            }
-            Event::FileDownloadSuccess(xfer, info) => {
-                let xfid = xfer.id();
-                if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
-                    occ.get_mut().remove(&info.id);
-                    if occ.get().is_empty() {
-                        service
-                            .cancel_all(xfid)
-                            .await
-                            .context("Failed to cancled transfer")?;
-                        occ.remove_entry();
-                    }
-                }
-            }
-            Event::FileDownloadFailed(xfer, file, _) => {
-                let xfid = xfer.id();
-
-                if let Entry::Occupied(mut occ) = active_file_downloads.entry(xfer.id()) {
-                    occ.get_mut().remove(&file);
-                    if occ.get().is_empty() {
-                        service
-                            .cancel_all(xfid)
-                            .await
-                            .context("Failed to cancled transfer")?;
-                        occ.remove_entry();
-                    }
-                }
-            }
-            Event::FileDownloadRejected {
-                transfer_id,
-                file_id,
-                ..
-            } => {
-                if let Entry::Occupied(mut occ) = active_file_downloads.entry(transfer_id) {
-                    occ.get_mut().remove(&file_id);
-                    if occ.get().is_empty() {
-                        service
-                            .cancel_all(transfer_id)
-                            .await
-                            .context("Failed to cancled transfer")?;
-                        occ.remove_entry();
-                    }
-                }
-            }
-            Event::IncomingTransferCanceled(xfer, _) => {
-                active_file_downloads.remove(&xfer.id());
-            }
-            Event::OutgoingTransferCanceled(xfer, _) => {
-                active_file_downloads.remove(&xfer.id());
-            }
-            _ => (),
         }
     }
 

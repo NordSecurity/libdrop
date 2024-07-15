@@ -120,7 +120,6 @@ scenarios = [
                             action.File("/tmp/received/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.AssertTransfers(
                         [
@@ -200,6 +199,7 @@ scenarios = [
                             FILES["testfile-small"].id,
                         )
                     ),
+                    action.ExpectCancel([0], True),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
                     action.Wait(
                         event.Queued(
@@ -222,7 +222,7 @@ scenarios = [
                             FILES["testfile-big"].id,
                         )
                     ),
-                    action.ExpectCancel([0, 1], True),
+                    action.ExpectCancel([1], True),
                     action.NoEvent(),
                     action.AssertTransfers(
                         [
@@ -323,6 +323,7 @@ scenarios = [
                             "/tmp/received/testfile-small",
                         )
                     ),
+                    action.ExpectCancel([0], False),
                     action.Wait(
                         event.Receive(
                             1,
@@ -354,8 +355,7 @@ scenarios = [
                             action.File("/tmp/received/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0, 1]),
-                    action.ExpectCancel([0, 1], False),
+                    action.ExpectCancel([1], False),
                     action.AssertTransfers(
                         [
                             """{
@@ -447,43 +447,37 @@ scenarios = [
                     action.Start("DROP_PEER_REN"),
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
-                    action.Wait(
-                        event.Queued(
-                            0,
-                            "DROP_PEER_STIMPY",
-                            [
-                                norddrop.QueuedFile(
-                                    FILES["testfile-big"].id,
-                                    "testfile-big",
-                                    10485760,
-                                    "/tmp",
-                                ),
-                            ],
-                        ),
-                    ),
-                    action.Wait(
-                        event.Start(
-                            0,
-                            FILES["testfile-big"].id,
-                        )
-                    ),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
-                    action.Wait(
-                        event.Queued(
-                            1,
-                            "DROP_PEER_STIMPY",
-                            [
-                                norddrop.QueuedFile(
-                                    FILES["testfile-small"].id,
-                                    "testfile-small",
-                                    1048576,
-                                    "/tmp",
-                                ),
-                            ],
-                        ),
-                    ),
                     action.WaitRacy(
                         [
+                            event.Queued(
+                                0,
+                                "DROP_PEER_STIMPY",
+                                [
+                                    norddrop.QueuedFile(
+                                        FILES["testfile-big"].id,
+                                        "testfile-big",
+                                        10485760,
+                                        "/tmp",
+                                    ),
+                                ],
+                            ),
+                            event.Queued(
+                                1,
+                                "DROP_PEER_STIMPY",
+                                [
+                                    norddrop.QueuedFile(
+                                        FILES["testfile-small"].id,
+                                        "testfile-small",
+                                        1048576,
+                                        "/tmp",
+                                    ),
+                                ],
+                            ),
+                            event.Start(
+                                0,
+                                FILES["testfile-big"].id,
+                            ),
                             event.Start(
                                 1,
                                 FILES["testfile-small"].id,
@@ -496,9 +490,10 @@ scenarios = [
                                 1,
                                 FILES["testfile-small"].id,
                             ),
+                            event.FinishTransferCanceled(0, True),
+                            event.FinishTransferCanceled(1, True),
                         ],
                     ),
-                    action.ExpectCancel([0, 1], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -506,43 +501,36 @@ scenarios = [
             "DROP_PEER_STIMPY": ActionList(
                 [
                     action.Start("DROP_PEER_STIMPY"),
-                    action.Wait(
-                        event.Receive(
-                            0,
-                            "DROP_PEER_REN",
-                            [
-                                norddrop.ReceivedFile(
-                                    FILES["testfile-big"].id,
-                                    "testfile-big",
-                                    10485760,
-                                ),
-                            ],
-                        ),
+                    action.WaitRacy(
+                        [
+                            event.Receive(
+                                0,
+                                "DROP_PEER_REN",
+                                [
+                                    norddrop.ReceivedFile(
+                                        FILES["testfile-big"].id,
+                                        "testfile-big",
+                                        10485760,
+                                    ),
+                                ],
+                            ),
+                            event.Receive(
+                                1,
+                                "DROP_PEER_REN",
+                                [
+                                    norddrop.ReceivedFile(
+                                        FILES["testfile-small"].id,
+                                        "testfile-small",
+                                        1048576,
+                                    ),
+                                ],
+                            ),
+                        ]
                     ),
                     action.Download(
                         0,
                         FILES["testfile-big"].id,
                         "/tmp/received",
-                    ),
-                    action.Wait(event.Pending(0, FILES["testfile-big"].id)),
-                    action.Wait(
-                        event.Start(
-                            0,
-                            FILES["testfile-big"].id,
-                        ),
-                    ),
-                    action.Wait(
-                        event.Receive(
-                            1,
-                            "DROP_PEER_REN",
-                            [
-                                norddrop.ReceivedFile(
-                                    FILES["testfile-small"].id,
-                                    "testfile-small",
-                                    1048576,
-                                ),
-                            ],
-                        ),
                     ),
                     action.Download(
                         1,
@@ -551,6 +539,11 @@ scenarios = [
                     ),
                     action.WaitRacy(
                         [
+                            event.Pending(0, FILES["testfile-big"].id),
+                            event.Start(
+                                0,
+                                FILES["testfile-big"].id,
+                            ),
                             event.FinishFileDownloaded(
                                 0,
                                 FILES["testfile-big"].id,
@@ -569,6 +562,8 @@ scenarios = [
                                 FILES["testfile-small"].id,
                                 "/tmp/received/testfile-small",
                             ),
+                            event.FinishTransferCanceled(0, False),
+                            event.FinishTransferCanceled(1, False),
                         ],
                     ),
                     action.CheckDownloadedFiles(
@@ -577,8 +572,6 @@ scenarios = [
                             action.File("/tmp/received/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0, 1]),
-                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1173,7 +1166,6 @@ scenarios = [
                             action.File("/tmp/received/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                 ]
@@ -1414,7 +1406,6 @@ scenarios = [
                             ),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -1656,7 +1647,6 @@ scenarios = [
                             ),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -1743,7 +1733,6 @@ scenarios = [
                             action.File("/tmp/received/testfile-small", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -1779,6 +1768,7 @@ scenarios = [
                     action.Wait(
                         event.FinishFileUploaded(0, FILES["testfile-small"].id)
                     ),
+                    action.ExpectCancel([0], True),
                     action.NewTransfer(
                         "DROP_PEER_STIMPY", ["/tmp/duplicate/testfile-small"]
                     ),
@@ -1802,7 +1792,7 @@ scenarios = [
                             1, FILES["duplicate/testfile-small"].id
                         )
                     ),
-                    action.ExpectCancel([0, 1], True),
+                    action.ExpectCancel([1], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1837,6 +1827,7 @@ scenarios = [
                             "/tmp/received/testfile-small",
                         )
                     ),
+                    action.ExpectCancel([0], False),
                     action.Wait(
                         event.Receive(
                             1,
@@ -1864,14 +1855,13 @@ scenarios = [
                             "/tmp/received/testfile-small(1)",
                         )
                     ),
+                    action.ExpectCancel([1], False),
                     action.CheckDownloadedFiles(
                         [
                             action.File("/tmp/received/testfile-small", 1048576),
                             action.File("/tmp/received/testfile-small(1)", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0, 1]),
-                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -1919,6 +1909,7 @@ scenarios = [
                             FILES["testfile.small.with.complicated.extension"].id,
                         )
                     ),
+                    action.ExpectCancel([0], True),
                     action.NewTransfer(
                         "DROP_PEER_STIMPY",
                         ["/tmp/duplicate/testfile.small.with.complicated.extension"],
@@ -1955,7 +1946,7 @@ scenarios = [
                             ].id,
                         )
                     ),
-                    action.ExpectCancel([0, 1], True),
+                    action.ExpectCancel([1], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2000,6 +1991,7 @@ scenarios = [
                             "/tmp/received/testfile.small.with.complicated.extension",
                         )
                     ),
+                    action.ExpectCancel([0], False),
                     action.Wait(
                         event.Receive(
                             1,
@@ -2045,6 +2037,7 @@ scenarios = [
                             "/tmp/received/testfile.small.with.complicated(1).extension",
                         )
                     ),
+                    action.ExpectCancel([1], False),
                     action.CheckDownloadedFiles(
                         [
                             action.File(
@@ -2057,8 +2050,6 @@ scenarios = [
                             ),
                         ],
                     ),
-                    action.CancelTransferRequest([0, 1]),
-                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2139,7 +2130,6 @@ scenarios = [
                             action.File("/tmp/received/8-3/testfile-small(1)", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -2201,10 +2191,19 @@ scenarios = [
                             event.FinishFileUploaded(7, FILES["testfile-bulk-01"].id),
                             event.FinishFileUploaded(8, FILES["testfile-bulk-01"].id),
                             event.FinishFileUploaded(9, FILES["testfile-bulk-01"].id),
+                            event.FinishTransferCanceled(0, True),
+                            event.FinishTransferCanceled(1, True),
+                            event.FinishTransferCanceled(2, True),
+                            event.FinishTransferCanceled(3, True),
+                            event.FinishTransferCanceled(4, True),
+                            event.FinishTransferCanceled(5, True),
+                            event.FinishTransferCanceled(6, True),
+                            event.FinishTransferCanceled(7, True),
+                            event.FinishTransferCanceled(8, True),
+                            event.FinishTransferCanceled(9, True),
                         ]
                     ),
                     # fmt: on
-                    action.ExpectCancel([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2273,11 +2272,19 @@ scenarios = [
                             event.FinishFileDownloaded(7, FILES["testfile-bulk-01"].id, "/tmp/received/11-1/7/testfile-bulk-01"),
                             event.FinishFileDownloaded(8, FILES["testfile-bulk-01"].id, "/tmp/received/11-1/8/testfile-bulk-01"),
                             event.FinishFileDownloaded(9, FILES["testfile-bulk-01"].id, "/tmp/received/11-1/9/testfile-bulk-01"),
+                            event.FinishTransferCanceled(0, False),
+                            event.FinishTransferCanceled(1, False),
+                            event.FinishTransferCanceled(2, False),
+                            event.FinishTransferCanceled(3, False),
+                            event.FinishTransferCanceled(4, False),
+                            event.FinishTransferCanceled(5, False),
+                            event.FinishTransferCanceled(6, False),
+                            event.FinishTransferCanceled(7, False),
+                            event.FinishTransferCanceled(8, False),
+                            event.FinishTransferCanceled(9, False),
                         ]
                     ),
                     # fmt: on
-                    action.CancelTransferRequest([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
-                    action.ExpectCancel([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -2853,7 +2860,6 @@ scenarios = [
                         event.FinishFileDownloaded(0, FILES["testfile-bulk-10"].id, "/tmp/received/11-4/testfile-bulk-10"),
                     ]),
                     # fmt: on
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.Stop(),
                 ]
@@ -2964,7 +2970,6 @@ scenarios = [
                             action.File("/tmp/received/stimpy/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -3009,7 +3014,6 @@ scenarios = [
                             action.File("/tmp/received/george/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -3121,7 +3125,6 @@ scenarios = [
                             ),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -3168,7 +3171,6 @@ scenarios = [
                             ),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -3252,7 +3254,6 @@ scenarios = [
                             ),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -3283,7 +3284,6 @@ scenarios = [
                             ],
                         ),
                     ),
-                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -3321,8 +3321,6 @@ scenarios = [
                             "/tmp/symtest-dir/testfile-small",
                         ]
                     ),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -3416,7 +3414,6 @@ scenarios = [
                             ),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -3503,7 +3500,6 @@ scenarios = [
                             ),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -3519,7 +3515,9 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
-                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY", ["/tmp/testfile-small", "/tmp/testfile-big"]
+                    ),
                     action.Wait(
                         event.Queued(
                             0,
@@ -3529,6 +3527,13 @@ scenarios = [
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
+                                ),
+                                # A second file to prevent transfer cancellation
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
                                     "/tmp",
                                 ),
                             ],
@@ -3541,7 +3546,6 @@ scenarios = [
                             FILES["testfile-small"].id,
                         )
                     ),
-                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -3558,6 +3562,11 @@ scenarios = [
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                ),
+                                norddrop.ReceivedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
                                 ),
                             ],
                         )
@@ -3593,8 +3602,6 @@ scenarios = [
                             action.File("/tmp/received/testfile-small", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -3650,6 +3657,7 @@ scenarios = [
                             ),
                         ]
                     ),
+                    action.ExpectCancel([0], True),
                     action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/deep/path"]),
                     action.Wait(
                         event.Queued(
@@ -3691,7 +3699,7 @@ scenarios = [
                             ),
                         ]
                     ),
-                    action.ExpectCancel([0, 1], True),
+                    action.ExpectCancel([1], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -3757,6 +3765,7 @@ scenarios = [
                             ),
                         ]
                     ),
+                    action.ExpectCancel([0], False),
                     action.Wait(
                         event.Receive(
                             1,
@@ -3815,6 +3824,7 @@ scenarios = [
                             ),
                         ]
                     ),
+                    action.ExpectCancel([1], False),
                     action.CheckDownloadedFiles(
                         [
                             action.File("/tmp/received/path/file1.ext1", 1048576),
@@ -3823,8 +3833,6 @@ scenarios = [
                             action.File("/tmp/received/path(1)/file2.ext2", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0, 1]),
-                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -3954,7 +3962,6 @@ scenarios = [
                             action.File("/tmp/received/15-3/name(1)/file-02", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -3995,7 +4002,7 @@ scenarios = [
                             norddrop.StatusCode.FILE_MODIFIED,
                         )
                     ),
-                    action.ExpectCancel([0], True),
+                    action.ExpectCancel([0], False),
                     action.AssertTransfers(
                         [
                             f"""{{
@@ -4005,7 +4012,7 @@ scenarios = [
                             {{
                                 "created_at": "*",
                                 "state": "cancel",
-                                "by_peer": true
+                                "by_peer": false
                             }}
                         ],
                         "type": "outgoing",
@@ -4031,7 +4038,7 @@ scenarios = [
                     }}"""
                         ]
                     ),
-                    action.NoEvent(),
+                    action.NoEvent(4),
                     action.Stop(),
                 ]
             ),
@@ -4064,8 +4071,7 @@ scenarios = [
                             norddrop.StatusCode.BAD_TRANSFER_STATE,
                         )
                     ),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
+                    action.ExpectCancel([0], True),
                     action.AssertTransfers(
                         [
                             f"""{{
@@ -4075,7 +4081,7 @@ scenarios = [
                             {{
                                 "created_at": "*",
                                 "state": "cancel",
-                                "by_peer": false
+                                "by_peer": true
                             }}
                         ],
                         "type": "incoming",
@@ -4163,6 +4169,7 @@ scenarios = [
                             FILES["testfile-small"].id,
                         )
                     ),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -4201,6 +4208,7 @@ scenarios = [
                         Path(gettempdir()) / "received" / "18",
                         [action.File("testfile-small", 1048576)],
                     ),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -4373,10 +4381,10 @@ scenarios = [
                                 FILES["a" * 251 + ".txt"].id,
                                 norddrop.StatusCode.FILENAME_TOO_LONG,
                             ),
+                            event.FinishTransferCanceled(0, False),
+                            event.FinishTransferCanceled(1, False),
                         ]
                     ),
-                    action.CancelTransferRequest([0, 1]),
-                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -4440,10 +4448,10 @@ scenarios = [
                                 FILES["a" * 251 + ".txt"].id,
                                 norddrop.StatusCode.FILENAME_TOO_LONG,
                             ),
+                            event.FinishTransferCanceled(0, False),
+                            event.FinishTransferCanceled(1, False),
                         ]
                     ),
-                    action.CancelTransferRequest([0, 1]),
-                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -4524,7 +4532,6 @@ scenarios = [
                             action.File("/tmp/received/with-illegal-char-_-", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -4609,7 +4616,6 @@ scenarios = [
                             ),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -4690,7 +4696,6 @@ scenarios = [
                             norddrop.StatusCode.FILENAME_TOO_LONG,
                         )
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -4854,7 +4859,6 @@ scenarios = [
                             ),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -5068,7 +5072,6 @@ scenarios = [
                             ),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -5178,7 +5181,6 @@ scenarios = [
                             action.File("/tmp/received/21-1/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -5276,7 +5278,6 @@ scenarios = [
                             action.File("/tmp/received/21-2/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -5442,7 +5443,6 @@ scenarios = [
                             ),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -5519,7 +5519,6 @@ scenarios = [
                             action.File("/tmp/received/22/zero-sized-file", 0),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -5635,7 +5634,6 @@ scenarios = [
                             ),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -5711,7 +5709,6 @@ scenarios = [
                             13,
                         )
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -5787,7 +5784,6 @@ scenarios = [
                         )
                     ),
                     action.CompareTrees(Path("/tmp/received/25"), []),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -5822,7 +5818,7 @@ scenarios = [
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-small"].id, False)
                     ),
-                    action.ExpectCancel([0], True),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -5846,8 +5842,7 @@ scenarios = [
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-small"].id, True)
                     ),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -5906,7 +5901,6 @@ scenarios = [
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-small"].id, False)
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -5944,7 +5938,7 @@ scenarios = [
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-big"].id, False)
                     ),
-                    action.ExpectCancel([0], True),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -5970,8 +5964,7 @@ scenarios = [
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-big"].id, True)
                     ),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -6034,7 +6027,6 @@ scenarios = [
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-big"].id, False)
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -6051,7 +6043,9 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
-                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY", ["/tmp/testfile-small", "/tmp/testfile-big"]
+                    ),  # A second file to keep the transfer alive
                     action.Wait(
                         event.Queued(
                             0,
@@ -6063,6 +6057,12 @@ scenarios = [
                                     1048576,
                                     "/tmp",
                                 ),
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
+                                ),
                             ],
                         )
                     ),
@@ -6070,7 +6070,6 @@ scenarios = [
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-small"].id, False)
                     ),
-                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -6087,6 +6086,11 @@ scenarios = [
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                ),
+                                norddrop.ReceivedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
                                 ),
                             ],
                         )
@@ -6104,8 +6108,6 @@ scenarios = [
                             norddrop.StatusCode.FILE_REJECTED,
                         )
                     ),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -6121,7 +6123,9 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
-                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY", ["/tmp/testfile-small", "/tmp/testfile-big"]
+                    ),  # A second file to keep the transfer alive
                     action.Wait(
                         event.Queued(
                             0,
@@ -6133,13 +6137,18 @@ scenarios = [
                                     1048576,
                                     "/tmp",
                                 ),
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
+                                ),
                             ],
                         )
                     ),
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-small"].id, True)
                     ),
-                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -6156,6 +6165,11 @@ scenarios = [
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                ),
+                                norddrop.ReceivedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
                                 ),
                             ],
                         )
@@ -6174,8 +6188,6 @@ scenarios = [
                             norddrop.StatusCode.FILE_REJECTED,
                         )
                     ),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -6191,7 +6203,9 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
-                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY", ["/tmp/testfile-small", "/tmp/testfile-big"]
+                    ),  # A second file to keep the transfer alive
                     action.Wait(
                         event.Queued(
                             0,
@@ -6201,6 +6215,12 @@ scenarios = [
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
+                                ),
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
                                     "/tmp",
                                 ),
                             ],
@@ -6219,8 +6239,6 @@ scenarios = [
                             norddrop.StatusCode.FILE_REJECTED,
                         ),
                     ),
-                    action.Sleep(2),
-                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -6238,6 +6256,11 @@ scenarios = [
                                     "testfile-small",
                                     1048576,
                                 ),
+                                norddrop.ReceivedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
                             ],
                         )
                     ),
@@ -6253,9 +6276,6 @@ scenarios = [
                         ),
                     ),
                     action.NoEvent(),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
-                    action.NoEvent(),
                     action.Stop(),
                 ]
             ),
@@ -6270,7 +6290,9 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
-                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY", ["/tmp/testfile-small", "/tmp/testfile-big"]
+                    ),  # A second file to keep the transfer alive
                     action.Wait(
                         event.Queued(
                             0,
@@ -6280,6 +6302,12 @@ scenarios = [
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
+                                ),
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
                                     "/tmp",
                                 ),
                             ],
@@ -6296,7 +6324,6 @@ scenarios = [
                             norddrop.StatusCode.FILE_REJECTED,
                         ),
                     ),
-                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -6314,6 +6341,11 @@ scenarios = [
                                     "testfile-small",
                                     1048576,
                                 ),
+                                norddrop.ReceivedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
                             ],
                         )
                     ),
@@ -6329,10 +6361,6 @@ scenarios = [
                             norddrop.StatusCode.FILE_REJECTED,
                         ),
                     ),
-                    # Canceling the transfer is actually emiting CLOSE frame which is not enqueued, meaning we need to give some time in order for the reject message to go back to the sender
-                    action.Sleep(4),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -6348,7 +6376,9 @@ scenarios = [
                 [
                     action.Start("DROP_PEER_REN"),
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
-                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY", ["/tmp/testfile-small", "/tmp/testfile-big"]
+                    ),  # A second file to keep the transfer alive
                     action.Wait(
                         event.Queued(
                             0,
@@ -6358,6 +6388,12 @@ scenarios = [
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
+                                ),
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
                                     "/tmp",
                                 ),
                             ],
@@ -6375,7 +6411,6 @@ scenarios = [
                             norddrop.StatusCode.FILE_FINISHED,
                         )
                     ),
-                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -6392,6 +6427,11 @@ scenarios = [
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                ),
+                                norddrop.ReceivedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
                                 ),
                             ],
                         )
@@ -6416,9 +6456,6 @@ scenarios = [
                             norddrop.StatusCode.FILE_FINISHED,
                         )
                     ),
-                    action.Sleep(2),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -6532,7 +6569,6 @@ scenarios = [
                             action.File("/tmp/received/28/testfile-small", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.AssertTransfers(
                         [
@@ -6714,7 +6750,6 @@ scenarios = [
                             action.File("/tmp/received/29-1/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(6),
                     action.AssertTransfers(
@@ -6866,7 +6901,6 @@ scenarios = [
                             action.File("/tmp/received/29-2/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -6942,7 +6976,6 @@ scenarios = [
                             FILES["testfile-big"].id,
                         )
                     ),
-                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -7001,8 +7034,6 @@ scenarios = [
                             action.File("/tmp/received/29-3/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
                     action.NoEvent(6),
                     action.Stop(),
                 ]
@@ -7071,7 +7102,6 @@ scenarios = [
                             FILES["testfile-big"].id,
                         )
                     ),
-                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -7142,8 +7172,6 @@ scenarios = [
                             action.File("/tmp/received/29-4/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -7262,7 +7290,6 @@ scenarios = [
                             "/tmp/received/29-5/testfile-big",
                         )
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(6),
                     action.Stop(),
@@ -7342,7 +7369,9 @@ scenarios = [
                 [
                     action.ConfigureNetwork(),
                     action.Start("DROP_PEER_REN", dbpath="/tmp/db/29-7-ren.sqlite"),
-                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY", ["/tmp/testfile-big", "/tmp/testfile-small"]
+                    ),  # A second file to keep the transfer alive
                     action.Wait(
                         event.Queued(
                             0,
@@ -7352,6 +7381,12 @@ scenarios = [
                                     FILES["testfile-big"].id,
                                     "testfile-big",
                                     10485760,
+                                    "/tmp",
+                                ),
+                                norddrop.QueuedFile(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
                                     "/tmp",
                                 ),
                             ],
@@ -7389,6 +7424,11 @@ scenarios = [
                             [
                                 norddrop.ReceivedFile(
                                     FILES["testfile-big"].id, "testfile-big", 10485760
+                                ),
+                                norddrop.ReceivedFile(
+                                    FILES["testfile-small"].id,
+                                    "testfile-small",
+                                    1048576,
                                 ),
                             ],
                         )
@@ -7529,7 +7569,6 @@ scenarios = [
                             action.File("/tmp/received/testfile-small", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.Stop(),
                     action.Start(
@@ -7619,7 +7658,6 @@ scenarios = [
                             action.File("/tmp/received/testfile-small", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                 ]
@@ -7658,6 +7696,7 @@ scenarios = [
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-small"].id, True)
                     ),
+                    action.ExpectCancel([0], True),
                 ]
             ),
             "DROP_PEER_STIMPY": ActionList(
@@ -7683,6 +7722,7 @@ scenarios = [
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-small"].id, False)
                     ),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                 ]
             ),
@@ -7790,7 +7830,7 @@ scenarios = [
                                 norddrop.StatusCode.IO_ERROR,
                                 os_err=2,
                             ),
-                            event.FinishTransferCanceled(0, True),
+                            event.FinishTransferCanceled(0, False),
                         ]
                     ),
                     action.NoEvent(),
@@ -7830,8 +7870,7 @@ scenarios = [
                             )
                         ]
                     ),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(6),
                     action.Stop(),
                 ]
@@ -8005,7 +8044,6 @@ scenarios = [
                         ]
                     ),
                     action.Sleep(0.5),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     # action.AssertTransfers([]),
@@ -8111,7 +8149,6 @@ scenarios = [
                     }"""
                         ]
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -8280,7 +8317,6 @@ scenarios = [
                     }"""
                         ]
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -8582,8 +8618,7 @@ scenarios = [
                     }"""
                         ]
                     ),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -8648,7 +8683,7 @@ scenarios = [
                     }"""
                         ]
                     ),
-                    action.ExpectCancel([0], True),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -8711,8 +8746,7 @@ scenarios = [
                     }"""
                         ]
                     ),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -8789,7 +8823,7 @@ scenarios = [
                     }"""
                         ]
                     ),
-                    action.ExpectCancel([0], True),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -9035,7 +9069,6 @@ scenarios = [
                             "/tmp/received/31-8/path/file2.ext2",
                         )
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.Stop(),
                 ]
@@ -9095,9 +9128,10 @@ scenarios = [
                                 1,
                                 FILES["testfile-small"].id,
                             ),
+                            event.FinishTransferCanceled(0, True),
+                            event.FinishTransferCanceled(1, True),
                         ],
                     ),
-                    action.ExpectCancel([0, 1], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -9142,15 +9176,13 @@ scenarios = [
                         "/tmp/received/32/",
                     ),
                     # We cannot predict the final path of files from each transfer so we cannot wait for specific event
-                    action.DrainEvents(6),
+                    action.DrainEvents(8),
                     action.CheckDownloadedFiles(
                         [
                             action.File("/tmp/received/32/testfile-small", 1048576),
                             action.File("/tmp/received/32/testfile-small(1)", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0, 1]),
-                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -9385,7 +9417,8 @@ scenarios = [
                                 0,
                                 FILES["testfile-small"].id,
                                 "/tmp/received/testfile-small",
-                            )
+                            ),
+                            event.FinishTransferCanceled(0, False),
                         ]
                     ),
                     action.CheckDownloadedFiles(
@@ -9393,8 +9426,6 @@ scenarios = [
                             action.File("/tmp/received/testfile-small", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
                     action.Stop(),
                 ]
             ),
@@ -9482,7 +9513,6 @@ scenarios = [
                             action.File("/tmp/received/testfile-small", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.Sleep(8),  # give time for the signal to be sent
                     action.Stop(),
@@ -9558,9 +9588,10 @@ scenarios = [
                                 1,
                                 FILES["testfile-small"].id,
                             ),
+                            event.FinishTransferCanceled(0, True),
+                            event.FinishTransferCanceled(1, True),
                         ]
                     ),
-                    action.ExpectCancel([0, 1], True),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -9620,6 +9651,8 @@ scenarios = [
                                 FILES["testfile-small"].id,
                                 "/tmp/received/testfile-small",
                             ),
+                            event.FinishTransferCanceled(0, False),
+                            event.FinishTransferCanceled(1, False),
                         ]
                     ),
                     action.CheckDownloadedFiles(
@@ -9632,8 +9665,6 @@ scenarios = [
                             action.File("/tmp/received/testfile-small", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0, 1]),
-                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -9781,8 +9812,7 @@ scenarios = [
                             FILES["testfile-big"].id,
                         )
                     ),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
+                    action.ExpectCancel([0], True),
                     action.Stop(),
                 ]
             ),
@@ -9817,7 +9847,7 @@ scenarios = [
                             "/tmp/received/testfile-big",
                         )
                     ),
-                    action.ExpectCancel([0], True),
+                    action.ExpectCancel([0], False),
                     action.Stop(),
                     action.NoEvent(),
                     action.Start("DROP_PEER_STIMPY", dbpath="/tmp/37-3-stimpy.db"),
@@ -10298,7 +10328,9 @@ scenarios = [
                 [
                     action.WaitForAnotherPeer("DROP_PEER_STIMPY"),
                     action.Start("DROP_PEER_REN"),
-                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-small"]),
+                    action.NewTransfer(
+                        "DROP_PEER_STIMPY", ["/tmp/testfile-small", "/tmp/testfile-big"]
+                    ),  # A second file to keep the transfer alive
                     action.Wait(
                         event.Queued(
                             0,
@@ -10308,6 +10340,12 @@ scenarios = [
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                    "/tmp",
+                                ),
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
                                     "/tmp",
                                 ),
                             ],
@@ -10336,6 +10374,11 @@ scenarios = [
                                     FILES["testfile-small"].id,
                                     "testfile-small",
                                     1048576,
+                                ),
+                                norddrop.ReceivedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
                                 ),
                             ],
                         )
@@ -10412,10 +10455,10 @@ scenarios = [
                                 1,
                                 FILES["testfile-big"].id,
                             ),
+                            event.FinishTransferCanceled(0, True),
+                            event.FinishTransferCanceled(1, True),
                         ],
                     ),
-                    action.CancelTransferRequest([0, 1]),
-                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(6),
                     action.Stop(),
                 ]
@@ -10451,7 +10494,7 @@ scenarios = [
                             "/tmp/received/testfile-small",
                         )
                     ),
-                    action.ExpectCancel([0], True),
+                    action.ExpectCancel([0], False),
                     action.Stop(),
                 ]
             ),
@@ -10485,7 +10528,7 @@ scenarios = [
                             "/tmp/received/testfile-big",
                         )
                     ),
-                    action.ExpectCancel([0], True),
+                    action.ExpectCancel([0], False),
                     action.Stop(),
                 ]
             ),
@@ -10561,10 +10604,10 @@ scenarios = [
                                 1,
                                 FILES["testfile-big"].id,
                             ),
+                            event.FinishTransferCanceled(0, True),
+                            event.FinishTransferCanceled(1, True),
                         ],
                     ),
-                    action.CancelTransferRequest([0, 1]),
-                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(6),
                     action.Stop(),
                 ]
@@ -10600,7 +10643,7 @@ scenarios = [
                             "/tmp/received/testfile-small",
                         )
                     ),
-                    action.ExpectCancel([0], True),
+                    action.ExpectCancel([0], False),
                     action.Stop(),
                 ]
             ),
@@ -10635,7 +10678,7 @@ scenarios = [
                             "/tmp/received/testfile-big",
                         )
                     ),
-                    action.ExpectCancel([0], True),
+                    action.ExpectCancel([0], False),
                     action.Stop(),
                 ]
             ),
@@ -10699,10 +10742,10 @@ scenarios = [
                                 1,
                                 FILES["testfile-big"].id,
                             ),
+                            event.FinishTransferCanceled(0, True),
+                            event.FinishTransferCanceled(1, True),
                         ]
                     ),
-                    action.CancelTransferRequest([0, 1]),
-                    action.ExpectCancel([0, 1], False),
                     action.NoEvent(6),
                     action.Stop(),
                 ]
@@ -10755,7 +10798,7 @@ scenarios = [
                             action.File("/tmp/received/testfile-small", 1048576),
                         ],
                     ),
-                    action.ExpectCancel([0], True),
+                    action.ExpectCancel([0], False),
                     action.Stop(),
                 ]
             ),
@@ -10807,7 +10850,7 @@ scenarios = [
                             action.File("/tmp/received/testfile-big", 10485760),
                         ],
                     ),
-                    action.ExpectCancel([0], True),
+                    action.ExpectCancel([0], False),
                     action.Stop(),
                 ]
             ),
@@ -10871,14 +10914,8 @@ scenarios = [
                                 1,
                                 FILES["testfile-big"].id,
                             ),
-                        ]
-                    ),
-                    action.CancelTransferRequest([0, 1]),
-                    action.NetworkRefresh(),
-                    action.WaitAndIgnoreExcept(
-                        [
-                            event.FinishTransferCanceled(0, False),
-                            event.FinishTransferCanceled(1, False),
+                            event.FinishTransferCanceled(0, True),
+                            event.FinishTransferCanceled(1, True),
                         ]
                     ),
                     action.NoEvent(6),
@@ -10933,7 +10970,7 @@ scenarios = [
                             action.File("/tmp/received/44-4/testfile-small", 1048576),
                         ],
                     ),
-                    action.ExpectCancel([0], True),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -10986,7 +11023,7 @@ scenarios = [
                             action.File("/tmp/received/44-4/testfile-big", 10485760),
                         ],
                     ),
-                    action.ExpectCancel([0], True),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                 ]
@@ -11111,7 +11148,6 @@ scenarios = [
                             action.File("/tmp/received/46/testfile-small", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -11188,7 +11224,6 @@ scenarios = [
                         )
                     ),
                     action.CompareTrees(Path("/tmp/received/47-1"), []),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -11229,7 +11264,8 @@ scenarios = [
                     action.Wait(
                         event.FinishFileRejected(0, FILES["testfile-big"].id, False)
                     ),
-                    action.ExpectCancel([0], True),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
                     action.Stop(),
                 ]
             ),
@@ -11265,8 +11301,7 @@ scenarios = [
                         )
                     ),
                     action.CompareTrees(Path("/tmp/received/47-2"), []),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
+                    action.ExpectCancel([0], True),
                     action.Stop(),
                 ]
             ),
@@ -11451,7 +11486,6 @@ scenarios = [
                             action.File("/tmp/received/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -11633,7 +11667,6 @@ scenarios = [
                             action.File("/tmp/received/tiny-gif.gif", 26),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -11786,7 +11819,6 @@ scenarios = [
                             action.File("/tmp/received/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -11961,7 +11993,6 @@ scenarios = [
                             action.File("/tmp/received/21-1/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -12045,7 +12076,7 @@ scenarios = [
                             norddrop.StatusCode.FILE_MODIFIED,
                         )
                     ),
-                    action.ExpectCancel([0], True),
+                    action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
                     action.AssertMooseEvents(
@@ -12119,8 +12150,7 @@ scenarios = [
                             norddrop.StatusCode.BAD_TRANSFER_STATE,
                         )
                     ),
-                    action.CancelTransferRequest([0]),
-                    action.ExpectCancel([0], False),
+                    action.ExpectCancel([0], True),
                     action.NoEvent(),
                     action.Stop(),
                     action.AssertMooseEvents(
@@ -12349,7 +12379,6 @@ scenarios = [
                             action.File("/tmp/received/26-2/testfile-small", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                 ]
             ),
@@ -12439,7 +12468,6 @@ scenarios = [
                         ]
                     ),
                     # fmt: on
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -12529,7 +12557,6 @@ scenarios = [
                             action.File("/tmp/received/49/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -12584,6 +12611,7 @@ scenarios = [
                         event.FinishFileRejected(0, FILES["testfile-bulk-04"].id, False),
                         event.FinishFileRejected(0, FILES["testfile-bulk-05"].id, False),
                     ]),
+                    action.ExpectCancel([0], False),
                     # fmt: on
                     action.NoEvent(),
                     action.Stop(),
@@ -12604,15 +12632,19 @@ scenarios = [
                     action.Download(0, FILES["testfile-bulk-01"].id, "/tmp/received/50"),
                     action.Wait(event.Pending(0, FILES["testfile-bulk-01"].id)),
                     action.Wait(event.Start(0, FILES["testfile-bulk-01"].id)),
+                    action.Sleep(0.02),
                     action.Download(0, FILES["testfile-bulk-02"].id, "/tmp/received/50"),
                     action.Wait(event.Pending(0, FILES["testfile-bulk-02"].id)),
                     action.Wait(event.Start(0, FILES["testfile-bulk-02"].id)),
+                    action.Sleep(0.02),
                     action.Download(0, FILES["testfile-bulk-03"].id, "/tmp/received/50"),
                     action.Wait(event.Pending(0, FILES["testfile-bulk-03"].id)),
                     action.Wait(event.Start(0, FILES["testfile-bulk-03"].id)),
+                    action.Sleep(0.02),
                     action.Download(0, FILES["testfile-bulk-04"].id, "/tmp/received/50"),
                     action.Wait(event.Pending(0, FILES["testfile-bulk-04"].id)),
                     action.Wait(event.Start(0, FILES["testfile-bulk-04"].id)),
+                    action.Sleep(0.02),
                     action.Download(0, FILES["testfile-bulk-05"].id, "/tmp/received/50"),
                     action.Wait(event.Pending(0, FILES["testfile-bulk-05"].id)),
                     action.Wait(event.Start(0, FILES["testfile-bulk-05"].id)),
@@ -12623,6 +12655,7 @@ scenarios = [
                         event.FinishFileRejected(0, FILES["testfile-bulk-04"].id, True),
                         event.FinishFileRejected(0, FILES["testfile-bulk-05"].id, True),
                     ]),
+                    action.ExpectCancel([0], True),
                     # fmt: on
                     action.NoEvent(),
                     action.Stop(),
@@ -12774,7 +12807,6 @@ scenarios = [
                             action.File("/tmp/received/50/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -12880,7 +12912,6 @@ scenarios = [
                             action.File("/tmp/received/53-1/testfile-small", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -12980,7 +13011,6 @@ scenarios = [
                             action.File("/tmp/received/53-2/testfile-small", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -13110,7 +13140,6 @@ scenarios = [
                             action.File("/tmp/received/53-3/testfile-small", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -13220,7 +13249,6 @@ scenarios = [
                             action.File("/tmp/received/53-4/testfile-small", 1048576),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -13346,7 +13374,6 @@ scenarios = [
                             action.File("/tmp/received/53-5/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -13493,7 +13520,6 @@ scenarios = [
                             action.File("/tmp/received/53-6/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -13626,7 +13652,6 @@ scenarios = [
                             action.File("/tmp/received/53-7/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),
@@ -13766,7 +13791,6 @@ scenarios = [
                             action.File("/tmp/received/53-8/testfile-big", 10485760),
                         ],
                     ),
-                    action.CancelTransferRequest([0]),
                     action.ExpectCancel([0], False),
                     action.NoEvent(),
                     action.Stop(),

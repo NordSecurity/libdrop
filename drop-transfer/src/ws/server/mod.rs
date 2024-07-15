@@ -35,6 +35,7 @@ use super::{events::FileEventTx, IncomingFileEventTx};
 use crate::{
     check,
     file::{self, FileSubPath, FileToRecv},
+    manager::{FinishTransferState, IncomingRegistered},
     protocol,
     quarantine::PathExt,
     service::State,
@@ -538,23 +539,27 @@ impl RunContext<'_> {
         req_send: mpsc::UnboundedSender<ServerReq>,
         xfer: &Arc<IncomingTransfer>,
     ) -> anyhow::Result<()> {
-        let is_new = self
+        let registered = self
             .state
             .transfer_manager
             .register_incoming(xfer.clone(), req_send)
             .await?;
 
-        if let Some(xfer_tx) = is_new {
-            xfer_tx.received().await;
+        match registered {
+            IncomingRegistered::IsNew { events } => {
+                events.received().await;
 
-            check::spawn(
-                self.refresh_trigger.clone(),
-                self.state.clone(),
-                xfer.clone(),
-                self.logger.clone(),
-                self.alive.clone(),
-                self.stop.clone(),
-            );
+                check::spawn(
+                    self.refresh_trigger.clone(),
+                    self.state.clone(),
+                    xfer.clone(),
+                    self.logger.clone(),
+                    self.alive.clone(),
+                    self.stop.clone(),
+                );
+            }
+            IncomingRegistered::Continue => (),
+            IncomingRegistered::JustCancelled { events } => events.cancel(false).await,
         }
 
         Ok(())
@@ -952,28 +957,21 @@ impl FileXferTask {
         if let Err(e) = tokio::spawn(async move {
             let _guard = guard;
 
-            match result {
+            let finish_res = match result {
                 Err(crate::Error::Canceled) => {
-                    info!(logger, "File {} stopped", self.file.id())
+                    info!(logger, "File {} stopped", self.file.id());
+                    return;
                 }
                 Ok(dst_location) => {
                     info!(logger, "File {} downloaded succesfully", self.file.id());
 
-                    if let Err(err) = state
+                    let finish_res = state
                         .transfer_manager
-                        .incoming_finish_post(self.xfer.id(), self.file.id(), true)
-                        .await
-                    {
-                        warn!(logger, "Failed to post finish: {err}");
-                    }
-
-                    if let Err(e) = req_send.send(ServerReq::Done {
-                        file: self.file.id().clone(),
-                    }) {
-                        warn!(logger, "Failed to send DONE message: {}", e);
-                    };
+                        .incoming_finish_post(self.xfer.id(), self.file.id(), Ok(()))
+                        .await;
 
                     events.success(dst_location).await;
+                    finish_res
                 }
                 Err(err) => {
                     info!(
@@ -982,23 +980,19 @@ impl FileXferTask {
                         self.file.id()
                     );
 
-                    if let Err(err) = state
+                    let finish_res = state
                         .transfer_manager
-                        .incoming_finish_post(self.xfer.id(), self.file.id(), false)
-                        .await
-                    {
-                        warn!(logger, "Failed to post finish: {err}");
-                    }
-
-                    if let Err(e) = req_send.send(ServerReq::Fail {
-                        file: self.file.id().clone(),
-                        msg: err.to_string(),
-                    }) {
-                        warn!(logger, "Failed to send FAIL message: {}", e);
-                    };
+                        .incoming_finish_post(self.xfer.id(), self.file.id(), Err(err.to_string()))
+                        .await;
 
                     events.failed(err).await;
+                    finish_res
                 }
+            };
+
+            match finish_res {
+                Ok(xfer_state) => handle_finish_xfer_state(xfer_state, false).await,
+                Err(err) => warn!(logger, "Failed to post finish: {err}"),
             }
         })
         .await
@@ -1180,6 +1174,13 @@ fn validate_file_id_for_download(file_id: &FileId) -> crate::Result<()> {
     }
 
     Ok(())
+}
+
+pub async fn handle_finish_xfer_state(state: FinishTransferState<IncomingTransfer>, by_peer: bool) {
+    match state {
+        FinishTransferState::Canceled { events } => events.cancel(by_peer).await,
+        FinishTransferState::Alive => (),
+    }
 }
 
 #[cfg(test)]

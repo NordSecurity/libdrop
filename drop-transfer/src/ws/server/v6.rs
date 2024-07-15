@@ -281,7 +281,8 @@ impl HandlerLoop<'_> {
                     tmp_bases.into_iter().map(|base| (base, &file_id)),
                 );
 
-                res.events.rejected(true).await;
+                res.file_events.rejected(true).await;
+                super::handle_finish_xfer_state(res.xfer_state, true).await;
             }
             Ok(None) => (),
         }
@@ -325,11 +326,13 @@ impl HandlerLoop<'_> {
                     warn!(self.logger, "Failed to accept failure: {err}");
                 }
                 Ok(Some(res)) => {
-                    res.events
+                    res.file_events
                         .failed(crate::Error::BadTransferState(format!(
                             "Sender reported an error: {msg}"
                         )))
                         .await;
+
+                    super::handle_finish_xfer_state(res.xfer_state, true).await;
                 }
                 Ok(None) => (),
             }

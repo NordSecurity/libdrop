@@ -34,20 +34,11 @@ pub(crate) fn spawn(
             utils::RetryTrigger::new(refresh_trigger, state.config.connection_retries);
 
         let task = async {
-            loop {
-                let cf = run(&state, &xfer, &logger).await;
-                if cf.is_break() {
-                    info!(logger, "Transfer {} is gone. Clearing", xfer.id());
-
-                    if let Some(state) = state.transfer_manager.incoming_remove(xfer.id()).await {
-                        state.xfer_events.cancel(true).await
-                    }
-
-                    break;
-                }
-
+            while run(&state, &xfer, &logger).await.is_continue() {
                 backoff.backoff().await;
             }
+
+            info!(logger, "Transfer {} is gone. Clearing", xfer.id());
         };
 
         tokio::select! {
@@ -68,11 +59,18 @@ async fn run(state: &State, xfer: &Arc<IncomingTransfer>, logger: &Logger) -> Co
         return ControlFlow::Break(());
     }
 
-    ask_server(state, xfer, logger).await?;
+    if !ask_server_if_alive(state, xfer, logger).await {
+        if let Some(state) = state.transfer_manager.incoming_remove(xfer.id()).await {
+            state.xfer_events.cancel(true).await
+        }
+
+        return ControlFlow::Break(());
+    }
+
     ControlFlow::Continue(())
 }
 
-async fn ask_server(state: &State, xfer: &IncomingTransfer, logger: &Logger) -> ControlFlow<()> {
+async fn ask_server_if_alive(state: &State, xfer: &IncomingTransfer, logger: &Logger) -> bool {
     let mut connector = hyper::client::HttpConnector::new();
     connector.set_local_address(Some(state.addr));
 
@@ -91,7 +89,7 @@ async fn ask_server(state: &State, xfer: &IncomingTransfer, logger: &Logger) -> 
         )
         .await
         {
-            Ok(false) => return ControlFlow::Break(()),
+            Ok(false) => return false,
             Ok(true) => break,
             Err(RequestError::UnexpectedResponse(status)) => {
                 debug!(
@@ -110,7 +108,7 @@ async fn ask_server(state: &State, xfer: &IncomingTransfer, logger: &Logger) -> 
         }
     }
 
-    ControlFlow::Continue(())
+    true
 }
 
 // Returns whether the transfer is alive

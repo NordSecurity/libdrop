@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::{
     auth,
     error::ResultExt,
-    manager,
+    manager::{self},
     tasks::AliveWaiter,
     transfer::Transfer,
     ws::{self, EventTxFactory},
@@ -226,7 +226,8 @@ impl Service {
                 .await
             {
                 Ok(res) => {
-                    res.events.rejected(false).await;
+                    res.file_events.rejected(false).await;
+                    super::ws::client::handle_finish_xfer_state(res.xfer_state, false).await;
                     return Ok(());
                 }
                 Err(crate::Error::BadTransfer) => (),
@@ -254,7 +255,8 @@ impl Service {
                         tmp_bases.into_iter().map(|base| (base, &file)),
                     );
 
-                    res.events.rejected(false).await;
+                    res.file_events.rejected(false).await;
+                    super::ws::server::handle_finish_xfer_state(res.xfer_state, false).await;
                     return Ok(());
                 }
                 Err(crate::Error::BadTransfer) => (),

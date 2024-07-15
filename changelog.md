@@ -3,6 +3,7 @@
 ---
 * Remove support for deprecated, unsecure protocols V1, V2, V4 and V5
 * Sanitize file ID before downloading a file, to prevent the temporary file from being allowed to traverse parent dirs
+* Implement automatic transfer cancellation when all files reach the terminal state
 
 ---
 <br>

@@ -377,30 +377,19 @@ impl Storage {
         }
     }
 
-    pub async fn update_incoming_file_sync_states(
-        &self,
-        transfer_id: Uuid,
-        file_id: &str,
-        local: sync::FileState,
-    ) {
-        let task = async {
-            let conn = self.conn.lock().await;
-            sync::incoming_file_set_local_state(&conn, transfer_id, file_id, local)?;
-            Ok::<(), Error>(())
-        };
+    pub async fn stop_incoming_file(&self, transfer_id: Uuid, file_id: &str) -> Option<()> {
+        let conn = self.conn.lock().await;
 
-        if let Err(e) = task.await {
+        if let Err(e) = sync::incoming_file_set_local_state(
+            &conn,
+            transfer_id,
+            file_id,
+            sync::FileState::Terminal,
+        ) {
             error!(self.logger, "Failed to update incoming file sync states"; "error" => %e);
         }
-    }
 
-    pub async fn stop_incoming_file(&self, transfer_id: Uuid, file_id: &str) -> Option<()> {
-        let task = async {
-            let conn = self.conn.lock().await;
-            sync::stop_incoming_file(&conn, transfer_id, file_id)
-        };
-
-        match task.await {
+        match sync::stop_incoming_file(&conn, transfer_id, file_id) {
             Ok(state) => state,
             Err(e) => {
                 error!(self.logger, "Failed to stop incoming file sync state"; "error" => %e);
