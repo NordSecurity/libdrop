@@ -1,6 +1,7 @@
 use tokio::sync::mpsc;
 
 #[derive(Clone)]
+#[allow(unused)]
 pub struct AliveGuard(mpsc::Sender<()>);
 
 pub struct AliveWaiter(AliveGuard, mpsc::Receiver<()>);
