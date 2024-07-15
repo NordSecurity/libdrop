@@ -880,6 +880,7 @@ impl FileXferTask {
     ) {
         let task = async {
             validate_subpath_for_download(self.file.subpath())?;
+            validate_file_id_for_download(self.file.id())?;
 
             let emit_checksum_events = {
                 if let Some(threshold) = state.config.checksum_events_size_threshold {
@@ -1164,9 +1165,26 @@ fn validate_subpath_for_download(subpath: &FileSubPath) -> crate::Result<()> {
     Ok(())
 }
 
+/// Check file ID for illegal characters so that the temp file is not created in
+/// parent directories
+fn validate_file_id_for_download(file_id: &FileId) -> crate::Result<()> {
+    const ALLOWED_BESIDE_ALPHANUMERIC: &[char] = &['_', '-', '=']; // Add '=' just in case the padding is added
+
+    fn is_char_valid(c: char) -> bool {
+        c.is_ascii_alphanumeric() || ALLOWED_BESIDE_ALPHANUMERIC.contains(&c)
+    }
+
+    let valid = file_id.as_ref().chars().all(is_char_valid);
+    if !valid {
+        return Err(Error::BadFileId);
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::file::FileSubPath;
+    use crate::{file::FileSubPath, FileId};
 
     #[test]
     fn validate_subpath() {
@@ -1186,6 +1204,36 @@ mod tests {
         assert!(matches!(
             super::validate_subpath_for_download(&sp),
             Err(crate::Error::FilenameTooLong)
+        ));
+    }
+
+    #[test]
+    fn validate_file_id() {
+        let id = FileId::from("x_ALOz5YRCXZSiS5V5Pd8VN_qqC6abyDyIBnjitzGe8");
+        assert!(super::validate_file_id_for_download(&id).is_ok());
+
+        let id = FileId::from("../../asdfasdf");
+        assert!(matches!(
+            super::validate_file_id_for_download(&id),
+            Err(crate::Error::BadFileId)
+        ));
+
+        let id = FileId::from("..");
+        assert!(matches!(
+            super::validate_file_id_for_download(&id),
+            Err(crate::Error::BadFileId)
+        ));
+
+        let id = FileId::from("/asdfasdf");
+        assert!(matches!(
+            super::validate_file_id_for_download(&id),
+            Err(crate::Error::BadFileId)
+        ));
+
+        let id = FileId::from("C:\\ABC");
+        assert!(matches!(
+            super::validate_file_id_for_download(&id),
+            Err(crate::Error::BadFileId)
         ));
     }
 }
