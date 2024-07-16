@@ -97,7 +97,7 @@ impl NordDrop {
         self.dev
             .lock()
             .expect("Poisoned lock")
-            .purge_transfers_until(until / 100)
+            .purge_transfers_until(until / 1000)
     }
 
     pub fn transfers_since(&self, since: i64) -> Result<Vec<TransferInfo>> {
@@ -107,7 +107,7 @@ impl NordDrop {
             .dev
             .lock()
             .expect("Poisoned lock")
-            .transfers_since(since / 100)?;
+            .transfers_since(since / 1000)?;
 
         let xfers = infos.into_iter().map(TransferInfo::from).collect();
         Ok(xfers)
