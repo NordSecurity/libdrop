@@ -97,7 +97,7 @@ impl<'a> handler::HandlerInit for HandlerInit<'a> {
             .context("Failed to receive transfer request")?;
 
         // print msg as ascii
-        debug!(self.logger, "************** msg:\n\t{msg:?}");
+        debug!(self.logger, "msg:\n\t{msg:?}");
 
         let msg = msg.to_str().ok().context("Expected JSON message")?;
         debug!(self.logger, "Request received:\n\t{msg}");

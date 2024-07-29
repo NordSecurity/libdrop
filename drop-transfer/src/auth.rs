@@ -4,17 +4,17 @@ use drop_auth::{PublicKey, SecretKey};
 use hyper::{http::HeaderValue, Response};
 
 pub struct Context {
-    secret: SecretKey,
+    secret: Box<dyn Fn() -> Option<SecretKey> + Send + Sync>,
     public: Box<dyn Fn(IpAddr) -> Option<PublicKey> + Send + Sync>,
 }
 
 impl Context {
     pub fn new(
-        secret: SecretKey,
+        secret: impl Fn() -> Option<SecretKey> + Send + Sync + 'static,
         public: impl Fn(IpAddr) -> Option<PublicKey> + Send + Sync + 'static,
     ) -> Self {
         Self {
-            secret,
+            secret: Box::new(secret),
             public: Box::new(public),
         }
     }
@@ -28,7 +28,8 @@ impl Context {
         tokio::task::block_in_place(|| {
             let auth_req = drop_auth::http::Authorization::parse(auth_header_value)?;
             let pubkey = (self.public)(peer_ip)?;
-            drop_auth::authorize(nonce, &self.secret, &pubkey, &auth_req)
+            let secret = (self.secret)()?;
+            drop_auth::authorize(nonce, &secret, &pubkey, &auth_req)
         })
         .is_some()
     }
@@ -74,9 +75,10 @@ impl Context {
                 .context("Failed to parse 'www-authenticate' header")?;
 
             let public = (self.public)(peer_ip).context("Failed to fetch peer's public key")?;
+            let secret = (self.secret)().context("Failed to fetch private key")?;
 
             let ticket =
-                drop_auth::create_ticket_as_client(&self.secret, &public, resp, check_nonce_prefix)
+                drop_auth::create_ticket_as_client(&secret, &public, resp, check_nonce_prefix)
                     .context("Failed to create auth ticket")?;
 
             let value = HeaderValue::from_str(&ticket.to_string())?;
@@ -96,8 +98,9 @@ impl Context {
                 .context("Failed to parse 'www-authenticate' header")?;
 
             let public = (self.public)(peer_ip).context("Failed to fetch peer's public key")?;
+            let secret = (self.secret)().context("Failed to fetch private key")?;
 
-            let ticket = drop_auth::create_ticket_as_server(&self.secret, &public, resp)
+            let ticket = drop_auth::create_ticket_as_server(&secret, &public, resp)
                 .context("Failed to create auth ticket")?;
 
             let value = HeaderValue::from_str(&ticket.to_string())?;
