@@ -15,12 +15,15 @@ use tokio::{
     task::JoinHandle,
 };
 
-use crate::{event, TransferDescriptor};
+use crate::{event, KeyStore, TransferDescriptor};
 
 pub type Result<T = ()> = std::result::Result<T, crate::LibdropError>;
 
 const SQLITE_TIMESTAMP_MIN: i64 = -210866760000;
 const SQLITE_TIMESTAMP_MAX: i64 = 253402300799;
+
+pub const PUBLIC_KEY_LENGTH: usize = 32;
+pub const SECRET_KEY_LENGTH: usize = 32;
 
 pub(super) struct NordDropFFI {
     rt: tokio::runtime::Runtime,
@@ -52,14 +55,10 @@ impl EventDispatcher {
 impl NordDropFFI {
     pub(super) fn new(
         event_cb: impl Fn(crate::Event) + Send + Sync + 'static,
-        pubkey_cb: impl Fn(IpAddr) -> Option<PublicKey> + Send + 'static,
-        privkey: SecretKey,
+        key_store: Arc<Box<dyn KeyStore>>,
         logger: Logger,
     ) -> Result<Self> {
         trace!(logger, "norddrop_new()");
-
-        // It's a debug print. Not visible in the production build
-        debug!(logger, "Private key: {:02X?}", privkey.to_bytes());
 
         Ok(NordDropFFI {
             instance: Arc::default(),
@@ -69,7 +68,7 @@ impl NordDropFFI {
                 cb: Arc::new(event_cb) as _,
             },
             config: DropConfig::default(),
-            keys: Arc::new(crate_key_context(logger, privkey, pubkey_cb)),
+            keys: Arc::new(create_key_context(logger, key_store)),
             #[cfg(unix)]
             fdresolv: None,
         })
@@ -522,22 +521,30 @@ impl NordDropFFI {
     }
 }
 
-fn crate_key_context(
-    logger: slog::Logger,
-    privkey: SecretKey,
-    pubkey_cb: impl Fn(IpAddr) -> Option<PublicKey> + Send + 'static,
-) -> auth::Context {
-    let pubkey_cb = std::sync::Mutex::new(pubkey_cb);
-    let public = move |ip: IpAddr| {
-        let guard = pubkey_cb.lock().expect("Failed to lock pubkey callback");
-        let key = guard(ip)?;
-        drop(guard);
+fn create_key_context(logger: slog::Logger, key_store: Arc<Box<dyn KeyStore>>) -> auth::Context {
+    let privkey = {
+        let key_store = key_store.clone();
+        let logger = logger.clone();
 
-        debug!(logger, "Public key for {ip:?}: {key:?}");
-        Some(key)
+        move || {
+            let privkey: [u8; PUBLIC_KEY_LENGTH] = key_store.privkey().try_into().ok()?;
+            debug!(logger, "Retrieved private key: {:?}", privkey);
+            Some(SecretKey::from(privkey))
+        }
     };
 
-    auth::Context::new(privkey, public)
+    let pubkey = {
+        move |ip: IpAddr| {
+            let key_store: Arc<Box<dyn KeyStore>> = Arc::clone(&key_store);
+
+            let pubkey = key_store.on_pubkey(ip.to_string())?;
+            let pubkey: [u8; PUBLIC_KEY_LENGTH] = pubkey.try_into().ok()?;
+            debug!(logger, "Retrieved public key for: {} key: {:?}", ip, pubkey);
+            Some(PublicKey::from(pubkey))
+        }
+    };
+
+    auth::Context::new(privkey, pubkey)
 }
 
 fn open_database(

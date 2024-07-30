@@ -68,7 +68,7 @@ class EventQueue(norddrop.EventCallback):
     def on_event(self, event: norddrop.Event):
         event = new_event(event)
         if DEBUG_PRINT_EVENT:
-            tprint(bcolors.HEADER + "--- event: ", event, bcolors.ENDC, flush=True)
+            tprint(bcolors.HEADER + "event: ", event, bcolors.ENDC, flush=True)
 
         with self._lock:
             self._events.append(event)

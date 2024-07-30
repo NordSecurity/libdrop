@@ -1,6 +1,4 @@
-use std::sync::Mutex;
-
-use drop_auth::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH};
+use std::sync::{Arc, Mutex};
 
 use crate::{device::NordDropFFI, Event, TransferDescriptor, TransferInfo};
 
@@ -36,20 +34,9 @@ impl NordDrop {
     ) -> Result<Self> {
         let logger = super::log::create(logger);
 
-        let privkey = key_store.privkey();
-        let privkey: [u8; PUBLIC_KEY_LENGTH] = privkey
-            .try_into()
-            .map_err(|_| crate::LibdropError::InvalidPrivkey)?;
-        let privkey = SecretKey::from(privkey);
-
         let dev = NordDropFFI::new(
             move |ev| event_callback.on_event(ev),
-            move |peer_ip| {
-                let pubkey = key_store.on_pubkey(peer_ip.to_string())?;
-                let pubkey: [u8; PUBLIC_KEY_LENGTH] = pubkey.try_into().ok()?;
-                Some(PublicKey::from(pubkey))
-            },
-            privkey,
+            Arc::new(key_store),
             logger,
         )?;
 

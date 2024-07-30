@@ -4,6 +4,8 @@ import math
 import os
 import re
 import time
+import sys
+from datetime import timedelta
 from threading import Semaphore
 from typing import Tuple
 
@@ -132,6 +134,7 @@ def run():
     for s in scenarios:
         total_containers += len(s.runners())
 
+    start_time = time.time()
     while True:
         if len(already_done) == len(scenarios):
             break
@@ -202,8 +205,6 @@ def run():
                     info = ContainerHolder(container, scenario.id(), TESTCASE_TIMEOUT)
                     scenario_results[scenario.id()].append(info)
 
-        curr_time = time.strftime("%H:%M:%S", time.localtime())
-
         done_containers = 0
         failed_container_count = 0
         for scenario in scenarios:
@@ -214,11 +215,11 @@ def run():
                         success, reason = container.success()
                         if not success:
                             failed_container_count += 1
-
-        print(
-            f"*** Test suite progress: {curr_time}: {done_containers}/{total_containers} containers finished, {failed_container_count} failed",
-            flush=True,
+        elapsed_time = str(timedelta(seconds=(round(time.time() - start_time))))
+        sys.stdout.write(
+            f"Testing in progress. Elapsed time: {elapsed_time}. Container exit stats: {done_containers}/{total_containers}, of those failed: {failed_container_count}\r"
         )
+        sys.stdout.flush()
 
         time.sleep(1)
 

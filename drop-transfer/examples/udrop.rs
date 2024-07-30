@@ -315,7 +315,12 @@ async fn main() -> anyhow::Result<()> {
 
     let auth = {
         let pubkey = drop_auth::PublicKey::from(PUB_KEY);
-        auth::Context::new(drop_auth::SecretKey::from(PRIV_KEY), move |_| Some(pubkey))
+        let privkey = move || {
+            let privkey = drop_auth::SecretKey::from(PRIV_KEY);
+            Some(privkey)
+        };
+
+        auth::Context::new(privkey, move |_| Some(pubkey))
     };
 
     let storage_file = matches.get_one::<String>("storage").unwrap();
