@@ -1,3 +1,11 @@
+### v7.0.1
+### **The United States of FFI v2**
+---
+* Update uniffi generators to v0.25.0-11, which fixes the callback crashes
+
+---
+<br>
+
 ### 7.0.0
 ### **The United States of FFI***
 ---
