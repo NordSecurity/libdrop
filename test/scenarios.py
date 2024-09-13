@@ -11702,6 +11702,10 @@ scenarios = [
                             "init_duration": ">0"
                         }""",
                             """{
+                            "type": "transfer_intent_received",
+                            "transfer_id": "*"
+                        }""",
+                            """{
                             "type": "file",
                             "result": 0,
                             "phase": "finished",
@@ -11885,6 +11889,10 @@ scenarios = [
                             "init_duration": ">0"
                         }""",
                             """{
+                            "type": "transfer_intent_received",
+                            "transfer_id": "*"
+                        }""",
+                            """{
                             "type": "file",
                             "result": 0,
                             "phase": "finished",
@@ -12035,6 +12043,10 @@ scenarios = [
                             "lib_version": "*",
                             "prod": false,
                             "init_duration": ">0"
+                        }""",
+                            """{
+                            "type": "transfer_intent_received",
+                            "transfer_id": "*"
                         }""",
                             """{
                             "type": "file",
@@ -12213,6 +12225,10 @@ scenarios = [
                             "init_duration": ">0"
                         }""",
                             """{
+                            "type": "transfer_intent_received",
+                            "transfer_id": "*"
+                        }""",
+                            """{
                             "type": "file",
                             "result": 0,
                             "phase": "paused",
@@ -12370,6 +12386,10 @@ scenarios = [
                             "lib_version": "*",
                             "prod": false,
                             "init_duration": ">0"
+                        }""",
+                            """{
+                            "type": "transfer_intent_received",
+                            "transfer_id": "*"
                         }""",
                             """{
                             "type": "file",
