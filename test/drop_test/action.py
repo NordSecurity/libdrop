@@ -12,6 +12,7 @@ import glob
 import socket
 import requests
 import shutil
+import re
 
 from . import event, ffi
 from .logger import logger
@@ -33,7 +34,7 @@ def to_num(s: str):
         return s
 
 
-compare_funcs = [
+compare_ops = [
     ("*", lambda input, value: value is not None),
     ("<=", lambda input, value: value <= to_num(input)),
     (">=", lambda input, value: value >= to_num(input)),
@@ -46,6 +47,18 @@ compare_funcs = [
         == Counter(str(value).split(",")),
     ),
 ]
+
+
+def substitute_transfer_id(input: str):
+    split = input.split(":")
+    if len(split) != 2:
+        raise Exception("Malformed transfer_id substitution expression")
+
+    return get_uuid(to_num(split[1]))
+
+
+substitute_pattern = r"(\?\/)(.*)(\/)"
+substitute_ops = [("transfer_id", lambda input: substitute_transfer_id(input))]
 
 
 def compare_json_struct(expected: dict, actual: dict):
@@ -64,7 +77,15 @@ def compare_json_struct(expected: dict, actual: dict):
                 compare_json_struct(expected_value[i], actual_value[i])
         else:
             valid = False
-            for func in compare_funcs:
+            substitution = re.search(substitute_pattern, str(expected_value))
+            if substitution is not None:
+                inner = substitution.group(2)
+                for sub_entry in substitute_ops:
+                    if inner.startswith(sub_entry[0]):
+                        expected_value = sub_entry[1](inner)
+                        break
+
+            for func in compare_ops:
                 signature = func[0]
                 op = func[1]
                 if str(expected_value).startswith(signature):
