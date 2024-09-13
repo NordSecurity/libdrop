@@ -564,6 +564,14 @@ impl TransferEventTx<OutgoingTransfer> {
 
 impl TransferEventTx<IncomingTransfer> {
     pub async fn received(&self) {
+        self.inner
+            .lock()
+            .await
+            .moose
+            .event_transfer_intent_received(drop_analytics::TransferIntentReceivedEventData {
+                transfer_id: self.xfer.id().to_string(),
+            });
+
         self.emit_ongoing(Event::RequestReceived(self.xfer.clone()))
             .await;
     }

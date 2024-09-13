@@ -127,7 +127,8 @@ impl super::Moose for MooseImpl {
             self.logger,
             send_serviceQuality_initialization_init,
             data.result,
-            data.init_duration
+            data.init_duration,
+            None
         );
     }
 
@@ -141,7 +142,17 @@ impl super::Moose for MooseImpl {
             data.file_sizes,
             data.extensions,
             data.mime_types,
-            data.path_ids
+            data.path_ids,
+            None
+        );
+    }
+
+    fn event_transfer_intent_received(&self, data: crate::TransferIntentReceivedEventData) {
+        moose!(
+            self.logger,
+            send_serviceQuality_transfer_intentReceived,
+            data.transfer_id,
+            None
         );
     }
 
@@ -151,7 +162,8 @@ impl super::Moose for MooseImpl {
             send_serviceQuality_transfer_state,
             data.transfer_id,
             data.result,
-            data.protocol_version
+            data.protocol_version,
+            None
         );
     }
 
@@ -165,7 +177,8 @@ impl super::Moose for MooseImpl {
             data.direction.into(),
             data.path_id,
             data.phase.into(),
-            data.transferred
+            data.transferred,
+            None
         );
     }
 
@@ -177,7 +190,8 @@ impl super::Moose for MooseImpl {
             data.code,
             data.name,
             data.message,
-            data.note
+            data.note,
+            None
         );
     }
 
@@ -189,7 +203,8 @@ impl super::Moose for MooseImpl {
             data.code,
             data.name,
             data.message,
-            data.note
+            data.note,
+            None
         );
     }
 }
