@@ -14,7 +14,7 @@ TESTCASE_TIMEOUT ?= 100
 
 $(LIB): $(shell find ../ -type f \( -name '*.rs' -o -name '*.toml' -o -name '*.sql' -o -name '*.lock' \))
 	cargo build $(FEATURES)
-	
+
 # Build the project with coverage instrumentation
 build-coverage:
 	CARGO_INCREMENTAL=0 RUSTFLAGS="$(RUSTFLAGS_COVERAGE)" cargo +nightly build $(FEATURES)

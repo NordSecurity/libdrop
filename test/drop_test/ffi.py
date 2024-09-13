@@ -410,7 +410,7 @@ def new_event(ev: norddrop.Event) -> event.Event:
     elif ev.is_file_throttled():
         return event.Throttled(transfer_slot, ev.file_id, ev.transferred)
     elif ev.is_file_pending():
-        return event.Pending(transfer_slot, ev.file_id)
+        return event.Pending(transfer_slot, ev.file_id, ev.base_dir)
 
     elif ev.is_transfer_finalized():
         return event.FinishTransferCanceled(transfer_slot, ev.by_peer)

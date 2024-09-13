@@ -116,9 +116,10 @@ class Start(Event):
 
 
 class Pending(Event):
-    def __init__(self, uuid_slot: int, file: str):
+    def __init__(self, uuid_slot: int, file: str, base_dir: str):
         self._uuid_slot = uuid_slot
         self._file = file
+        self._base_dir = base_dir
 
     def __eq__(self, rhs):
         if not isinstance(rhs, Pending):
@@ -127,11 +128,13 @@ class Pending(Event):
             return False
         if self._file != rhs._file:
             return False
+        if self._base_dir != rhs._base_dir:
+            return False
 
         return True
 
     def __str__(self):
-        return f"Pending(transfer={print_uuid(self._uuid_slot)}, file={self._file})"
+        return f"Pending(transfer={print_uuid(self._uuid_slot)}, file={self._file}, base_dir={self._base_dir})"
 
 
 class Progress(Event):
