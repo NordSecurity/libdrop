@@ -1,4 +1,12 @@
-### v8.0.1
+#### v8.1.0
+### **UNRELEASED**
+---
+* Add `base_dir` field to the `FilePending` event
+
+---
+<br>
+
+## v8.0.1
 ### **Fresh air v2**
 ---
 * Update uniffi generators to v0.25.0-11, which fixes the callback crashes

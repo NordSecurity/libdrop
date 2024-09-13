@@ -78,6 +78,7 @@ pub enum EventKind {
     FilePending {
         transfer_id: String,
         file_id: String,
+        base_dir: String,
     },
 
     TransferFinalized {
@@ -331,10 +332,11 @@ impl From<drop_transfer::Event> for EventKind {
             FileDownloadPending {
                 transfer_id,
                 file_id,
-                ..
+                base_dir,
             } => Self::FilePending {
                 transfer_id: transfer_id.to_string(),
                 file_id: file_id.to_string(),
+                base_dir,
             },
         }
     }
