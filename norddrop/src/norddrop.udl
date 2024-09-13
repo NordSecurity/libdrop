@@ -292,7 +292,7 @@ interface EventKind {
 
     /// Indicates that the file transfer is registered and ready. It is emitted as a
     /// response to the `download()` call.
-    FilePending    (string transfer_id, string file_id);
+    FilePending    (string transfer_id, string file_id, string base_dir);
 
 
     /// Transfer is finalized and no further action on the transfer are possible.
