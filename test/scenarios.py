@@ -11623,7 +11623,7 @@ scenarios = [
                         }""",
                             """{
                             "type": "transfer_intent",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "path_ids": \""""
                             + FILES["testfile-big"].id
                             + """\",
@@ -11642,7 +11642,7 @@ scenarios = [
                             "type": "file",
                             "result": 0,
                             "phase": "finished",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "transfer_time": ">0",
                             "transferred": 10240,
                             "path_id": \""""
@@ -11702,10 +11702,14 @@ scenarios = [
                             "init_duration": ">0"
                         }""",
                             """{
+                            "type": "transfer_intent_received",
+                            "transfer_id": "?/transfer_id:0/"
+                        }""",
+                            """{
                             "type": "file",
                             "result": 0,
                             "phase": "finished",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "transfer_time": ">0",
                             "transferred": 10240,
                             "path_id": \""""
@@ -11776,7 +11780,7 @@ scenarios = [
                         }""",
                             """{
                             "type": "transfer_intent",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "path_ids": \"[~]"""
                             + FILES["tiny-jpeg.jpg"].id
                             + ","
@@ -11797,7 +11801,7 @@ scenarios = [
                             "type": "file",
                             "result": 0,
                             "phase": "finished",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "transfer_time": ">0",
                             "transferred": 0,
                             "path_id": "*",
@@ -11807,7 +11811,7 @@ scenarios = [
                             "type": "file",
                             "result": 0,
                             "phase": "finished",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "transfer_time": ">0",
                             "transferred": 0,
                             "path_id": "*",
@@ -11885,10 +11889,14 @@ scenarios = [
                             "init_duration": ">0"
                         }""",
                             """{
+                            "type": "transfer_intent_received",
+                            "transfer_id": "?/transfer_id:0/"
+                        }""",
+                            """{
                             "type": "file",
                             "result": 0,
                             "phase": "finished",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "transfer_time": ">0",
                             "transferred": 0,
                             "path_id": "*",
@@ -11898,7 +11906,7 @@ scenarios = [
                             "type": "file",
                             "result": 0,
                             "phase": "finished",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "transfer_time": ">0",
                             "transferred": 0,
                             "path_id": "*",
@@ -11957,7 +11965,7 @@ scenarios = [
                         }""",
                             """{
                             "type": "transfer_intent",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "path_ids": \""""
                             + FILES["testfile-big"].id
                             + """\",
@@ -11976,7 +11984,7 @@ scenarios = [
                             "type": "file",
                             "result": 0,
                             "phase": "finished",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "transfer_time": ">0",
                             "transferred": 10240,
                             "path_id": \""""
@@ -12037,10 +12045,14 @@ scenarios = [
                             "init_duration": ">0"
                         }""",
                             """{
+                            "type": "transfer_intent_received",
+                            "transfer_id": "?/transfer_id:0/"
+                        }""",
+                            """{
                             "type": "file",
                             "result": 0,
                             "phase": "finished",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "transfer_time": ">=0",
                             "transferred": 10240,
                             "path_id": \""""
@@ -12101,7 +12113,7 @@ scenarios = [
                         }""",
                             """{
                             "type": "transfer_intent",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "path_ids": \""""
                             + FILES["testfile-big"].id
                             + """\",
@@ -12120,7 +12132,7 @@ scenarios = [
                             "type": "file",
                             "result": 0,
                             "phase": "paused",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "transfer_time": ">0",
                             "transferred": ">=0",
                             "path_id": \""""
@@ -12137,7 +12149,7 @@ scenarios = [
                             "type": "file",
                             "result": 0,
                             "phase": "finished",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "transfer_time": ">0",
                             "transferred": 10240,
                             "path_id": \""""
@@ -12213,10 +12225,14 @@ scenarios = [
                             "init_duration": ">0"
                         }""",
                             """{
+                            "type": "transfer_intent_received",
+                            "transfer_id": "?/transfer_id:0/"
+                        }""",
+                            """{
                             "type": "file",
                             "result": 0,
                             "phase": "paused",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "transfer_time": ">=0",
                             "transferred": ">=0",
                             "path_id": \""""
@@ -12235,7 +12251,7 @@ scenarios = [
                             "type": "file",
                             "result": 0,
                             "phase": "finished",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "transfer_time": ">=0",
                             "transferred": 10240,
                             "path_id": \""""
@@ -12297,7 +12313,7 @@ scenarios = [
                         }""",
                             """{
                             "type": "transfer_intent",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "path_ids": \""""
                             + FILES["testfile-big"].id
                             + """\",
@@ -12316,7 +12332,7 @@ scenarios = [
                             "type": "file",
                             "result": 28,
                             "phase": "finished",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "transfer_time": ">0",
                             "transferred": ">=0",
                             "path_id": \""""
@@ -12372,10 +12388,14 @@ scenarios = [
                             "init_duration": ">0"
                         }""",
                             """{
+                            "type": "transfer_intent_received",
+                            "transfer_id": "?/transfer_id:0/"
+                        }""",
+                            """{
                             "type": "file",
                             "result": 8,
                             "phase": "finished",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "transfer_time": ">=0",
                             "transferred": ">=0",
                             "path_id": \""""
@@ -12522,7 +12542,7 @@ scenarios = [
                         }""",
                             """{
                             "type": "transfer_intent",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "path_ids": \""""
                             + FILES["testfile-small"].id
                             + """\",
@@ -12541,7 +12561,7 @@ scenarios = [
                             "type": "file",
                             "result": 0,
                             "phase": "finished",
-                            "transfer_id": "*",
+                            "transfer_id": "?/transfer_id:0/",
                             "transfer_time": ">0",
                             "transferred": ">=0",
                             "path_id": \""""

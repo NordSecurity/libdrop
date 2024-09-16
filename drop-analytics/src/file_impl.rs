@@ -10,6 +10,8 @@ enum MooseEventType {
     Init(InitEvent),
     #[serde(rename = "transfer_intent")]
     TransferIntent(crate::TransferIntentEventData),
+    #[serde(rename = "transfer_intent_received")]
+    TransferIntentReceived(crate::TransferIntentReceivedEventData),
     #[serde(rename = "transfer_state")]
     TransferState(crate::TransferStateEventData),
     #[serde(rename = "file")]
@@ -92,6 +94,18 @@ impl super::Moose for FileImpl {
             slog::error!(
                 self.logger,
                 "[Moose] Failed to write transfer intent event: {:?}",
+                event.err()
+            );
+        };
+    }
+
+    fn event_transfer_intent_received(&self, data: crate::TransferIntentReceivedEventData) {
+        let event = self.write_event(MooseEventType::TransferIntentReceived(data));
+
+        if event.is_err() {
+            slog::error!(
+                self.logger,
+                "[Moose] Failed to write transfer intent received event: {:?}",
                 event.err()
             );
         };
