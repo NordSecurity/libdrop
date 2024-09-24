@@ -4,6 +4,7 @@
 * Add `base_dir` field to the `FilePending` event
 * Update moose tracker to v13.1.0
     * Adds the `transfer_intent_received` event
+* Added private key retrieval on demand instead of caching it
 
 ---
 <br>
