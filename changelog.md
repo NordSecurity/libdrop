@@ -1,5 +1,5 @@
-#### v8.1.0
-### **UNRELEASED**
+### v8.1.0
+### **Magic wand**
 ---
 * Add `base_dir` field to the `FilePending` event
 * Update moose tracker to v13.1.0
@@ -10,7 +10,7 @@
 ---
 <br>
 
-## v8.0.1
+### v8.0.1
 ### **Fresh air v2**
 ---
 * Update uniffi generators to v0.25.0-11, which fixes the callback crashes
