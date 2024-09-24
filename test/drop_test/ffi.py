@@ -322,6 +322,7 @@ class Drop:
         dbpath: str,
         checksum_events_size_threshold=None,
         checksum_events_granularity=None,
+        auto_retry_interval_ms=None,
     ):
         cfg = norddrop.Config(
             dir_depth_limit=5,
@@ -332,6 +333,7 @@ class Drop:
             checksum_events_size_threshold=checksum_events_size_threshold,
             checksum_events_granularity=checksum_events_granularity,
             connection_retries=1,
+            auto_retry_interval_ms=auto_retry_interval_ms,
         )
 
         self._instance.start(addr, cfg)
