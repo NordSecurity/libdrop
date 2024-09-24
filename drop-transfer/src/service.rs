@@ -3,14 +3,14 @@ use std::{
     net::IpAddr,
     path::{Component, Path},
     sync::Arc,
-    time::{Instant, SystemTime},
+    time::{Duration, Instant, SystemTime},
 };
 
 use drop_analytics::{InitEventData, Moose, TransferStateEventData};
 use drop_config::DropConfig;
 use drop_core::Status;
 use drop_storage::Storage;
-use slog::{debug, trace, Logger};
+use slog::{debug, info, trace, Logger};
 use tokio::sync::{mpsc, Semaphore};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -19,7 +19,7 @@ use crate::{
     auth,
     error::ResultExt,
     manager::{self},
-    tasks::AliveWaiter,
+    tasks::{AliveGuard, AliveWaiter},
     transfer::Transfer,
     ws::{self, EventTxFactory},
     Error, Event, FileId, TransferManager,
@@ -106,12 +106,22 @@ impl Service {
 
             manager::resume(&refresh_trigger.subscribe(), &state, &logger, &guard, &stop).await;
 
+            if let Some(interval) = state.config.auto_retry_interval {
+                spawn_auto_retry_loop(
+                    refresh_trigger.clone(),
+                    interval,
+                    logger.clone(),
+                    guard.clone(),
+                    stop.clone(),
+                );
+            }
+
             Ok(Self {
                 refresh_trigger,
                 state,
                 stop,
                 waiter,
-                logger: logger.clone(),
+                logger,
             })
         };
 
@@ -334,4 +344,38 @@ fn validate_dest_path(parent_dir: &Path) -> crate::Result<()> {
     fs::create_dir_all(parent_dir).map_err(|ioerr| crate::Error::BadPath(ioerr.to_string()))?;
 
     Ok(())
+}
+
+fn spawn_auto_retry_loop(
+    trigger: tokio::sync::watch::Sender<()>,
+    interval: Duration,
+    logger: Logger,
+    guard: AliveGuard,
+    stop: CancellationToken,
+) {
+    info!(
+        logger,
+        "Starting auto retry loop with interval: {}ms",
+        interval.as_millis()
+    );
+
+    tokio::spawn(async move {
+        let _guard = guard;
+
+        let task = async {
+            loop {
+                tokio::time::sleep(interval).await;
+                let _ = trigger.send(());
+            }
+        };
+
+        tokio::select! {
+            biased;
+
+            _ = stop.cancelled() => {
+                debug!(logger, "Stopping auto retry loop");
+            },
+            _ = task => (),
+        }
+    });
 }

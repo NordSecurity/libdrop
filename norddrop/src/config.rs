@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 #[derive(Debug)]
 pub struct Config {
     pub dir_depth_limit: u64,
@@ -8,6 +10,7 @@ pub struct Config {
     pub checksum_events_size_threshold: Option<u64>,
     pub checksum_events_granularity: Option<u64>,
     pub connection_retries: Option<u32>,
+    pub auto_retry_interval_ms: Option<u32>,
 }
 
 impl Config {
@@ -31,6 +34,7 @@ impl From<Config> for drop_config::Config {
             checksum_events_size_threshold,
             checksum_events_granularity,
             connection_retries,
+            auto_retry_interval_ms,
         } = val;
 
         drop_config::Config {
@@ -43,6 +47,8 @@ impl From<Config> for drop_config::Config {
                     .unwrap_or(Config::default_checksum_granularity() as _),
                 connection_retries: connection_retries
                     .unwrap_or(Config::default_connection_retries()),
+                auto_retry_interval: auto_retry_interval_ms
+                    .map(|ms| Duration::from_millis(ms as _)),
             },
             moose: drop_config::MooseConfig {
                 event_path: moose_event_path,

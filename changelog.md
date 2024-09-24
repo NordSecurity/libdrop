@@ -5,6 +5,7 @@
 * Update moose tracker to v13.1.0
     * Adds the `transfer_intent_received` event
 * Added private key retrieval on demand instead of caching it
+* Add internal retries and put under a config feature `auto_retry_interval_ms`
 
 ---
 <br>

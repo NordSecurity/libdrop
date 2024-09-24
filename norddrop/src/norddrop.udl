@@ -58,8 +58,29 @@ dictionary Config {
     /// Emit checksum events at set granularity
     u64? checksum_events_granularity;
 
-    /// Limits the number of connection retries afer the `network_refresh()` call.
+    /// Limits the number of burst connection retries after the
+    /// `network_refresh()` call. Setting this to `0` or `1` gives an effect of
+    /// only one retry after `network_refresh()` call.
+    /// When set to `n > 1` the retry happens in a burst of `n` times and the
+    /// interval between burst retries is increased by the power of 2 starting
+    /// from 1-second interval. For example for `n = 5` the retries happen
+    /// * 1st burst retry immediately
+    /// * 2nd burst retry after 1s the previous burst retry
+    /// * 3rd burst retry after 2s the previous burst retry
+    /// * 4th burst retry after 4s the previous burst retry
+    /// * 5th burst retry after 8s the previous burst retry
+    /// When set to `null` the default of 5 burst retries is used.
     u32? connection_retries;
+
+    /// Enable auto retry loop inside libdrop. Conceptually this means that
+    /// libdrop is calling `network_refresh()` automatically with the given
+    /// period in milliseconds. When set to `null` the feature is disabled and
+    /// the application needs to call  `network_refresh()` manually.
+    /// Note the setting `connection_retries` still applies, meaning the retry
+    /// is executed in burst with this number of counts.
+    /// For example for a single retry every 5 seconds the application needs to
+    /// set `connection_retries` to `1` or `0` and `auto_retry_interval_ms = 5000`.
+    u32? auto_retry_interval_ms;
 };
 
 /// Posible log levels.

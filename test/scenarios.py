@@ -1187,6 +1187,96 @@ scenarios = [
         tags=["offline", "flaky"],
     ),
     Scenario(
+        "scenario5-3",
+        "Try to send file to an offline peer who later comes online and receives the transfer and downloads it, use auto retry feature",
+        {
+            "DROP_PEER_REN": ActionList(
+                [
+                    action.Start("DROP_PEER_REN", auto_retry_interval_ms=1000),
+                    action.NewTransfer("DROP_PEER_STIMPY", ["/tmp/testfile-big"]),
+                    action.Wait(
+                        event.Queued(
+                            0,
+                            "DROP_PEER_STIMPY",
+                            [
+                                norddrop.QueuedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                    "/tmp",
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Wait(
+                        event.TransferDeferred(
+                            0,
+                            "DROP_PEER_STIMPY",
+                            norddrop.StatusCode.IO_ERROR,
+                            ignore_os=True,
+                        )
+                    ),
+                    action.Sleep(8),
+                    action.WaitAndIgnoreExcept(
+                        [event.Start(0, FILES["testfile-big"].id)]
+                    ),
+                    action.Wait(
+                        event.FinishFileUploaded(
+                            0,
+                            FILES["testfile-big"].id,
+                        )
+                    ),
+                    action.ExpectCancel([0], True),
+                    action.Stop(),
+                    action.NoEvent(),
+                ]
+            ),
+            "DROP_PEER_STIMPY": ActionList(
+                [
+                    action.Sleep(5),
+                    action.Start("DROP_PEER_STIMPY"),
+                    action.Wait(
+                        event.Receive(
+                            0,
+                            "DROP_PEER_REN",
+                            [
+                                norddrop.ReceivedFile(
+                                    FILES["testfile-big"].id,
+                                    "testfile-big",
+                                    10485760,
+                                ),
+                            ],
+                        )
+                    ),
+                    action.Download(
+                        0,
+                        FILES["testfile-big"].id,
+                        "/tmp/received/5-3",
+                    ),
+                    action.Wait(
+                        event.Pending(0, FILES["testfile-big"].id, "/tmp/received/5-3")
+                    ),
+                    action.Wait(event.Start(0, FILES["testfile-big"].id)),
+                    action.Wait(
+                        event.FinishFileDownloaded(
+                            0,
+                            FILES["testfile-big"].id,
+                            "/tmp/received/5-3/testfile-big",
+                        )
+                    ),
+                    action.CheckDownloadedFiles(
+                        [
+                            action.File("/tmp/received/5-3/testfile-big", 10485760),
+                        ],
+                    ),
+                    action.ExpectCancel([0], False),
+                    action.NoEvent(),
+                ]
+            ),
+        },
+        tags=["offline", "flaky"],
+    ),
+    Scenario(
         "scenario6-1",
         "Send nested directory, expect it to be transferred fully",
         {

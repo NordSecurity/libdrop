@@ -974,11 +974,13 @@ class Start(Action):
         dbpath: str = ":memory:",
         checksum_events_size_threshold=2**32,  # don't emit events for existing tests
         checksum_events_granularity=None,
+        auto_retry_interval_ms=None,
     ):
         self._addr = addr
         self._dbpath = dbpath
         self._checksum_events_size_threshold = checksum_events_size_threshold
         self._checksum_events_granularity = checksum_events_granularity
+        self._auto_retry_interval_ms = auto_retry_interval_ms
 
     async def run(self, drop: ffi.Drop):
         drop.start(
@@ -986,6 +988,7 @@ class Start(Action):
             self._dbpath,
             self._checksum_events_size_threshold,
             self._checksum_events_granularity,
+            self._auto_retry_interval_ms,
         )
 
     def __str__(self):

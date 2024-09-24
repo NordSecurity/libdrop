@@ -17,6 +17,7 @@ pub struct DropConfig {
     // Default value is 256KB.
     pub checksum_events_granularity: u64,
     pub connection_retries: u32,
+    pub auto_retry_interval: Option<Duration>,
 }
 
 impl Default for DropConfig {
@@ -28,6 +29,7 @@ impl Default for DropConfig {
             checksum_events_size_threshold: None,
             checksum_events_granularity: 256 * 1024,
             connection_retries: 5,
+            auto_retry_interval: None,
         }
     }
 }
