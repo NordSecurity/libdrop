@@ -1,3 +1,11 @@
+### v8.1.1
+### **Magic wand**
+---
+* Re-realease of v8.1.0 just with MacOS dylibs containing dynamic rpath
+
+---
+<br>
+
 ### v8.1.0
 ### **Magic wand**
 ---
