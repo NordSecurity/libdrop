@@ -91,5 +91,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("cargo:rustc-cdylib-link-arg=-Wl,-soname,{}", soname);
     }
 
+    println!("===============> target_os: {}", target_os);
+    if target_os == "tvos" {
+        println!("cargo:rustc-cdylib-link-arg=-Wl,-adhoc_codesign");
+    }
+
     Ok(())
 }
