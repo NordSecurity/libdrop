@@ -17,13 +17,13 @@ pub struct MooseImpl {
 
 struct MooseInitCallback {
     logger: slog::Logger,
-    init_tx: SyncSender<Result<moose::TrackerState, moose::MooseError>>,
+    init_tx: SyncSender<Result<moose::TrackerState, moose::InitError>>,
 }
 
 impl moose::InitCallback for MooseInitCallback {
-    fn after_init(&self, result_code: &Result<moose::TrackerState, moose::MooseError>) {
+    fn after_init(&self, result_code: Result<moose::TrackerState, moose::InitError>) {
         info!(self.logger, "[Moose] Init callback: {:?}", result_code);
-        let _ = self.init_tx.send(*result_code);
+        let _ = self.init_tx.send(result_code);
     }
 }
 
@@ -34,14 +34,31 @@ struct MooseErrorCallback {
 impl moose::ErrorCallback for MooseErrorCallback {
     fn on_error(
         &self,
-        _error_level: moose::MooseErrorLevel,
-        error_code: moose::MooseError,
+        moose_error_code: moose::MooseError,
+        error_level: moose::MooseErrorLevel,
+        error_code: i32,
         msg: &str,
     ) {
-        error!(
-            self.logger,
-            "[Moose] Error callback {:?}: {:?}", error_code, msg
-        );
+        match error_level {
+            mooselibdropapp::MooseErrorLevel::Warning => {
+                warn!(
+                    self.logger,
+                    "[Moose] callback: moose_error_code({:?}) error_code({:?}): {:?}",
+                    moose_error_code,
+                    error_code,
+                    msg
+                );
+            }
+            mooselibdropapp::MooseErrorLevel::Error => {
+                error!(
+                    self.logger,
+                    "[Moose] callback: moose_error_code({:?}) error_code({:?}): {:?}",
+                    moose_error_code,
+                    error_code,
+                    msg
+                );
+            }
+        }
     }
 }
 
