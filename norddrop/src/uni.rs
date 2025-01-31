@@ -154,16 +154,6 @@ impl NordDrop {
     }
 }
 
-#[cfg(any(target_os = "android", target_os = "linux"))]
-extern "C" {
-    fn fortify_source();
-}
-
 pub fn version() -> String {
-    #[cfg(any(target_os = "android", target_os = "linux"))]
-    unsafe {
-        fortify_source();
-    }
-
     env!("DROP_VERSION").to_string()
 }
