@@ -64,22 +64,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS defined");
 
-    {
-        let path = "suppress_source_fortification_check.c";
-        println!("cargo:rerun-if-changed={}", &path);
-        let mut build = cc::Build::new();
-        build.file(path);
-        build.warnings_into_errors(true);
-
-        if target_os != "windows" {
-            build
-                .flag("-fstack-protector-strong")
-                .define("_FORTIFY_SOURCE", "2");
-        }
-
-        build.compile("suppressSourceFortificationCheck")
-    }
-
     let version = parse_version()?;
 
     if target_os == "windows" {
