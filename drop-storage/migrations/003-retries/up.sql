@@ -80,11 +80,25 @@ DROP TABLE outgoing_path_pending_states;
 
 ALTER TABLE incoming_path_pending_states ADD COLUMN base_dir TEXT NOT NULL DEFAULT '';
 
-UPDATE incoming_path_pending_states SET base_dir = ipss.base_dir
-FROM (SELECT path_id, base_dir, MIN(created_at) FROM incoming_path_started_states GROUP BY path_id) as ipss
-WHERE incoming_path_pending_states.path_id = ipss.path_id;
+--- todo: the ALTER TABLE DROP COLUMN is only supported since 2021-03-12 (3.35.0)
+--- ALTER TABLE incoming_path_started_states DROP COLUMN base_dir;
 
-ALTER TABLE incoming_path_started_states DROP COLUMN base_dir;
+CREATE TABLE IF NOT EXISTS incoming_path_started_states_new (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, 
+  path_id INTEGER NOT NULL,
+  bytes_received INTEGER NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
+  FOREIGN KEY(path_id) REFERENCES incoming_paths(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  CHECK(bytes_received >= 0)
+);
+
+INSERT INTO incoming_path_started_states_new (id, path_id, bytes_received, created_at)
+SELECT id, path_id, bytes_received, created_at
+FROM incoming_path_started_states;
+
+DROP TABLE incoming_path_started_states;
+
+ALTER TABLE incoming_path_started_states_new RENAME TO incoming_path_started_states;
 
 
 -- transfers soft deletion
