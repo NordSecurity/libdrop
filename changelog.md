@@ -1,3 +1,12 @@
+### v8.2.0
+### **Light SQL**
+---
+* Moose v16.0.1
+* Migrations rewritten with older syntax to work with older SQLite versions
+
+---
+<br>
+
 ### v8.1.2
 ### **Magic wand**
 ---
