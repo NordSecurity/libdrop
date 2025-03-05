@@ -1,3 +1,11 @@
+### v8.1.3
+### **Magic wand**
+---
+* SQLite migrations backported to older SQLite syntax
+
+---
+<br>
+
 ### v8.1.2
 ### **Magic wand**
 ---
