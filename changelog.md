@@ -1,3 +1,11 @@
+### v8.1.4
+### **Magic wand**
+---
+* Fix XCFramework generation
+
+---
+<br>
+
 ### v8.1.3
 ### **Magic wand**
 ---
