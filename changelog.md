@@ -1,3 +1,11 @@
+### v8.2.2
+### **Light SQL**
+---
+* Fix for fix XCFramework generation
+
+---
+<br>
+
 ### v8.2.1
 ### **Light SQL**
 ---
