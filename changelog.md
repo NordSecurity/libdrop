@@ -1,3 +1,11 @@
+### v8.2.3
+### **Light SQL**
+---
+* Moose bump to v16.0.2, fixes killswitch bug
+
+---
+<br>
+
 ### v8.2.2
 ### **Light SQL**
 ---
