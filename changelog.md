@@ -1,6 +1,8 @@
-### UNRELEASED
+### v8.2.4
+### **Light SQL***
 ---
 * Bump Rust to 1.85.0
+* Crossbeam-channel vulnerability fix
 
 ---
 <br>
