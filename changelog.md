@@ -1,3 +1,10 @@
+### UNRELEASED
+---
+* Bump Rust to 1.85.0
+
+---
+<br>
+
 ### v8.2.3
 ### **Light SQL**
 ---
