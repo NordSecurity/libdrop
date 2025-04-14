@@ -37,6 +37,8 @@ jobs:
             --color always --lib --release
             --
             --allow unknown-lints
+            --allow clippy::empty-line-after-doc-comments
+            --allow clippy::doc-lazy-continuation
             --deny clippy::unused_async
             --deny clippy::wildcard_imports
             --deny clippy::unwrap_used
