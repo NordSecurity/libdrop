@@ -50,7 +50,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install linters
-        run: python3 -m pip install black mypy types-requests
+        run: python3 -m pip install black==23.7.0 mypy==1.4.1 types-requests
       - name: Run black
         run: black --check --diff test/
       - name: Run mypy
