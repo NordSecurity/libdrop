@@ -1465,7 +1465,7 @@ fn ensure_resume_matches_existing_transfer<T: Transfer>(
         current
             .files()
             .iter()
-            .all(|(key, val)| existing.files().get(key).map_or(false, |v| {
+            .all(|(key, val)| existing.files().get(key).is_some_and(|v| {
                 val.id() == v.id() && val.size() == v.size() && val.mime_type() == v.mime_type()
             })),
         "Files do not match"
