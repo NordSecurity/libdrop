@@ -1,3 +1,12 @@
+### v8.1.6
+### **Magic wand**
+---
+* Bump rust to 1.85.0
+* Crossbeam-channel vulnerability fix
+
+---
+<br>
+
 ### v8.1.5
 ### **Magic wand**
 ---
