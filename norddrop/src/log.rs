@@ -24,7 +24,7 @@ struct KeyValueSerializer<'a> {
     kv: HashMap<slog::Key, String>,
 }
 
-impl<'a> slog::Serializer for KeyValueSerializer<'a> {
+impl slog::Serializer for KeyValueSerializer<'_> {
     fn emit_arguments(&mut self, key: slog::Key, val: &fmt::Arguments) -> slog::Result {
         self.kv.insert(key, val.to_string());
         Ok(())

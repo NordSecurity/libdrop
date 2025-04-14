@@ -1073,7 +1073,7 @@ fn move_tmp_to_dst(
     Ok(dst_location)
 }
 
-impl<'a> FileStreamCtx<'a> {
+impl FileStreamCtx<'_> {
     async fn start(
         self,
         downloader: impl Downloader + Send + 'static,
