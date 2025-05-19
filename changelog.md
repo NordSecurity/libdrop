@@ -1,5 +1,13 @@
+### UNRELEASED
+### **Deck of Cards**
+---
+* Bump uniffi to 0.28.3
+
+---
+<br>
+
 ### v8.2.4
-### **Light SQL***
+### **Light SQL**
 ---
 * Bump Rust to 1.85.0
 * Crossbeam-channel vulnerability fix

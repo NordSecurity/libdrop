@@ -26,6 +26,7 @@ anyhow = "1.0.75"
 libc = "0.2.147"
 sha2 = "0.10.7"
 thiserror = "1.0"
+uniffi = "0.28.3"
 
 [profile.release]
 lto = true
