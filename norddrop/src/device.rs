@@ -561,30 +561,23 @@ fn open_database(
             // If we can't even open the DB in memory, there is nothing else left to do,
             // throw an error
             if dbpath == ":memory:" {
-                let error = crate::LibdropError::DbError;
                 moose.developer_exception(DeveloperExceptionEventData {
-                    code: error as i32,
                     note: err.to_string(),
                     message: "Failed to open in-memory DB".to_string(),
-                    name: "DB Error".to_string(),
                 });
 
-                Err(error)
+                Err(crate::LibdropError::DbError)
             } else {
                 moose.developer_exception(DeveloperExceptionEventData {
-                    code: crate::LibdropError::DbError as i32,
                     note: "Initial DB open failed, recreating".to_string(),
                     message: "Failed to open DB file".to_string(),
-                    name: "DB Error".to_string(),
                 });
                 // Still problems? Let's try to delete the file, provided it's not in memory
                 warn!(logger, "Removing old DB file");
                 if let Err(err) = std::fs::remove_file(dbpath) {
                     moose.developer_exception(DeveloperExceptionEventData {
-                        code: crate::LibdropError::DbError as i32,
                         note: err.to_string(),
                         message: "Failed to remove old DB file".to_string(),
-                        name: "DB Error".to_string(),
                     });
                     error!(
                         logger,
@@ -603,18 +596,15 @@ fn open_database(
                 match drop_storage::Storage::new(logger.clone(), dbpath) {
                     Ok(storage) => Ok(storage),
                     Err(err) => {
-                        let error = crate::LibdropError::DbError;
                         moose.developer_exception(DeveloperExceptionEventData {
-                            code: error as i32,
                             note: err.to_string(),
                             message: "Failed to open DB after cleanup".to_string(),
-                            name: "DB Error".to_string(),
                         });
                         error!(
                             logger,
                             "Failed to open DB after cleaning up old file: {err}"
                         );
-                        Err(error)
+                        Err(crate::LibdropError::DbError)
                     }
                 }
             }

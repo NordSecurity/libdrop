@@ -7,7 +7,7 @@ use anyhow::Context;
 use mooselibdropapp as moose;
 use slog::{error, info, warn, Logger};
 
-use crate::{TransferDirection, TransferFilePhase, MOOSE_VALUE_NONE};
+use crate::{TransferDirection, TransferFilePhase};
 
 const DROP_MOOSE_APP_NAME: &str = "norddrop";
 
@@ -200,27 +200,13 @@ impl super::Moose for MooseImpl {
     }
 
     fn developer_exception(&self, data: crate::DeveloperExceptionEventData) {
-        moose!(
-            self.logger,
-            send_developer_exceptionHandling_catchException,
-            MOOSE_VALUE_NONE,
-            data.code,
-            data.name,
-            data.message,
-            data.note,
-            None
-        );
-    }
+        let json = serde_json::to_string(&data).expect("Failed to seriazlie event");
 
-    fn developer_exception_with_value(&self, data: crate::DeveloperExceptionWithValueEventData) {
         moose!(
             self.logger,
-            send_developer_exceptionHandling_catchException,
-            data.arbitrary_value,
-            data.code,
-            data.name,
-            data.message,
-            data.note,
+            send_debugger_exceptionHandling_catchException,
+            json,
+            Vec::new(),
             None
         );
     }

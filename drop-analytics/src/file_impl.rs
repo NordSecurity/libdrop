@@ -18,8 +18,6 @@ enum MooseEventType {
     File(crate::TransferFileEventData),
     #[serde(rename = "exception")]
     Exception(crate::DeveloperExceptionEventData),
-    #[serde(rename = "exception_with_value")]
-    ExceptionWithValue(crate::DeveloperExceptionWithValueEventData),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -137,18 +135,6 @@ impl super::Moose for FileImpl {
 
     fn developer_exception(&self, data: crate::DeveloperExceptionEventData) {
         let event = self.write_event(MooseEventType::Exception(data));
-
-        if event.is_err() {
-            slog::error!(
-                self.logger,
-                "[Moose] Failed to write exception event: {:?}",
-                event.err()
-            );
-        };
-    }
-
-    fn developer_exception_with_value(&self, data: crate::DeveloperExceptionWithValueEventData) {
-        let event = self.write_event(MooseEventType::ExceptionWithValue(data));
 
         if event.is_err() {
             slog::error!(
