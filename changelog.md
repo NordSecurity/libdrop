@@ -1,7 +1,8 @@
-### UNRELEASED
+### v8.3.0
 ### **Deck of Cards**
 ---
 * Bump uniffi to 0.28.3
+* Bump moose to v17.0.0
 
 ---
 <br>

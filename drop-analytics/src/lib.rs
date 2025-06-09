@@ -75,19 +75,8 @@ pub struct TransferFileEventData {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DeveloperExceptionEventData {
-    pub code: i32,
     pub note: String,
     pub message: String,
-    pub name: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DeveloperExceptionWithValueEventData {
-    pub arbitrary_value: i32,
-    pub code: i32,
-    pub note: String,
-    pub message: String,
-    pub name: String,
 }
 
 pub trait Moose: Send + Sync {
@@ -105,16 +94,6 @@ pub trait Moose: Send + Sync {
     /// message - error message
     /// name - name of the error
     fn developer_exception(&self, data: DeveloperExceptionEventData);
-
-    /// Generic function for logging exceptions not related to specific
-    /// transfers, with an arbitrary value
-    ///
-    /// arbitrary_value - arbitrary value, if unavailable, use -1
-    /// code - error code, if unavailable, use -1
-    /// note - custom additional information
-    /// message - error message
-    /// name - name of the error
-    fn developer_exception_with_value(&self, data: DeveloperExceptionWithValueEventData);
 }
 
 #[allow(unused_variables)]
