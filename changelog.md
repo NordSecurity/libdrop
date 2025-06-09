@@ -1,4 +1,4 @@
-### v8.3.0
+### v9.0.0
 ### **Deck of Cards**
 ---
 * Bump uniffi to 0.28.3
