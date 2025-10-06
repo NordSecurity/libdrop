@@ -150,15 +150,19 @@ impl super::Moose for MooseImpl {
     }
 
     fn event_transfer_intent(&self, data: crate::TransferIntentEventData) {
+        let params = moose::TransferParams {
+            file_extension: data.extensions,
+            mime_type: data.mime_types,
+            no_of_files: data.file_count,
+            size_of_files_list: data.file_sizes,
+            transfer_id: data.transfer_id,
+            transfer_size: data.transfer_size,
+        };
+
         moose!(
             self.logger,
             send_serviceQuality_transfer_intent,
-            data.transfer_id,
-            data.file_count,
-            data.transfer_size,
-            data.file_sizes,
-            data.extensions,
-            data.mime_types,
+            params,
             data.path_ids,
             None
         );
@@ -185,18 +189,17 @@ impl super::Moose for MooseImpl {
     }
 
     fn event_transfer_file(&self, data: crate::TransferFileEventData) {
-        moose!(
-            self.logger,
-            send_serviceQuality_transfer_file,
-            data.transfer_id,
-            data.transfer_time,
-            data.result,
-            data.direction.into(),
-            data.path_id,
-            data.phase.into(),
-            data.transferred,
-            None
-        );
+        let params = moose::FileTransferParams {
+            errno: data.result,
+            file_phase: data.phase.into(),
+            path_ids: data.path_id,
+            transfer_direction: data.direction.into(),
+            transfer_id: data.transfer_id,
+            transfer_time: data.transfer_time,
+            transferred: data.transferred,
+        };
+
+        moose!(self.logger, send_serviceQuality_transfer_file, params, None);
     }
 
     fn developer_exception(&self, data: crate::DeveloperExceptionEventData) {
