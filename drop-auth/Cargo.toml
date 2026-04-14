@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 base64 = { workspace = true }
-rand = "0.8.5"
+rand = "0.9.3"
 hmac = "0.12.1"
 x25519-dalek = { version = "2.0.0", features = ["static_secrets"]}
 sha2 = { workspace = true }
