@@ -2,6 +2,7 @@
 ### **UNRELEASED**
 ---
 * Bump moose to v18.0.0
+* Make the C# bindings public
 
 ---
 <br>
