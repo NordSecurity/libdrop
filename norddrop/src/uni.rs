@@ -79,8 +79,8 @@ impl NordDrop {
     }
 
     pub fn purge_transfers_until(&self, until: i64) -> Result<()> {
-        // The `device` function takes in seconds as an argument and this function takes
-        // in ms
+        // The `device` function takes in seconds as an argument and this
+        // function takes in ms
         self.dev
             .lock()
             .expect("Poisoned lock")
@@ -88,8 +88,8 @@ impl NordDrop {
     }
 
     pub fn transfers_since(&self, since: i64) -> Result<Vec<TransferInfo>> {
-        // The `device` function takes in seconds as an argument and this function takes
-        // in ms
+        // The `device` function takes in seconds as an argument and this
+        // function takes in ms
         let infos = self
             .dev
             .lock()

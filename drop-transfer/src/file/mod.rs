@@ -342,9 +342,10 @@ where
     loop {
         let buf = reader.fill_buf()?;
         if buf.is_empty() {
-            // If we reached the end of file and the already announced_bytes are different
-            // than the total file size, we announce the total file size
-            // It simply means that the file size is not a multiple of granularity
+            // If we reached the end of file and the already announced_bytes are
+            // different than the total file size, we announce the total file
+            // size It simply means that the file size is not a multiple of
+            // granularity
             if let Some(progress_cb) = progress_cb.as_mut() {
                 if announced_bytes != total_n {
                     progress_cb(total_n).await;
@@ -368,8 +369,8 @@ where
             }
         }
 
-        // Since these are all blocking operation we need to give tokio runtime a
-        // timeslice
+        // Since these are all blocking operation we need to give tokio runtime
+        // a timeslice
         tokio::task::yield_now().await;
     }
 

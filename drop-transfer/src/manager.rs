@@ -667,7 +667,8 @@ impl TransferManager {
             .ok_or(crate::Error::BadTransfer)?;
 
         match state.xfer_sync {
-            // If it's new, then suppress transfer synchronization by deleting the state
+            // If it's new, then suppress transfer synchronization by deleting
+            // the state
             sync::TransferState::New => {
                 self.storage.transfer_sync_clear(transfer_id).await;
 
@@ -1037,7 +1038,8 @@ impl DirMapping {
                 let name = match self.mappings.entry(dest_dir.join(probe)) {
                     // Dir is known, reuse
                     Entry::Occupied(occ) => occ.get().clone(),
-                    // Dir in new, check if there is name conflict and add to known
+                    // Dir in new, check if there is name conflict and add to
+                    // known
                     Entry::Vacant(vacc) => {
                         let mapped = crate::utils::filepath_variants(vacc.key())?.find(|dst_location| {
                                 // Skip if there is already a file with the same name.

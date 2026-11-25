@@ -155,8 +155,8 @@ mod tests {
             assert!(!item.is_null());
 
             let item = MDItem::wrap_under_create_rule(item);
-            // Get all of the values for the `com.apple.metadata:kMDItemWhereFroms`
-            // attribute.
+            // Get all of the values for the
+            // `com.apple.metadata:kMDItemWhereFroms` attribute.
             let attr = MDItemCopyAttribute(item.as_concrete_TypeRef(), kMDItemWhereFroms);
 
             assert!(!attr.is_null());
@@ -164,8 +164,9 @@ mod tests {
             CFArray::wrap_under_create_rule(CFArrayRef::from_void_ptr(attr))
         };
 
-        // It is not impossible for something else in the system to write a value
-        // into this attribute, so we check for existence, not equivalence.
+        // It is not impossible for something else in the system to write a
+        // value into this attribute, so we check for existence, not
+        // equivalence.
         assert(
             array
                 .iter()

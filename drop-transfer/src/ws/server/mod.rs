@@ -50,8 +50,8 @@ use crate::{
 };
 
 const MAX_FILENAME_LENGTH: usize = 255;
-const MAX_FILE_SUFFIX_LEN: usize = 5; // Assume that the suffix will fit into 5 characters e.g.
-                                      // `<filename>(999).<ext>`
+const MAX_FILE_SUFFIX_LEN: usize = 5; // Assume that the suffix will fit into 5
+                                      // characters e.g. `<filename>(999).<ext>`
 const REPORT_PROGRESS_THRESHOLD: u64 = 1024 * 64;
 
 pub enum ServerReq {
@@ -823,9 +823,9 @@ impl FileXferTask {
         emit_checksum_events: bool,
         checksum_events_granularity: u64,
     ) -> Option<TmpFileState> {
-        // TODO: we load the file's metadata to check if we should emit checksum events
-        // based on size threshold. However TmpFileState::load also does the
-        // same thing. We should refactor this to avoid double loading.
+        // TODO: we load the file's metadata to check if we should emit checksum
+        // events based on size threshold. However TmpFileState::load also does
+        // the same thing. We should refactor this to avoid double loading.
         let tmp_size = fs::File::open(&tmp_location.0)
             .and_then(|file| file.metadata())
             .map(|metadata| metadata.len())
@@ -951,8 +951,8 @@ impl FileXferTask {
         let result = task.await;
 
         // This is a critical part that we need to execute atomically.
-        // Since the outter task can be aborted, let's move it to a separate task
-        // so that it's never interrupted.
+        // Since the outter task can be aborted, let's move it to a separate
+        // task so that it's never interrupted.
         let error_logger = logger.clone();
         if let Err(e) = tokio::spawn(async move {
             let _guard = guard;

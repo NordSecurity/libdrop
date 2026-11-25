@@ -17,8 +17,8 @@ impl AliveWaiter {
     }
 
     pub async fn wait_for_all(self) {
-        // Drop the sender and wait for the receiver to get the notification about last
-        // sender being dropped. Based on <https://tokio.rs/tokio/topics/shutdown>
+        // Drop the sender and wait for the receiver to get the notification
+        // about last sender being dropped. Based on <https://tokio.rs/tokio/topics/shutdown>
 
         let Self(guard, mut recv) = self;
         drop(guard);

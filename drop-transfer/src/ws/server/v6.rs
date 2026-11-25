@@ -551,8 +551,8 @@ impl handler::HandlerLoop for HandlerLoop<'_> {
         );
     }
 
-    // While the destructor ensures the events are paused this function waits for
-    // the execution to be finished
+    // While the destructor ensures the events are paused this function waits
+    // for the execution to be finished
     async fn finalize_failure(mut self) {
         self.take_pause_futures().await;
     }
@@ -613,7 +613,8 @@ impl handler::Downloader for Downloader {
                     }
                     Ordering::Equal => {
                         if self.full_csum.get().await == csum {
-                            // All matches the temp file is actually the full file
+                            // All matches the temp file is actually the full
+                            // file
                             meta.len()
                         } else {
                             info!(
