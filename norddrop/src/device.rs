@@ -120,9 +120,10 @@ impl NordDropFFI {
 
                 dispatch.handle_event(&e.0).await;
                 // Android team reported problems with the event ordering.
-                // The events where dispatched in different order than where emitted.
-                // To fix that we need to process the events sequentially.
-                // Also the callback may block the executor - we need to be resistant to that.
+                // The events where dispatched in different order than where
+                // emitted. To fix that we need to process the events
+                // sequentially. Also the callback may block the executor - we
+                // need to be resistant to that.
                 tokio::task::block_in_place(|| ed.dispatch(e));
             }
         });
@@ -558,8 +559,8 @@ fn open_database(
         Err(err) => {
             error!(logger, "Failed to open DB at \"{dbpath}\": {err}",);
 
-            // If we can't even open the DB in memory, there is nothing else left to do,
-            // throw an error
+            // If we can't even open the DB in memory, there is nothing else
+            // left to do, throw an error
             if dbpath == ":memory:" {
                 moose.developer_exception(DeveloperExceptionEventData {
                     note: err.to_string(),
@@ -572,7 +573,8 @@ fn open_database(
                     note: "Initial DB open failed, recreating".to_string(),
                     message: "Failed to open DB file".to_string(),
                 });
-                // Still problems? Let's try to delete the file, provided it's not in memory
+                // Still problems? Let's try to delete the file, provided it's
+                // not in memory
                 warn!(logger, "Removing old DB file");
                 if let Err(err) = std::fs::remove_file(dbpath) {
                     moose.developer_exception(DeveloperExceptionEventData {
@@ -583,7 +585,8 @@ fn open_database(
                         logger,
                         "Failed to open DB and failed to remove it's file: {err}"
                     );
-                    // Try to at least open db in memory if the path doesn't work
+                    // Try to at least open db in memory if the path doesn't
+                    // work
                     return open_database(":memory:", events, logger, moose);
                 } else {
                     // Inform app that we wiped the old DB file

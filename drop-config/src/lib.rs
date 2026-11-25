@@ -11,10 +11,11 @@ pub struct DropConfig {
     pub dir_depth_limit: usize,
     pub transfer_file_limit: usize,
     pub storage_path: String,
-    // If set the checksum events will be emited for every file of this or bigger size
+    // If set the checksum events will be emited for every file of this or
+    // bigger size
     pub checksum_events_size_threshold: Option<usize>,
-    // If set the checksum events will be emited for every checksum_events_granularity bytes
-    // Default value is 256KB.
+    // If set the checksum events will be emited for every
+    // checksum_events_granularity bytes Default value is 256KB.
     pub checksum_events_granularity: u64,
     pub connection_retries: u32,
     pub auto_retry_interval: Option<Duration>,

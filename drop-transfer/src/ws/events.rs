@@ -66,8 +66,8 @@ trait EventTx {
 
 impl EventTx for UnboundedSender<(Event, SystemTime)> {
     fn emit(&self, event: Event) {
-        // Sometimes on shutdown it can error out. It's better not to handle this error
-        // at all
+        // Sometimes on shutdown it can error out. It's better not to handle
+        // this error at all
         let _ = self.send((event, SystemTime::now()));
     }
 }

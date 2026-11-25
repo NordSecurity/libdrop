@@ -1126,9 +1126,9 @@ impl Storage {
         // 2. outgoing paths with their states
         // 3. incoming paths with their states
         // Because a single query is used for transfers and their states
-        // (the same applies to paths as well), a hashmap is used to collect states for
-        // each transfer. For each state their transfer is taken from a hash map
-        // (or inserted), and this transfers state list is appended.
+        // (the same applies to paths as well), a hashmap is used to collect
+        // states for each transfer. For each state their transfer is taken from
+        // a hash map (or inserted), and this transfers state list is appended.
         // For transfers, their rowid is selected as well and used to sort the
         // transfers. Because its not part of `Transfer` structure, a tuple is
         // used as hashmap value.
@@ -1210,8 +1210,8 @@ impl Storage {
                 .count();
 
             let mut outgoing_paths: HashMap<i64, OutgoingPath> = HashMap::new();
-            // Here is the same situation as before - because the columns after created_at
-            // are all integers, they can be shared.
+            // Here is the same situation as before - because the columns after
+            // created_at are all integers, they can be shared.
             let _ = tx.prepare(r#"
             WITH ops AS (
                 select 1, path_id, created_at, bytes_sent, null from outgoing_path_started_states
@@ -1341,8 +1341,8 @@ impl Storage {
             }
 
             let mut incoming_paths: HashMap<i64, IncomingPath> = HashMap::new();
-            // And this is more interesting - base_ir and final_patch are text type. For
-            // these fields a separate column will be used.
+            // And this is more interesting - base_ir and final_patch are text
+            // type. For these fields a separate column will be used.
             let _ = tx.prepare(r#"
             WITH ips AS (
                 select 1, path_id, created_at, null, null, base_dir from incoming_path_pending_states

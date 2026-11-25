@@ -43,7 +43,8 @@ fn create_winres(version: &str) -> Result<(), Box<dyn Error>> {
     let version = version.strip_prefix('v').unwrap_or(version);
 
     let ver_uint = if let Some([major, minor, patch]) = parse_ver(version) {
-        // Win version is of the form: MAJOR << 48 | MINOR << 32 | PATCH << 16 | RELEASE
+        // Win version is of the form: MAJOR << 48 | MINOR << 32 | PATCH << 16 |
+        // RELEASE
         ((major as u64) << 48) | ((minor as u64) << 32) | ((patch as u64) << 16)
     } else {
         0

@@ -324,9 +324,9 @@ impl RunContext<'_> {
                     anyhow::Ok(())
                 };
                 if let Err(err) = task.await {
-                    // It means that the close() call returned an IO error for some reason. It
-                    // shouldn't happen probably, and even if it does, it's probably best to just
-                    // ignore it
+                    // It means that the close() call returned an IO error for
+                    // some reason. It shouldn't happen probably, and even if it
+                    // does, it's probably best to just ignore it
                     error!(self.logger, "Failed to close socket on start: {err:?}");
                 } else {
                     info!(self.logger, "Socket closed on start");
