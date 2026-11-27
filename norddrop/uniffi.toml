@@ -1,5 +1,6 @@
 [bindings.csharp]
 cdylib_name = "norddrop"
+access_modifier = "public"
 
 [bindings.kotlin]
 cdylib_name = "norddrop"
