@@ -132,7 +132,7 @@ impl From<&ServerMsg> for warp::ws::Message {
 impl From<&ClientMsg> for tokio_tungstenite::tungstenite::Message {
     fn from(value: &ClientMsg) -> Self {
         let msg = serde_json::to_string(value).expect("Failed to serialize client message");
-        Self::Text(msg)
+        Self::Text(msg.into())
     }
 }
 
@@ -178,7 +178,7 @@ where
     T: From<String> + ToString,
 {
     fn from(value: Chunk<T>) -> Self {
-        Self::Binary(value.encode())
+        Self::Binary(value.encode().into())
     }
 }
 
@@ -202,7 +202,7 @@ impl From<&OutgoingTransfer> for TransferRequest {
 impl From<&TransferRequest> for tokio_tungstenite::tungstenite::Message {
     fn from(value: &TransferRequest) -> Self {
         let msg = serde_json::to_string(value).expect("Failed to serialize client message");
-        Self::Text(msg)
+        Self::Text(msg.into())
     }
 }
 

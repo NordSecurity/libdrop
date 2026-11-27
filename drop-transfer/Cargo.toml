@@ -28,7 +28,9 @@ drop-storage = { version = "1.0.0", path = "../drop-storage" }
 futures = "0.3"
 futures-util = "0.3"
 hex = { version = "0.4.3", features = ["serde"] }
-hyper = "0.14.27"
+hyper = "1"
+hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
+http-body-util = "0.1"
 infer = "0.13.0"
 libc = { workspace = true }
 serde = { workspace = true }
@@ -38,10 +40,10 @@ slog = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-tokio-tungstenite = "0.20.1"
+tokio-tungstenite = "0.29"
 tokio-util = "0.7.8"
 uuid = { workspace = true }
-warp = { version = "0.3.6", default-features = false, features = ["websocket"] }
+warp = { version = "0.4", default-features = false, features = ["server", "websocket"] }
 walkdir = "2.3.3"
 async_cell = "0.2.2"
 governor = { version = "0.6.0", default-features = false, features = ["dashmap", "std"] }

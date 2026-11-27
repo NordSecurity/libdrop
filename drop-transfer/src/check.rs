@@ -71,10 +71,11 @@ async fn run(state: &State, xfer: &Arc<IncomingTransfer>, logger: &Logger) -> Co
 }
 
 async fn ask_server_if_alive(state: &State, xfer: &IncomingTransfer, logger: &Logger) -> bool {
-    let mut connector = hyper::client::HttpConnector::new();
+    let mut connector = hyper_util::client::legacy::connect::HttpConnector::new();
     connector.set_local_address(Some(state.addr));
 
-    let client = hyper::Client::builder().build::<_, hyper::Body>(connector);
+    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+        .build::<_, http_body_util::Empty<hyper::body::Bytes>>(connector);
 
     let versions_to_try = [protocol::Version::V6];
 
@@ -113,7 +114,10 @@ async fn ask_server_if_alive(state: &State, xfer: &IncomingTransfer, logger: &Lo
 
 // Returns whether the transfer is alive
 async fn make_request(
-    client: &hyper::Client<hyper::client::HttpConnector>,
+    client: &hyper_util::client::legacy::Client<
+        hyper_util::client::legacy::connect::HttpConnector,
+        http_body_util::Empty<hyper::body::Bytes>,
+    >,
     ip: IpAddr,
     version: protocol::Version,
     xfer_id: uuid::Uuid,
@@ -136,7 +140,7 @@ async fn make_request(
 
     let req = req
         .header(key, value)
-        .body(hyper::Body::empty())
+        .body(http_body_util::Empty::new())
         .expect("Creating request should not fail");
 
     let response = client
@@ -168,7 +172,7 @@ async fn make_request(
             debug!(logger, "Building 'authorization' request");
             let req = hyper::Request::get(url)
                 .header(key, value)
-                .body(hyper::Body::empty())
+                .body(http_body_util::Empty::new())
                 .expect("Creating request should not fail");
 
             let response = client
