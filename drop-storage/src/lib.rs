@@ -1324,7 +1324,7 @@ impl Storage {
             })?.count();
 
             for (_, mut path) in outgoing_paths {
-                path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+                path.states.sort_by_key(|a| a.created_at);
 
                 path.bytes_sent = path.states.last().map_or(0, |state| match state.data {
                     OutgoingPathStateEventData::Started { bytes_sent } => bytes_sent,
@@ -1438,7 +1438,7 @@ impl Storage {
             })?.count();
 
             for (_, mut path) in incoming_paths {
-                path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+                path.states.sort_by_key(|a| a.created_at);
 
                 path.bytes_received = path
                     .states
@@ -1474,9 +1474,7 @@ impl Storage {
             transfers.sort_by_key(|rt| rt.0);
             let mut transfers: Vec<Transfer> = transfers.into_iter().map(|rt| rt.1).collect();
             for transfer in &mut transfers {
-                transfer
-                    .states
-                    .sort_by(|a, b| a.created_at.cmp(&b.created_at));
+                transfer.states.sort_by_key(|a| a.created_at);
                 match transfer.transfer_type {
                     DbTransferType::Incoming(ref mut p) => p.sort_by_key(|ip| ip.id),
                     DbTransferType::Outgoing(ref mut p) => p.sort_by_key(|op| op.id),
@@ -2232,5 +2230,40 @@ mod tests {
         let transfers = storage.transfers_since(0).await;
         assert_eq!(transfers.len(), 1);
         assert_eq!(transfers[0].id, transfer_id_2);
+    }
+
+    #[tokio::test]
+    async fn test_created_at_is_read_as_utc_millis() {
+        let logger = slog::Logger::root(slog::Discard, slog::o!());
+        let storage = Storage::new(logger, ":memory:").unwrap();
+
+        let transfer_id: Uuid = "23e488a4-0521-11ee-be56-0242ac120002".parse().unwrap();
+        let transfer = TransferInfo {
+            id: transfer_id,
+            peer: "1.2.3.4".to_string(),
+            files: TransferFiles::Incoming(vec![TransferIncomingPath {
+                file_id: "id1".to_string(),
+                relative_path: "1".to_string(),
+                size: 1024,
+            }]),
+        };
+        storage.insert_transfer(&transfer).await;
+
+        storage
+            .conn
+            .lock()
+            .await
+            .execute(
+                "UPDATE transfers SET created_at = '2023-06-07 08:09:10.123'",
+                [],
+            )
+            .unwrap();
+
+        let transfers = storage.transfers_since(0).await;
+        assert_eq!(transfers.len(), 1);
+        assert_eq!(
+            types::timestamp_millis(&transfers[0].created_at),
+            1_686_125_350_123
+        );
     }
 }

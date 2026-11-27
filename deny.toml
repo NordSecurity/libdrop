@@ -1,0 +1,10 @@
+[advisories]
+yanked = "warn"
+ignore = [
+    # The uniffi bump of LLT-7959 removes bincode and paste
+    "RUSTSEC-2024-0436", # paste is unmaintained
+    "RUSTSEC-2025-0141", # bincode is unmaintained
+    "RUSTSEC-2026-0374", # basic-toml is unmaintained
+    # The fix needs a newer rusqlite, see LLT-7910 and LLT-7912.
+    "RUSTSEC-2026-0459", # libsqlite3-sys
+]

@@ -114,7 +114,7 @@ impl<T: Transfer> FileEventTx<T> {
     async fn emit_in_flight(&self, event: Event) {
         let mut lock = self.inner.lock().await;
 
-        if !(matches!(lock.state, FileState::Preflight { .. })
+        if !(matches!(lock.state, FileState::Preflight)
             || matches!(lock.state, FileState::InFlight { .. }))
         {
             return;

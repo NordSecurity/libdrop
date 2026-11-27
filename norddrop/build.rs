@@ -21,8 +21,8 @@ fn parse_version() -> Result<String, Box<dyn Error>> {
         ),
     };
 
-    println!("cargo:warning=parse_version() -> {}", &version);
-    println!("cargo:rustc-env=DROP_VERSION={}", &version);
+    println!("cargo:warning=parse_version() -> {}", version);
+    println!("cargo:rustc-env=DROP_VERSION={}", version);
 
     Ok(version)
 }

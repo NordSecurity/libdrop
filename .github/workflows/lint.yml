@@ -3,14 +3,14 @@ on:
   - push
 jobs:
   rust:
-    container: rust:1.85.0-bullseye
+    container: ghcr.io/nordsecurity/build-linux-rust1.99.1:v8.3.0
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.85.0
+          toolchain: 1.99.1
           default: true
           components: clippy
       - name: Install nightly Rust toolchain
@@ -43,6 +43,15 @@ jobs:
             --deny clippy::wildcard_imports
             --deny clippy::unwrap_used
             --deny warnings
+  deny:
+    container: ghcr.io/nordsecurity/build-linux-rust1.99.1:v8.3.0
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install cargo-deny
+        run: cargo install --locked cargo-deny@0.18.9
+      - name: Check advisories
+        run: cargo deny check advisories
   python:
     runs-on: ubuntu-latest
     steps:

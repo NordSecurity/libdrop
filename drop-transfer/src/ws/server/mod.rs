@@ -252,40 +252,42 @@ pub(crate) fn spawn(
         })
     };
 
-    let future =
-        match warp::serve(service).try_bind_with_graceful_shutdown(addr, stop.cancelled_owned()) {
-            Ok((socket, future)) => {
-                debug!(logger, "WS server is bound to: {socket}");
-                future
-            }
-            Err(err) => {
-                // Check if this is IO error about address already in use
-                if let Some(ioerr) = std::error::Error::source(&err)
-                    .and_then(|src| src.downcast_ref::<hyper::Error>())
-                    .and_then(std::error::Error::source)
-                    .and_then(|src| src.downcast_ref::<io::Error>())
-                {
-                    if ioerr.kind() == io::ErrorKind::AddrInUse {
-                        error!(
-                            logger,
-                            "Found that the address {addr} is already used, while trying to bind \
-                             the WS server: {ioerr}",
-                        );
-                        return Err(Error::AddrInUse);
-                    }
-                }
+    let listener = match bind_listener(addr) {
+        Ok(listener) => {
+            debug!(logger, "WS server is bound to: {addr}");
+            listener
+        }
+        Err(ioerr) if ioerr.kind() == io::ErrorKind::AddrInUse => {
+            error!(
+                logger,
+                "Found that the address {addr} is already used, while trying to bind the WS \
+                 server: {ioerr}",
+            );
+            return Err(Error::AddrInUse);
+        }
+        Err(ioerr) => return Err(ioerr.into()),
+    };
 
-                return Err(err.into());
-            }
-        };
+    let future = warp::serve(service)
+        .incoming(listener)
+        .graceful(stop.cancelled_owned())
+        .run();
 
-    tokio::spawn(async move {
-        let _guard = alive;
-        future.await;
+    // A warp 0.4 server awaited in a spawned `async` block fails the `Send`,
+    // check https://github.com/seanmonstar/warp/issues/1130 and
+    // https://github.com/seanmonstar/warp/issues/1139
+    tokio::spawn(futures::FutureExt::map(future, move |()| {
+        drop(alive);
         debug!(logger, "WS server stopped");
-    });
+    }));
 
     Ok(())
+}
+
+fn bind_listener(addr: SocketAddr) -> io::Result<tokio::net::TcpListener> {
+    let listener = std::net::TcpListener::bind(addr)?;
+    listener.set_nonblocking(true)?;
+    tokio::net::TcpListener::from_std(listener)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -576,7 +578,7 @@ impl RunContext<'_> {
             debug!(self.logger, "Received:\n\t{text}");
             handler.on_text_msg(socket, text).await?;
         } else if msg.is_binary() {
-            handler.on_bin_msg(socket, msg.into_bytes()).await?;
+            handler.on_bin_msg(socket, msg.into_bytes().into()).await?;
         } else if msg.is_close() {
             debug!(self.logger, "Got CLOSE frame");
 

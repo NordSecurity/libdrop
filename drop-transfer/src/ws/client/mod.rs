@@ -57,7 +57,7 @@ struct RunContext<'a> {
 enum WsConnection {
     Recoverable(crate::Error),
     Unrecoverable(crate::Error),
-    Connected(WsStream, protocol::Version),
+    Connected(Box<WsStream>, protocol::Version),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -114,7 +114,7 @@ async fn connect_to_peer(
     debug!(logger, "Outgoing transfer job started for {}", xfer.id(),);
 
     let (socket, ver) = match establish_ws_conn(state, xfer, logger).await {
-        WsConnection::Connected(sock, ver) => (sock, ver),
+        WsConnection::Connected(sock, ver) => (*sock, ver),
         WsConnection::Recoverable(error) => {
             info!(logger, "Transfer deferred {}: {error}", xfer.id());
 
@@ -212,7 +212,7 @@ async fn establish_ws_conn(
     };
 
     let client = WebSocketStream::from_raw_socket(socket, Role::Client, None).await;
-    WsConnection::Connected(client, ver)
+    WsConnection::Connected(Box::new(client), ver)
 }
 
 async fn make_request(
@@ -280,7 +280,7 @@ async fn send_request_and_wait_for_respnse(
 ) -> anyhow::Result<Response<Option<Vec<u8>>>> {
     let resp = match tokio_tungstenite::client_async(req, &mut *socket).await {
         Ok((_, resp)) => resp,
-        Err(tungstenite::Error::Http(resp)) => resp,
+        Err(tungstenite::Error::Http(resp)) => *resp,
         Err(err) => return Err(err.into()),
     };
 
@@ -375,7 +375,7 @@ impl RunContext<'_> {
                         socket.send(msg).await.context("Socket sending upload msg")?;
                     },
                     _ = ping.tick() => {
-                        socket.send(Message::Ping(Vec::new())).await.context("Failed to send PING")?;
+                        socket.send(Message::Ping(Default::default())).await.context("Failed to send PING")?;
                     }
                 }
             }
@@ -425,7 +425,7 @@ impl RunContext<'_> {
         match msg {
             Message::Text(text) => {
                 debug!(self.logger, "Received:\n\t{text}");
-                handler.on_text_msg(socket, jobs, text).await?;
+                handler.on_text_msg(socket, jobs, text.to_string()).await?;
             }
             Message::Close(_) => {
                 debug!(self.logger, "Got CLOSE frame");

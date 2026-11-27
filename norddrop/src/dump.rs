@@ -110,7 +110,7 @@ impl From<db::TransferStateEventData> for TransferStateKind {
 impl From<db::TransferStateEvent> for TransferState {
     fn from(state: db::TransferStateEvent) -> Self {
         TransferState {
-            created_at: state.created_at.and_utc().timestamp_millis(),
+            created_at: db::timestamp_millis(&state.created_at),
             kind: state.data.into(),
         }
     }
@@ -120,7 +120,7 @@ impl From<db::Transfer> for TransferInfo {
     fn from(info: db::Transfer) -> Self {
         TransferInfo {
             id: info.id.to_string(),
-            created_at: info.created_at.and_utc().timestamp_millis(),
+            created_at: db::timestamp_millis(&info.created_at),
             peer: info.peer_id,
             states: info.states.into_iter().map(TransferState::from).collect(),
             kind: info.transfer_type.into(),
@@ -168,7 +168,7 @@ impl From<db::IncomingPathStateEventData> for IncomingPathStateKind {
 impl From<db::IncomingPathStateEvent> for IncomingPathState {
     fn from(state: db::IncomingPathStateEvent) -> Self {
         IncomingPathState {
-            created_at: state.created_at.and_utc().timestamp_millis(),
+            created_at: db::timestamp_millis(&state.created_at),
             kind: state.data.into(),
         }
     }
@@ -225,7 +225,7 @@ impl From<db::OutgoingPathStateEventData> for OutgoingPathStateKind {
 impl From<db::OutgoingPathStateEvent> for OutgoingPathState {
     fn from(state: db::OutgoingPathStateEvent) -> Self {
         OutgoingPathState {
-            created_at: state.created_at.and_utc().timestamp_millis(),
+            created_at: db::timestamp_millis(&state.created_at),
             kind: state.data.into(),
         }
     }
