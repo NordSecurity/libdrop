@@ -2,6 +2,7 @@
 ### **UNRELEASED**
 ---
 * Bump moose to v18.0.0
+* Bump Rust to 1.99.1
 * h2 vulnerability fix
 
 ---

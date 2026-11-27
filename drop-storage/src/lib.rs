@@ -1324,7 +1324,7 @@ impl Storage {
             })?.count();
 
             for (_, mut path) in outgoing_paths {
-                path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+                path.states.sort_by_key(|a| a.created_at);
 
                 path.bytes_sent = path.states.last().map_or(0, |state| match state.data {
                     OutgoingPathStateEventData::Started { bytes_sent } => bytes_sent,
@@ -1438,7 +1438,7 @@ impl Storage {
             })?.count();
 
             for (_, mut path) in incoming_paths {
-                path.states.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+                path.states.sort_by_key(|a| a.created_at);
 
                 path.bytes_received = path
                     .states
@@ -1474,9 +1474,7 @@ impl Storage {
             transfers.sort_by_key(|rt| rt.0);
             let mut transfers: Vec<Transfer> = transfers.into_iter().map(|rt| rt.1).collect();
             for transfer in &mut transfers {
-                transfer
-                    .states
-                    .sort_by(|a, b| a.created_at.cmp(&b.created_at));
+                transfer.states.sort_by_key(|a| a.created_at);
                 match transfer.transfer_type {
                     DbTransferType::Incoming(ref mut p) => p.sort_by_key(|ip| ip.id),
                     DbTransferType::Outgoing(ref mut p) => p.sort_by_key(|op| op.id),

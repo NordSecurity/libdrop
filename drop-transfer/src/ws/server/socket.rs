@@ -41,7 +41,7 @@ impl WebSocket {
         let msg = tokio::time::timeout(timeout, self.stream.next())
             .await
             .map_err(|err| io::Error::new(io::ErrorKind::TimedOut, err))?
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Emptry socket stream"))??;
+            .ok_or_else(|| io::Error::other("Emptry socket stream"))??;
 
         self.recv_last = Some(Instant::now());
 
