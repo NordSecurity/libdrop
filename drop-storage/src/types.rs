@@ -1,18 +1,22 @@
 use std::path::PathBuf;
 
-use chrono::NaiveDateTime;
 use serde::Serialize;
+use time::OffsetDateTime;
 
 use crate::sync;
 
 pub(crate) type TransferId = uuid::Uuid;
 type FileId = String;
 
-fn serialize_datetime<S>(timestamp: &NaiveDateTime, serializer: S) -> Result<S::Ok, S::Error>
+pub fn timestamp_millis(timestamp: &OffsetDateTime) -> i64 {
+    timestamp.unix_timestamp() * 1000 + i64::from(timestamp.millisecond())
+}
+
+fn serialize_datetime<S>(timestamp: &OffsetDateTime, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::ser::Serializer,
 {
-    serializer.serialize_i64(timestamp.and_utc().timestamp_millis())
+    serializer.serialize_i64(timestamp_millis(timestamp))
 }
 
 #[derive(Serialize)]
@@ -55,7 +59,7 @@ pub struct OutgoingPathStateEvent {
     #[serde(skip_serializing)]
     pub path_id: i64,
     #[serde(serialize_with = "serialize_datetime")]
-    pub created_at: NaiveDateTime,
+    pub created_at: OffsetDateTime,
     #[serde(flatten)]
     pub data: OutgoingPathStateEventData,
 }
@@ -65,7 +69,7 @@ pub struct IncomingPathStateEvent {
     #[serde(skip_serializing)]
     pub path_id: i64,
     #[serde(serialize_with = "serialize_datetime")]
-    pub created_at: NaiveDateTime,
+    pub created_at: OffsetDateTime,
     #[serde(flatten)]
     pub data: IncomingPathStateEventData,
 }
@@ -84,7 +88,7 @@ pub struct TransferStateEvent {
     #[serde(skip_serializing)]
     pub transfer_id: TransferId,
     #[serde(serialize_with = "serialize_datetime")]
-    pub created_at: NaiveDateTime,
+    pub created_at: OffsetDateTime,
     #[serde(flatten)]
     pub data: TransferStateEventData,
 }
@@ -180,7 +184,7 @@ pub enum DbTransferType {
 pub struct Transfer {
     pub id: TransferId,
     #[serde(serialize_with = "serialize_datetime")]
-    pub created_at: NaiveDateTime,
+    pub created_at: OffsetDateTime,
     pub peer_id: String,
     pub states: Vec<TransferStateEvent>,
     #[serde(flatten)]
@@ -192,7 +196,7 @@ pub struct OutgoingPath {
     #[serde(skip_serializing)]
     pub id: i64,
     #[serde(serialize_with = "serialize_datetime")]
-    pub created_at: NaiveDateTime,
+    pub created_at: OffsetDateTime,
     pub transfer_id: TransferId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_path: Option<PathBuf>,
@@ -210,7 +214,7 @@ pub struct IncomingPath {
     #[serde(skip_serializing)]
     pub id: i64,
     #[serde(serialize_with = "serialize_datetime")]
-    pub created_at: NaiveDateTime,
+    pub created_at: OffsetDateTime,
     pub transfer_id: TransferId,
     pub relative_path: String,
     pub file_id: String,

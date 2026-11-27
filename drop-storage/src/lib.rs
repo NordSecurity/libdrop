@@ -2231,4 +2231,39 @@ mod tests {
         assert_eq!(transfers.len(), 1);
         assert_eq!(transfers[0].id, transfer_id_2);
     }
+
+    #[tokio::test]
+    async fn test_created_at_is_read_as_utc_millis() {
+        let logger = slog::Logger::root(slog::Discard, slog::o!());
+        let storage = Storage::new(logger, ":memory:").unwrap();
+
+        let transfer_id: Uuid = "23e488a4-0521-11ee-be56-0242ac120002".parse().unwrap();
+        let transfer = TransferInfo {
+            id: transfer_id,
+            peer: "1.2.3.4".to_string(),
+            files: TransferFiles::Incoming(vec![TransferIncomingPath {
+                file_id: "id1".to_string(),
+                relative_path: "1".to_string(),
+                size: 1024,
+            }]),
+        };
+        storage.insert_transfer(&transfer).await;
+
+        storage
+            .conn
+            .lock()
+            .await
+            .execute(
+                "UPDATE transfers SET created_at = '2023-06-07 08:09:10.123'",
+                [],
+            )
+            .unwrap();
+
+        let transfers = storage.transfers_since(0).await;
+        assert_eq!(transfers.len(), 1);
+        assert_eq!(
+            types::timestamp_millis(&transfers[0].created_at),
+            1_686_125_350_123
+        );
+    }
 }
